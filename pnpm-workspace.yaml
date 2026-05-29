@@ -1,0 +1,9 @@
+# Réglages pnpm (depuis pnpm 11, ils vivent ici et non plus dans package.json).
+# Autorise l'exécution des scripts de build de ces dépendances (bloqués par défaut).
+allowBuilds:
+  '@biomejs/biome': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: true

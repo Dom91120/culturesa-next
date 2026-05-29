@@ -13,7 +13,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setPending(true);
     const form = new FormData(e.currentTarget);
-    await authClient.forgetPassword({
+    await authClient.requestPasswordReset({
       email: String(form.get("email")),
       redirectTo: "/auth/reset-password",
     });

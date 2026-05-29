@@ -7,6 +7,9 @@ node_modules
 out
 next-env.d.ts
 
+# cache TypeScript
+*.tsbuildinfo
+
 # env / secrets
 .env
 .env.*
