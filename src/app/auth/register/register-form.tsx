@@ -100,6 +100,12 @@ export function RegisterForm({
 
   return (
     <form onSubmit={onSubmit}>
+      <div className="mode-toggle">
+        Déjà inscrit ?{" "}
+        <Link href="/auth/login" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
+          Se connecter
+        </Link>
+      </div>
       <div className="panel">
         <div className="panel-title">
           <span className="dot" />
@@ -292,13 +298,6 @@ export function RegisterForm({
         <button type="submit" className="btn btn-primary" disabled={pending}>
           {pending ? "Création…" : "Créer mon compte →"}
         </button>
-      </div>
-
-      <div className="mode-toggle">
-        Déjà inscrit ?{" "}
-        <Link href="/auth/login" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
-          Se connecter
-        </Link>
       </div>
     </form>
   );

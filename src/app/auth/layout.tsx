@@ -13,8 +13,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
       <main>
-        <div style={{ width: "60%", maxWidth: 560, margin: "1.5rem auto", padding: "0 1rem" }}>
-          {children}
+        <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 1rem 2rem" }}>
+          <div className="tabs-nav">
+            <button type="button" className="tab-nav-btn active">
+              <span className="tab-icon">👤</span> Compte
+            </button>
+          </div>
+          <div id="tab-content-compte">{children}</div>
         </div>
       </main>
     </>

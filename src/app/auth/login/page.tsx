@@ -34,11 +34,18 @@ export default function LoginPage() {
 
   return (
     <>
-      <div className="panel">
-        <div className="panel-title">
-          <span className="dot" />
-          Se connecter
-        </div>
+      <div className="mode-toggle">
+        Pas encore de compte ?{" "}
+        <Link href="/auth/register" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
+          Créer un compte
+        </Link>
+      </div>
+      <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
+        <div className="panel">
+          <div className="panel-title">
+            <span className="dot" />
+            Se connecter
+          </div>
         <form onSubmit={onSubmit}>
           <div className="form-grid">
             <div className="field full">
@@ -73,13 +80,7 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
-      </div>
-
-      <div className="mode-toggle">
-        Pas encore de compte ?{" "}
-        <Link href="/auth/register" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
-          Créer un compte
-        </Link>
+        </div>
       </div>
     </>
   );
