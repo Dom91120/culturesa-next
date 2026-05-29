@@ -5,6 +5,7 @@ import { toDateInput } from "@/lib/format";
 import { listPeriods } from "@/server/services/periods";
 import { getService } from "@/server/services/services";
 import { listSlotsForService } from "@/server/services/slots";
+import { deleteServiceAction } from "../actions";
 import { ServiceForm } from "./service-form";
 import { SlotCreateForm } from "./slot-create-form";
 import { deleteSlotAction, updateSlotAction } from "./slot-actions";
@@ -111,6 +112,13 @@ export default async function ServiceConfigPage({ params }: { params: Promise<{ 
           {slots.length === 0 && <p className="text-sm text-neutral-400">Aucun créneau pour ce service.</p>}
         </div>
       </Card>
+
+      <form action={deleteServiceAction} style={{ marginTop: ".5rem" }}>
+        <input type="hidden" name="id" value={id} />
+        <button type="submit" className="btn btn-ghost" style={{ borderColor: "rgba(224,107,107,.4)", color: "var(--danger)" }}>
+          🗑️ Supprimer ce service
+        </button>
+      </form>
     </div>
   );
 }
