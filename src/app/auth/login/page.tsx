@@ -9,16 +9,16 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const canSubmit = email.trim().length > 0 && password.length > 0;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setPending(true);
-    const form = new FormData(e.currentTarget);
-    const res = await signIn.email({
-      email: String(form.get("email")),
-      password: String(form.get("password")),
-    });
+    const res = await signIn.email({ email, password });
     setPending(false);
     if (res.error) {
       setError(
@@ -40,47 +40,64 @@ export default function LoginPage() {
           Créer un compte
         </Link>
       </div>
+
       <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
-        <div className="panel">
-          <div className="panel-title">
-            <span className="dot" />
-            Se connecter
-          </div>
         <form onSubmit={onSubmit}>
-          <div className="form-grid">
-            <div className="field full">
-              <label htmlFor="l-email">
-                E-mail <span className="required-star">*</span>
-              </label>
-              <input id="l-email" name="email" type="text" required placeholder="marie@exemple.fr" autoComplete="email" />
+          <div className="panel">
+            <div className="panel-title">
+              <span className="dot" />
+              Se connecter
             </div>
-            <div className="field full">
-              <label htmlFor="l-pwd">
-                Mot de passe <span className="required-star">*</span>
-              </label>
-              <input id="l-pwd" name="password" type="password" required placeholder="••••••••" autoComplete="current-password" />
-              {error && (
-                <span className="field-error" style={{ display: "block" }}>
-                  {error}
-                </span>
-              )}
-              <div style={{ marginTop: ".4rem", textAlign: "right" }}>
-                <Link
-                  href="/auth/forgot-password"
-                  style={{ fontSize: ".75rem", color: "var(--muted)", textDecoration: "underline" }}
-                >
-                  Mot de passe oublié ?
-                </Link>
+            <div className="form-grid">
+              <div className="field full">
+                <label htmlFor="l-email">
+                  E-mail <span className="required-star">*</span>
+                </label>
+                <input
+                  id="l-email"
+                  type="text"
+                  required
+                  placeholder="marie@exemple.fr"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div className="field full">
+                <label htmlFor="l-pwd">
+                  Mot de passe <span className="required-star">*</span>
+                </label>
+                <input
+                  id="l-pwd"
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                {error && (
+                  <span className="field-error" style={{ display: "block" }}>
+                    {error}
+                  </span>
+                )}
+                <div style={{ marginTop: ".4rem", textAlign: "right" }}>
+                  <Link
+                    href="/auth/forgot-password"
+                    style={{ fontSize: ".75rem", color: "var(--muted)", textDecoration: "underline" }}
+                  >
+                    Mot de passe oublié ?
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
           <div className="btn-row">
-            <button type="submit" className="btn btn-primary" disabled={pending}>
+            <button type="submit" className="btn btn-primary" disabled={pending || !canSubmit}>
               {pending ? "Connexion…" : "Connexion →"}
             </button>
           </div>
         </form>
-        </div>
       </div>
     </>
   );
