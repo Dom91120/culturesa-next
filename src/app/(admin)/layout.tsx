@@ -1,44 +1,30 @@
-import Link from "next/link";
-import { SignOutButton } from "@/components/sign-out-button";
+import { ConnectedShell, type ShellTab } from "@/components/connected-shell";
+import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 
-const NAV = [
-  { href: "/services", label: "Services" },
-  { href: "/periods", label: "Périodes" },
-  { href: "/demandeurs", label: "Demandeurs" },
-  { href: "/structures", label: "Structures" },
-  { href: "/niveaux", label: "Niveaux" },
+const ADMIN_TABS: ShellTab[] = [
+  { href: "/services", label: "Services", icon: "🏷️" },
+  { href: "/users", label: "Comptes utilisateurs", icon: "👥" },
+  { href: "/demandeurs", label: "Demandeurs", icon: "🏛️" },
+  { href: "/messagerie", label: "Messagerie", icon: "✉️" },
+  { href: "/configuration", label: "Configuration", icon: "⚙️" },
+  { href: "/rgpd", label: "RGPD", icon: "🛡️" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Tout le back-office exige au minimum le rôle gestionnaire.
   const session = await requireRole("gestionnaire");
+  const services = await prisma.service.findMany({
+    orderBy: [{ position: "asc" }, { label: "asc" }],
+    select: { id: true, label: true, icon: true },
+  });
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
-      <header className="border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-3">
-          <Link href="/" className="font-bold text-brand-700">
-            CultuRésa <span className="font-normal text-neutral-400">admin</span>
-          </Link>
-          <nav className="flex gap-4 text-sm">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-neutral-600 hover:text-brand-700 dark:text-neutral-300"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-neutral-500">{session.user.email}</span>
-            <SignOutButton />
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
-    </div>
+    <ConnectedShell
+      user={{ name: session.user.name ?? "", email: session.user.email }}
+      services={services}
+      tabs={ADMIN_TABS}
+    >
+      {children}
+    </ConnectedShell>
   );
 }
