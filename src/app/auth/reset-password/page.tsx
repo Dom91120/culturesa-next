@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { btnPrimary, inputClass } from "@/components/ui";
 import { authClient } from "@/lib/auth-client";
 
 function ResetForm() {
@@ -17,12 +16,15 @@ function ResetForm() {
 
   if (!token || errorParam) {
     return (
-      <div className="space-y-4 text-center">
-        <h1 className="text-lg font-semibold">Lien invalide ou expiré</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-300">
+      <div className="panel" style={{ textAlign: "center", padding: "2rem 1.5rem" }}>
+        <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".5rem" }}>
+          <span className="dot" />
+          Lien invalide ou expiré
+        </div>
+        <p style={{ fontSize: ".88rem", color: "var(--muted)", marginBottom: "1.25rem" }}>
           Demandez un nouveau lien de réinitialisation.
         </p>
-        <Link href="/auth/forgot-password" className="inline-block text-sm text-brand-700 hover:underline">
+        <Link className="btn btn-ghost" href="/auth/forgot-password" style={{ fontSize: ".82rem", textDecoration: "none" }}>
           Mot de passe oublié
         </Link>
       </div>
@@ -44,9 +46,9 @@ function ResetForm() {
       return;
     }
     setPending(true);
-    const { error } = await authClient.resetPassword({ newPassword: password, token: token! });
+    const res = await authClient.resetPassword({ newPassword: password, token: token! });
     setPending(false);
-    if (error) {
+    if (res.error) {
       setError("Échec de la réinitialisation. Le lien a peut-être expiré.");
       return;
     }
@@ -54,47 +56,44 @@ function ResetForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <h1 className="text-lg font-semibold">Nouveau mot de passe</h1>
-      <div>
-        <label htmlFor="password" className="mb-1 block text-sm font-medium">
-          Mot de passe
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className={inputClass}
-        />
+    <div className="panel">
+      <div className="panel-title">
+        <span className="dot" />
+        Nouveau mot de passe
       </div>
-      <div>
-        <label htmlFor="confirm" className="mb-1 block text-sm font-medium">
-          Confirmation
-        </label>
-        <input
-          id="confirm"
-          name="confirm"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className={inputClass}
-        />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
-        {pending ? "Enregistrement…" : "Réinitialiser"}
-      </button>
-    </form>
+      <form onSubmit={onSubmit}>
+        <div className="form-grid">
+          <div className="field full">
+            <label htmlFor="password">
+              Mot de passe <span className="required-star">*</span>
+            </label>
+            <input id="password" name="password" type="password" required minLength={8} placeholder="••••••••" autoComplete="new-password" />
+          </div>
+          <div className="field full">
+            <label htmlFor="confirm">
+              Confirmer <span className="required-star">*</span>
+            </label>
+            <input id="confirm" name="confirm" type="password" required minLength={8} placeholder="••••••••" autoComplete="new-password" />
+            {error && (
+              <span className="field-error" style={{ display: "block" }}>
+                {error}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="btn-row">
+          <button type="submit" className="btn btn-primary" disabled={pending}>
+            {pending ? "Enregistrement…" : "Réinitialiser"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-neutral-500">Chargement…</p>}>
+    <Suspense fallback={<p style={{ color: "var(--muted)" }}>Chargement…</p>}>
       <ResetForm />
     </Suspense>
   );

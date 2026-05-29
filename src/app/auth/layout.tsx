@@ -1,16 +1,22 @@
-import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 dark:bg-neutral-950">
-      <div className="w-full max-w-sm">
-        <Link href="/" className="mb-6 block text-center text-2xl font-bold text-brand-700">
-          CultuRésa
-        </Link>
-        <div className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+    <>
+      <header>
+        <div className="logo">
+          Cultu<em>Résa</em>
+        </div>
+        <div className="tagline">Réservation d&apos;activités culturelles</div>
+        <div style={{ position: "absolute", top: "1rem", right: "1.5rem" }}>
+          <ThemeToggle />
+        </div>
+      </header>
+      <main>
+        <div style={{ width: "60%", maxWidth: 560, margin: "1.5rem auto", padding: "0 1rem" }}>
           {children}
         </div>
-      </div>
-    </div>
+      </main>
+    </>
   );
 }

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { btnPrimary, inputClass } from "@/components/ui";
 import { signIn } from "@/lib/auth-client";
 
 export default function LoginPage() {
@@ -16,14 +15,14 @@ export default function LoginPage() {
     setError(null);
     setPending(true);
     const form = new FormData(e.currentTarget);
-    const { error } = await signIn.email({
+    const res = await signIn.email({
       email: String(form.get("email")),
       password: String(form.get("password")),
     });
     setPending(false);
-    if (error) {
+    if (res.error) {
       setError(
-        error.status === 403
+        res.error.status === 403
           ? "Adresse e-mail non confirmée. Vérifiez votre boîte mail."
           : "E-mail ou mot de passe incorrect.",
       );
@@ -34,39 +33,54 @@ export default function LoginPage() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <h1 className="text-lg font-semibold">Connexion</h1>
-      <div>
-        <label htmlFor="email" className="mb-1 block text-sm font-medium">
-          E-mail
-        </label>
-        <input id="email" name="email" type="email" required autoComplete="email" className={inputClass} />
+    <>
+      <div className="panel">
+        <div className="panel-title">
+          <span className="dot" />
+          Se connecter
+        </div>
+        <form onSubmit={onSubmit}>
+          <div className="form-grid">
+            <div className="field full">
+              <label htmlFor="l-email">
+                E-mail <span className="required-star">*</span>
+              </label>
+              <input id="l-email" name="email" type="text" required placeholder="marie@exemple.fr" autoComplete="email" />
+            </div>
+            <div className="field full">
+              <label htmlFor="l-pwd">
+                Mot de passe <span className="required-star">*</span>
+              </label>
+              <input id="l-pwd" name="password" type="password" required placeholder="••••••••" autoComplete="current-password" />
+              {error && (
+                <span className="field-error" style={{ display: "block" }}>
+                  {error}
+                </span>
+              )}
+              <div style={{ marginTop: ".4rem", textAlign: "right" }}>
+                <Link
+                  href="/auth/forgot-password"
+                  style={{ fontSize: ".75rem", color: "var(--muted)", textDecoration: "underline" }}
+                >
+                  Mot de passe oublié ?
+                </Link>
+              </div>
+            </div>
+          </div>
+          <div className="btn-row">
+            <button type="submit" className="btn btn-primary" disabled={pending}>
+              {pending ? "Connexion…" : "Connexion →"}
+            </button>
+          </div>
+        </form>
       </div>
-      <div>
-        <label htmlFor="password" className="mb-1 block text-sm font-medium">
-          Mot de passe
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          autoComplete="current-password"
-          className={inputClass}
-        />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
-        {pending ? "Connexion…" : "Se connecter"}
-      </button>
-      <div className="flex justify-between text-sm text-neutral-500">
-        <Link href="/auth/forgot-password" className="hover:text-brand-700">
-          Mot de passe oublié ?
-        </Link>
-        <Link href="/auth/register" className="hover:text-brand-700">
+
+      <div className="mode-toggle">
+        Pas encore de compte ?{" "}
+        <Link href="/auth/register" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
           Créer un compte
         </Link>
       </div>
-    </form>
+    </>
   );
 }

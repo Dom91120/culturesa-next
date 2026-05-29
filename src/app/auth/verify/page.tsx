@@ -8,15 +8,23 @@ export default async function VerifyPage({
   const { email } = await searchParams;
 
   return (
-    <div className="space-y-4 text-center">
-      <h1 className="text-lg font-semibold">Vérifiez votre boîte mail</h1>
-      <p className="text-sm text-neutral-600 dark:text-neutral-300">
+    <div className="panel" style={{ textAlign: "center", padding: "2rem 1.5rem" }}>
+      <div style={{ fontSize: "2.5rem", marginBottom: ".75rem" }}>📧</div>
+      <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".5rem" }}>
+        <span className="dot" />
+        Vérifiez votre boîte mail
+      </div>
+      <p style={{ fontSize: ".88rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.25rem" }}>
         Un e-mail de confirmation {email ? <>a été envoyé à <strong>{email}</strong></> : "vous a été envoyé"}.
-        Cliquez sur le lien qu&apos;il contient pour activer votre compte, puis connectez-vous.
+        <br />
+        Cliquez sur le lien qu&apos;il contient pour activer votre compte.
       </p>
-      <Link href="/auth/login" className="inline-block text-sm text-brand-700 hover:underline">
-        Retour à la connexion
-      </Link>
+      <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Le lien est valable 24 heures.</p>
+      <div style={{ marginTop: "1.25rem" }}>
+        <Link className="btn btn-ghost" href="/auth/login" style={{ fontSize: ".82rem", textDecoration: "none" }}>
+          J&apos;ai confirmé → Se connecter
+        </Link>
+      </div>
     </div>
   );
 }

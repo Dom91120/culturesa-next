@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { btnPrimary, inputClass } from "@/components/ui";
 import { authClient } from "@/lib/auth-client";
 
 export default function ForgotPasswordPage() {
@@ -18,43 +17,59 @@ export default function ForgotPasswordPage() {
       redirectTo: "/auth/reset-password",
     });
     setPending(false);
-    // Message identique qu'il existe ou non un compte (anti-énumération).
     setSent(true);
   }
 
   if (sent) {
     return (
-      <div className="space-y-4 text-center">
-        <h1 className="text-lg font-semibold">E-mail envoyé</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-300">
-          Si un compte existe pour cette adresse, un lien de réinitialisation vient d&apos;être
-          envoyé (valable 1h).
+      <div className="panel" style={{ textAlign: "center", padding: "2rem 1.5rem" }}>
+        <div style={{ fontSize: "2.5rem", marginBottom: ".75rem" }}>📧</div>
+        <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".5rem" }}>
+          <span className="dot" />
+          E-mail envoyé
+        </div>
+        <p style={{ fontSize: ".88rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.25rem" }}>
+          Si un compte existe pour cette adresse, un lien de réinitialisation vient d&apos;être envoyé
+          (valable 1h).
         </p>
-        <Link href="/auth/login" className="inline-block text-sm text-brand-700 hover:underline">
-          Retour à la connexion
+        <Link className="btn btn-ghost" href="/auth/login" style={{ fontSize: ".82rem", textDecoration: "none" }}>
+          ← Retour à la connexion
         </Link>
       </div>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <h1 className="text-lg font-semibold">Mot de passe oublié</h1>
-      <p className="text-sm text-neutral-500">
-        Saisissez votre e-mail pour recevoir un lien de réinitialisation.
-      </p>
-      <div>
-        <label htmlFor="email" className="mb-1 block text-sm font-medium">
-          E-mail
-        </label>
-        <input id="email" name="email" type="email" required autoComplete="email" className={inputClass} />
+    <>
+      <div className="panel">
+        <div className="panel-title">
+          <span className="dot" />
+          Mot de passe oublié
+        </div>
+        <p style={{ fontSize: ".82rem", color: "var(--muted)", marginBottom: "1rem" }}>
+          Saisissez votre e-mail pour recevoir un lien de réinitialisation.
+        </p>
+        <form onSubmit={onSubmit}>
+          <div className="form-grid">
+            <div className="field full">
+              <label htmlFor="email">
+                E-mail <span className="required-star">*</span>
+              </label>
+              <input id="email" name="email" type="email" required placeholder="marie@exemple.fr" autoComplete="email" />
+            </div>
+          </div>
+          <div className="btn-row">
+            <button type="submit" className="btn btn-primary" disabled={pending}>
+              {pending ? "Envoi…" : "Envoyer le lien"}
+            </button>
+          </div>
+        </form>
       </div>
-      <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
-        {pending ? "Envoi…" : "Envoyer le lien"}
-      </button>
-      <Link href="/auth/login" className="block text-center text-sm text-neutral-500 hover:text-brand-700">
-        Retour à la connexion
-      </Link>
-    </form>
+      <div className="mode-toggle">
+        <Link href="/auth/login" style={{ color: "var(--muted)", textDecoration: "underline" }}>
+          ← Retour à la connexion
+        </Link>
+      </div>
+    </>
   );
 }

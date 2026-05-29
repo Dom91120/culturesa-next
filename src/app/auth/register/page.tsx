@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { btnPrimary, inputClass } from "@/components/ui";
 import { signUp } from "@/lib/auth-client";
 
 export default function RegisterPage() {
@@ -20,23 +19,27 @@ export default function RegisterPage() {
     const nom = String(form.get("nom")).trim();
     const email = String(form.get("email")).trim();
     const password = String(form.get("password"));
-    const rgpdOk = form.get("rgpdOk") === "on";
+    const password2 = String(form.get("password2"));
+    const rgpdOk = form.get("rgpd") === "on";
 
-    if (!rgpdOk) {
-      setError("Vous devez accepter la politique de confidentialité (RGPD).");
-      return;
-    }
     if (password.length < 8) {
       setError("Le mot de passe doit contenir au moins 8 caractères.");
       return;
     }
+    if (password !== password2) {
+      setError("Les mots de passe ne correspondent pas.");
+      return;
+    }
+    if (!rgpdOk) {
+      setError("Vous devez accepter l'utilisation de vos données (RGPD).");
+      return;
+    }
 
     setPending(true);
-    const { error } = await signUp.email({
+    const res = await signUp.email({
       email,
       password,
       name: `${prenom} ${nom}`.trim(),
-      // Champs métier additionnels (cf. better-auth additionalFields)
       prenom,
       nom,
       tel: String(form.get("tel") ?? "").trim(),
@@ -44,9 +47,9 @@ export default function RegisterPage() {
     });
     setPending(false);
 
-    if (error) {
+    if (res.error) {
       setError(
-        error.status === 422
+        res.error.status === 422
           ? "Un compte existe déjà avec cette adresse e-mail."
           : "Inscription impossible. Réessayez plus tard.",
       );
@@ -56,65 +59,85 @@ export default function RegisterPage() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <h1 className="text-lg font-semibold">Créer un compte</h1>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="prenom" className="mb-1 block text-sm font-medium">
-            Prénom
-          </label>
-          <input id="prenom" name="prenom" required className={inputClass} />
+    <form onSubmit={onSubmit}>
+      <div className="panel">
+        <div className="panel-title">
+          <span className="dot" />
+          Créer un compte
         </div>
-        <div>
-          <label htmlFor="nom" className="mb-1 block text-sm font-medium">
-            Nom
-          </label>
-          <input id="nom" name="nom" required className={inputClass} />
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="c-nom">
+              Nom <span className="required-star">*</span>
+            </label>
+            <input id="c-nom" name="nom" type="text" required placeholder="Dupont" />
+          </div>
+          <div className="field">
+            <label htmlFor="c-prenom">
+              Prénom <span className="required-star">*</span>
+            </label>
+            <input id="c-prenom" name="prenom" type="text" required placeholder="Marie" />
+          </div>
+          <div className="field">
+            <label htmlFor="c-email">
+              E-mail <span className="required-star">*</span>
+            </label>
+            <input id="c-email" name="email" type="email" required placeholder="marie@exemple.fr" />
+          </div>
+          <div className="field">
+            <label htmlFor="c-tel">Téléphone</label>
+            <input id="c-tel" name="tel" type="tel" placeholder="06 12 34 56 78" />
+          </div>
+          <div className="field">
+            <label htmlFor="c-pwd">
+              Mot de passe <span className="required-star">*</span>
+            </label>
+            <input id="c-pwd" name="password" type="password" required placeholder="••••••••" minLength={8} autoComplete="new-password" />
+          </div>
+          <div className="field">
+            <label htmlFor="c-pwd2">
+              Confirmer <span className="required-star">*</span>
+            </label>
+            <input id="c-pwd2" name="password2" type="password" required placeholder="••••••••" autoComplete="new-password" />
+          </div>
         </div>
       </div>
-      <div>
-        <label htmlFor="email" className="mb-1 block text-sm font-medium">
-          E-mail
-        </label>
-        <input id="email" name="email" type="email" required autoComplete="email" className={inputClass} />
+
+      <div className="rgpd-box">
+        <div className="rgpd-header">🔒 Protection des données (RGPD)</div>
+        <p className="rgpd-text">
+          Vos données sont traitées pour gérer vos demandes de réservation et vous informer sur les
+          activités culturelles.
+        </p>
+        <div className="check-row">
+          <label className="custom-check">
+            <input type="checkbox" name="rgpd" />
+            <span className="checkmark" />
+          </label>
+          <span className="check-label">
+            J&apos;accepte que mes données soient utilisées pour la gestion de mes réservations.
+          </span>
+        </div>
       </div>
-      <div>
-        <label htmlFor="tel" className="mb-1 block text-sm font-medium">
-          Téléphone
-        </label>
-        <input id="tel" name="tel" type="tel" autoComplete="tel" className={inputClass} />
+
+      {error && (
+        <p className="field-error" style={{ display: "block", marginBottom: ".5rem" }}>
+          {error}
+        </p>
+      )}
+
+      <div className="btn-row">
+        <button type="submit" className="btn btn-primary" disabled={pending}>
+          {pending ? "Création…" : "Créer mon compte →"}
+        </button>
       </div>
-      <div>
-        <label htmlFor="password" className="mb-1 block text-sm font-medium">
-          Mot de passe
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className={inputClass}
-        />
-      </div>
-      <label className="flex items-start gap-2 text-sm text-neutral-600 dark:text-neutral-300">
-        <input type="checkbox" name="rgpdOk" className="mt-0.5" />
-        <span>
-          J&apos;accepte que mes données soient traitées conformément à la politique de
-          confidentialité (RGPD).
-        </span>
-      </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
-        {pending ? "Création…" : "Créer mon compte"}
-      </button>
-      <p className="text-center text-sm text-neutral-500">
+
+      <div className="mode-toggle">
         Déjà inscrit ?{" "}
-        <Link href="/auth/login" className="hover:text-brand-700">
+        <Link href="/auth/login" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
           Se connecter
         </Link>
-      </p>
+      </div>
     </form>
   );
 }
