@@ -1,0 +1,15 @@
+# Normalisation des fins de ligne.
+* text=auto eol=lf
+
+# Fichiers qui DOIVENT rester en LF (exécutés dans des conteneurs Linux).
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+cron/crontab text eol=lf
+Dockerfile text eol=lf
+*/Dockerfile text eol=lf
+
+# Fichiers binaires (pas de conversion).
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

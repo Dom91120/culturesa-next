@@ -1,0 +1,22 @@
+# dépendances
+node_modules
+.pnpm-store
+
+# build Next.js
+.next
+out
+next-env.d.ts
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs / divers
+npm-debug.log*
+*.log
+.DS_Store
+coverage
+
+# Prisma (le client généré ne se commit pas)
+prisma/generated

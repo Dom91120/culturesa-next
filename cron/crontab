@@ -1,0 +1,9 @@
+# Tâches planifiées CultuRésa.
+# $CRON_SECRET est injecté via l'environnement du conteneur (docker-compose).
+# busybox crond exécute chaque ligne via /bin/sh, qui développe la variable.
+
+# Auto-validation des réservations — toutes les 15 minutes
+*/15 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/auto-validate >/dev/null 2>&1
+
+# Rétention RGPD (préavis + anonymisation des comptes inactifs) — tous les jours à 03h00
+0 3 * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/rgpd-retention >/dev/null 2>&1

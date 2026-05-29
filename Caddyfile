@@ -1,0 +1,23 @@
+# Reverse proxy + HTTPS automatique (Let's Encrypt).
+# Remplace {$APP_DOMAIN} et {$ADMIN_EMAIL} via le fichier .env / l'environnement.
+#
+# En local/dev, tu peux mettre :  http://localhost  à la place du domaine.
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# Transmet tout le trafic au conteneur Next.js
+	reverse_proxy app:3000
+
+	# En-têtes de sécurité de base
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Email pour les notifications Let's Encrypt
+	tls {$ADMIN_EMAIL}
+}

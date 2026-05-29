@@ -1,0 +1,422 @@
+// ============================================================
+//  CultuRésa — Schéma Prisma (PostgreSQL)
+//  Porté depuis l'ancien schéma MySQL (install/culturesa.sql).
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // native     = poste de dev ; linux-musl-openssl-3.0.x = image Docker Alpine
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+//  Enums
+// ============================================================
+
+enum Role {
+  utilisateur
+  gestionnaire
+  administrateur
+}
+
+enum ThemesMode {
+  libre
+  liste
+}
+
+enum SlotType {
+  recurring
+  unique
+}
+
+enum EntityState {
+  actif
+  desactive
+  archive
+}
+
+enum BookingType {
+  recurring
+  unique
+}
+
+enum Pointage {
+  present
+  absent
+}
+
+// ============================================================
+//  Authentification — Better Auth
+//  (remplace les anciennes tables sessions/email_confirmations/
+//   password_reset_requests/email_change_requests/auth_attempts/
+//   account_deletion_requests : gérées par Better Auth + plugins)
+// ============================================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  name          String   @default("")
+  image         String?
+  createdAt     DateTime @default(now()) @db.Timestamptz
+  updatedAt     DateTime @updatedAt @db.Timestamptz
+
+  // ── Champs métier (additionalFields Better Auth) ──
+  prenom        String   @default("")
+  nom           String   @default("")
+  tel           String   @default("")
+  niveau        String   @default("")
+  enfants       Int      @default(0) @db.SmallInt
+  accompagnants Int      @default(0) @db.SmallInt
+  role          Role     @default(utilisateur)
+  rgpdOk        Boolean  @default(false)
+
+  demandeurId   Int?
+  structureId   Int?
+  demandeur     Demandeur?  @relation(fields: [demandeurId], references: [id], onDelete: SetNull)
+  structure     Structure?  @relation(fields: [structureId], references: [id], onDelete: SetNull)
+
+  // ── RGPD / rétention ──
+  lastLoginAt           DateTime? @db.Timestamptz
+  anonymizedAt          DateTime? @db.Timestamptz
+  deletionNoticeSentAt  DateTime? @db.Timestamptz
+
+  sessions  Session[]
+  accounts  Account[]
+  bookings  Booking[]
+
+  @@index([demandeurId])
+  @@index([structureId])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime @db.Timestamptz
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz
+  refreshTokenExpiresAt DateTime? @db.Timestamptz
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz
+  updatedAt             DateTime  @updatedAt @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ============================================================
+//  Domaine métier
+// ============================================================
+
+model Service {
+  id                    String     @id
+  label                 String
+  validationBloquante   Boolean    @default(false)
+  maxReservations       Int        @default(1)
+  maxReservationsPeriod Int        @default(1)
+  activeDays            String     @default("lun,mar,mer,jeu,ven")
+  position              Int        @default(0)
+  createdAt             DateTime   @default(now()) @db.Timestamptz
+
+  ponctDuration         Int        @default(60)
+  ponctCapacity         Int        @default(1)
+  recurDuration         Int        @default(60)
+  recurCapacity         Int        @default(1)
+  morningStart          String     @default("09:00")
+  morningEnd            String     @default("12:00")
+  afternoonStart        String     @default("14:00")
+  afternoonEnd          String     @default("18:00")
+  icon                  String?
+  bookingDelay          Int        @default(0)
+  openOnHolidays        Boolean    @default(false)
+  showPreviousExercices Boolean    @default(false)
+  themesMode            ThemesMode @default(libre)
+
+  // Délai d'auto-validation en minutes signées (cf. PLAN.md §4).
+  //   0 = jamais ; négatif = N jours OUVRÉS avant la séance ;
+  //   positif = N (semaines) calendaires après la résa.
+  autoValidationDelay   Int        @default(0)
+
+  slots             Slot[]
+  periods           Period[]
+  cycleEvents       CycleEvent[]
+  themes            ServiceTheme[]
+  demandeurSettings ServiceDemandeurSettings[]
+  bookings          Booking[]
+
+  @@map("services")
+}
+
+model Slot {
+  id           String      @id
+  serviceId    String
+  slotType     SlotType    @default(recurring)
+  startTime    String      @default("09:00")
+  endTime      String      @default("10:30")
+  slotDate     DateTime?   @db.Date
+  capacity     Int?
+  capLun       Int?
+  capMar       Int?
+  capMer       Int?
+  capJeu       Int?
+  capVen       Int?
+  capSam       Int?
+  capDim       Int?
+  periodId     Int?
+  parentSlotId String?
+  weeks        String?
+  state        EntityState @default(actif)
+
+  service     Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  period      Period?         @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  demandeurs  SlotDemandeur[]
+  bookings    Booking[]
+
+  @@index([serviceId])
+  @@index([parentSlotId])
+  @@index([periodId])
+  @@map("slots")
+}
+
+model Exercice {
+  id        Int      @id @default(autoincrement())
+  label     String
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  periods Period[]
+
+  @@map("exercice")
+}
+
+model Period {
+  id         Int         @id @default(autoincrement())
+  serviceId  String?
+  exerciceId Int?
+  label      String
+  etiquette  String?
+  dateStart  DateTime?   @db.Date
+  dateEnd    DateTime?   @db.Date
+  color      String      @default("#6dceaa")
+  position   Int         @default(0)
+  state      EntityState @default(actif)
+
+  service  Service?        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  exercice Exercice?       @relation(fields: [exerciceId], references: [id], onDelete: SetNull)
+  slots    Slot[]
+  holidays PeriodHoliday[]
+
+  @@index([serviceId])
+  @@index([exerciceId])
+  @@map("periods")
+}
+
+model CycleEvent {
+  id        Int      @id @default(autoincrement())
+  serviceId String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+  data      Json
+
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, createdAt])
+  @@map("cycle_events")
+}
+
+model PeriodHoliday {
+  id       Int      @id @default(autoincrement())
+  periodId Int
+  date     DateTime @db.Date
+  label    String   @default("")
+
+  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, date])
+  @@map("period_holidays")
+}
+
+model SchoolHoliday {
+  id        Int      @id @default(autoincrement())
+  zone      String   @db.Char(1)
+  dateStart DateTime @db.Date
+  dateEnd   DateTime @db.Date
+  label     String   @default("")
+
+  @@index([zone, dateStart, dateEnd])
+  @@map("school_holidays")
+}
+
+model Demandeur {
+  id                   Int     @id @default(autoincrement())
+  label                String
+  openOnSchoolHolidays Boolean @default(true)
+
+  structures        Structure[]
+  niveaux           Niveau[]
+  slotRestrictions  SlotDemandeur[]
+  serviceSettings   ServiceDemandeurSettings[]
+  users             User[]
+
+  @@map("demandeurs")
+}
+
+model Structure {
+  id          Int    @id @default(autoincrement())
+  demandeurId Int
+  label       String
+
+  demandeur Demandeur @relation(fields: [demandeurId], references: [id], onDelete: Cascade)
+  users     User[]
+
+  @@index([demandeurId])
+  @@map("structures")
+}
+
+model Niveau {
+  id          Int    @id @default(autoincrement())
+  label       String
+  demandeurId Int?
+  position    Int    @default(0)
+
+  demandeur Demandeur? @relation(fields: [demandeurId], references: [id], onDelete: SetNull)
+
+  @@index([demandeurId])
+  @@map("niveaux")
+}
+
+model SlotDemandeur {
+  slotId      String
+  demandeurId Int
+
+  slot      Slot      @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  demandeur Demandeur @relation(fields: [demandeurId], references: [id], onDelete: Cascade)
+
+  @@id([slotId, demandeurId])
+  @@index([demandeurId])
+  @@map("slot_demandeurs")
+}
+
+model ServiceTheme {
+  id        Int    @id @default(autoincrement())
+  serviceId String
+  label     String
+  position  Int    @default(0)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@map("service_themes")
+}
+
+model ServiceDemandeurSettings {
+  serviceId   String
+  demandeurId Int
+  recurrent   Boolean @default(false)
+  semaineAb   Boolean @default(false)
+  validation  Boolean @default(false)
+  themes      Boolean @default(false)
+  jauge       Boolean @default(false)
+
+  service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  demandeur Demandeur @relation(fields: [demandeurId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, demandeurId])
+  @@index([demandeurId])
+  @@map("service_demandeur_settings")
+}
+
+model Booking {
+  id              Int         @id @default(autoincrement())
+  bookingType     BookingType @default(recurring)
+  userId          String
+  serviceId       String
+  slotId          String
+  periodId        Int         @default(0)
+  dayKey          String      @default("")
+  week            String      @default("")
+  parentBookingId Int?
+  themeLabel      String      @default("")
+  enfants         Int         @default(0) @db.SmallInt
+  accompagnants   Int         @default(0) @db.SmallInt
+  validated       Boolean     @default(false)
+  createdAt       DateTime    @default(now()) @db.Timestamptz
+
+  // Point de départ du décompte d'auto-validation (= createdAt, MAJ sur déplacement).
+  autoValidateFrom DateTime? @db.Timestamptz
+  pointage         Pointage?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  slot    Slot    @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serviceId, slotId, periodId, dayKey, week], name: "uq_recurring")
+  @@index([userId])
+  @@index([serviceId])
+  @@index([periodId])
+  @@index([slotId])
+  @@index([parentBookingId])
+  @@map("bookings")
+}
+
+// Journal d'audit RGPD — pas de FK : conservé même après anonymisation/suppression.
+model RgpdLog {
+  id           Int      @id @default(autoincrement())
+  action       String
+  targetUserId String?
+  actorUserId  String?
+  details      Json?
+  ip           String?
+  createdAt    DateTime @default(now()) @db.Timestamptz
+
+  @@index([action])
+  @@index([targetUserId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("rgpd_log")
+}
+
+model AppConfig {
+  key   String  @id @map("cfg_key")
+  value String? @map("cfg_value")
+
+  @@map("app_config")
+}

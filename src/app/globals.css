@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* Thème neuf (design à affiner ensemble). Variables exposées à Tailwind v4. */
+@theme {
+  --color-brand-50: oklch(0.97 0.02 200);
+  --color-brand-500: oklch(0.72 0.12 195);
+  --color-brand-600: oklch(0.64 0.13 195);
+  --color-brand-700: oklch(0.55 0.12 195);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+}
