@@ -106,8 +106,22 @@ export default function RegisterPage() {
       <div className="rgpd-box">
         <div className="rgpd-header">🔒 Protection des données (RGPD)</div>
         <p className="rgpd-text">
-          Vos données sont traitées pour gérer vos demandes de réservation et vous informer sur les
-          activités culturelles.
+          La Ville de Châtillon traite les données recueillies pour pouvoir gérer votre demande de
+          réservation, et également afin de vous contacter en vue de bénéficier des services et des
+          informations concernant les activités, évènements et fonctionnement des structures
+          culturelles de la Ville.
+        </p>
+        <p className="rgpd-text" style={{ marginTop: ".5rem" }}>
+          Pour en savoir plus sur la gestion de vos données personnelles et pour exercer vos droits,
+          cliquez sur notre{" "}
+          <a
+            href="#"
+            onClick={(e) => e.preventDefault()}
+            style={{ color: "inherit", textDecoration: "underline" }}
+          >
+            Politique de confidentialité
+          </a>
+          .
         </p>
         <div className="check-row">
           <label className="custom-check">
