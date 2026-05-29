@@ -3,6 +3,8 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { requireRole } from "@/server/guards";
 
 const NAV = [
+  { href: "/services", label: "Services" },
+  { href: "/periods", label: "Périodes" },
   { href: "/demandeurs", label: "Demandeurs" },
   { href: "/structures", label: "Structures" },
   { href: "/niveaux", label: "Niveaux" },
