@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SignOutButton } from "@/components/sign-out-button";
 import { requireRole } from "@/server/guards";
 
 const NAV = [
@@ -29,7 +30,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               </Link>
             ))}
           </nav>
-          <span className="text-sm text-neutral-500">{session.user.email}</span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-neutral-500">{session.user.email}</span>
+            <SignOutButton />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
