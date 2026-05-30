@@ -17,7 +17,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   });
   if (!service) notFound();
 
-  const [periods, slots, bookings] = await Promise.all([
+  const [periods, slots, bookings, users] = await Promise.all([
     prisma.period.findMany({
       where: { OR: [{ serviceId: null }, { serviceId: id }], state: "actif" },
       orderBy: [{ position: "asc" }, { id: "asc" }],
@@ -41,7 +41,17 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         user: { select: { nom: true, prenom: true, demandeur: { select: { label: true } } } },
       },
     }),
+    prisma.user.findMany({
+      where: { role: "utilisateur" },
+      orderBy: [{ nom: "asc" }, { prenom: "asc" }],
+      select: { id: true, nom: true, prenom: true, demandeur: { select: { label: true } } },
+    }),
   ]);
+
+  const usersData = users.map((u) => ({
+    id: u.id,
+    label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
+  }));
 
   const bookingsData = bookings.map((b) => ({
     id: b.id,
@@ -56,5 +66,13 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     demandeur: b.user.demandeur?.label ?? "",
   }));
 
-  return <AgendaGrid service={service} periods={periods} slots={slots} bookings={bookingsData} />;
+  return (
+    <AgendaGrid
+      service={service}
+      periods={periods}
+      slots={slots}
+      bookings={bookingsData}
+      users={usersData}
+    />
+  );
 }

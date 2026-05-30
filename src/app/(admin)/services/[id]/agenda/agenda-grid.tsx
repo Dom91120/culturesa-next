@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
+  createRecurringBookingAction,
   deleteBookingAdminAction,
+  moveBookingAction,
   setBookingPointageAction,
   setBookingValidatedAction,
 } from "./actions";
@@ -31,6 +33,7 @@ type Booking = {
   name: string;
   demandeur: string;
 };
+type UserOpt = { id: string; label: string };
 
 const DAY_NAMES: Record<string, string> = {
   lun: "Lundi",
@@ -52,7 +55,6 @@ function toMinutes(t: string, fallback: number): number {
 
 type Block = {
   booking: Booking;
-  dayKey: string;
   top: number;
   height: number;
   leftPct: number;
@@ -61,27 +63,35 @@ type Block = {
   capacity: number;
   full: boolean;
 };
-
 type Menu = { block: Block; x: number; y: number } | null;
+type CreateCtx = { dayKey: string; slotId: string } | null;
 
 export function AgendaGrid({
   service,
   periods,
   slots,
   bookings,
+  users,
 }: {
   service: Service;
   periods: Period[];
   slots: Slot[];
   bookings: Booking[];
+  users: UserOpt[];
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [periodIdx, setPeriodIdx] = useState(0);
   const [mode, setMode] = useState<"model" | "realweek">("model");
   const [hideEmpty, setHideEmpty] = useState(false);
   const [validation, setValidation] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [createCtx, setCreateCtx] = useState<CreateCtx>(null);
+  const [cUser, setCUser] = useState("");
+  const [cEnfants, setCEnfants] = useState("0");
+  const [cTheme, setCTheme] = useState("");
+  const [cError, setCError] = useState<string | null>(null);
 
   const days = service.activeDays.split(",").map((d) => d.trim()).filter(Boolean);
   const startMin = toMinutes(service.morningStart, 9 * 60);
@@ -93,6 +103,21 @@ export function AgendaGrid({
   const totalH = (lastHour - firstHour) * ROW_H;
   const pxPerMin = ROW_H / 60;
   const selectedPeriodId = periods[periodIdx]?.id ?? null;
+
+  const slotsParsed = useMemo(
+    () =>
+      slots.map((s) => ({
+        ...s,
+        startMin: toMinutes(s.startTime, gridStartMin),
+        endMin: toMinutes(s.endTime, gridStartMin + 60),
+      })),
+    [slots, gridStartMin],
+  );
+
+  function slotAtClientY(colTop: number, clientY: number) {
+    const minute = gridStartMin + (clientY - colTop) / pxPerMin;
+    return slotsParsed.find((s) => minute >= s.startMin && minute < s.endMin) ?? null;
+  }
 
   const blocksByDay = useMemo(() => {
     const slotById = new Map(slots.map((s) => [s.id, s]));
@@ -117,7 +142,6 @@ export function AgendaGrid({
       list.forEach((booking, i) => {
         (byDay[dayKey] ??= []).push({
           booking,
-          dayKey,
           top: (s - gridStartMin) * pxPerMin,
           height: Math.max(28, (e - s) * pxPerMin),
           leftPct: (i / list.length) * 100,
@@ -144,13 +168,47 @@ export function AgendaGrid({
     function onDoc() {
       setMenu(null);
     }
-    // Attaché au tick suivant pour ne pas capter le clic qui vient d'ouvrir le menu.
     const t = setTimeout(() => document.addEventListener("click", onDoc), 0);
     return () => {
       clearTimeout(t);
       document.removeEventListener("click", onDoc);
     };
   }, [menu]);
+
+  function openCreate(dayKey: string, slotId: string) {
+    setCUser("");
+    setCEnfants("0");
+    setCTheme("");
+    setCError(null);
+    setCreateCtx({ dayKey, slotId });
+  }
+
+  function submitCreate() {
+    if (!createCtx || selectedPeriodId == null) return;
+    if (!cUser) {
+      setCError("Choisissez un usager.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await createRecurringBookingAction({
+        serviceId: service.id,
+        slotId: createCtx.slotId,
+        periodId: selectedPeriodId,
+        dayKey: createCtx.dayKey,
+        userId: cUser,
+        enfants: Number(cEnfants) || 0,
+        theme: cTheme,
+      });
+      if (!res.ok) {
+        setCError(res.error ?? "Échec.");
+        return;
+      }
+      setCreateCtx(null);
+      router.refresh();
+    });
+  }
+
+  const createSlot = createCtx ? slots.find((s) => s.id === createCtx.slotId) : null;
 
   return (
     <div>
@@ -191,7 +249,12 @@ export function AgendaGrid({
         </div>
       </div>
 
-      <div className="planning-wrap" style={{ opacity: pending ? 0.6 : 1 }}>
+      <p style={{ fontSize: ".7rem", color: "var(--muted)", marginBottom: ".4rem" }}>
+        Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers
+        un autre créneau pour le déplacer.
+      </p>
+
+      <div className="planning-wrap">
         <div className="agenda-grid" style={{ gridTemplateColumns: `44px repeat(${days.length}, 1fr)` }}>
           <div className="agenda-header-cell agenda-corner" title="Horaires">
             🕘
@@ -211,28 +274,70 @@ export function AgendaGrid({
           </div>
 
           {days.map((d) => (
-            <div key={d} className="agenda-day-col" style={{ height: totalH }}>
+            // biome-ignore lint/a11y/useKeyWithClickEvents: grille agenda (clic = créer)
+            <div
+              key={d}
+              className="agenda-day-col"
+              style={{ height: totalH, cursor: "cell" }}
+              onClick={(e) => {
+                const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
+                if (slot && selectedPeriodId != null) openCreate(d, slot.id);
+              }}
+              onDragOver={(e) => {
+                if (draggingId != null) e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggingId == null) return;
+                const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
+                const id = draggingId;
+                setDraggingId(null);
+                if (slot) run(moveBookingAction(id, service.id, d, slot.id));
+              }}
+            >
               {hours.map((h) => (
                 <div key={h} className="agenda-grid-line is-hour" style={{ top: (h - firstHour) * ROW_H }} />
+              ))}
+              {/* Lanes des créneaux (repère visuel + cible de clic/drop, via la colonne) */}
+              {slotsParsed.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    position: "absolute",
+                    left: 2,
+                    right: 2,
+                    top: (s.startMin - gridStartMin) * pxPerMin,
+                    height: Math.max(20, (s.endMin - s.startMin) * pxPerMin),
+                    border: "1px dashed rgba(127,127,127,.25)",
+                    borderRadius: "var(--rad-sm)",
+                    background: "rgba(127,127,127,.03)",
+                    pointerEvents: "none",
+                  }}
+                />
               ))}
               {(blocksByDay[d] ?? []).map((b) => {
                 const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
                 const bk = b.booking;
                 const pendingValidation = validation && !bk.validated;
                 return (
+                  // biome-ignore lint/a11y/useKeyWithClickEvents: bloc agenda (clic = menu)
                   <div
                     key={bk.id}
                     className={`agenda-block${b.full ? " is-full" : ""}`}
+                    draggable
                     style={{
                       top: b.top,
                       height: b.height,
                       left: `calc(${b.leftPct}% + 2px)`,
                       width: `calc(${b.widthPct}% - 4px)`,
-                      opacity: bk.validated ? 1 : 0.78,
+                      opacity: draggingId === bk.id ? 0.4 : bk.validated ? 1 : 0.78,
                       outline: pendingValidation ? "2px solid var(--warn)" : undefined,
                       outlineOffset: -2,
+                      pointerEvents: draggingId != null && draggingId !== bk.id ? "none" : undefined,
                     }}
                     title={`${bk.demandeur} — ${bk.name}`}
+                    onDragStart={() => setDraggingId(bk.id)}
+                    onDragEnd={() => setDraggingId(null)}
                     onClick={(e) => {
                       e.stopPropagation();
                       setMenu({ block: b, x: e.clientX, y: e.clientY });
@@ -265,69 +370,73 @@ export function AgendaGrid({
       </div>
 
       {menu && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: menu contextuel
         <div
-          style={{
-            position: "fixed",
-            top: menu.y + 4,
-            left: menu.x + 4,
-            zIndex: 9999,
-            background: "var(--surface2)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--rad-sm)",
-            boxShadow: "0 6px 20px rgba(0,0,0,.25)",
-            minWidth: 180,
-            overflow: "hidden",
-          }}
+          style={{ position: "fixed", top: menu.y + 4, left: menu.x + 4, zIndex: 9999, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "var(--rad-sm)", boxShadow: "0 6px 20px rgba(0,0,0,.25)", minWidth: 180, overflow: "hidden" }}
           onClick={(e) => e.stopPropagation()}
         >
           <MenuItem onClick={() => run(setBookingValidatedAction(menu.block.booking.id, service.id, !menu.block.booking.validated))}>
             {menu.block.booking.validated ? "↩ Dévalider" : "✓ Valider"}
           </MenuItem>
-          <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, "present"))}>
-            ✅ Présent
-          </MenuItem>
-          <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, "absent"))}>
-            ❌ Absent
-          </MenuItem>
+          <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, "present"))}>✅ Présent</MenuItem>
+          <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, "absent"))}>❌ Absent</MenuItem>
           {menu.block.booking.pointage && (
-            <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, null))}>
-              ⚪ Effacer le pointage
-            </MenuItem>
+            <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, null))}>⚪ Effacer le pointage</MenuItem>
           )}
-          <MenuItem danger onClick={() => run(deleteBookingAdminAction(menu.block.booking.id, service.id))}>
-            🗑️ Supprimer
-          </MenuItem>
+          <MenuItem danger onClick={() => run(deleteBookingAdminAction(menu.block.booking.id, service.id))}>🗑️ Supprimer</MenuItem>
+        </div>
+      )}
+
+      {createCtx && (
+        <div className="modal-overlay open" onClick={() => setCreateCtx(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">
+              Nouvelle réservation — {DAY_NAMES[createCtx.dayKey] ?? createCtx.dayKey}
+              {createSlot ? ` · ${createSlot.startTime}–${createSlot.endTime}` : ""}
+            </div>
+            <div className="form-grid">
+              <div className="field full">
+                <label htmlFor="ag-user">Usager</label>
+                <select id="ag-user" value={cUser} onChange={(e) => setCUser(e.target.value)}>
+                  <option value="">— choisir —</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="ag-enfants">Enfants</label>
+                <input id="ag-enfants" type="number" min={0} value={cEnfants} onChange={(e) => setCEnfants(e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="ag-theme">Thème</label>
+                <input id="ag-theme" value={cTheme} onChange={(e) => setCTheme(e.target.value)} placeholder="(optionnel)" />
+              </div>
+            </div>
+            {cError && <p className="field-error" style={{ display: "block" }}>{cError}</p>}
+            <div className="btn-row">
+              <button type="button" className="btn btn-ghost" onClick={() => setCreateCtx(null)}>
+                Annuler
+              </button>
+              <button type="button" className="btn btn-primary" onClick={submitCreate}>
+                Créer
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function MenuItem({
-  children,
-  onClick,
-  danger,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  danger?: boolean;
-}) {
+function MenuItem({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      style={{
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        padding: ".4rem .8rem",
-        background: "none",
-        border: "none",
-        fontFamily: "inherit",
-        fontSize: ".8rem",
-        cursor: "pointer",
-        color: danger ? "var(--danger)" : "var(--text)",
-      }}
+      style={{ display: "block", width: "100%", textAlign: "left", padding: ".4rem .8rem", background: "none", border: "none", fontFamily: "inherit", fontSize: ".8rem", cursor: "pointer", color: danger ? "var(--danger)" : "var(--text)" }}
     >
       {children}
     </button>
