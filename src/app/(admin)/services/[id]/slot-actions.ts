@@ -19,6 +19,13 @@ function readForm(formData: FormData) {
     endTime: formData.get("endTime"),
     slotDate: empty("slotDate"),
     capacity: empty("capacity"),
+    capLun: empty("capLun"),
+    capMar: empty("capMar"),
+    capMer: empty("capMer"),
+    capJeu: empty("capJeu"),
+    capVen: empty("capVen"),
+    capSam: empty("capSam"),
+    capDim: empty("capDim"),
     periodId: empty("periodId"),
     state: formData.get("state"),
   });

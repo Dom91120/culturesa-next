@@ -58,6 +58,13 @@ export const slotSchema = z
     endTime: z.string().regex(TIME, "Heure invalide"),
     slotDate: z.coerce.date().optional().nullable(),
     capacity: z.coerce.number().int().min(0).optional().nullable(),
+    capLun: z.coerce.number().int().min(0).optional().nullable(),
+    capMar: z.coerce.number().int().min(0).optional().nullable(),
+    capMer: z.coerce.number().int().min(0).optional().nullable(),
+    capJeu: z.coerce.number().int().min(0).optional().nullable(),
+    capVen: z.coerce.number().int().min(0).optional().nullable(),
+    capSam: z.coerce.number().int().min(0).optional().nullable(),
+    capDim: z.coerce.number().int().min(0).optional().nullable(),
     periodId: z.coerce.number().int().positive().optional().nullable(),
     state: z.enum(["actif", "desactive", "archive"]).default("actif"),
   })

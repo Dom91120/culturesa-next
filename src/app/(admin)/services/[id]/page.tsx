@@ -12,6 +12,16 @@ import { SlotCreateForm } from "./slot-create-form";
 import { SlotDemandeurs } from "./slot-demandeurs";
 import { deleteSlotAction, updateSlotAction } from "./slot-actions";
 
+const DAY_CAP_FIELDS = [
+  { key: "lun", field: "capLun", label: "Lun" },
+  { key: "mar", field: "capMar", label: "Mar" },
+  { key: "mer", field: "capMer", label: "Mer" },
+  { key: "jeu", field: "capJeu", label: "Jeu" },
+  { key: "ven", field: "capVen", label: "Ven" },
+  { key: "sam", field: "capSam", label: "Sam" },
+  { key: "dim", field: "capDim", label: "Dim" },
+] as const;
+
 export default async function ServiceConfigPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const service = await getService(id);
@@ -26,6 +36,8 @@ export default async function ServiceConfigPage({ params }: { params: Promise<{ 
   const periodOptions = allPeriods
     .filter((p) => p.serviceId === null || p.serviceId === id)
     .map((p) => ({ id: p.id, label: p.label }));
+  const activeDays = new Set(service.activeDays.split(",").map((d) => d.trim()).filter(Boolean));
+  const dayCapFields = DAY_CAP_FIELDS.filter((d) => activeDays.has(d.key));
 
   return (
     <div className="space-y-6">
@@ -83,6 +95,19 @@ export default async function ServiceConfigPage({ params }: { params: Promise<{ 
                   <span className="mb-1 block font-medium text-neutral-500">Capacité</span>
                   <input name="capacity" type="number" min={0} defaultValue={slot.capacity ?? ""} className={`${inputClass} w-24`} />
                 </label>
+                {slot.slotType === "recurring" &&
+                  dayCapFields.map((d) => (
+                    <label key={d.field} className="text-xs" title={`Capacité ${d.label} (sinon capacité par défaut)`}>
+                      <span className="mb-1 block font-medium text-neutral-500">{d.label}</span>
+                      <input
+                        name={d.field}
+                        type="number"
+                        min={0}
+                        defaultValue={(slot[d.field as keyof typeof slot] as number | null) ?? ""}
+                        className={`${inputClass} w-14`}
+                      />
+                    </label>
+                  ))}
                 <label className="text-xs">
                   <span className="mb-1 block font-medium text-neutral-500">Période</span>
                   <select name="periodId" defaultValue={slot.periodId ?? ""} className={inputClass}>

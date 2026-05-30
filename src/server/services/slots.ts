@@ -20,6 +20,13 @@ function toData(data: SlotInput) {
     endTime: data.endTime,
     slotDate: data.slotType === "unique" ? (data.slotDate ?? null) : null,
     capacity: data.capacity ?? null,
+    capLun: data.capLun ?? null,
+    capMar: data.capMar ?? null,
+    capMer: data.capMer ?? null,
+    capJeu: data.capJeu ?? null,
+    capVen: data.capVen ?? null,
+    capSam: data.capSam ?? null,
+    capDim: data.capDim ?? null,
     periodId: data.periodId ?? null,
     state: data.state,
   };
