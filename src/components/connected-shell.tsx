@@ -6,7 +6,26 @@ import { signOut } from "@/lib/auth-client";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export type ServiceItem = { id: string; label: string; icon: string | null };
-export type ShellTab = { href: string; label: string; icon: string };
+type Tab = { href: string; label: string; icon: string };
+
+const ADMIN_TABS: Tab[] = [
+  { href: "/services", label: "Services", icon: "🏷️" },
+  { href: "/users", label: "Comptes utilisateurs", icon: "👥" },
+  { href: "/demandeurs", label: "Demandeurs", icon: "🏛️" },
+  { href: "/messagerie", label: "Messagerie", icon: "✉️" },
+  { href: "/configuration", label: "Configuration", icon: "⚙️" },
+  { href: "/rgpd", label: "RGPD", icon: "🛡️" },
+];
+
+function serviceTabs(id: string): Tab[] {
+  return [
+    { href: `/services/${id}/agenda`, label: "Agenda", icon: "📆" },
+    { href: `/services/${id}/editions`, label: "Éditions", icon: "📋" },
+    { href: `/services/${id}/stats`, label: "Statistiques", icon: "📈" },
+    { href: `/services/${id}/creneaux`, label: "Créneaux", icon: "🕘" },
+    { href: `/services/${id}`, label: "Paramètres", icon: "🔧" },
+  ];
+}
 
 function initialsOf(name: string, email: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -18,12 +37,10 @@ function initialsOf(name: string, email: string) {
 export function ConnectedShell({
   user,
   services,
-  tabs,
   children,
 }: {
   user: { name: string; email: string };
   services: ServiceItem[];
-  tabs: ShellTab[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -35,6 +52,15 @@ export function ConnectedShell({
   const serviceMatch = pathname.match(/^\/services\/([^/]+)/);
   const activeServiceId = serviceMatch ? serviceMatch[1] : null;
   const adminActive = !activeServiceId && pathname !== "/mon-compte";
+  const tabs = activeServiceId ? serviceTabs(activeServiceId) : ADMIN_TABS;
+
+  // Onglet actif = le href le plus long qui préfixe le chemin courant.
+  let activeHref = "";
+  for (const t of tabs) {
+    if ((pathname === t.href || pathname.startsWith(`${t.href}/`)) && t.href.length > activeHref.length) {
+      activeHref = t.href;
+    }
+  }
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -86,12 +112,7 @@ export function ConnectedShell({
             className={collapsed ? "collapsed" : ""}
             style={{ width: "18%", minWidth: "fit-content", maxWidth: 300, flexShrink: 0, position: "relative" }}
           >
-            <button
-              type="button"
-              id="sidebar-toggle"
-              onClick={() => setCollapsed((c) => !c)}
-              title="Réduire / agrandir"
-            >
+            <button type="button" id="sidebar-toggle" onClick={() => setCollapsed((c) => !c)} title="Réduire / agrandir">
               ☰
             </button>
             <div className="sidebar-header">
@@ -109,7 +130,7 @@ export function ConnectedShell({
                   key={s.id}
                   type="button"
                   className={activeServiceId === s.id ? "active" : ""}
-                  onClick={() => router.push(`/services/${s.id}`)}
+                  onClick={() => router.push(`/services/${s.id}/agenda`)}
                 >
                   <span className="sb-icon">{s.icon || "📄"}</span>
                   <span className="sb-label">{s.label}</span>
@@ -141,19 +162,16 @@ export function ConnectedShell({
 
           <div className="app-main">
             <div className="tabs-nav">
-              {tabs.map((t) => {
-                const active = pathname === t.href || pathname.startsWith(`${t.href}/`);
-                return (
-                  <button
-                    key={t.href}
-                    type="button"
-                    className={`tab-nav-btn${active ? " active" : ""}`}
-                    onClick={() => router.push(t.href)}
-                  >
-                    <span className="tab-icon">{t.icon}</span> {t.label}
-                  </button>
-                );
-              })}
+              {tabs.map((t) => (
+                <button
+                  key={t.href}
+                  type="button"
+                  className={`tab-nav-btn${t.href === activeHref ? " active" : ""}`}
+                  onClick={() => router.push(t.href)}
+                >
+                  <span className="tab-icon">{t.icon}</span> {t.label}
+                </button>
+              ))}
             </div>
             {children}
           </div>
