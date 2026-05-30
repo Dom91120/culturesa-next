@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Service = {
   id: string;
@@ -8,8 +8,21 @@ type Service = {
   activeDays: string;
   morningStart: string;
   afternoonEnd: string;
+  recurCapacity: number;
 };
 type Period = { id: number; label: string; color: string };
+type Slot = { id: string; startTime: string; endTime: string; capacity: number | null };
+type Booking = {
+  id: number;
+  slotId: string;
+  periodId: number;
+  dayKey: string;
+  enfants: number;
+  theme: string;
+  validated: boolean;
+  name: string;
+  demandeur: string;
+};
 
 const DAY_NAMES: Record<string, string> = {
   lun: "Lundi",
@@ -29,7 +42,31 @@ function toMinutes(t: string, fallback: number): number {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
-export function AgendaGrid({ service, periods }: { service: Service; periods: Period[] }) {
+type Block = {
+  key: string;
+  dayKey: string;
+  top: number;
+  height: number;
+  name: string;
+  demandeur: string;
+  theme: string;
+  count: number;
+  used: number;
+  capacity: number;
+  full: boolean;
+};
+
+export function AgendaGrid({
+  service,
+  periods,
+  slots,
+  bookings,
+}: {
+  service: Service;
+  periods: Period[];
+  slots: Slot[];
+  bookings: Booking[];
+}) {
   const [periodIdx, setPeriodIdx] = useState(0);
   const [mode, setMode] = useState<"model" | "realweek">("model");
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -42,70 +79,78 @@ export function AgendaGrid({ service, periods }: { service: Service; periods: Pe
   const firstHour = Math.floor(startMin / 60);
   const lastHour = Math.ceil(endMin / 60);
   const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
+  const gridStartMin = firstHour * 60;
   const totalH = (lastHour - firstHour) * ROW_H;
+  const pxPerMin = ROW_H / 60;
+
+  const selectedPeriodId = periods[periodIdx]?.id ?? null;
+
+  // Regroupe les réservations par (jour, créneau) pour la période active → un bloc par groupe.
+  const blocksByDay = useMemo(() => {
+    const slotById = new Map(slots.map((s) => [s.id, s]));
+    const groups = new Map<string, Booking[]>();
+    for (const b of bookings) {
+      if (selectedPeriodId != null && b.periodId !== selectedPeriodId) continue;
+      const key = `${b.dayKey}|${b.slotId}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(b);
+      groups.set(key, arr);
+    }
+
+    const byDay: Record<string, Block[]> = {};
+    for (const [key, list] of groups) {
+      const [dayKey, slotId] = key.split("|");
+      const slot = slotById.get(slotId);
+      if (!slot) continue;
+      const s = toMinutes(slot.startTime, gridStartMin);
+      const e = toMinutes(slot.endTime, s + 60);
+      const capacity = slot.capacity ?? service.recurCapacity;
+      const used = list.reduce((sum, b) => sum + b.enfants, 0);
+      const first = list[0];
+      const block: Block = {
+        key,
+        dayKey,
+        top: (s - gridStartMin) * pxPerMin,
+        height: Math.max(24, (e - s) * pxPerMin),
+        name: first.name,
+        demandeur: first.demandeur,
+        theme: first.theme,
+        count: list.length,
+        used,
+        capacity,
+        full: used >= capacity,
+      };
+      (byDay[dayKey] ??= []).push(block);
+    }
+    return byDay;
+  }, [bookings, slots, selectedPeriodId, gridStartMin, pxPerMin, service.recurCapacity]);
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: ".75rem",
-          flexWrap: "wrap",
-          marginBottom: ".75rem",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem", flexWrap: "wrap", marginBottom: ".75rem" }}>
         <div className="panel-title" style={{ marginBottom: 0 }}>
           <span className="dot" />
           Agenda — {service.label}
         </div>
         <div style={{ display: "flex", gap: ".4rem", alignItems: "center" }}>
-          <button
-            type="button"
-            className={`btn ${mode === "model" ? "btn-primary" : "btn-ghost"}`}
-            style={{ fontSize: ".72rem", padding: ".25rem .7rem" }}
-            onClick={() => setMode("model")}
-          >
+          <button type="button" className={`btn ${mode === "model" ? "btn-primary" : "btn-ghost"}`} style={{ fontSize: ".72rem", padding: ".25rem .7rem" }} onClick={() => setMode("model")}>
             Modèle de période
           </button>
-          <button
-            type="button"
-            className={`btn ${mode === "realweek" ? "btn-primary" : "btn-ghost"}`}
-            style={{ fontSize: ".72rem", padding: ".25rem .7rem" }}
-            onClick={() => setMode("realweek")}
-          >
+          <button type="button" className={`btn ${mode === "realweek" ? "btn-primary" : "btn-ghost"}`} style={{ fontSize: ".72rem", padding: ".25rem .7rem" }} onClick={() => setMode("realweek")}>
             Semaine réelle
           </button>
         </div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: ".75rem",
-          flexWrap: "wrap",
-          marginBottom: ".75rem",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem", flexWrap: "wrap", marginBottom: ".75rem" }}>
         <div className="period-tabs">
           {periods.map((p, i) => (
-            <button
-              key={p.id}
-              type="button"
-              className={`period-btn ${i === periodIdx ? "active" : ""}`}
-              style={{ "--period-color": p.color } as React.CSSProperties}
-              onClick={() => setPeriodIdx(i)}
-            >
+            <button key={p.id} type="button" className={`period-btn ${i === periodIdx ? "active" : ""}`} style={{ "--period-color": p.color } as React.CSSProperties} onClick={() => setPeriodIdx(i)}>
               <span className="period-badge" />
               {p.label}
             </button>
           ))}
-          {periods.length === 0 && (
-            <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Aucune période active.</span>
-          )}
+          {periods.length === 0 && <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Aucune période active.</span>}
         </div>
         <div className="planning-options-row">
           <label className="planning-option">
@@ -121,7 +166,6 @@ export function AgendaGrid({ service, periods }: { service: Service; periods: Pe
 
       <div className="planning-wrap">
         <div className="agenda-grid" style={{ gridTemplateColumns: `44px repeat(${days.length}, 1fr)` }}>
-          {/* En-tête */}
           <div className="agenda-header-cell agenda-corner" title="Horaires">
             🕘
           </div>
@@ -131,7 +175,6 @@ export function AgendaGrid({ service, periods }: { service: Service; periods: Pe
             </div>
           ))}
 
-          {/* Colonne des heures */}
           <div className="agenda-time-col" style={{ height: totalH }}>
             {hours.map((h) => (
               <div key={h} className="agenda-time-mark" style={{ top: (h - firstHour) * ROW_H }}>
@@ -140,26 +183,43 @@ export function AgendaGrid({ service, periods }: { service: Service; periods: Pe
             ))}
           </div>
 
-          {/* Colonnes des jours */}
           {days.map((d) => (
             <div key={d} className="agenda-day-col" style={{ height: totalH }}>
               {hours.map((h) => (
-                <div
-                  key={h}
-                  className="agenda-grid-line is-hour"
-                  style={{ top: (h - firstHour) * ROW_H }}
-                />
+                <div key={h} className="agenda-grid-line is-hour" style={{ top: (h - firstHour) * ROW_H }} />
               ))}
-              {/* Les blocs de réservation seront positionnés ici (sous-phase suivante). */}
+              {(blocksByDay[d] ?? []).map((b) => {
+                const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
+                return (
+                  <div
+                    key={b.key}
+                    className={`agenda-block${b.full ? " is-full" : ""}`}
+                    style={{ top: b.top, height: b.height, left: 2, right: 2 }}
+                    title={`${b.demandeur} — ${b.name}`}
+                  >
+                    <div className="agenda-block-chips">
+                      {b.demandeur && <div style={{ fontSize: ".6rem", color: "var(--muted)" }}>{b.demandeur}</div>}
+                      <div className="planning-name-tag">
+                        <span>
+                          {b.name}
+                          {b.count > 1 ? ` +${b.count - 1}` : ""}
+                        </span>
+                      </div>
+                      {b.theme && <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>{b.theme}</span>}
+                    </div>
+                    <div className="agenda-block-meta is-gauge">
+                      <span className="agenda-block-gauge-bar">
+                        <span style={{ width: `${pct}%`, background: b.full ? "var(--danger)" : "var(--accent)" }} />
+                      </span>
+                      {b.used}/{b.capacity}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
       </div>
-
-      <p style={{ fontSize: ".72rem", color: "var(--muted)", marginTop: ".75rem" }}>
-        Cadre de l&apos;agenda en place. Prochaine sous-phase : afficher les réservations (blocs
-        positionnés + jauges), puis les modes A/B, le pointage et la création par clic.
-      </p>
     </div>
   );
 }

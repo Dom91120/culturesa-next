@@ -132,6 +132,69 @@ async function main() {
     console.log(`• Admin déjà présent : ${adminEmail}`);
   }
 
+  // ── Données de démo pour l'Agenda (réservations récurrentes) ──
+  // Capacité des créneaux svc_001 (pour la jauge).
+  await prisma.slot.updateMany({ where: { id: { in: ["matin", "aprem"] } }, data: { capacity: 15 } });
+
+  const demoUsers = [
+    { email: "huppert@demo.fr", prenom: "Isabelle", nom: "HUPPERT", demandeurId: 5 },
+    { email: "adjani@demo.fr", prenom: "Isabelle", nom: "ADJANI", demandeurId: 5 },
+  ];
+  const userIds: Record<string, string> = {};
+  for (const u of demoUsers) {
+    const created = await prisma.user.upsert({
+      where: { email: u.email },
+      update: { prenom: u.prenom, nom: u.nom, demandeurId: u.demandeurId },
+      create: {
+        email: u.email,
+        emailVerified: true,
+        name: `${u.prenom} ${u.nom}`,
+        prenom: u.prenom,
+        nom: u.nom,
+        role: "utilisateur",
+        rgpdOk: true,
+        demandeurId: u.demandeurId,
+      },
+    });
+    userIds[u.nom] = created.id;
+  }
+
+  const demoBookings = [
+    { user: "HUPPERT", slotId: "matin", dayKey: "lun", enfants: 4, theme: "La côte de bœuf" },
+    { user: "ADJANI", slotId: "matin", dayKey: "mar", enfants: 9, theme: "Le chocolat" },
+    { user: "HUPPERT", slotId: "aprem", dayKey: "jeu", enfants: 6, theme: "Atelier nature" },
+  ];
+  for (const b of demoBookings) {
+    const userId = userIds[b.user];
+    await prisma.booking.upsert({
+      where: {
+        uq_recurring: {
+          userId,
+          serviceId: "svc_001",
+          slotId: b.slotId,
+          periodId: 1,
+          dayKey: b.dayKey,
+          week: "",
+        },
+      },
+      update: { enfants: b.enfants, themeLabel: b.theme, validated: true },
+      create: {
+        bookingType: "recurring",
+        userId,
+        serviceId: "svc_001",
+        slotId: b.slotId,
+        periodId: 1,
+        dayKey: b.dayKey,
+        week: "",
+        enfants: b.enfants,
+        themeLabel: b.theme,
+        validated: true,
+        autoValidateFrom: new Date(),
+      },
+    });
+  }
+  console.log(`✓ Démo agenda : ${demoBookings.length} réservations récurrentes.`);
+
   console.log("✓ Seed terminé.");
 }
 
