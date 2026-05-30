@@ -1,18 +1,26 @@
+import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
+import { PasswordForm } from "./password-form";
+import { ProfileForm } from "./profile-form";
 
 export default async function MonComptePage() {
   const session = await requireUser();
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { prenom: true, nom: true, tel: true, email: true },
+  });
+
+  const profile = {
+    prenom: user?.prenom ?? "",
+    nom: user?.nom ?? "",
+    tel: user?.tel ?? "",
+    email: user?.email ?? session.user.email,
+  };
+
   return (
-    <div className="panel">
-      <div className="panel-title">
-        <span className="dot" />
-        Mon compte
-      </div>
-      <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-        Connecté en tant que <strong style={{ color: "var(--text)" }}>{session.user.email}</strong>.
-        <br />
-        Édition du profil, changement d&apos;e-mail / mot de passe et droits RGPD — à venir.
-      </p>
+    <div>
+      <ProfileForm profile={profile} />
+      <PasswordForm />
     </div>
   );
 }
