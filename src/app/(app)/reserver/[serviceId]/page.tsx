@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, PageTitle } from "@/components/ui";
 import { getServiceWithAvailability } from "@/server/services/bookings";
 import { requireUser } from "@/server/guards";
 import { ReserveSlot } from "./reserve-slot";
@@ -24,34 +23,37 @@ export default async function ServiceReservePage({
   const { service, availability } = data;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <PageTitle>{service.label}</PageTitle>
-        <Link href="/reserver" className="text-sm text-neutral-500 hover:text-brand-700">
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem", flexWrap: "wrap" }}>
+        <div className="panel-title" style={{ marginBottom: ".5rem" }}>
+          <span className="dot" />
+          {service.label}
+        </div>
+        <Link href="/reserver" style={{ fontSize: ".8rem", color: "var(--muted)", textDecoration: "none" }}>
           ← Activités
         </Link>
       </div>
 
-      <Card>
-        {availability.length === 0 ? (
-          <p className="text-sm text-neutral-400">Aucun créneau ponctuel à venir pour cette activité.</p>
-        ) : (
-          <div className="space-y-3">
-            {availability.map((slot) => (
-              <ReserveSlot
-                key={slot.id}
-                serviceId={service.id}
-                slotId={slot.id}
-                dateLabel={slot.slotDate ? dateFmt.format(slot.slotDate) : "Date à définir"}
-                timeLabel={`${slot.startTime} – ${slot.endTime}`}
-                remaining={slot.remaining}
-                capacity={slot.capacity}
-                mine={slot.mine}
-              />
-            ))}
-          </div>
-        )}
-      </Card>
+      {availability.length === 0 ? (
+        <div className="panel">
+          <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
+            Aucun créneau ponctuel à venir pour cette activité.
+          </p>
+        </div>
+      ) : (
+        availability.map((slot) => (
+          <ReserveSlot
+            key={slot.id}
+            serviceId={service.id}
+            slotId={slot.id}
+            dateLabel={slot.slotDate ? dateFmt.format(slot.slotDate) : "Date à définir"}
+            timeLabel={`${slot.startTime} – ${slot.endTime}`}
+            remaining={slot.remaining}
+            capacity={slot.capacity}
+            mine={slot.mine}
+          />
+        ))
+      )}
     </div>
   );
 }

@@ -1,34 +1,36 @@
 import Link from "next/link";
-import { Card, PageTitle } from "@/components/ui";
 import { listBookableServices } from "@/server/services/bookings";
 
 export default async function ReserverPage() {
   const services = await listBookableServices();
 
   return (
-    <div className="space-y-6">
-      <PageTitle>Réserver une activité</PageTitle>
+    <div>
+      <div className="panel-title">
+        <span className="dot" />
+        Réserver une activité
+      </div>
 
       {services.length === 0 && (
-        <Card>
-          <p className="text-sm text-neutral-400">Aucune activité disponible pour le moment.</p>
-        </Card>
+        <div className="panel">
+          <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
+            Aucune activité disponible pour le moment.
+          </p>
+        </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: ".85rem" }}>
         {services.map((s) => (
-          <Link key={s.id} href={`/reserver/${s.id}`} className="block">
-            <Card>
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-brand-700">{s.label}</h2>
-                {s.icon && <span className="text-xl">{s.icon}</span>}
-              </div>
-              <p className="mt-2 text-sm text-neutral-500">
-                {s._count.slots > 0
-                  ? `${s._count.slots} créneau${s._count.slots > 1 ? "x" : ""} à venir`
-                  : "Aucun créneau à venir"}
-              </p>
-            </Card>
+          <Link key={s.id} href={`/reserver/${s.id}`} className="panel" style={{ textDecoration: "none", display: "block", marginBottom: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 600, color: "var(--accent)" }}>{s.label}</span>
+              {s.icon && <span style={{ fontSize: "1.2rem" }}>{s.icon}</span>}
+            </div>
+            <p style={{ fontSize: ".78rem", color: "var(--muted)", marginTop: ".4rem" }}>
+              {s._count.slots > 0
+                ? `${s._count.slots} créneau${s._count.slots > 1 ? "x" : ""} à venir`
+                : "Aucun créneau à venir"}
+            </p>
           </Link>
         ))}
       </div>

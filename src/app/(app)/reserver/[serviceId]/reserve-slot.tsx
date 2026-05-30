@@ -2,7 +2,6 @@
 
 import { useActionState } from "react";
 import { initialActionState } from "@/lib/action-state";
-import { btnPrimary, inputClass } from "@/components/ui";
 import { createBookingAction } from "./actions";
 
 type Props = {
@@ -20,46 +19,52 @@ export function ReserveSlot({ serviceId, slotId, dateLabel, timeLabel, remaining
   const full = remaining <= 0;
 
   return (
-    <div className="rounded-md border border-neutral-100 p-4 dark:border-neutral-800">
-      <div className="flex items-center justify-between">
+    <div className="panel" style={{ padding: "1rem 1.1rem", marginBottom: ".6rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem" }}>
         <div>
-          <p className="font-medium capitalize">{dateLabel}</p>
-          <p className="text-sm text-neutral-500">{timeLabel}</p>
+          <div style={{ fontWeight: 600, textTransform: "capitalize" }}>{dateLabel}</div>
+          <div style={{ fontSize: ".8rem", color: "var(--muted)" }}>{timeLabel}</div>
         </div>
         <span
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-            full
-              ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-              : "bg-brand-50 text-brand-700"
-          }`}
+          className="role-pill"
+          style={{
+            background: full ? "var(--danger-dim)" : "var(--accent-dim)",
+            color: full ? "var(--danger)" : "var(--accent)",
+          }}
         >
           {full ? "Complet" : `${remaining}/${capacity} places`}
         </span>
       </div>
 
       {mine ? (
-        <p className="mt-3 text-sm font-medium text-brand-700">Vous êtes inscrit ✓</p>
+        <p style={{ marginTop: ".6rem", fontSize: ".8rem", fontWeight: 600, color: "var(--accent)" }}>
+          Vous êtes inscrit ✓
+        </p>
       ) : (
         !full && (
-          <form action={action} className="mt-3 flex flex-wrap items-end gap-3">
+          <form action={action} style={{ marginTop: ".6rem", display: "flex", flexWrap: "wrap", gap: ".6rem", alignItems: "flex-end" }}>
             <input type="hidden" name="slotId" value={slotId} />
             <input type="hidden" name="serviceId" value={serviceId} />
-            <label className="text-xs">
-              <span className="mb-1 block font-medium text-neutral-500">Enfants</span>
-              <input name="enfants" type="number" min={0} defaultValue={0} className={`${inputClass} w-20`} />
-            </label>
-            <label className="text-xs">
-              <span className="mb-1 block font-medium text-neutral-500">Accompagnants</span>
-              <input name="accompagnants" type="number" min={0} defaultValue={0} className={`${inputClass} w-28`} />
-            </label>
-            <button type="submit" disabled={pending} className={btnPrimary}>
+            <div className="field" style={{ width: 88 }}>
+              <label htmlFor={`enf-${slotId}`}>Enfants</label>
+              <input id={`enf-${slotId}`} name="enfants" type="number" min={0} defaultValue={0} />
+            </div>
+            <div className="field" style={{ width: 120 }}>
+              <label htmlFor={`acc-${slotId}`}>Accompagnants</label>
+              <input id={`acc-${slotId}`} name="accompagnants" type="number" min={0} defaultValue={0} />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={pending}>
               {pending ? "Réservation…" : "Réserver"}
             </button>
           </form>
         )
       )}
 
-      {state?.error && <p className="mt-2 text-sm text-red-600">{state.error}</p>}
+      {state?.error && (
+        <p className="field-error" style={{ display: "block", marginTop: ".4rem" }}>
+          {state.error}
+        </p>
+      )}
     </div>
   );
 }
