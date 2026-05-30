@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { toDateInput } from "@/lib/format";
 import { prisma } from "@/server/db";
 import { AgendaGrid } from "./agenda-grid";
 
@@ -21,7 +22,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     prisma.period.findMany({
       where: { OR: [{ serviceId: null }, { serviceId: id }], state: "actif" },
       orderBy: [{ position: "asc" }, { id: "asc" }],
-      select: { id: true, label: true, color: true },
+      select: { id: true, label: true, color: true, dateStart: true, dateEnd: true },
     }),
     prisma.slot.findMany({
       where: { serviceId: id, slotType: "recurring", state: "actif" },
@@ -78,10 +79,18 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     demandeur: b.user.demandeur?.label ?? "",
   }));
 
+  const periodsData = periods.map((p) => ({
+    id: p.id,
+    label: p.label,
+    color: p.color,
+    dateStart: toDateInput(p.dateStart),
+    dateEnd: toDateInput(p.dateEnd),
+  }));
+
   return (
     <AgendaGrid
       service={service}
-      periods={periods}
+      periods={periodsData}
       slots={slots}
       bookings={bookingsData}
       users={usersData}

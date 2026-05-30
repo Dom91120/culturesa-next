@@ -18,7 +18,26 @@ type Service = {
   afternoonEnd: string;
   recurCapacity: number;
 };
-type Period = { id: number; label: string; color: string };
+type Period = { id: number; label: string; color: string; dateStart: string; dateEnd: string };
+
+const DAY_OFFSET: Record<string, number> = { lun: 0, mar: 1, mer: 2, jeu: 3, ven: 4, sam: 5, dim: 6 };
+
+function ymd(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function mondayOf(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = (x.getDay() + 6) % 7; // 0 = lundi
+  x.setDate(x.getDate() - day);
+  return x;
+}
+function addDays(iso: string, n: number): Date {
+  const x = new Date(`${iso}T00:00:00`);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
 type Slot = {
   id: string;
   startTime: string;
@@ -116,6 +135,7 @@ export function AgendaGrid({
   const [, startTransition] = useTransition();
   const [periodIdx, setPeriodIdx] = useState(0);
   const [mode, setMode] = useState<"model" | "realweek">("model");
+  const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
   const [hideEmpty, setHideEmpty] = useState(false);
   const [validation, setValidation] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
@@ -134,13 +154,31 @@ export function AgendaGrid({
   const pxPerMin = ROW_H / 60;
   const selectedPeriodId = periods[periodIdx]?.id ?? null;
 
+  // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
+  const mondayStr = anchorMonday;
+  const sundayStr = mondayStr ? ymd(addDays(mondayStr, 6)) : null;
+  const coveringPeriod =
+    mondayStr && sundayStr
+      ? periods.find(
+          (p) => p.dateStart && p.dateEnd && p.dateStart <= sundayStr && p.dateEnd >= mondayStr,
+        ) ?? null
+      : null;
+  // En semaine réelle sans période couvrante, -1 ne matche rien → aucun bloc.
+  const effectivePeriodId =
+    mode === "realweek" ? (coveringPeriod?.id ?? -1) : selectedPeriodId;
+  // Libellé daté de chaque jour de la semaine réelle, par dayKey.
+  const weekDateByDay: Record<string, string> = {};
+  if (mondayStr) {
+    for (const d of days) weekDateByDay[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
+  }
+
   // "Masquer les horaires sans réservation" : resserre la grille sur la plage
   // horaire réellement occupée par des réservations de la période active.
   let firstHour = baseFirst;
   let lastHour = baseLast;
   if (hideEmpty) {
     const bookedSlotIds = new Set(
-      bookings.filter((b) => selectedPeriodId == null || b.periodId === selectedPeriodId).map((b) => b.slotId),
+      bookings.filter((b) => effectivePeriodId == null || b.periodId === effectivePeriodId).map((b) => b.slotId),
     );
     let lo = Number.POSITIVE_INFINITY;
     let hi = Number.NEGATIVE_INFINITY;
@@ -178,7 +216,7 @@ export function AgendaGrid({
     const slotById = new Map(slots.map((s) => [s.id, s]));
     const groups = new Map<string, Booking[]>();
     for (const b of bookings) {
-      if (selectedPeriodId != null && b.periodId !== selectedPeriodId) continue;
+      if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
       const key = `${b.dayKey}|${b.slotId}`;
       const arr = groups.get(key) ?? [];
       arr.push(b);
@@ -208,7 +246,7 @@ export function AgendaGrid({
       });
     }
     return byDay;
-  }, [bookings, slots, selectedPeriodId, gridStartMin, pxPerMin, service.recurCapacity]);
+  }, [bookings, slots, effectivePeriodId, gridStartMin, pxPerMin, service.recurCapacity]);
 
   function run(p: Promise<unknown>) {
     setMenu(null);
@@ -229,6 +267,12 @@ export function AgendaGrid({
       document.removeEventListener("click", onDoc);
     };
   }, [menu]);
+
+  // Ancre la semaine réelle sur le lundi courant (client uniquement, évite tout
+  // décalage SSR/hydratation).
+  useEffect(() => {
+    setAnchorMonday(ymd(mondayOf(new Date())));
+  }, []);
 
   function openCreate(dayKey: string, slotId: string) {
     setCUser("");
@@ -284,12 +328,27 @@ export function AgendaGrid({
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem", flexWrap: "wrap", marginBottom: ".75rem" }}>
         <div className="period-tabs">
-          {periods.map((p, i) => (
-            <button key={p.id} type="button" className={`period-btn ${i === periodIdx ? "active" : ""}`} style={{ "--period-color": p.color } as React.CSSProperties} onClick={() => setPeriodIdx(i)}>
-              <span className="period-badge" />
-              {p.label}
-            </button>
-          ))}
+          {periods.map((p, i) => {
+            const active = mode === "realweek" ? p.id === coveringPeriod?.id : i === periodIdx;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                className={`period-btn ${active ? "active" : ""}`}
+                style={{ "--period-color": p.color } as React.CSSProperties}
+                onClick={() => {
+                  if (mode === "realweek") {
+                    if (p.dateStart) setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
+                  } else {
+                    setPeriodIdx(i);
+                  }
+                }}
+              >
+                <span className="period-badge" />
+                {p.label}
+              </button>
+            );
+          })}
           {periods.length === 0 && <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Aucune période active.</span>}
         </div>
         <div className="planning-options-row">
@@ -304,6 +363,37 @@ export function AgendaGrid({
         </div>
       </div>
 
+      {mode === "realweek" && (
+        <div className="exercice-nav" style={{ marginBottom: ".5rem" }}>
+          <button
+            type="button"
+            className="ex-arrow"
+            disabled={!mondayStr}
+            onClick={() => mondayStr && setAnchorMonday(ymd(addDays(mondayStr, -7)))}
+          >
+            ◀
+          </button>
+          <span className="ex-nav-label">
+            {mondayStr
+              ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
+              : "…"}
+          </span>
+          <button
+            type="button"
+            className="ex-arrow"
+            disabled={!mondayStr}
+            onClick={() => mondayStr && setAnchorMonday(ymd(addDays(mondayStr, 7)))}
+          >
+            ▶
+          </button>
+          {mode === "realweek" && !coveringPeriod && mondayStr && (
+            <span style={{ fontSize: ".72rem", color: "var(--muted)", marginLeft: ".5rem" }}>
+              (aucune période sur cette semaine)
+            </span>
+          )}
+        </div>
+      )}
+
       <p style={{ fontSize: ".7rem", color: "var(--muted)", marginBottom: ".4rem" }}>
         Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers
         un autre créneau pour le déplacer.
@@ -317,6 +407,9 @@ export function AgendaGrid({
           {days.map((d) => (
             <div key={d} className="agenda-header-cell">
               {DAY_NAMES[d] ?? d}
+              {mode === "realweek" && weekDateByDay[d] && (
+                <span className="agenda-day-sub">{weekDateByDay[d]}</span>
+              )}
             </div>
           ))}
 
