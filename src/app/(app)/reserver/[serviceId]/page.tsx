@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { prisma } from "@/server/db";
 import { getServiceWithAvailability } from "@/server/services/bookings";
 import { requireUser } from "@/server/guards";
+import { RecurringBooking } from "./recurring-booking";
 import { ReserveSlot } from "./reserve-slot";
 
 const dateFmt = new Intl.DateTimeFormat("fr-FR", {
@@ -19,8 +21,27 @@ export default async function ServiceReservePage({
   const { serviceId } = await params;
   const data = await getServiceWithAvailability(serviceId, session.user.id);
   if (!data) notFound();
-
   const { service, availability } = data;
+
+  const [recurSlots, recurBookings, periods, profile] = await Promise.all([
+    prisma.slot.findMany({
+      where: { serviceId, slotType: "recurring", state: "actif" },
+      orderBy: { startTime: "asc" },
+      select: { id: true, startTime: true, endTime: true, capacity: true },
+    }),
+    prisma.booking.findMany({
+      where: { serviceId, bookingType: "recurring" },
+      select: { id: true, slotId: true, periodId: true, dayKey: true, enfants: true, userId: true },
+    }),
+    prisma.period.findMany({
+      where: { OR: [{ serviceId: null }, { serviceId }], state: "actif" },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+      select: { id: true, label: true, color: true },
+    }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { enfants: true } }),
+  ]);
+
+  const days = service.activeDays.split(",").map((d) => d.trim()).filter(Boolean);
 
   return (
     <div>
@@ -34,11 +55,30 @@ export default async function ServiceReservePage({
         </Link>
       </div>
 
+      <div className="panel">
+        <div className="panel-title" style={{ fontSize: ".82rem" }}>
+          <span className="dot" />
+          Créneaux récurrents
+        </div>
+        <RecurringBooking
+          serviceId={service.id}
+          days={days}
+          recurCapacity={service.recurCapacity}
+          slots={recurSlots}
+          periods={periods}
+          bookings={recurBookings}
+          userId={session.user.id}
+          myEnfants={profile?.enfants ?? 0}
+        />
+      </div>
+
+      <div className="panel-title" style={{ fontSize: ".82rem", marginTop: "1rem" }}>
+        <span className="dot" />
+        Créneaux ponctuels
+      </div>
       {availability.length === 0 ? (
         <div className="panel">
-          <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-            Aucun créneau ponctuel à venir pour cette activité.
-          </p>
+          <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>Aucun créneau ponctuel à venir.</p>
         </div>
       ) : (
         availability.map((slot) => (
