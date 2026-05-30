@@ -19,7 +19,40 @@ type Service = {
   recurCapacity: number;
 };
 type Period = { id: number; label: string; color: string };
-type Slot = { id: string; startTime: string; endTime: string; capacity: number | null };
+type Slot = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  capacity: number | null;
+  capLun: number | null;
+  capMar: number | null;
+  capMer: number | null;
+  capJeu: number | null;
+  capVen: number | null;
+  capSam: number | null;
+  capDim: number | null;
+};
+
+function dayCap(slot: Slot, dayKey: string): number | null {
+  switch (dayKey) {
+    case "lun":
+      return slot.capLun;
+    case "mar":
+      return slot.capMar;
+    case "mer":
+      return slot.capMer;
+    case "jeu":
+      return slot.capJeu;
+    case "ven":
+      return slot.capVen;
+    case "sam":
+      return slot.capSam;
+    case "dim":
+      return slot.capDim;
+    default:
+      return null;
+  }
+}
 type Pointage = "present" | "absent" | null;
 type Booking = {
   id: number;
@@ -158,7 +191,7 @@ export function AgendaGrid({
       if (!slot) continue;
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
-      const capacity = slot.capacity ?? service.recurCapacity;
+      const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.recurCapacity;
       const used = list.reduce((sum, b) => sum + b.enfants, 0);
       const full = used >= capacity;
       list.forEach((booking, i) => {

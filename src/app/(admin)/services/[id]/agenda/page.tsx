@@ -25,7 +25,19 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     }),
     prisma.slot.findMany({
       where: { serviceId: id, slotType: "recurring", state: "actif" },
-      select: { id: true, startTime: true, endTime: true, capacity: true },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        capacity: true,
+        capLun: true,
+        capMar: true,
+        capMer: true,
+        capJeu: true,
+        capVen: true,
+        capSam: true,
+        capDim: true,
+      },
     }),
     prisma.booking.findMany({
       where: { serviceId: id, bookingType: "recurring" },

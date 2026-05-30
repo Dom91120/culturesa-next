@@ -135,6 +135,8 @@ async function main() {
   // ── Données de démo pour l'Agenda (réservations récurrentes) ──
   // Capacité des créneaux svc_001 (pour la jauge).
   await prisma.slot.updateMany({ where: { id: { in: ["matin", "aprem"] } }, data: { capacity: 15 } });
+  // Démo capacité par jour : Lundi matin plafonné à 6 (au lieu de 15).
+  await prisma.slot.update({ where: { id: "matin" }, data: { capLun: 6 } });
 
   const demoUsers = [
     { email: "huppert@demo.fr", prenom: "Isabelle", nom: "HUPPERT", demandeurId: 5 },
