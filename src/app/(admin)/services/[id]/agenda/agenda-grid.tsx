@@ -96,13 +96,35 @@ export function AgendaGrid({
   const days = service.activeDays.split(",").map((d) => d.trim()).filter(Boolean);
   const startMin = toMinutes(service.morningStart, 9 * 60);
   const endMin = toMinutes(service.afternoonEnd, 18 * 60);
-  const firstHour = Math.floor(startMin / 60);
-  const lastHour = Math.ceil(endMin / 60);
+  const baseFirst = Math.floor(startMin / 60);
+  const baseLast = Math.ceil(endMin / 60);
+  const pxPerMin = ROW_H / 60;
+  const selectedPeriodId = periods[periodIdx]?.id ?? null;
+
+  // "Masquer les horaires sans réservation" : resserre la grille sur la plage
+  // horaire réellement occupée par des réservations de la période active.
+  let firstHour = baseFirst;
+  let lastHour = baseLast;
+  if (hideEmpty) {
+    const bookedSlotIds = new Set(
+      bookings.filter((b) => selectedPeriodId == null || b.periodId === selectedPeriodId).map((b) => b.slotId),
+    );
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
+    for (const s of slots) {
+      if (!bookedSlotIds.has(s.id)) continue;
+      lo = Math.min(lo, toMinutes(s.startTime, startMin));
+      hi = Math.max(hi, toMinutes(s.endTime, endMin));
+    }
+    if (hi > lo) {
+      firstHour = Math.max(baseFirst, Math.floor(lo / 60));
+      lastHour = Math.min(baseLast, Math.ceil(hi / 60));
+    }
+  }
+
   const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
   const gridStartMin = firstHour * 60;
   const totalH = (lastHour - firstHour) * ROW_H;
-  const pxPerMin = ROW_H / 60;
-  const selectedPeriodId = periods[periodIdx]?.id ?? null;
 
   const slotsParsed = useMemo(
     () =>
