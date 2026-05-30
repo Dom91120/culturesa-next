@@ -1,45 +1,53 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { demandeurSchema, idSchema } from "@/schemas/referentiels";
+import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
-import * as svc from "@/server/services/demandeurs";
 
-const PATH = "/demandeurs";
+const rowsSchema = z.array(
+  z.object({
+    id: z.number().int().positive().nullable(),
+    label: z.string().trim().min(1).max(100),
+    openOnSchoolHolidays: z.boolean(),
+  }),
+);
 
-function readForm(formData: FormData) {
-  return demandeurSchema.safeParse({
-    label: formData.get("label"),
-    openOnSchoolHolidays: formData.get("openOnSchoolHolidays") === "on",
+export type DemandeurRow = z.infer<typeof rowsSchema>[number];
+
+/**
+ * Sauvegarde groupée des demandeurs (comme l'original : un seul "Enregistrer").
+ * Réconcilie : crée les nouveaux, met à jour les existants, supprime ceux retirés.
+ */
+export async function saveDemandeursAction(rows: DemandeurRow[]): Promise<ActionState> {
+  await requireRole("gestionnaire");
+
+  const parsed = rowsSchema.safeParse(rows);
+  if (!parsed.success) return { ok: false, error: "Chaque demandeur doit avoir un libellé." };
+  const data = parsed.data;
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.demandeur.findMany({ select: { id: true } });
+    const keepIds = new Set(data.filter((r) => r.id != null).map((r) => r.id));
+    const toDelete = existing.filter((e) => !keepIds.has(e.id)).map((e) => e.id);
+    if (toDelete.length) {
+      await tx.demandeur.deleteMany({ where: { id: { in: toDelete } } });
+    }
+    for (const r of data) {
+      if (r.id != null) {
+        await tx.demandeur.update({
+          where: { id: r.id },
+          data: { label: r.label, openOnSchoolHolidays: r.openOnSchoolHolidays },
+        });
+      } else {
+        await tx.demandeur.create({
+          data: { label: r.label, openOnSchoolHolidays: r.openOnSchoolHolidays },
+        });
+      }
+    }
   });
-}
 
-export async function createDemandeurAction(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  await requireRole("gestionnaire");
-  const parsed = readForm(formData);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message };
-  await svc.createDemandeur(parsed.data);
-  revalidatePath(PATH);
+  revalidatePath("/demandeurs");
   return { ok: true };
-}
-
-export async function updateDemandeurAction(formData: FormData) {
-  await requireRole("gestionnaire");
-  const id = idSchema.safeParse(formData.get("id"));
-  const parsed = readForm(formData);
-  if (!id.success || !parsed.success) return;
-  await svc.updateDemandeur(id.data, parsed.data);
-  revalidatePath(PATH);
-}
-
-export async function deleteDemandeurAction(formData: FormData) {
-  await requireRole("gestionnaire");
-  const id = idSchema.safeParse(formData.get("id"));
-  if (!id.success) return;
-  await svc.deleteDemandeur(id.data);
-  revalidatePath(PATH);
 }
