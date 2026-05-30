@@ -14,6 +14,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       morningStart: true,
       afternoonEnd: true,
       recurCapacity: true,
+      semaineAb: true,
     },
   });
   if (!service) notFound();
@@ -47,6 +48,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         slotId: true,
         periodId: true,
         dayKey: true,
+        week: true,
         enfants: true,
         themeLabel: true,
         validated: true,
@@ -71,6 +73,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     slotId: b.slotId,
     periodId: b.periodId,
     dayKey: b.dayKey,
+    week: b.week,
     enfants: b.enfants,
     theme: b.themeLabel,
     validated: b.validated,

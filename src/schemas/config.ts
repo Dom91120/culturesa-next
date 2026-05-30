@@ -30,6 +30,7 @@ export const serviceUpdateSchema = z.object({
   bookingDelay: z.coerce.number().int().min(0).default(0),
   openOnHolidays: z.boolean().default(false),
   showPreviousExercices: z.boolean().default(false),
+  semaineAb: z.boolean().default(false),
   themesMode: z.enum(["libre", "liste"]).default("libre"),
   autoValidationDelay: z.coerce.number().int().default(0),
 });

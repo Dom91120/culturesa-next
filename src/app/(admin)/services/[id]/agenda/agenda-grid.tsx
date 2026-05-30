@@ -17,6 +17,7 @@ type Service = {
   morningStart: string;
   afternoonEnd: string;
   recurCapacity: number;
+  semaineAb: boolean;
 };
 type Period = { id: number; label: string; color: string; dateStart: string; dateEnd: string };
 
@@ -38,6 +39,17 @@ function addDays(iso: string, n: number): Date {
   return x;
 }
 const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+/** Numéro de semaine ISO (1..53) — sert à déduire la parité A/B en semaine réelle. */
+function isoWeek(d: Date): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const fdn = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - fdn + 3);
+  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 24 * 3600 * 1000));
+}
 type Slot = {
   id: string;
   startTime: string;
@@ -78,6 +90,7 @@ type Booking = {
   slotId: string;
   periodId: number;
   dayKey: string;
+  week: string;
   enfants: number;
   theme: string;
   validated: boolean;
@@ -136,6 +149,7 @@ export function AgendaGrid({
   const [periodIdx, setPeriodIdx] = useState(0);
   const [mode, setMode] = useState<"model" | "realweek">("model");
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
+  const [weekAB, setWeekAB] = useState<"A" | "B">("A");
   const [hideEmpty, setHideEmpty] = useState(false);
   const [validation, setValidation] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
@@ -171,6 +185,16 @@ export function AgendaGrid({
   if (mondayStr) {
     for (const d of days) weekDateByDay[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
   }
+
+  // ── Semaines A/B ──
+  const abMode = service.semaineAb;
+  const realWeekParity: "A" | "B" | null = mondayStr
+    ? isoWeek(new Date(`${mondayStr}T00:00:00`)) % 2 === 1
+      ? "A"
+      : "B"
+    : null;
+  // Semaine effective filtrée : en modèle = choix A/B ; en réel = parité de la date.
+  const effectiveWeek: "A" | "B" | null = abMode ? (mode === "model" ? weekAB : realWeekParity) : null;
 
   // "Masquer les horaires sans réservation" : resserre la grille sur la plage
   // horaire réellement occupée par des réservations de la période active.
@@ -217,6 +241,8 @@ export function AgendaGrid({
     const groups = new Map<string, Booking[]>();
     for (const b of bookings) {
       if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
+      // A/B : une résa sans semaine ("") vaut pour les deux semaines.
+      if (effectiveWeek != null && b.week !== effectiveWeek && b.week !== "") continue;
       const key = `${b.dayKey}|${b.slotId}`;
       const arr = groups.get(key) ?? [];
       arr.push(b);
@@ -246,7 +272,7 @@ export function AgendaGrid({
       });
     }
     return byDay;
-  }, [bookings, slots, effectivePeriodId, gridStartMin, pxPerMin, service.recurCapacity]);
+  }, [bookings, slots, effectivePeriodId, effectiveWeek, gridStartMin, pxPerMin, service.recurCapacity]);
 
   function run(p: Promise<unknown>) {
     setMenu(null);
@@ -283,7 +309,11 @@ export function AgendaGrid({
   }
 
   function submitCreate() {
-    if (!createCtx || selectedPeriodId == null) return;
+    const createPeriodId = effectivePeriodId != null && effectivePeriodId > 0 ? effectivePeriodId : null;
+    if (!createCtx || createPeriodId == null) {
+      setCError("Aucune période active pour créer une réservation.");
+      return;
+    }
     if (!cUser) {
       setCError("Choisissez un usager.");
       return;
@@ -292,11 +322,12 @@ export function AgendaGrid({
       const res = await createRecurringBookingAction({
         serviceId: service.id,
         slotId: createCtx.slotId,
-        periodId: selectedPeriodId,
+        periodId: createPeriodId,
         dayKey: createCtx.dayKey,
         userId: cUser,
         enfants: Number(cEnfants) || 0,
         theme: cTheme,
+        week: effectiveWeek ?? "",
       });
       if (!res.ok) {
         setCError(res.error ?? "Échec.");
@@ -323,6 +354,19 @@ export function AgendaGrid({
           <button type="button" className={`btn ${mode === "realweek" ? "btn-primary" : "btn-ghost"}`} style={{ fontSize: ".72rem", padding: ".25rem .7rem" }} onClick={() => setMode("realweek")}>
             Semaine réelle
           </button>
+          {abMode && mode === "model" && (
+            <span style={{ display: "inline-flex", gap: ".2rem", marginLeft: ".4rem" }}>
+              <button type="button" className={`btn ${weekAB === "A" ? "btn-primary" : "btn-ghost"}`} style={{ fontSize: ".72rem", padding: ".25rem .6rem" }} onClick={() => setWeekAB("A")}>
+                Sem. A
+              </button>
+              <button type="button" className={`btn ${weekAB === "B" ? "btn-primary" : "btn-ghost"}`} style={{ fontSize: ".72rem", padding: ".25rem .6rem" }} onClick={() => setWeekAB("B")}>
+                Sem. B
+              </button>
+            </span>
+          )}
+          {abMode && mode === "realweek" && realWeekParity && (
+            <span style={{ marginLeft: ".4rem", fontSize: ".72rem", color: "var(--muted)" }}>Semaine {realWeekParity}</span>
+          )}
         </div>
       </div>
 
@@ -429,7 +473,7 @@ export function AgendaGrid({
               style={{ height: totalH, cursor: "cell" }}
               onClick={(e) => {
                 const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
-                if (slot && selectedPeriodId != null) openCreate(d, slot.id);
+                if (slot && effectivePeriodId != null && effectivePeriodId > 0) openCreate(d, slot.id);
               }}
               onDragOver={(e) => {
                 if (draggingId != null) e.preventDefault();

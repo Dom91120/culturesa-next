@@ -170,6 +170,7 @@ model Service {
   bookingDelay          Int        @default(0)
   openOnHolidays        Boolean    @default(false)
   showPreviousExercices Boolean    @default(false)
+  semaineAb             Boolean    @default(false)
   themesMode            ThemesMode @default(libre)
 
   // Délai d'auto-validation en minutes signées (cf. PLAN.md §4).

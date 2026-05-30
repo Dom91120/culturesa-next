@@ -66,6 +66,7 @@ const createSchema = z.object({
   userId: z.string().min(1),
   enfants: z.coerce.number().int().min(0).max(999).default(0),
   theme: z.string().trim().max(255).default(""),
+  week: z.enum(["", "A", "B"]).default(""),
 });
 
 /** Crée une réservation récurrente (clic sur un créneau vide de l'agenda). */
@@ -77,6 +78,7 @@ export async function createRecurringBookingAction(input: {
   userId: string;
   enfants: number;
   theme: string;
+  week: "" | "A" | "B";
 }): Promise<{ ok: boolean; error?: string }> {
   await requireRole("gestionnaire");
   const parsed = createSchema.safeParse(input);
@@ -91,7 +93,7 @@ export async function createRecurringBookingAction(input: {
         slotId: d.slotId,
         periodId: d.periodId,
         dayKey: d.dayKey,
-        week: "",
+        week: d.week,
         enfants: d.enfants,
         themeLabel: d.theme,
         validated: true,

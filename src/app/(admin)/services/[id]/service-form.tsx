@@ -25,6 +25,7 @@ type ServiceFormData = {
   bookingDelay: number;
   openOnHolidays: boolean;
   showPreviousExercices: boolean;
+  semaineAb: boolean;
   themesMode: "libre" | "liste";
   autoValidationDelay: number;
 };
@@ -148,6 +149,10 @@ export function ServiceForm({ service }: { service: ServiceFormData }) {
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="showPreviousExercices" defaultChecked={service.showPreviousExercices} />
           Afficher les exercices précédents
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="semaineAb" defaultChecked={service.semaineAb} />
+          Semaines A/B
         </label>
       </div>
 

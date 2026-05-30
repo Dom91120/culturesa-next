@@ -45,6 +45,7 @@ export async function updateServiceAction(
     bookingDelay: formData.get("bookingDelay"),
     openOnHolidays: formData.get("openOnHolidays") === "on",
     showPreviousExercices: formData.get("showPreviousExercices") === "on",
+    semaineAb: formData.get("semaineAb") === "on",
     themesMode: formData.get("themesMode"),
     autoValidationDelay: formData.get("autoValidationDelay"),
   });

@@ -161,10 +161,22 @@ async function main() {
     userIds[u.nom] = created.id;
   }
 
+  // Repart d'une base propre pour les résa de démo (évite les doublons si la
+  // semaine A/B change entre deux exécutions).
+  await prisma.booking.deleteMany({
+    where: {
+      serviceId: "svc_001",
+      bookingType: "recurring",
+      userId: { in: Object.values(userIds) },
+    },
+  });
+
+  // Démo semaine A/B : HUPPERT lundi matin est en semaine A (les autres = toutes
+  // semaines). Le service svc_001 est activé en mode A/B plus bas.
   const demoBookings = [
-    { user: "HUPPERT", slotId: "matin", dayKey: "lun", enfants: 4, theme: "La côte de bœuf" },
-    { user: "ADJANI", slotId: "matin", dayKey: "mar", enfants: 9, theme: "Le chocolat" },
-    { user: "HUPPERT", slotId: "aprem", dayKey: "jeu", enfants: 6, theme: "Atelier nature" },
+    { user: "HUPPERT", slotId: "matin", dayKey: "lun", enfants: 4, theme: "La côte de bœuf", week: "A" },
+    { user: "ADJANI", slotId: "matin", dayKey: "mar", enfants: 9, theme: "Le chocolat", week: "" },
+    { user: "HUPPERT", slotId: "aprem", dayKey: "jeu", enfants: 6, theme: "Atelier nature", week: "" },
   ];
   for (const b of demoBookings) {
     const userId = userIds[b.user];
@@ -176,7 +188,7 @@ async function main() {
           slotId: b.slotId,
           periodId: 1,
           dayKey: b.dayKey,
-          week: "",
+          week: b.week,
         },
       },
       update: { enfants: b.enfants, themeLabel: b.theme, validated: true },
@@ -187,7 +199,7 @@ async function main() {
         slotId: b.slotId,
         periodId: 1,
         dayKey: b.dayKey,
-        week: "",
+        week: b.week,
         enfants: b.enfants,
         themeLabel: b.theme,
         validated: true,
@@ -195,7 +207,9 @@ async function main() {
       },
     });
   }
-  console.log(`✓ Démo agenda : ${demoBookings.length} réservations récurrentes.`);
+  // Active le mode semaines A/B sur svc_001 (démo).
+  await prisma.service.update({ where: { id: "svc_001" }, data: { semaineAb: true } });
+  console.log(`✓ Démo agenda : ${demoBookings.length} réservations récurrentes (svc_001 en A/B).`);
 
   console.log("✓ Seed terminé.");
 }
