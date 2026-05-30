@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  deleteBookingAdminAction,
+  setBookingPointageAction,
+  setBookingValidatedAction,
+} from "./actions";
 
 type Service = {
   id: string;
@@ -12,6 +18,7 @@ type Service = {
 };
 type Period = { id: number; label: string; color: string };
 type Slot = { id: string; startTime: string; endTime: string; capacity: number | null };
+type Pointage = "present" | "absent" | null;
 type Booking = {
   id: number;
   slotId: string;
@@ -20,6 +27,7 @@ type Booking = {
   enfants: number;
   theme: string;
   validated: boolean;
+  pointage: Pointage;
   name: string;
   demandeur: string;
 };
@@ -34,7 +42,7 @@ const DAY_NAMES: Record<string, string> = {
   dim: "Dimanche",
 };
 
-const ROW_H = 56; // px par heure
+const ROW_H = 56;
 
 function toMinutes(t: string, fallback: number): number {
   const m = /^(\d{1,2}):(\d{2})$/.exec(t);
@@ -43,18 +51,18 @@ function toMinutes(t: string, fallback: number): number {
 }
 
 type Block = {
-  key: string;
+  booking: Booking;
   dayKey: string;
   top: number;
   height: number;
-  name: string;
-  demandeur: string;
-  theme: string;
-  count: number;
+  leftPct: number;
+  widthPct: number;
   used: number;
   capacity: number;
   full: boolean;
 };
+
+type Menu = { block: Block; x: number; y: number } | null;
 
 export function AgendaGrid({
   service,
@@ -67,13 +75,15 @@ export function AgendaGrid({
   slots: Slot[];
   bookings: Booking[];
 }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [periodIdx, setPeriodIdx] = useState(0);
   const [mode, setMode] = useState<"model" | "realweek">("model");
   const [hideEmpty, setHideEmpty] = useState(false);
   const [validation, setValidation] = useState(false);
+  const [menu, setMenu] = useState<Menu>(null);
 
   const days = service.activeDays.split(",").map((d) => d.trim()).filter(Boolean);
-
   const startMin = toMinutes(service.morningStart, 9 * 60);
   const endMin = toMinutes(service.afternoonEnd, 18 * 60);
   const firstHour = Math.floor(startMin / 60);
@@ -82,10 +92,8 @@ export function AgendaGrid({
   const gridStartMin = firstHour * 60;
   const totalH = (lastHour - firstHour) * ROW_H;
   const pxPerMin = ROW_H / 60;
-
   const selectedPeriodId = periods[periodIdx]?.id ?? null;
 
-  // Regroupe les réservations par (jour, créneau) pour la période active → un bloc par groupe.
   const blocksByDay = useMemo(() => {
     const slotById = new Map(slots.map((s) => [s.id, s]));
     const groups = new Map<string, Booking[]>();
@@ -96,7 +104,6 @@ export function AgendaGrid({
       arr.push(b);
       groups.set(key, arr);
     }
-
     const byDay: Record<string, Block[]> = {};
     for (const [key, list] of groups) {
       const [dayKey, slotId] = key.split("|");
@@ -106,24 +113,44 @@ export function AgendaGrid({
       const e = toMinutes(slot.endTime, s + 60);
       const capacity = slot.capacity ?? service.recurCapacity;
       const used = list.reduce((sum, b) => sum + b.enfants, 0);
-      const first = list[0];
-      const block: Block = {
-        key,
-        dayKey,
-        top: (s - gridStartMin) * pxPerMin,
-        height: Math.max(24, (e - s) * pxPerMin),
-        name: first.name,
-        demandeur: first.demandeur,
-        theme: first.theme,
-        count: list.length,
-        used,
-        capacity,
-        full: used >= capacity,
-      };
-      (byDay[dayKey] ??= []).push(block);
+      const full = used >= capacity;
+      list.forEach((booking, i) => {
+        (byDay[dayKey] ??= []).push({
+          booking,
+          dayKey,
+          top: (s - gridStartMin) * pxPerMin,
+          height: Math.max(28, (e - s) * pxPerMin),
+          leftPct: (i / list.length) * 100,
+          widthPct: (1 / list.length) * 100,
+          used,
+          capacity,
+          full,
+        });
+      });
     }
     return byDay;
   }, [bookings, slots, selectedPeriodId, gridStartMin, pxPerMin, service.recurCapacity]);
+
+  function run(p: Promise<unknown>) {
+    setMenu(null);
+    startTransition(async () => {
+      await p;
+      router.refresh();
+    });
+  }
+
+  useEffect(() => {
+    if (!menu) return;
+    function onDoc() {
+      setMenu(null);
+    }
+    // Attaché au tick suivant pour ne pas capter le clic qui vient d'ouvrir le menu.
+    const t = setTimeout(() => document.addEventListener("click", onDoc), 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("click", onDoc);
+    };
+  }, [menu]);
 
   return (
     <div>
@@ -164,7 +191,7 @@ export function AgendaGrid({
         </div>
       </div>
 
-      <div className="planning-wrap">
+      <div className="planning-wrap" style={{ opacity: pending ? 0.6 : 1 }}>
         <div className="agenda-grid" style={{ gridTemplateColumns: `44px repeat(${days.length}, 1fr)` }}>
           <div className="agenda-header-cell agenda-corner" title="Horaires">
             🕘
@@ -190,22 +217,38 @@ export function AgendaGrid({
               ))}
               {(blocksByDay[d] ?? []).map((b) => {
                 const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
+                const bk = b.booking;
+                const pendingValidation = validation && !bk.validated;
                 return (
                   <div
-                    key={b.key}
+                    key={bk.id}
                     className={`agenda-block${b.full ? " is-full" : ""}`}
-                    style={{ top: b.top, height: b.height, left: 2, right: 2 }}
-                    title={`${b.demandeur} — ${b.name}`}
+                    style={{
+                      top: b.top,
+                      height: b.height,
+                      left: `calc(${b.leftPct}% + 2px)`,
+                      width: `calc(${b.widthPct}% - 4px)`,
+                      opacity: bk.validated ? 1 : 0.78,
+                      outline: pendingValidation ? "2px solid var(--warn)" : undefined,
+                      outlineOffset: -2,
+                    }}
+                    title={`${bk.demandeur} — ${bk.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenu({ block: b, x: e.clientX, y: e.clientY });
+                    }}
                   >
+                    <div style={{ position: "absolute", top: 1, right: 3, fontSize: ".6rem" }}>
+                      {!bk.validated && "⏳"}
+                      {bk.pointage === "present" && "✅"}
+                      {bk.pointage === "absent" && "❌"}
+                    </div>
                     <div className="agenda-block-chips">
-                      {b.demandeur && <div style={{ fontSize: ".6rem", color: "var(--muted)" }}>{b.demandeur}</div>}
+                      {bk.demandeur && <div style={{ fontSize: ".6rem", color: "var(--muted)" }}>{bk.demandeur}</div>}
                       <div className="planning-name-tag">
-                        <span>
-                          {b.name}
-                          {b.count > 1 ? ` +${b.count - 1}` : ""}
-                        </span>
+                        <span>{bk.name}</span>
                       </div>
-                      {b.theme && <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>{b.theme}</span>}
+                      {bk.theme && <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>{bk.theme}</span>}
                     </div>
                     <div className="agenda-block-meta is-gauge">
                       <span className="agenda-block-gauge-bar">
@@ -220,6 +263,73 @@ export function AgendaGrid({
           ))}
         </div>
       </div>
+
+      {menu && (
+        <div
+          style={{
+            position: "fixed",
+            top: menu.y + 4,
+            left: menu.x + 4,
+            zIndex: 9999,
+            background: "var(--surface2)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--rad-sm)",
+            boxShadow: "0 6px 20px rgba(0,0,0,.25)",
+            minWidth: 180,
+            overflow: "hidden",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MenuItem onClick={() => run(setBookingValidatedAction(menu.block.booking.id, service.id, !menu.block.booking.validated))}>
+            {menu.block.booking.validated ? "↩ Dévalider" : "✓ Valider"}
+          </MenuItem>
+          <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, "present"))}>
+            ✅ Présent
+          </MenuItem>
+          <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, "absent"))}>
+            ❌ Absent
+          </MenuItem>
+          {menu.block.booking.pointage && (
+            <MenuItem onClick={() => run(setBookingPointageAction(menu.block.booking.id, service.id, null))}>
+              ⚪ Effacer le pointage
+            </MenuItem>
+          )}
+          <MenuItem danger onClick={() => run(deleteBookingAdminAction(menu.block.booking.id, service.id))}>
+            🗑️ Supprimer
+          </MenuItem>
+        </div>
+      )}
     </div>
+  );
+}
+
+function MenuItem({
+  children,
+  onClick,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        padding: ".4rem .8rem",
+        background: "none",
+        border: "none",
+        fontFamily: "inherit",
+        fontSize: ".8rem",
+        cursor: "pointer",
+        color: danger ? "var(--danger)" : "var(--text)",
+      }}
+    >
+      {children}
+    </button>
   );
 }
