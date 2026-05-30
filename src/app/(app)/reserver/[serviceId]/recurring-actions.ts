@@ -25,12 +25,24 @@ export async function bookRecurringAction(
   try {
     await prisma.$transaction(
       async (tx) => {
-        const slot = await tx.slot.findUnique({ where: { id: slotId }, include: { service: true } });
+        const slot = await tx.slot.findUnique({
+          where: { id: slotId },
+          include: { service: true, demandeurs: { select: { demandeurId: true } } },
+        });
         if (!slot || slot.serviceId !== serviceId || slot.slotType !== "recurring" || slot.state !== "actif") {
           throw new BookingError("Ce créneau n'est pas disponible.");
         }
-        const user = await tx.user.findUnique({ where: { id: session.user.id }, select: { enfants: true } });
+        const user = await tx.user.findUnique({
+          where: { id: session.user.id },
+          select: { enfants: true, demandeurId: true },
+        });
         const myEnfants = user?.enfants ?? 0;
+
+        // Restriction par demandeur (liste vide = ouvert à tous).
+        if (slot.demandeurs.length > 0 && !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)) {
+          throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+        }
+
         const capacity = slot.capacity ?? slot.service.recurCapacity;
         const agg = await tx.booking.aggregate({
           where: { serviceId, slotId, periodId, dayKey, bookingType: "recurring" },

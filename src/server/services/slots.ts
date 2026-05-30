@@ -5,7 +5,10 @@ export function listSlotsForService(serviceId: string) {
   return prisma.slot.findMany({
     where: { serviceId },
     orderBy: [{ slotType: "asc" }, { startTime: "asc" }],
-    include: { period: { select: { label: true } } },
+    include: {
+      period: { select: { label: true } },
+      demandeurs: { select: { demandeurId: true } },
+    },
   });
 }
 

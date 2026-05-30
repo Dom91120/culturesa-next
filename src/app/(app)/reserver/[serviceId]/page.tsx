@@ -23,11 +23,17 @@ export default async function ServiceReservePage({
   if (!data) notFound();
   const { service, availability } = data;
 
-  const [recurSlots, recurBookings, periods, profile] = await Promise.all([
+  const [allRecurSlots, recurBookings, periods, profile] = await Promise.all([
     prisma.slot.findMany({
       where: { serviceId, slotType: "recurring", state: "actif" },
       orderBy: { startTime: "asc" },
-      select: { id: true, startTime: true, endTime: true, capacity: true },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        capacity: true,
+        demandeurs: { select: { demandeurId: true } },
+      },
     }),
     prisma.booking.findMany({
       where: { serviceId, bookingType: "recurring" },
@@ -38,8 +44,17 @@ export default async function ServiceReservePage({
       orderBy: [{ position: "asc" }, { id: "asc" }],
       select: { id: true, label: true, color: true },
     }),
-    prisma.user.findUnique({ where: { id: session.user.id }, select: { enfants: true } }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { enfants: true, demandeurId: true } }),
   ]);
+
+  // Masque les créneaux réservés à d'autres demandeurs (liste vide = ouvert à tous).
+  const recurSlots = allRecurSlots
+    .filter(
+      (s) =>
+        s.demandeurs.length === 0 ||
+        s.demandeurs.some((d) => d.demandeurId === (profile?.demandeurId ?? -1)),
+    )
+    .map((s) => ({ id: s.id, startTime: s.startTime, endTime: s.endTime, capacity: s.capacity }));
 
   const days = service.activeDays.split(",").map((d) => d.trim()).filter(Boolean);
 

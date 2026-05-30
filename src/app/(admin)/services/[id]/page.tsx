@@ -2,12 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { btnDanger, btnGhost, Card, inputClass, PageTitle } from "@/components/ui";
 import { toDateInput } from "@/lib/format";
+import { prisma } from "@/server/db";
 import { listPeriods } from "@/server/services/periods";
 import { getService } from "@/server/services/services";
 import { listSlotsForService } from "@/server/services/slots";
 import { deleteServiceAction } from "../actions";
 import { ServiceForm } from "./service-form";
 import { SlotCreateForm } from "./slot-create-form";
+import { SlotDemandeurs } from "./slot-demandeurs";
 import { deleteSlotAction, updateSlotAction } from "./slot-actions";
 
 export default async function ServiceConfigPage({ params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +17,11 @@ export default async function ServiceConfigPage({ params }: { params: Promise<{ 
   const service = await getService(id);
   if (!service) notFound();
 
-  const [slots, allPeriods] = await Promise.all([listSlotsForService(id), listPeriods()]);
+  const [slots, allPeriods, demandeurs] = await Promise.all([
+    listSlotsForService(id),
+    listPeriods(),
+    prisma.demandeur.findMany({ orderBy: { label: "asc" }, select: { id: true, label: true } }),
+  ]);
   // Périodes utilisables : globales (sans service) ou propres à ce service.
   const periodOptions = allPeriods
     .filter((p) => p.serviceId === null || p.serviceId === id)
@@ -107,6 +113,14 @@ export default async function ServiceConfigPage({ params }: { params: Promise<{ 
                   Supprimer
                 </button>
               </form>
+              {slot.slotType === "recurring" && (
+                <SlotDemandeurs
+                  slotId={slot.id}
+                  serviceId={id}
+                  demandeurs={demandeurs}
+                  allowedIds={slot.demandeurs.map((d) => d.demandeurId)}
+                />
+              )}
             </div>
           ))}
           {slots.length === 0 && <p className="text-sm text-neutral-400">Aucun créneau pour ce service.</p>}
