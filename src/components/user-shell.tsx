@@ -2,14 +2,10 @@
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-const TABS = [
-  { href: "/reserver", label: "Réserver", icon: "📅" },
-  { href: "/mes-reservations", label: "Mes réservations", icon: "🗂️" },
-];
+type ServiceItem = { id: string; label: string; icon: string | null };
 
 function initialsOf(name: string, email: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -20,15 +16,20 @@ function initialsOf(name: string, email: string) {
 
 export function UserShell({
   user,
+  services,
   children,
 }: {
   user: { name: string; email: string };
+  services: ServiceItem[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const match = pathname.match(/^\/reservations\/([^/]+)/);
+  const activeServiceId = match ? match[1] : null;
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -46,13 +47,6 @@ export function UserShell({
 
   return (
     <>
-      <header>
-        <div className="logo">
-          Cultu<em>Résa</em>
-        </div>
-        <div className="tagline">Réservation d&apos;activités culturelles</div>
-      </header>
-
       <div className="user-bar" id="user-bar">
         <div className="user-pill-wrap" ref={menuRef}>
           <button
@@ -69,6 +63,15 @@ export function UserShell({
             <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>▾</span>
           </button>
           <div id="user-menu" className={menuOpen ? "open" : ""}>
+            <button
+              type="button"
+              onClick={() => {
+                router.push("/mon-compte");
+                setMenuOpen(false);
+              }}
+            >
+              👤 Mon compte
+            </button>
             <button type="button" className="danger" onClick={onLogout}>
               ⏏ Déconnexion
             </button>
@@ -79,24 +82,44 @@ export function UserShell({
 
       <main>
         <div className="app-layout">
-          <div className="app-main">
-            <div className="tabs-nav">
-              {TABS.map((t) => {
-                const active = pathname === t.href || pathname.startsWith(`${t.href}/`);
-                return (
-                  <Link
-                    key={t.href}
-                    href={t.href}
-                    className={`tab-nav-btn${active ? " active" : ""}`}
-                    style={{ textDecoration: "none" }}
-                  >
-                    <span className="tab-icon">{t.icon}</span> {t.label}
-                  </Link>
-                );
-              })}
+          <div
+            id="service-sidebar-wrap"
+            style={{ width: "18%", minWidth: "fit-content", maxWidth: 300, flexShrink: 0 }}
+          >
+            {/* Marque dans la sidebar (comme le shell admin) : plus de bandeau-titre en haut. */}
+            <div className="sidebar-header">
+              <div
+                className="sidebar-title"
+                style={{ fontSize: "1rem", fontWeight: "bolder", color: "var(--text)" }}
+              >
+                <span className="sidebar-title-resa">Cultu</span>
+                <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
+              </div>
+              <div className="sidebar-tagline">Réservation d&apos;activités culturelles</div>
             </div>
-            {children}
+
+            <div className="sidebar-label">Réservations</div>
+            <div id="service-sidebar">
+              {services.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={activeServiceId === s.id ? "active" : ""}
+                  onClick={() => router.push(`/reservations/${s.id}`)}
+                >
+                  <span className="sb-icon">{s.icon || "📄"}</span>
+                  <span className="sb-label">{s.label}</span>
+                </button>
+              ))}
+              {services.length === 0 && (
+                <p style={{ fontSize: ".78rem", color: "var(--muted)", padding: ".4rem" }}>
+                  Aucune activité disponible.
+                </p>
+              )}
+            </div>
           </div>
+
+          <div className="app-main">{children}</div>
         </div>
       </main>
     </>

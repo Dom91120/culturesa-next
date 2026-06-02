@@ -1,6 +1,9 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "@/server/db";
+import { toDateInput } from "@/lib/format";
 import type { BookingCreateInput } from "@/schemas/booking";
+import { prisma } from "@/server/db";
+import { Prisma } from "@prisma/client";
+import { getServiceDemandeurSettings } from "./demandeur-settings";
+import { deriveServiceModes } from "./service-modes";
 
 /** Erreur métier de réservation (message destiné à l'usager). */
 export class BookingError extends Error {}
@@ -18,7 +21,9 @@ export function listBookableServices() {
     include: {
       _count: {
         select: {
-          slots: { where: { state: "actif", slotType: "unique", slotDate: { gte: startOfToday() } } },
+          slots: {
+            where: { state: "actif", slotType: "unique", slotDate: { gte: startOfToday() } },
+          },
         },
       },
     },
@@ -86,7 +91,11 @@ export async function getServiceWithAvailability(serviceId: string, userId: stri
  * surbooking. La transaction est SÉRIALISABLE : deux réservations concurrentes
  * sur la dernière place en feront échouer une (à réessayer), jamais les deux.
  */
-export async function createUniqueBooking(userId: string, input: BookingCreateInput) {
+export async function createUniqueBooking(
+  userId: string,
+  input: BookingCreateInput,
+  validated = false,
+) {
   try {
     return await prisma.$transaction(
       async (tx) => {
@@ -119,7 +128,7 @@ export async function createUniqueBooking(userId: string, input: BookingCreateIn
             enfants: input.enfants,
             accompagnants: input.accompagnants,
             themeLabel: input.themeLabel,
-            validated: false,
+            validated,
             autoValidateFrom: new Date(),
           },
         });
@@ -156,4 +165,213 @@ export function listUserBookings(userId: string) {
 export async function cancelUserBooking(userId: string, bookingId: number) {
   const res = await prisma.booking.deleteMany({ where: { id: bookingId, userId } });
   return res.count > 0;
+}
+
+// ─── Agenda usager (onglet « Réservations ») ───────────────────────────────
+// Données de l'agenda hebdomadaire d'un service POUR un usager : même forme que
+// l'agenda admin (service, périodes, créneaux, modes), mais les réservations sont
+// ANONYMISÉES (uniquement enfants/validated pour la jauge) + un drapeau `mine`
+// et l'id de la résa propre (pour badge ✅/⏳ et annulation). Les `modes` sont
+// dérivés du demandeur DE L'USAGER (cf. legacy _userDem), pas de tous.
+// Forme alignée sur le type Booking de l'agenda (pour réutiliser le moteur de
+// rendu), mais ANONYMISÉE : name/demandeur/structure vides, accompagnants 0,
+// theme "", pointage null. `mine` = réservation de l'usager courant.
+export type UserAgendaBooking = {
+  id: number;
+  slotId: string;
+  periodId: number;
+  dayKey: string;
+  week: string;
+  enfants: number;
+  accompagnants: number;
+  theme: string;
+  validated: boolean;
+  pointage: "present" | "absent" | null;
+  name: string;
+  demandeur: string;
+  structure: string;
+  mine: boolean;
+};
+
+export async function getUserServiceAgenda(serviceId: string, userId: string) {
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      demandeurId: true,
+      demandeur: { select: { label: true } },
+      nom: true,
+      prenom: true,
+      email: true,
+      niveau: true,
+      enfants: true,
+      accompagnants: true,
+    },
+  });
+
+  const periodSelect = {
+    id: true,
+    label: true,
+    color: true,
+    dateStart: true,
+    dateEnd: true,
+    exerciceId: true,
+  } as const;
+
+  const [settings, recurSlots, uniqueSlots, bookings, themeRows] = await Promise.all([
+    getServiceDemandeurSettings(serviceId),
+    prisma.slot.findMany({
+      where: { serviceId, slotType: "recurring", state: "actif" },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        capacity: true,
+        capLun: true,
+        capMar: true,
+        capMer: true,
+        capJeu: true,
+        capVen: true,
+        capSam: true,
+        capDim: true,
+        periodId: true,
+        weeks: true,
+      },
+    }),
+    prisma.slot.findMany({
+      where: { serviceId, slotType: "unique", state: "actif" },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        capacity: true,
+        slotDate: true,
+        parentSlotId: true,
+      },
+    }),
+    prisma.booking.findMany({
+      where: { serviceId, bookingType: { in: ["recurring", "unique"] } },
+      select: {
+        id: true,
+        slotId: true,
+        periodId: true,
+        dayKey: true,
+        week: true,
+        enfants: true,
+        accompagnants: true,
+        validated: true,
+        themeLabel: true,
+        userId: true,
+      },
+    }),
+    service.themesMode === "liste"
+      ? prisma.serviceTheme.findMany({
+          where: { serviceId },
+          orderBy: [{ position: "asc" }, { id: "asc" }],
+          select: { label: true },
+        })
+      : Promise.resolve([] as { label: string }[]),
+  ]);
+
+  // Périodes : celles du service, sinon les globales (fallback, comme l'agenda admin).
+  let periods = await prisma.period.findMany({
+    where: { serviceId, state: "actif" },
+    orderBy: [{ position: "asc" }, { id: "asc" }],
+    select: periodSelect,
+  });
+  if (periods.length === 0) {
+    periods = await prisma.period.findMany({
+      where: { serviceId: null, state: "actif" },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+      select: periodSelect,
+    });
+  }
+
+  // Modes dérivés du demandeur de l'usager (repli sur tous si non rattaché / absent).
+  const mineSettings = user?.demandeurId
+    ? settings.filter((s) => s.demandeurId === user.demandeurId)
+    : [];
+  const modes = deriveServiceModes(mineSettings.length ? mineSettings : settings);
+
+  const exerciceIds = [
+    ...new Set(periods.map((p) => p.exerciceId).filter((x): x is number => x != null)),
+  ];
+  const exercices = (
+    exerciceIds.length
+      ? await prisma.exercice.findMany({
+          where: { id: { in: exerciceIds } },
+          select: { id: true, label: true },
+        })
+      : []
+  ).sort((a, b) => a.label.localeCompare(b.label));
+
+  return {
+    service: {
+      id: service.id,
+      label: service.label,
+      activeDays: service.activeDays,
+      morningStart: service.morningStart,
+      morningEnd: service.morningEnd,
+      afternoonStart: service.afternoonStart,
+      afternoonEnd: service.afternoonEnd,
+      recurCapacity: service.recurCapacity,
+      ponctCapacity: service.ponctCapacity,
+      semaineAb: service.semaineAb,
+      themesMode: service.themesMode,
+      openOnHolidays: service.openOnHolidays,
+      showPreviousExercices: service.showPreviousExercices,
+    },
+    periods: periods.map((p) => ({
+      id: p.id,
+      label: p.label,
+      color: p.color,
+      dateStart: toDateInput(p.dateStart),
+      dateEnd: toDateInput(p.dateEnd),
+      exerciceId: p.exerciceId,
+    })),
+    slots: recurSlots.map((s) => ({ ...s, weeks: s.weeks ?? null })),
+    uniqueSlots: uniqueSlots.map((s) => ({
+      id: s.id,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      capacity: s.capacity,
+      slotDate: toDateInput(s.slotDate),
+      parentSlotId: s.parentSlotId,
+    })),
+    bookings: bookings.map(
+      (b): UserAgendaBooking => ({
+        id: b.id,
+        slotId: b.slotId,
+        periodId: b.periodId,
+        dayKey: b.dayKey,
+        week: b.week,
+        enfants: b.enfants,
+        accompagnants: b.accompagnants,
+        // Thème réel seulement pour MES réservations (les autres restent anonymes).
+        theme: b.userId === userId ? (b.themeLabel ?? "") : "",
+        validated: b.validated,
+        pointage: null,
+        name: "",
+        demandeur: "",
+        structure: "",
+        mine: b.userId === userId,
+      }),
+    ),
+    modes,
+    exercices,
+    themes: themeRows.map((t) => t.label),
+    // Libellé du demandeur de l'usager (bandeau debug, cf. legacy #dem-info).
+    demandeurLabel: user?.demandeur?.label ?? null,
+    // Infos usager pour le récapitulatif de la modale de confirmation (legacy).
+    user: {
+      nom: user?.nom ?? "",
+      prenom: user?.prenom ?? "",
+      email: user?.email ?? "",
+      niveau: user?.niveau ?? "",
+      enfants: user?.enfants ?? 0,
+      accompagnants: user?.accompagnants ?? 0,
+    },
+  };
 }

@@ -1,9 +1,9 @@
 "use client";
 
+import { signIn } from "@/lib/auth-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { signIn } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,7 +28,9 @@ export default function LoginPage() {
       );
       return;
     }
-    router.push("/reserver");
+    // Redirection selon le rôle déléguée à « / » (gestionnaire → Administration,
+    // sinon → réservation).
+    router.push("/");
     router.refresh();
   }
 
@@ -36,7 +38,10 @@ export default function LoginPage() {
     <>
       <div className="mode-toggle">
         Pas encore de compte ?{" "}
-        <Link href="/auth/register" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
+        <Link
+          href="/auth/register"
+          style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}
+        >
           Créer un compte
         </Link>
       </div>
@@ -84,7 +89,11 @@ export default function LoginPage() {
                 <div style={{ marginTop: ".4rem", textAlign: "right" }}>
                   <Link
                     href="/auth/forgot-password"
-                    style={{ fontSize: ".75rem", color: "var(--muted)", textDecoration: "underline" }}
+                    style={{
+                      fontSize: ".75rem",
+                      color: "var(--muted)",
+                      textDecoration: "underline",
+                    }}
                   >
                     Mot de passe oublié ?
                   </Link>
