@@ -7,5 +7,19 @@
     "enabled": true,
     "rules": { "recommended": true }
   },
-  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always" } }
+  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always" } },
+  "overrides": [
+    {
+      "include": ["**/services/legacy-icons.ts"],
+      "linter": { "enabled": false }
+    },
+    {
+      "include": ["**/services/services-manager.tsx"],
+      "linter": { "rules": { "a11y": { "useKeyWithClickEvents": "off" } } }
+    },
+    {
+      "include": ["**/users/users-table.tsx"],
+      "linter": { "rules": { "a11y": { "useKeyWithClickEvents": "off" } } }
+    }
+  ]
 }

@@ -1,0 +1,83 @@
+"use server";
+
+import type { ActionState } from "@/lib/action-state";
+import { requireRole } from "@/server/guards";
+import { cycleService, setShowPreviousExercices, undoCycle } from "@/server/services/exercice";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+/** Variante d'ActionState renvoyant les compteurs du cycle. */
+export type CycleActionState =
+  | { ok: true; created: number; slotsCreated: number }
+  | { ok: false; error: string };
+
+function revalidate(serviceId: string): void {
+  revalidatePath(`/services/${serviceId}/exercice`);
+  revalidatePath(`/services/${serviceId}/periodes`);
+  revalidatePath(`/services/${serviceId}/agenda`);
+}
+
+export async function setShowPreviousExercicesAction(
+  serviceId: string,
+  value: boolean,
+): Promise<ActionState> {
+  await requireRole("gestionnaire");
+  const parsed = z
+    .object({ serviceId: z.string().trim().min(1), value: z.boolean() })
+    .safeParse({ serviceId, value });
+  if (!parsed.success) {
+    return { ok: false, error: "Valeurs invalides." };
+  }
+  try {
+    await setShowPreviousExercices(parsed.data.serviceId, parsed.data.value);
+    revalidate(parsed.data.serviceId);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Échec de l'enregistrement." };
+  }
+}
+
+const cycleSchema = z.object({
+  serviceId: z.string().trim().min(1),
+  recreatePeriods: z.boolean(),
+  recreateSlots: z.boolean(),
+});
+
+export async function cycleAction(
+  serviceId: string,
+  recreatePeriods: boolean,
+  recreateSlots: boolean,
+): Promise<CycleActionState> {
+  await requireRole("gestionnaire");
+  const parsed = cycleSchema.safeParse({ serviceId, recreatePeriods, recreateSlots });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
+  }
+  try {
+    const res = await cycleService(parsed.data.serviceId, {
+      recreatePeriods: parsed.data.recreatePeriods,
+      recreateSlots: parsed.data.recreateSlots,
+    });
+    revalidate(parsed.data.serviceId);
+    return { ok: true, created: res.created, slotsCreated: res.slotsCreated };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Échec du cycle." };
+  }
+}
+
+const undoSchema = z.object({ serviceId: z.string().trim().min(1) });
+
+export async function undoCycleAction(serviceId: string): Promise<ActionState> {
+  await requireRole("gestionnaire");
+  const parsed = undoSchema.safeParse({ serviceId });
+  if (!parsed.success) {
+    return { ok: false, error: "Valeurs invalides." };
+  }
+  try {
+    await undoCycle(parsed.data.serviceId);
+    revalidate(parsed.data.serviceId);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Échec de l'annulation." };
+  }
+}

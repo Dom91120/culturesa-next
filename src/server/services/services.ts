@@ -1,5 +1,5 @@
-import { prisma } from "@/server/db";
 import type { ServiceUpdateInput } from "@/schemas/config";
+import { prisma } from "@/server/db";
 
 export function listServices() {
   return prisma.service.findMany({
@@ -19,6 +19,11 @@ export function createService(label: string, position: number) {
 }
 
 export function updateService(id: string, data: ServiceUpdateInput) {
+  return prisma.service.update({ where: { id }, data });
+}
+
+/** Mise à jour partielle (nom + icône) — utilisée par la modale de l'écran liste. */
+export function updateServiceBasics(id: string, data: { label?: string; icon?: string | null }) {
   return prisma.service.update({ where: { id }, data });
 }
 

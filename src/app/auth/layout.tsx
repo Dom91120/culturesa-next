@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
       <main>
-        <div className="app-layout" style={{ marginLeft: "auto", marginRight: "auto" }}>
+        <div className="app-layout">
           <div className="app-main">
             <div className="tabs-nav">
               <button type="button" className="tab-nav-btn active">

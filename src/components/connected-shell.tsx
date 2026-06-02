@@ -1,9 +1,9 @@
 "use client";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+import { signOut } from "@/lib/auth-client";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { signOut } from "@/lib/auth-client";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export type ServiceItem = { id: string; label: string; icon: string | null };
 type Tab = { href: string; label: string; icon: string };
@@ -57,7 +57,10 @@ export function ConnectedShell({
   // Onglet actif = le href le plus long qui préfixe le chemin courant.
   let activeHref = "";
   for (const t of tabs) {
-    if ((pathname === t.href || pathname.startsWith(`${t.href}/`)) && t.href.length > activeHref.length) {
+    if (
+      (pathname === t.href || pathname.startsWith(`${t.href}/`)) &&
+      t.href.length > activeHref.length
+    ) {
       activeHref = t.href;
     }
   }
@@ -80,13 +83,13 @@ export function ConnectedShell({
     <>
       <div className="user-bar" id="user-bar">
         <div className="user-pill-wrap" ref={menuRef}>
-          <div className="user-pill" onClick={() => setMenuOpen((o) => !o)}>
+          <button type="button" className="user-pill" onClick={() => setMenuOpen((o) => !o)}>
             <div className="avatar">{initialsOf(user.name, user.email)}</div>
             <span id="user-display-name" style={{ fontSize: ".78rem", color: "var(--text)" }}>
               {user.name || user.email}
             </span>
             <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>▾</span>
-          </div>
+          </button>
           <div id="user-menu" className={menuOpen ? "open" : ""}>
             <button
               type="button"
@@ -106,17 +109,31 @@ export function ConnectedShell({
       </div>
 
       <main>
-        <div className="app-layout" style={{ marginLeft: "auto", marginRight: "auto" }}>
+        <div className="app-layout">
           <div
             id="service-sidebar-wrap"
             className={collapsed ? "collapsed" : ""}
-            style={{ width: "18%", minWidth: "fit-content", maxWidth: 300, flexShrink: 0, position: "relative" }}
+            style={{
+              width: "18%",
+              minWidth: "fit-content",
+              maxWidth: 300,
+              flexShrink: 0,
+              position: "relative",
+            }}
           >
-            <button type="button" id="sidebar-toggle" onClick={() => setCollapsed((c) => !c)} title="Réduire / agrandir">
+            <button
+              type="button"
+              id="sidebar-toggle"
+              onClick={() => setCollapsed((c) => !c)}
+              title="Réduire / agrandir"
+            >
               ☰
             </button>
             <div className="sidebar-header">
-              <div className="sidebar-title" style={{ fontSize: "1rem", fontWeight: "bolder", color: "var(--text)" }}>
+              <div
+                className="sidebar-title"
+                style={{ fontSize: "1rem", fontWeight: "bolder", color: "var(--text)" }}
+              >
                 <span className="sidebar-title-resa">Cultu</span>
                 <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
               </div>

@@ -1,47 +1,73 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
-import { setConfig } from "@/server/config";
+import { setConfigMany } from "@/server/config";
 import { requireRole } from "@/server/guards";
 import { sendMail } from "@/server/mailer";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-const schema = z.object({
-  senderName: z.string().trim().max(120),
-  signature: z.string().trim().max(2000),
+const mailConfigSchema = z.object({
+  driver: z.enum(["smtp", "mail", "sendmail"]),
+  from: z.string().trim().max(190),
+  fromName: z.string().trim().max(190),
+  host: z.string().trim().max(190),
+  port: z.string().trim().max(5),
+  security: z.enum(["", "tls", "ssl"]),
+  username: z.string().trim().max(190),
+  // Mot de passe : non trimé (peut contenir des espaces), vide = conserver l'actuel.
+  password: z.string().max(190),
 });
 
-export async function saveMessagingAction(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  await requireRole("gestionnaire");
-  const parsed = schema.safeParse({
-    senderName: formData.get("senderName"),
-    signature: formData.get("signature"),
-  });
-  if (!parsed.success) return { ok: false, error: "Données invalides." };
+export type MailConfigInput = z.infer<typeof mailConfigSchema>;
 
-  await setConfig("mail.senderName", parsed.data.senderName);
-  await setConfig("mail.signature", parsed.data.signature);
-  revalidatePath("/messagerie");
+export async function saveMailConfigAction(input: MailConfigInput): Promise<ActionState> {
+  await requireRole("administrateur");
+
+  const parsed = mailConfigSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Données invalides." };
+  const d = parsed.data;
+
+  // Validation métier : en mode SMTP, serveur + expéditeur obligatoires.
+  if (d.driver === "smtp" && (!d.host || !d.from)) {
+    return { ok: false, error: "Serveur SMTP et adresse expéditeur sont requis." };
+  }
+  if (d.from && !z.string().email().safeParse(d.from).success) {
+    return { ok: false, error: "Adresse expéditeur invalide." };
+  }
+
+  const entries: Record<string, string> = {
+    "mail.driver": d.driver,
+    "mail.from": d.from,
+    "mail.fromName": d.fromName,
+    "mail.host": d.host,
+    "mail.port": d.port,
+    "mail.security": d.security,
+    "mail.username": d.username,
+  };
+  // Mot de passe laissé vide => on conserve l'actuel (on n'écrit pas la clé).
+  if (d.password !== "") entries["mail.password"] = d.password;
+
+  await setConfigMany(entries);
+  revalidatePath("/configuration");
   return { ok: true };
 }
 
-export async function sendTestEmailAction(): Promise<ActionState> {
-  const session = await requireRole("gestionnaire");
-  if (!process.env.SMTP_HOST) {
-    return { ok: false, error: "SMTP non configuré (variable SMTP_HOST vide)." };
-  }
+export async function sendTestMailAction(to: string): Promise<ActionState> {
+  await requireRole("administrateur");
+
+  const parsed = z.string().trim().email().safeParse(to);
+  if (!parsed.success) return { ok: false, error: "Adresse destinataire invalide." };
+
   try {
     await sendMail({
-      to: session.user.email,
+      to: parsed.data,
       subject: "Test — CultuRésa",
       html: "<p>Ceci est un e-mail de test envoyé depuis l'interface d'administration de CultuRésa.</p>",
     });
-  } catch {
-    return { ok: false, error: "Échec de l'envoi (vérifiez la configuration SMTP)." };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Échec de l'envoi.";
+    return { ok: false, error: msg };
   }
   return { ok: true };
 }

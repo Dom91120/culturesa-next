@@ -1,0 +1,198 @@
+"use server";
+
+import type { ActionState } from "@/lib/action-state";
+import { auth } from "@/server/auth";
+import { prisma } from "@/server/db";
+import { requireRole } from "@/server/guards";
+import { anonymizeUser } from "@/server/services/rgpd";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
+
+// Champs métier communs (création + édition).
+const baseUserSchema = z.object({
+  prenom: z.string().trim().max(100).default(""),
+  nom: z.string().trim().max(100).default(""),
+  tel: z.string().trim().max(30).default(""),
+  niveau: z.string().trim().max(100).default(""),
+  enfants: z.coerce.number().int().min(0).max(99).default(0),
+  accompagnants: z.coerce.number().int().min(0).max(99).default(0),
+  role: z.enum(ROLES),
+  demandeurId: z.coerce.number().int().positive().nullable().default(null),
+  structureId: z.coerce.number().int().positive().nullable().default(null),
+  services: z.array(z.string().min(1)).default([]),
+});
+
+const updateUserSchema = baseUserSchema.extend({ id: z.string().min(1) });
+const createUserSchema = baseUserSchema.extend({
+  email: z.string().trim().email(),
+});
+
+export type UpdateUserInput = z.input<typeof updateUserSchema>;
+export type CreateUserInput = z.input<typeof createUserSchema>;
+
+/** Synchronise la table ServiceManager (delta) pour un gestionnaire. */
+async function syncManagedServices(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  userId: string,
+  serviceIds: string[],
+) {
+  const existing = await tx.serviceManager.findMany({
+    where: { userId },
+    select: { serviceId: true },
+  });
+  const have = new Set(existing.map((s) => s.serviceId));
+  const want = new Set(serviceIds);
+  const toAdd = serviceIds.filter((id) => !have.has(id));
+  const toRemove = [...have].filter((id) => !want.has(id));
+  if (toRemove.length) {
+    await tx.serviceManager.deleteMany({ where: { userId, serviceId: { in: toRemove } } });
+  }
+  for (const serviceId of toAdd) {
+    await tx.serviceManager.create({ data: { userId, serviceId } });
+  }
+}
+
+/** Mot de passe aléatoire fort (l'admin ne le connaît jamais ; reset par lien). */
+function strongRandomPassword(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return `${Buffer.from(bytes).toString("base64url")}Aa1!`;
+}
+
+export async function updateUserAction(input: UpdateUserInput): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = updateUserSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  const d = parsed.data;
+  const isManager = d.role === "gestionnaire";
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: d.id },
+        data: {
+          prenom: d.prenom,
+          nom: d.nom,
+          name: `${d.prenom} ${d.nom}`.trim(),
+          tel: d.tel,
+          niveau: d.niveau,
+          enfants: d.enfants,
+          accompagnants: d.accompagnants,
+          role: d.role,
+          demandeurId: d.demandeurId,
+          structureId: d.structureId,
+        },
+      });
+      // Hors gestionnaire : aucun service nominatif → on vide la liste.
+      await syncManagedServices(tx, d.id, isManager ? d.services : []);
+    });
+  } catch {
+    return { ok: false, error: "Échec de la mise à jour du compte." };
+  }
+
+  revalidatePath("/users");
+  return { ok: true };
+}
+
+export async function createUserAction(input: CreateUserInput): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = createUserSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  const d = parsed.data;
+  const isManager = d.role === "gestionnaire";
+
+  let userId: string;
+  try {
+    const res = await auth.api.signUpEmail({
+      body: {
+        email: d.email,
+        password: strongRandomPassword(),
+        name: `${d.prenom} ${d.nom}`.trim(),
+      },
+    });
+    userId = res.user.id;
+  } catch {
+    return { ok: false, error: "Impossible de créer le compte (e-mail déjà utilisé ?)." };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          prenom: d.prenom,
+          nom: d.nom,
+          tel: d.tel,
+          niveau: d.niveau,
+          enfants: d.enfants,
+          accompagnants: d.accompagnants,
+          role: d.role,
+          demandeurId: d.demandeurId,
+          structureId: d.structureId,
+          rgpdOk: true,
+        },
+      });
+      await syncManagedServices(tx, userId, isManager ? d.services : []);
+    });
+  } catch {
+    return {
+      ok: false,
+      error: "Compte créé mais les informations métier n'ont pas pu être enregistrées.",
+    };
+  }
+
+  // La personne choisit elle-même son mot de passe via le lien reçu.
+  try {
+    await auth.api.requestPasswordReset({
+      body: { email: d.email, redirectTo: "/auth/reset-password" },
+    });
+  } catch {
+    // Non bloquant : le compte existe, l'admin pourra renvoyer un lien.
+  }
+
+  revalidatePath("/users");
+  return { ok: true };
+}
+
+export async function anonymizeUserAction(id: string): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = z.string().min(1).safeParse(id);
+  if (!parsed.success) return { ok: false, error: "Compte introuvable" };
+  try {
+    await anonymizeUser(parsed.data, "admin");
+  } catch {
+    return { ok: false, error: "Échec de l'anonymisation." };
+  }
+  revalidatePath("/users");
+  return { ok: true };
+}
+
+export async function resendVerificationAction(email: string): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = z.string().email().safeParse(email);
+  if (!parsed.success) return { ok: false, error: "E-mail invalide" };
+  try {
+    await auth.api.sendVerificationEmail({ body: { email: parsed.data, callbackURL: "/" } });
+  } catch {
+    return { ok: false, error: "Échec de l'envoi du mail de confirmation." };
+  }
+  return { ok: true };
+}
+
+export async function sendPasswordResetAction(email: string): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = z.string().email().safeParse(email);
+  if (!parsed.success) return { ok: false, error: "E-mail invalide" };
+  try {
+    await auth.api.requestPasswordReset({
+      body: { email: parsed.data, redirectTo: "/auth/reset-password" },
+    });
+  } catch {
+    return { ok: false, error: "Échec de l'envoi du lien de réinitialisation." };
+  }
+  return { ok: true };
+}

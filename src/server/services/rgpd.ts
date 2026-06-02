@@ -1,0 +1,391 @@
+import { getConfigMany } from "@/server/config";
+import { prisma } from "@/server/db";
+import { sendMail } from "@/server/mailer";
+
+export type AnonymizeReason = "self_service" | "admin" | "retention";
+
+/** Délai (en jours) après envoi du préavis avant effacement possible. */
+export const GRACE_DAYS = 30;
+/** Durée de rétention par défaut (années) si la config est absente. */
+export const DEFAULT_RETENTION_YEARS = 2;
+/** Clé app_config de la durée de rétention RGPD. */
+const RETENTION_YEARS_KEY = "rgpd.retentionYears";
+
+/**
+ * Anonymisation RGPD d'un compte (≠ suppression).
+ *
+ * Remplace les données personnelles identifiantes par des valeurs neutres,
+ * dissocie le compte de ses référentiels (demandeur/structure), supprime les
+ * sessions (déconnexion immédiate) et journalise l'opération dans `RgpdLog`.
+ *
+ * Les réservations ne sont PAS supprimées : l'historique métier est conservé,
+ * mais rattaché à un compte désormais non identifiable.
+ *
+ * Idempotent : si le compte est déjà anonymisé (`anonymizedAt` non null), no-op.
+ */
+export async function anonymizeUser(userId: string, reason: AnonymizeReason): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { id: true, anonymizedAt: true },
+    });
+    if (!user || user.anonymizedAt) return; // introuvable ou déjà anonymisé → no-op
+
+    const now = new Date();
+
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        // E-mail unique non identifiant (l'unicité de la colonne est préservée).
+        email: `anonyme-${userId}@anonymise.local`,
+        name: "",
+        prenom: "",
+        nom: "",
+        tel: "",
+        niveau: "",
+        enfants: 0,
+        accompagnants: 0,
+        demandeurId: null,
+        structureId: null,
+        rgpdOk: false,
+        anonymizedAt: now,
+      },
+    });
+
+    // Déconnexion : on révoque toutes les sessions actives.
+    await tx.session.deleteMany({ where: { userId } });
+
+    await tx.rgpdLog.create({
+      data: {
+        action: "anonymize",
+        targetUserId: userId,
+        details: { reason },
+        createdAt: now,
+      },
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  Scan d'inactivité RGPD (admin)
+//
+//  Calque l'écran legacy "Administration > RGPD" : liste les comptes
+//  `utilisateur` non anonymisés triés par inactivité décroissante, propose
+//  l'envoi d'un préavis puis l'effacement (anonymisation) une fois le délai
+//  de grâce écoulé. Règles métier identiques au PHP d'origine.
+// ════════════════════════════════════════════════════════════
+
+const MS_PER_DAY = 86_400_000;
+
+/** Source de la « dernière activité » retenue pour un compte. */
+export type LastSeenSource = "connexion" | "réservation" | "création";
+
+export type InactiveUser = {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  lastLoginAt: Date | null;
+  lastBookingAt: Date | null;
+  createdAt: Date;
+  deletionNoticeSentAt: Date | null;
+  /** Jours écoulés depuis la dernière activité (référence = maintenant). */
+  daysInactive: number;
+  /** Date de dernière activité retenue (max des trois sources). */
+  lastSeen: Date;
+  lastSeenSource: LastSeenSource;
+};
+
+/**
+ * Dernière activité d'un compte = la plus récente parmi : dernière connexion,
+ * dernière réservation, et à défaut date de création (toujours présente).
+ * Reproduit `_rgpdLastSeen` du legacy.
+ */
+function computeLastSeen(
+  lastLoginAt: Date | null,
+  lastBookingAt: Date | null,
+  createdAt: Date,
+): { date: Date; source: LastSeenSource } {
+  let best = createdAt;
+  let source: LastSeenSource = "création";
+  if (lastBookingAt && lastBookingAt.getTime() >= best.getTime()) {
+    best = lastBookingAt;
+    source = "réservation";
+  }
+  if (lastLoginAt && lastLoginAt.getTime() >= best.getTime()) {
+    best = lastLoginAt;
+    source = "connexion";
+  }
+  return { date: best, source };
+}
+
+/** Map userId → date de dernière réservation, via un seul agrégat groupBy. */
+async function lastBookingMap(userIds: string[]): Promise<Map<string, Date | null>> {
+  const rows = await prisma.booking.groupBy({
+    by: ["userId"],
+    where: userIds.length > 0 ? { userId: { in: userIds } } : undefined,
+    _max: { createdAt: true },
+  });
+  const map = new Map<string, Date | null>();
+  for (const r of rows) map.set(r.userId, r._max.createdAt);
+  return map;
+}
+
+/**
+ * Liste les comptes utilisateurs (rôle `utilisateur`, non anonymisés) avec leur
+ * inactivité calculée, triés par inactivité décroissante.
+ */
+export async function listInactiveScan(): Promise<InactiveUser[]> {
+  const users = await prisma.user.findMany({
+    where: { role: "utilisateur", anonymizedAt: null },
+    select: {
+      id: true,
+      nom: true,
+      prenom: true,
+      email: true,
+      lastLoginAt: true,
+      deletionNoticeSentAt: true,
+      createdAt: true,
+    },
+  });
+
+  const bookingByUser = await lastBookingMap(users.map((u) => u.id));
+  const now = Date.now();
+
+  const list: InactiveUser[] = users.map((u) => {
+    const lastBookingAt = bookingByUser.get(u.id) ?? null;
+    const { date: lastSeen, source } = computeLastSeen(u.lastLoginAt, lastBookingAt, u.createdAt);
+    const daysInactive = Math.floor((now - lastSeen.getTime()) / MS_PER_DAY);
+    return {
+      id: u.id,
+      nom: u.nom,
+      prenom: u.prenom,
+      email: u.email,
+      lastLoginAt: u.lastLoginAt,
+      lastBookingAt,
+      createdAt: u.createdAt,
+      deletionNoticeSentAt: u.deletionNoticeSentAt,
+      daysInactive,
+      lastSeen,
+      lastSeenSource: source,
+    };
+  });
+
+  list.sort((a, b) => b.daysInactive - a.daysInactive);
+  return list;
+}
+
+// ════════════════════════════════════════════════════════════
+//  RGPD limité à UN service (sous-onglet Paramètres › RGPD)
+//
+//  Calque la « Partie 1 » du legacy (_rgpdServiceUsers / _renderRgpdPart1) :
+//  liste les usagers rattachés à ce service afin de permettre leur
+//  export (art. 15) ou leur effacement (anonymisation).
+// ════════════════════════════════════════════════════════════
+
+/** Usager du service exposé au panneau RGPD (dates sérialisées côté page). */
+export type ServiceRgpdUser = {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  /** Dernière activité (max connexion / réservation / création), ou null. */
+  lastSeen: Date | null;
+};
+
+/**
+ * Liste les usagers d'un service éligibles au traitement RGPD individuel.
+ *
+ * Critères (cf. legacy `_rgpdServiceUsers`) : rôle `utilisateur`, non
+ * anonymisés, et dont le « demandeur effectif » appartient aux demandeurs
+ * configurés pour ce service (`ServiceDemandeurSettings`).
+ *
+ * Demandeur effectif = `user.demandeurId` s'il existe, sinon le
+ * `demandeurId` de la structure de l'usager (COALESCE legacy).
+ *
+ * `lastSeen` = max(dernière connexion, dernière réservation, création),
+ * via la même logique que le scan d'inactivité (`computeLastSeen`).
+ * Trié par nom puis prénom.
+ */
+export async function listServiceRgpdUsers(serviceId: string): Promise<ServiceRgpdUser[]> {
+  // Demandeurs configurés pour ce service.
+  const settings = await prisma.serviceDemandeurSettings.findMany({
+    where: { serviceId },
+    select: { demandeurId: true },
+  });
+  const configuredDemandeurIds = new Set(settings.map((s) => s.demandeurId));
+  if (configuredDemandeurIds.size === 0) return [];
+
+  // Usagers candidats : rôle utilisateur, non anonymisés. On récupère le
+  // demandeur direct + le demandeur de la structure pour le COALESCE.
+  const users = await prisma.user.findMany({
+    where: { role: "utilisateur", anonymizedAt: null },
+    select: {
+      id: true,
+      nom: true,
+      prenom: true,
+      email: true,
+      lastLoginAt: true,
+      createdAt: true,
+      demandeurId: true,
+      structure: { select: { demandeurId: true } },
+    },
+  });
+
+  const eligible = users.filter((u) => {
+    const effectiveDemandeurId = u.demandeurId ?? u.structure?.demandeurId ?? null;
+    return effectiveDemandeurId != null && configuredDemandeurIds.has(effectiveDemandeurId);
+  });
+
+  const bookingByUser = await lastBookingMap(eligible.map((u) => u.id));
+
+  const list: ServiceRgpdUser[] = eligible.map((u) => {
+    const { date: lastSeen } = computeLastSeen(
+      u.lastLoginAt,
+      bookingByUser.get(u.id) ?? null,
+      u.createdAt,
+    );
+    return { id: u.id, nom: u.nom, prenom: u.prenom, email: u.email, lastSeen };
+  });
+
+  list.sort((a, b) => a.nom.localeCompare(b.nom) || a.prenom.localeCompare(b.prenom));
+  return list;
+}
+
+/** Lit la durée de rétention configurée (années), bornée 0–50, défaut 2. */
+export async function getRetentionYears(): Promise<number> {
+  const cfg = await getConfigMany([RETENTION_YEARS_KEY]);
+  const v = Number.parseInt(cfg[RETENTION_YEARS_KEY] ?? "", 10);
+  if (!Number.isFinite(v) || v < 0 || v > 50) return DEFAULT_RETENTION_YEARS;
+  return v;
+}
+
+/** Seuil d'inactivité en jours = années de rétention × 365. */
+function thresholdDays(years: number): number {
+  return years * 365;
+}
+
+/**
+ * Envoie le préavis de suppression aux comptes éligibles SANS préavis encore
+ * envoyé : pose `deletionNoticeSentAt`, journalise (`deletion_notice`) et tente
+ * un e-mail. L'échec d'envoi n'empêche PAS le marquage.
+ * Retourne le nombre de comptes effectivement traités.
+ */
+export async function markDeletionNotice(userIds: string[]): Promise<number> {
+  if (userIds.length === 0) return 0;
+  const years = await getRetentionYears();
+  const minDays = thresholdDays(years);
+
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: userIds },
+      role: "utilisateur",
+      anonymizedAt: null,
+      deletionNoticeSentAt: null,
+    },
+    select: { id: true, email: true, nom: true, prenom: true, lastLoginAt: true, createdAt: true },
+  });
+
+  const bookingByUser = await lastBookingMap(users.map((u) => u.id));
+  const now = Date.now();
+  let processed = 0;
+
+  for (const u of users) {
+    const { date: lastSeen } = computeLastSeen(
+      u.lastLoginAt,
+      bookingByUser.get(u.id) ?? null,
+      u.createdAt,
+    );
+    const daysInactive = Math.floor((now - lastSeen.getTime()) / MS_PER_DAY);
+    if (daysInactive < minDays) continue; // re-vérification serveur : pas encore éligible
+
+    const sentAt = new Date();
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: u.id }, data: { deletionNoticeSentAt: sentAt } }),
+      prisma.rgpdLog.create({
+        data: {
+          action: "deletion_notice",
+          targetUserId: u.id,
+          details: { graceDays: GRACE_DAYS },
+          createdAt: sentAt,
+        },
+      }),
+    ]);
+
+    // Envoi best-effort : un échec SMTP ne doit pas annuler le marquage.
+    const name = `${u.prenom} ${u.nom}`.trim() || u.email;
+    try {
+      await sendMail({
+        to: u.email,
+        subject: "Préavis de suppression de votre compte — CultuRésa",
+        html: `<p>Bonjour ${name},</p><p>Votre compte CultuRésa est inactif depuis plus de ${years} an(s). Conformément à notre politique de conservation des données (RGPD), il sera anonymisé de façon irréversible si vous ne vous reconnectez pas dans un délai de ${GRACE_DAYS} jours.</p><p>Pour conserver votre compte, il vous suffit de vous reconnecter avant l'échéance.</p><p>L'équipe CultuRésa</p>`,
+      });
+    } catch {
+      // SMTP indisponible : on ignore, le marquage du préavis reste valide.
+    }
+
+    processed += 1;
+  }
+
+  return processed;
+}
+
+/**
+ * Anonymise les comptes réellement éligibles : inactivité ≥ seuil ET préavis
+ * envoyé il y a ≥ GRACE_DAYS. Re-vérifie ces conditions côté serveur avant
+ * d'agir (la liste cliente ne fait pas foi). Délègue à `anonymizeUser`.
+ * Retourne le nombre de comptes anonymisés.
+ */
+export async function anonymizeInactive(
+  userIds: string[],
+  actorUserId: string | null,
+): Promise<number> {
+  if (userIds.length === 0) return 0;
+  const years = await getRetentionYears();
+  const minDays = thresholdDays(years);
+
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: userIds },
+      role: "utilisateur",
+      anonymizedAt: null,
+      deletionNoticeSentAt: { not: null },
+    },
+    select: { id: true, deletionNoticeSentAt: true, lastLoginAt: true, createdAt: true },
+  });
+
+  const bookingByUser = await lastBookingMap(users.map((u) => u.id));
+  const now = Date.now();
+  let anonymized = 0;
+
+  for (const u of users) {
+    const { date: lastSeen } = computeLastSeen(
+      u.lastLoginAt,
+      bookingByUser.get(u.id) ?? null,
+      u.createdAt,
+    );
+    const daysInactive = Math.floor((now - lastSeen.getTime()) / MS_PER_DAY);
+    if (daysInactive < minDays) continue;
+
+    const noticeAgeDays = u.deletionNoticeSentAt
+      ? Math.floor((now - u.deletionNoticeSentAt.getTime()) / MS_PER_DAY)
+      : -1;
+    if (noticeAgeDays < GRACE_DAYS) continue;
+
+    await anonymizeUser(u.id, "retention");
+
+    // Trace l'acteur sur la dernière entrée RgpdLog de ce compte (anonymizeUser
+    // ne connaît pas l'admin déclencheur).
+    if (actorUserId) {
+      const last = await prisma.rgpdLog.findFirst({
+        where: { action: "anonymize", targetUserId: u.id },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (last) await prisma.rgpdLog.update({ where: { id: last.id }, data: { actorUserId } });
+    }
+    anonymized += 1;
+  }
+
+  return anonymized;
+}

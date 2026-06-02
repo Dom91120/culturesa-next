@@ -17,3 +17,15 @@ export async function setConfig(key: string, value: string): Promise<void> {
     create: { key, value },
   });
 }
+
+/** Écrit plusieurs clés de configuration en une seule transaction. */
+export async function setConfigMany(entries: Record<string, string>): Promise<void> {
+  const ops = Object.entries(entries).map(([key, value]) =>
+    prisma.appConfig.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value },
+    }),
+  );
+  await prisma.$transaction(ops);
+}

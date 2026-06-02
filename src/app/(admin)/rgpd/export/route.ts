@@ -1,6 +1,6 @@
-import { headers } from "next/headers";
 import { prisma } from "@/server/db";
 import { getSession, requireRole } from "@/server/guards";
+import { headers } from "next/headers";
 
 export async function GET(req: Request) {
   await requireRole("gestionnaire");

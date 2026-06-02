@@ -111,6 +111,7 @@ header {
   background: var(--surface2); border: 1px solid var(--border);
   height: 32px; padding: 0 .65rem 0 .35rem;
   border-radius: 99px; cursor: pointer; user-select: none;
+  color: inherit; font: inherit;
 }
 .user-pill-wrap { position: relative; }
 /* Le nom utilisateur est masqué par défaut, affiché quand le menu est ouvert (i.e. au clic sur le pill) */
@@ -183,14 +184,15 @@ header {
   margin: 0 0 1rem;
   padding: 0 .5rem;
   border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 .tab-nav-btn {
   position: relative;
   display: flex; align-items: center; gap: .3rem;
   padding: .4rem .8rem .4rem;
-  background: transparent;
-  border: 1px solid transparent;
-  border-bottom: none;
+  background: var(--surface2);
+  border: 1px solid var(--surface);
+  border-bottom: 1px solid var(--border);
   border-top-left-radius: var(--rad-sm);
   border-top-right-radius: var(--rad-sm);
   font-family: inherit; font-size: .82rem; font-weight: 500;
@@ -222,24 +224,23 @@ header {
 /* ── Layout & Sidebar ───────────────────────────────────── */
 .app-layout {
   display: flex; align-items: flex-start;
-  width: calc(96% - 2 * var(--header-h, 60px));
-  height: calc(100dvh - 2 * var(--header-h, 60px));
+  height: 100dvh;
 }
 /* .app-main scrolle ; on l'étend visuellement jusqu'au bord droit du viewport
    pour que la scrollbar soit collée au bord de la page (sans décentrer .app-layout). */
 .app-main {
   flex: 1; min-width: 0;
-  padding: 0 calc(2vw + var(--header-h, 60px)) 2rem 2.3rem;
-  margin-right: calc(-2vw - var(--header-h, 60px));
+  padding: 1rem 2.3rem 2rem 2.3rem;
   height: 100%;
   overflow-y: auto;
+  background: var(--surface);
 }
 main { width: 100%; background: var(--surface1); }
 
 #service-sidebar-wrap {
   background: var(--sidebar-bg); border-right: 1px solid var(--border);
   padding: 0 0 1rem 0;
-  height: calc(100dvh - 2 * var(--header-h, 60px));
+  height: 100dvh;
   position: sticky; top: 0; align-self: flex-start; overflow-y: auto; overflow-x: hidden; border-radius: var(--radius);
   transition: width .18s ease, min-width .18s ease, max-width .18s ease;
 }
@@ -366,9 +367,9 @@ main { width: 100%; background: var(--surface1); }
   display: inline-flex; align-items: center; gap: .3rem;
   padding: .4rem .8rem .4rem;
   font-family: inherit; font-size: .82rem; font-weight: 500;
-  background: transparent;
-  border: 1px solid transparent;
-  border-bottom: none;
+  background: var(--surface2);
+  border: 1px solid var(--surface);
+  border-bottom: 1px solid var(--border);
   border-top-left-radius: var(--rad-sm);
   border-top-right-radius: var(--rad-sm);
   cursor: pointer;
@@ -382,6 +383,7 @@ main { width: 100%; background: var(--surface1); }
   color: var(--warn);
   background: var(--surface1);
   border-color: var(--border);
+  border-bottom: none;
 }
 
 /* ── Créneaux sub-tabs ──────────────────────────────────── */
@@ -399,9 +401,9 @@ main { width: 100%; background: var(--surface1); }
   display: inline-flex; align-items: center; gap: .3rem;
   padding: .45rem 1rem .35rem;
   font-family: inherit; font-size: .78rem; font-weight: 500;
-  background: transparent;
-  border: 1px solid transparent;
-  border-bottom: none;
+  background: var(--surface2);
+  border: 1px solid var(--surface);
+  border-bottom: 1px solid var(--border);
   border-top-left-radius: var(--rad-sm);
   border-top-right-radius: var(--rad-sm);
   cursor: pointer;
@@ -414,6 +416,7 @@ main { width: 100%; background: var(--surface1); }
   color: var(--warn);
   background: var(--surface1);
   border-color: var(--border);
+  border-bottom: none;
 }
 
 
@@ -723,30 +726,30 @@ textarea.theme-pending:focus::placeholder {
   column-gap: 8rem;
 }
 #periods-row > .pr-title  { grid-column: 1; grid-row: 1; }
-#periods-row > #exercice-nav { grid-column: 1; grid-row: 2; }
+#periods-row > #periode-nav { grid-column: 1; grid-row: 2; }
 #periods-row > .pr-editor { grid-column: 1; grid-row: 3; }
 #periods-row > .pr-add    { grid-column: 1; grid-row: 4; display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
 /* Verrou visuel quand on consulte un exercice ancien — appliqué soit sur le pane entier
    (Créneaux, Réservations, Demandeurs), soit sur des éléments ciblés (Périodes : éditeur,
-   jours d'ouverture, barre d'actions) pour préserver la navigation .exercice-nav. */
+   jours d'ouverture, barre d'actions) pour préserver la navigation .periode-nav. */
 .exercice-locked { pointer-events: none; opacity: .45; filter: grayscale(.3); }
 
 /* Barre de navigation entre exercices : ◀ label ▶ — réutilisée par périodes, planning rec et planning ponctuel */
-.exercice-nav {
-  display: flex; align-items: center; justify-content: center; gap: .9rem;
+.periode-nav {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
   margin: .35rem 0 .55rem;
 }
-.exercice-nav .ex-nav-label {
-  font-weight: 600; font-size: .95rem; color: var(--text);
-  min-width: 6.5rem; text-align: center;
+.periode-nav .ex-nav-label {
+  font-weight: 600; font-size: .72rem; color: var(--text);
+  min-width: 5rem; text-align: center;
 }
-.exercice-nav .ex-arrow {
+.periode-nav .ex-arrow {
   background: var(--surface2); color: var(--text); border: 1px solid var(--border);
-  border-radius: var(--rad-sm); padding: .15rem .55rem; font-size: .85rem;
+  border-radius: var(--rad-sm); padding: .05rem .4rem; font-size: .7rem;
   cursor: pointer; line-height: 1;
 }
-.exercice-nav .ex-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.exercice-nav .ex-arrow:disabled { opacity: .35; cursor: not-allowed; }
+.periode-nav .ex-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.periode-nav .ex-arrow:disabled { opacity: .35; cursor: not-allowed; }
 
 /* Variante inline (intégrée à un panel-title) : libellé à la suite du titre + petites flèches gauche/droite à droite */
 .exercice-nav-inline {
@@ -866,7 +869,7 @@ textarea.theme-pending:focus::placeholder {
 .admin-table tr.role-break td { border-top: 1px dotted lightgray; }
 #uc-search-admin { padding: .25rem .6rem .25rem 1.8rem; text-align: left; font-size: .78rem; }
 .search-wrap { position: relative; flex: 0 1 260px; margin-left: auto; }
-.search-wrap input { width: 100%; }
+.search-wrap input { width: 100%; padding-left: 1.85rem; }
 .search-wrap .search-icon {
   position: absolute; left: .55rem; top: 50%; transform: translateY(-50%);
   width: .95rem; height: .95rem; color: var(--muted); pointer-events: none;
@@ -977,8 +980,9 @@ textarea.theme-pending:focus::placeholder {
 #tab-content-reservation .slot-spots { font-size: .62rem; background: none; }
 #tab-content-reservation .period-btn,
 #tab-content-planning .period-btn,
-#tab-content-planning-rec .period-btn,
-#cap-period-tabs-2 .period-btn { padding: .25rem .6rem; font-size: .7rem; }
+#tab-content-planning-rec .period-btn { padding: .25rem .6rem; font-size: .7rem; }
+/* Onglets périodes des créneaux récurrents : plus compacts. */
+#cap-period-tabs-2 .period-btn { padding: .12rem .5rem; font-size: .64rem; }
 
 /* ── Role pills ──────────────────────────────────────────── */
 .role-pill {
@@ -1308,9 +1312,12 @@ textarea.theme-pending:focus::placeholder {
 
 /* ── Agenda hebdomadaire (vue graphique type Google Agenda) ────────── */
 /* Onglets periode plus compacts dans l'agenda (scope au seul conteneur agenda). */
+#agenda-period-tabs { margin: 0; }
+/* La grille agenda tient en pleine largeur (colonnes minmax(0,1fr)) : pas d'ascenseur. */
+#agenda-print-grid { overflow: visible; }
 #agenda-period-tabs .period-btn {
-  padding: .2rem .65rem;
-  font-size: .7rem;
+  padding: .12rem .5rem;
+  font-size: .64rem;
 }
 /* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda et dans la
    modale multi-badges (cell-stack-modal) — même taille texte + même scale de case. */
@@ -1341,8 +1348,8 @@ textarea.theme-pending:focus::placeholder {
 .agenda-mode-btn {
   background: transparent;
   border: 0;
-  padding: .25rem .7rem;
-  font-size: .7rem;
+  padding: .12rem .5rem;
+  font-size: .62rem;
   color: var(--muted);
   cursor: pointer;
   transition: background .15s, color .15s;
@@ -1366,6 +1373,9 @@ textarea.theme-pending:focus::placeholder {
   display: grid;
   /* grid-template-columns est défini inline (selon le nombre de jours actifs) */
   width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden; /* clippe les cellules d'angle pour que l'arrondi soit visible */
 }
 .agenda-header-cell {
   background: var(--surface2);
@@ -1808,3 +1818,29 @@ textarea.theme-pending:focus::placeholder {
   font-size: .82rem; color: var(--text); min-height: 1.25rem;
   word-break: break-word;
 }
+
+/* ── Créneaux (onglet dédié) — barre d'outils + modale demandeurs ── */
+.cap-tool-label {
+  font-size: .62rem; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--muted);
+}
+.cap-input {
+  width: 42px; font-size: .78rem; padding: .1rem .3rem; text-align: center;
+  border: 1.5px solid var(--border); border-radius: var(--rad-sm);
+  background: var(--surface2); color: var(--text);
+}
+.btn-add-slot {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent); white-space: nowrap; flex-shrink: 0;
+  font-size: .7rem; padding: .2rem .6rem; border-radius: var(--rad-sm); letter-spacing: .04em;
+}
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem;
+}
+.dem-modal-list { list-style: none; margin: .5rem 0; padding: 0; max-height: 50vh; overflow: auto; }
+.dem-modal-list li { padding: .15rem 0; }
+.day-chk {
+  display: flex; align-items: center; gap: .4rem; cursor: pointer;
+  font-size: .82rem; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text);
+}
+.muted { color: var(--muted); font-size: .85rem; }

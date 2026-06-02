@@ -1,22 +1,29 @@
 import { getConfigMany } from "@/server/config";
-import { MessagingPanel } from "./messaging-panel";
+import { MessagingConfig } from "./messaging-config";
 
 export default async function MessageriePage() {
-  const cfg = await getConfigMany(["mail.senderName", "mail.signature"]);
+  // Le mot de passe (mail.password) n'est jamais renvoyé au client.
+  const cfg = await getConfigMany([
+    "mail.driver",
+    "mail.from",
+    "mail.fromName",
+    "mail.host",
+    "mail.port",
+    "mail.security",
+    "mail.username",
+  ]);
 
   return (
-    <div>
-      <div className="panel-title">
-        <span className="dot" />
-        Messagerie
-      </div>
-      <MessagingPanel
-        senderName={cfg["mail.senderName"]}
-        signature={cfg["mail.signature"]}
-        smtpConfigured={Boolean(process.env.SMTP_HOST)}
-        smtpHost={process.env.SMTP_HOST ?? ""}
-        smtpFrom={process.env.SMTP_FROM ?? ""}
-      />
-    </div>
+    <MessagingConfig
+      config={{
+        driver: cfg["mail.driver"],
+        from: cfg["mail.from"],
+        fromName: cfg["mail.fromName"],
+        host: cfg["mail.host"],
+        port: cfg["mail.port"],
+        security: cfg["mail.security"],
+        username: cfg["mail.username"],
+      }}
+    />
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+import { signOut } from "@/lib/auth-client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { signOut } from "@/lib/auth-client";
 
 const TABS = [
   { href: "/reserver", label: "Réserver", icon: "📅" },
@@ -55,13 +55,19 @@ export function UserShell({
 
       <div className="user-bar" id="user-bar">
         <div className="user-pill-wrap" ref={menuRef}>
-          <div className="user-pill" onClick={() => setMenuOpen((o) => !o)}>
+          <button
+            type="button"
+            className="user-pill"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
             <div className="avatar">{initialsOf(user.name, user.email)}</div>
             <span id="user-display-name" style={{ fontSize: ".78rem", color: "var(--text)" }}>
               {user.name || user.email}
             </span>
             <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>▾</span>
-          </div>
+          </button>
           <div id="user-menu" className={menuOpen ? "open" : ""}>
             <button type="button" className="danger" onClick={onLogout}>
               ⏏ Déconnexion
@@ -72,7 +78,7 @@ export function UserShell({
       </div>
 
       <main>
-        <div className="app-layout" style={{ marginLeft: "auto", marginRight: "auto" }}>
+        <div className="app-layout">
           <div className="app-main">
             <div className="tabs-nav">
               {TABS.map((t) => {

@@ -1,0 +1,755 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import {
+  createPeriodAction,
+  deletePeriodAction,
+  reactivatePeriodsAction,
+  saveOpeningConfigAction,
+  updatePeriodAction,
+} from "./actions";
+
+type PeriodState = "actif" | "desactive" | "archive";
+
+export type UiPeriod = {
+  id: number;
+  label: string;
+  etiquette: string | null;
+  dateStart: string; // "YYYY-MM-DD" ou ""
+  dateEnd: string;
+  color: string;
+  state: PeriodState;
+  exerciceId: number | null;
+};
+
+type Exercice = { id: number; label: string };
+
+type Opening = {
+  activeDays: string[];
+  openOnHolidays: boolean;
+  morningStart: string;
+  morningEnd: string;
+  afternoonStart: string;
+  afternoonEnd: string;
+};
+
+type Props = {
+  serviceId: string;
+  initialPeriods: UiPeriod[];
+  exercices: Exercice[];
+  opening: Opening;
+};
+
+// Ordre + libellés des jours (legacy : ALL_DKEYS / ALL_DAYS).
+const DAYS: { key: string; label: string; full: string }[] = [
+  { key: "lun", label: "Lun", full: "Lundi" },
+  { key: "mar", label: "Mar", full: "Mardi" },
+  { key: "mer", label: "Mer", full: "Mercredi" },
+  { key: "jeu", label: "Jeu", full: "Jeudi" },
+  { key: "ven", label: "Ven", full: "Vendredi" },
+  { key: "sam", label: "Sam", full: "Samedi" },
+  { key: "dim", label: "Dim", full: "Dimanche" },
+];
+
+/** Tri legacy : dateStart croissant (nulls en dernier), puis id. */
+function sortPeriods(periods: UiPeriod[]): UiPeriod[] {
+  return periods.slice().sort((a, b) => {
+    const as = a.dateStart;
+    const bs = b.dateStart;
+    if (as && bs) return as < bs ? -1 : as > bs ? 1 : a.id - b.id;
+    if (as) return -1;
+    if (bs) return 1;
+    return a.id - b.id;
+  });
+}
+
+/** « 2025-09-01 » → « 01/09/2025 » (format legacy fr-FR). */
+function fmtDate(value: string): string {
+  if (!value) return "—";
+  return new Date(`${value}T00:00`).toLocaleDateString("fr-FR");
+}
+
+/** Incrémente/décrémente une heure « HH:MM » par pas de 15 min, calé sur la grille. */
+function stepTime(value: string, deltaMin: number): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  let total = m ? Math.min(23, Number(m[1])) * 60 + Math.min(59, Number(m[2])) : 0;
+  const onGrid = total % 15 === 0;
+  if (onGrid) total += deltaMin;
+  else total = deltaMin > 0 ? Math.ceil(total / 15) * 15 : Math.floor(total / 15) * 15;
+  total = Math.max(0, Math.min(23 * 60 + 45, total));
+  const h = Math.floor(total / 60);
+  const mm = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+type ModalForm = {
+  id: number | null;
+  label: string;
+  etiquette: string;
+  dateStart: string;
+  dateEnd: string;
+  color: string;
+};
+
+const EMPTY_FORM: ModalForm = {
+  id: null,
+  label: "",
+  etiquette: "",
+  dateStart: "",
+  dateEnd: "",
+  color: "#6dceaa",
+};
+
+export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }: Props) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  // ── Navigation entre exercices (par défaut : le plus récent). ───────────────
+  const sortedExercices = useMemo(
+    () => exercices.slice().sort((a, b) => a.label.localeCompare(b.label)),
+    [exercices],
+  );
+  const defaultExerciceId =
+    sortedExercices.length > 0 ? sortedExercices[sortedExercices.length - 1].id : null;
+  const [currentExerciceId, setCurrentExerciceId] = useState<number | null>(defaultExerciceId);
+
+  const exerciceIndex = sortedExercices.findIndex((e) => e.id === currentExerciceId);
+  const exerciceLabel = exerciceIndex >= 0 ? sortedExercices[exerciceIndex].label : "—";
+  const canPrev = exerciceIndex > 0;
+  const canNext = exerciceIndex >= 0 && exerciceIndex < sortedExercices.length - 1;
+
+  // ── Sélection de périodes (cases à cocher). ─────────────────────────────────
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const visiblePeriods = useMemo(() => {
+    const inExercice =
+      currentExerciceId == null
+        ? initialPeriods
+        : initialPeriods.filter((p) => p.exerciceId === currentExerciceId);
+    return sortPeriods(inExercice);
+  }, [initialPeriods, currentExerciceId]);
+
+  function changeExercice(id: number | null) {
+    setCurrentExerciceId(id);
+    setSelected(new Set());
+  }
+
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(check: boolean) {
+    setSelected(check ? new Set(visiblePeriods.map((p) => p.id)) : new Set());
+  }
+
+  const selectedCount = selected.size;
+  const allChecked = visiblePeriods.length > 0 && selectedCount === visiblePeriods.length;
+  const someChecked = selectedCount > 0 && !allChecked;
+  const anyInactiveSelected = [...selected].some((id) => {
+    const p = visiblePeriods.find((x) => x.id === id);
+    return p && p.state !== "actif";
+  });
+
+  // ── Modale création / édition. ──────────────────────────────────────────────
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState<ModalForm>(EMPTY_FORM);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+
+  function openCreate() {
+    setModalError(null);
+    setForm(EMPTY_FORM);
+    setModalOpen(true);
+  }
+
+  function openEdit() {
+    const id = [...selected][0];
+    const p = visiblePeriods.find((x) => x.id === id);
+    if (!p) return;
+    setModalError(null);
+    setForm({
+      id: p.id,
+      label: p.label,
+      etiquette: p.etiquette ?? "",
+      dateStart: p.dateStart,
+      dateEnd: p.dateEnd,
+      color: p.color || "#6dceaa",
+    });
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setModalError(null);
+  }
+
+  function saveModal() {
+    setModalError(null);
+    const label = form.label.trim();
+    if (!label) {
+      setModalError("Le libellé est requis.");
+      return;
+    }
+    const base = {
+      serviceId,
+      label,
+      etiquette: form.etiquette.trim(),
+      dateStart: form.dateStart || null,
+      dateEnd: form.dateEnd || null,
+      color: form.color || "#6dceaa",
+    };
+    startTransition(async () => {
+      const res =
+        form.id == null
+          ? await createPeriodAction(base)
+          : await updatePeriodAction({ ...base, id: form.id });
+      if (res && !res.ok) {
+        setModalError(res.error ?? "Échec de l'enregistrement.");
+        return;
+      }
+      setModalOpen(false);
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  function deleteSelected() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        `Supprimer ${ids.length} période(s) ? Les réservations liées seront aussi supprimées.`,
+      )
+    ) {
+      return;
+    }
+    setListError(null);
+    startTransition(async () => {
+      for (const id of ids) {
+        const res = await deletePeriodAction({ serviceId, id });
+        if (res && !res.ok) {
+          setListError(res.error ?? "Échec de la suppression.");
+          return;
+        }
+      }
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  function reactivateSelected() {
+    const ids = [...selected].filter((id) => {
+      const p = visiblePeriods.find((x) => x.id === id);
+      return p && p.state !== "actif";
+    });
+    if (ids.length === 0) return;
+    setListError(null);
+    startTransition(async () => {
+      const res = await reactivatePeriodsAction({ serviceId, ids });
+      if (res && !res.ok) {
+        setListError(res.error ?? "Échec de la réactivation.");
+        return;
+      }
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  // ── Jours d'ouverture + fériés + plages horaires. ───────────────────────────
+  const [activeDays, setActiveDays] = useState<string[]>(opening.activeDays);
+  const [openOnHolidays, setOpenOnHolidays] = useState(opening.openOnHolidays);
+  const [morningStart, setMorningStart] = useState(opening.morningStart);
+  const [morningEnd, setMorningEnd] = useState(opening.morningEnd);
+  const [afternoonStart, setAfternoonStart] = useState(opening.afternoonStart);
+  const [afternoonEnd, setAfternoonEnd] = useState(opening.afternoonEnd);
+  const [openingError, setOpeningError] = useState<string | null>(null);
+  const [openingSaved, setOpeningSaved] = useState(false);
+
+  function touchOpening() {
+    setOpeningSaved(false);
+  }
+  function toggleDay(key: string) {
+    touchOpening();
+    setActiveDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
+  }
+
+  function saveOpening() {
+    setOpeningError(null);
+    startTransition(async () => {
+      const res = await saveOpeningConfigAction({
+        serviceId,
+        activeDays: activeDays as ("lun" | "mar" | "mer" | "jeu" | "ven" | "sam" | "dim")[],
+        openOnHolidays,
+        morningStart,
+        morningEnd,
+        afternoonStart,
+        afternoonEnd,
+      });
+      if (res && !res.ok) {
+        setOpeningError(res.error ?? "Échec de l'enregistrement.");
+        return;
+      }
+      setOpeningSaved(true);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="panel">
+      {/* ── Ligne périodes : titre · nav exercice · tableau · actions ──────── */}
+      <div id="periods-row">
+        <div className="panel-title pr-title">
+          <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            <span className="dot" style={{ background: "var(--warn)" }} />
+            Périodes
+          </span>
+        </div>
+
+        <div className="periode-nav">
+          <button
+            type="button"
+            className="ex-arrow"
+            onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
+            disabled={!canPrev}
+            aria-label="Exercice précédent"
+          >
+            ◀
+          </button>
+          <span className="ex-nav-label">{exerciceLabel}</span>
+          <button
+            type="button"
+            className="ex-arrow"
+            onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
+            disabled={!canNext}
+            aria-label="Exercice suivant"
+          >
+            ▶
+          </button>
+        </div>
+
+        <div className="pr-editor">
+          {visiblePeriods.length > 0 ? (
+            <table className="periods-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 32 }}>
+                    <input
+                      type="checkbox"
+                      className="admin-cb"
+                      checked={allChecked}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someChecked;
+                      }}
+                      onChange={(e) => toggleSelectAll(e.target.checked)}
+                      title="Tout sélectionner"
+                    />
+                  </th>
+                  <th>Coul</th>
+                  <th>Étiq</th>
+                  <th className="td-left" style={{ width: 260 }}>
+                    Libellé
+                  </th>
+                  <th>Début</th>
+                  <th>Fin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePeriods.map((p) => (
+                  <tr key={p.id} style={p.state === "actif" ? undefined : { opacity: 0.55 }}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        className="admin-cb"
+                        checked={selected.has(p.id)}
+                        onChange={() => toggleSelect(p.id)}
+                      />
+                    </td>
+                    <td>
+                      <span
+                        className="period-swatch"
+                        style={{ background: p.color || "#6dceaa" }}
+                      />
+                    </td>
+                    <td>{p.etiquette || "—"}</td>
+                    <td className="td-left">{p.label || "—"}</td>
+                    <td>{fmtDate(p.dateStart)}</td>
+                    <td>{fmtDate(p.dateEnd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ color: "var(--muted)", fontSize: ".85rem", margin: ".4rem 0" }}>
+              Aucune période définie.
+            </p>
+          )}
+        </div>
+
+        <div className="pr-add">
+          {selectedCount > 0 && (
+            <>
+              <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>
+                {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
+              </span>
+              {selectedCount === 1 && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={openEdit}
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                    color: "var(--accent)",
+                    padding: ".25rem .65rem",
+                    fontSize: ".68rem",
+                  }}
+                >
+                  ✏️ Modifier
+                </button>
+              )}
+              {anyInactiveSelected && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={reactivateSelected}
+                  disabled={pending}
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                    color: "var(--accent)",
+                    padding: ".25rem .65rem",
+                    fontSize: ".68rem",
+                  }}
+                >
+                  ✓ Réactiver
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={deleteSelected}
+                disabled={pending}
+                style={{
+                  borderColor: "rgba(220,80,80,.4)",
+                  color: "#e05555",
+                  padding: ".25rem .65rem",
+                  fontSize: ".68rem",
+                }}
+              >
+                🗑️ Supprimer
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={openCreate}
+            style={{
+              marginLeft: "auto",
+              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+              color: "var(--accent)",
+              padding: ".25rem .7rem",
+              fontSize: ".7rem",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ＋ Ajouter une période
+          </button>
+        </div>
+      </div>
+
+      {listError && (
+        <div className="field-error" style={{ display: "block", marginBottom: ".75rem" }}>
+          {listError}
+        </div>
+      )}
+
+      {/* ── Jours d'ouverture ──────────────────────────────────────────────── */}
+      <div className="panel-title panel-second-title">
+        <span className="dot" style={{ background: "var(--warn)" }} />
+        Jours d&apos;ouverture
+      </div>
+      <div style={{ display: "flex", gap: ".55rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}>
+          {DAYS.map((d) => (
+            <label
+              key={d.key}
+              title={d.full}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: ".3rem",
+                cursor: "pointer",
+                fontSize: ".75rem",
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="checkbox"
+                className="admin-cb"
+                checked={activeDays.includes(d.key)}
+                onChange={() => toggleDay(d.key)}
+                style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+              />
+              {d.label}
+            </label>
+          ))}
+        </div>
+        <span
+          style={{
+            width: 1,
+            height: "1rem",
+            background: "var(--border)",
+            flexShrink: 0,
+            margin: "0 .2rem",
+            alignSelf: "center",
+          }}
+        />
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: ".3rem",
+            cursor: "pointer",
+            fontSize: ".75rem",
+            fontWeight: 500,
+          }}
+        >
+          <input
+            type="checkbox"
+            className="admin-cb"
+            checked={openOnHolidays}
+            onChange={(e) => {
+              touchOpening();
+              setOpenOnHolidays(e.target.checked);
+            }}
+            style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+          />
+          Jours fériés
+        </label>
+      </div>
+
+      {/* ── Plages horaires ────────────────────────────────────────────────── */}
+      <div className="panel-title panel-second-title">
+        <span className="dot" style={{ background: "var(--warn)" }} />
+        Plages horaires
+      </div>
+      <div
+        className="defaults-row"
+        style={{ display: "flex", alignItems: "center", gap: "2rem", flexWrap: "wrap" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+          <span
+            style={{
+              fontSize: ".62rem",
+              fontWeight: 700,
+              letterSpacing: ".09em",
+              textTransform: "uppercase",
+              color: "var(--muted)",
+            }}
+          >
+            Matin
+          </span>
+          <TimeStepper
+            value={morningStart}
+            onChange={(v) => {
+              touchOpening();
+              setMorningStart(v);
+            }}
+          />
+          <TimeStepper
+            value={morningEnd}
+            onChange={(v) => {
+              touchOpening();
+              setMorningEnd(v);
+            }}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+          <span
+            style={{
+              fontSize: ".62rem",
+              fontWeight: 700,
+              letterSpacing: ".09em",
+              textTransform: "uppercase",
+              color: "var(--muted)",
+            }}
+          >
+            Après-midi
+          </span>
+          <TimeStepper
+            value={afternoonStart}
+            onChange={(v) => {
+              touchOpening();
+              setAfternoonStart(v);
+            }}
+          />
+          <TimeStepper
+            value={afternoonEnd}
+            onChange={(v) => {
+              touchOpening();
+              setAfternoonEnd(v);
+            }}
+          />
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".5rem" }}>
+          {openingError && (
+            <span className="field-error" style={{ display: "inline" }}>
+              {openingError}
+            </span>
+          )}
+          {openingSaved && (
+            <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={saveOpening}
+            disabled={pending}
+            style={{ background: "var(--warn)", color: "#0f1117" }}
+          >
+            {pending ? "Enregistrement…" : "💾 Enregistrer"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Modale création / édition ──────────────────────────────────────── */}
+      {modalOpen && (
+        <div className="modal-overlay open">
+          <div className="modal-box" aria-labelledby="period-modal-title">
+            <div className="modal-title" id="period-modal-title">
+              <span>{form.id == null ? "➕ Nouvelle période" : "✏️ Modifier la période"}</span>
+              <button type="button" className="modal-close" onClick={closeModal}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Libellé *</span>
+                <input
+                  type="text"
+                  value={form.label}
+                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                  placeholder="Ex. Période 1"
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Étiquette</span>
+                <input
+                  type="text"
+                  value={form.etiquette}
+                  onChange={(e) => setForm((f) => ({ ...f, etiquette: e.target.value }))}
+                  placeholder="Optionnel"
+                />
+              </label>
+              <div style={{ display: "flex", gap: ".75rem" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Début</span>
+                  <input
+                    type="date"
+                    value={form.dateStart}
+                    onChange={(e) => setForm((f) => ({ ...f, dateStart: e.target.value }))}
+                  />
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Fin</span>
+                  <input
+                    type="date"
+                    value={form.dateEnd}
+                    onChange={(e) => setForm((f) => ({ ...f, dateEnd: e.target.value }))}
+                  />
+                </label>
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Couleur</span>
+                <input
+                  type="color"
+                  className="period-color-input"
+                  value={form.color}
+                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                />
+              </label>
+
+              {modalError && (
+                <div className="field-error" style={{ display: "block" }}>
+                  {modalError}
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: ".5rem",
+                  marginTop: ".5rem",
+                }}
+              >
+                <button type="button" className="btn btn-ghost" onClick={closeModal}>
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={saveModal}
+                  disabled={pending}
+                  style={{ background: "var(--warn)", color: "#0f1117" }}
+                >
+                  {pending ? "Enregistrement…" : "Enregistrer"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Champ heure « HH:MM » avec boutons ▲▼ par pas de 15 min (port legacy). */
+function TimeStepper({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <span className="time-step-wrap">
+      <input
+        type="text"
+        value={value}
+        maxLength={5}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: 50,
+          fontSize: ".78rem",
+          padding: ".15rem .35rem",
+          borderRadius: "var(--rad-sm)",
+          border: "1px solid var(--border)",
+          background: "var(--surface2)",
+          color: "var(--text)",
+          textAlign: "center",
+        }}
+      />
+      <span className="time-step-btns">
+        <button
+          type="button"
+          className="time-step-btn"
+          tabIndex={-1}
+          onClick={() => onChange(stepTime(value, 15))}
+          aria-label="Augmenter"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          className="time-step-btn"
+          tabIndex={-1}
+          onClick={() => onChange(stepTime(value, -15))}
+          aria-label="Diminuer"
+        >
+          ▼
+        </button>
+      </span>
+    </span>
+  );
+}
