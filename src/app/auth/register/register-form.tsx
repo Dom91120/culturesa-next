@@ -1,9 +1,9 @@
 "use client";
 
+import { signUp } from "@/lib/auth-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { signUp } from "@/lib/auth-client";
 
 type Structure = { id: number; label: string };
 type Demandeur = { id: number; label: string; structures: Structure[] };
@@ -30,12 +30,29 @@ export function RegisterForm({
 
   const [demandeurId, setDemandeurId] = useState("");
   const [structureId, setStructureId] = useState("");
-  const structures = demandeurs.find((d) => String(d.id) === demandeurId)?.structures ?? [];
-  const niveauOptions = niveaux.filter((n) => !demandeurId || String(n.demandeurId) === demandeurId);
-
   const [niveau, setNiveau] = useState("");
   const [niveauOpen, setNiveauOpen] = useState(false);
   const comboRef = useRef<HTMLDivElement>(null);
+
+  const structures = demandeurs.find((d) => String(d.id) === demandeurId)?.structures ?? [];
+
+  // Niveaux applicables — port du legacy _niveauFilteredList :
+  // - demandeur choisi → ses niveaux + les niveaux globaux (demandeurId null) ;
+  // - repli sur la liste complète si le filtre est vide (jamais de menu vide) ;
+  // - filtrage live par le texte saisi (sauf quand il correspond à un niveau exact).
+  const niveauBase = (() => {
+    let base = demandeurId
+      ? niveaux.filter((n) => n.demandeurId == null || String(n.demandeurId) === demandeurId)
+      : niveaux;
+    if (base.length === 0 && niveaux.length > 0) base = niveaux;
+    return base;
+  })();
+  const niveauQuery = niveau.trim().toLowerCase();
+  const niveauExact = niveauBase.some((n) => n.label.toLowerCase() === niveauQuery);
+  const niveauOptions =
+    niveauQuery && !niveauExact
+      ? niveauBase.filter((n) => n.label.toLowerCase().includes(niveauQuery))
+      : niveauBase;
 
   const [pwd, setPwd] = useState("");
   const pwdValid = PWD_RULES.every((r) => r.test(pwd));
@@ -102,7 +119,10 @@ export function RegisterForm({
     <form onSubmit={onSubmit}>
       <div className="mode-toggle">
         Déjà inscrit ?{" "}
-        <Link href="/auth/login" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}>
+        <Link
+          href="/auth/login"
+          style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}
+        >
           Se connecter
         </Link>
       </div>
@@ -140,8 +160,19 @@ export function RegisterForm({
               id="c-demandeur"
               value={demandeurId}
               onChange={(e) => {
-                setDemandeurId(e.target.value);
+                const newDem = e.target.value;
+                setDemandeurId(newDem);
                 setStructureId("");
+                // Efface le niveau s'il s'agit d'un niveau CONNU non applicable au
+                // nouveau demandeur ; un texte libre ou un niveau encore valide est
+                // conservé (port du legacy _refreshNiveauForDemandeur).
+                const known = niveaux.some((n) => n.label === niveau);
+                const stillValid = niveaux.some(
+                  (n) =>
+                    n.label === niveau &&
+                    (n.demandeurId == null || String(n.demandeurId) === newDem),
+                );
+                if (known && !stillValid) setNiveau("");
               }}
             >
               <option value="">— choisir —</option>
@@ -160,7 +191,9 @@ export function RegisterForm({
               onChange={(e) => setStructureId(e.target.value)}
               disabled={!demandeurId}
             >
-              <option value="">— choisir —</option>
+              <option value="">
+                {demandeurId ? "— choisir —" : "— Sélectionner d'abord une catégorie —"}
+              </option>
               {structures.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
@@ -199,10 +232,19 @@ export function RegisterForm({
                 </button>
                 <div
                   className={`niveau-combo-list${niveauOpen ? " open" : ""}`}
-                  style={{ position: "absolute", top: "100%", left: 0, right: 0, width: "auto", marginTop: 2 }}
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    width: "auto",
+                    marginTop: 2,
+                  }}
                 >
                   {niveauOptions.length === 0 ? (
-                    <div className="niveau-combo-empty">Aucun niveau</div>
+                    <div className="niveau-combo-empty">
+                      Aucun niveau prédéfini — tapez librement
+                    </div>
                   ) : (
                     niveauOptions.map((n) => (
                       <div
@@ -223,11 +265,25 @@ export function RegisterForm({
             </div>
             <div>
               <label htmlFor="c-enfants">Nb enfants</label>
-              <input id="c-enfants" name="enfants" type="number" min={0} max={99} placeholder="25" />
+              <input
+                id="c-enfants"
+                name="enfants"
+                type="number"
+                min={0}
+                max={99}
+                placeholder="25"
+              />
             </div>
             <div>
               <label htmlFor="c-accompagnants">Nb accompagnants</label>
-              <input id="c-accompagnants" name="accompagnants" type="number" min={0} max={99} placeholder="0" />
+              <input
+                id="c-accompagnants"
+                name="accompagnants"
+                type="number"
+                min={0}
+                max={99}
+                placeholder="0"
+              />
             </div>
           </div>
 
@@ -256,7 +312,14 @@ export function RegisterForm({
             <label htmlFor="c-pwd2">
               Confirmer <span className="required-star">*</span>
             </label>
-            <input id="c-pwd2" name="password2" type="password" required placeholder="••••••••" autoComplete="new-password" />
+            <input
+              id="c-pwd2"
+              name="password2"
+              type="password"
+              required
+              placeholder="••••••••"
+              autoComplete="new-password"
+            />
           </div>
         </div>
       </div>
@@ -272,9 +335,21 @@ export function RegisterForm({
         <p className="rgpd-text" style={{ marginTop: ".5rem" }}>
           Pour en savoir plus sur la gestion de vos données personnelles et pour exercer vos droits,
           cliquez sur notre{" "}
-          <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "inherit", textDecoration: "underline" }}>
+          <button
+            type="button"
+            onClick={(e) => e.preventDefault()}
+            style={{
+              color: "inherit",
+              textDecoration: "underline",
+              background: "none",
+              border: "none",
+              padding: 0,
+              font: "inherit",
+              cursor: "pointer",
+            }}
+          >
             Politique de confidentialité
-          </a>
+          </button>
           .
         </p>
         <div className="check-row">
