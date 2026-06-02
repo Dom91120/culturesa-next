@@ -1378,7 +1378,10 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+}
+/* Semaine réelle : en-têtes plus compacts (jour + date sur 2 lignes). */
+.agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
+  padding: 0 .4rem;
 }
 .agenda-header-cell + .agenda-header-cell { border-left: 1px solid var(--border); }
 .agenda-corner {
