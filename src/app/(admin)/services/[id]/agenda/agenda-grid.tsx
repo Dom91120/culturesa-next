@@ -11,6 +11,8 @@ import {
   deleteBookingAdminAction,
   deleteSlotAction,
   moveBookingAction,
+  moveRecurringSlotAction,
+  moveUniqueSlotAction,
   setBookingPointageAction,
   setBookingValidatedAction,
   updateBookingDetailAction,
@@ -400,6 +402,21 @@ export function AgendaGrid({
     curDay: string;
   } | null>(null);
   const createDragRef = useRef<typeof createDrag>(null);
+  // Glisser-DÉPLACER un créneau vide (mode création) : id du créneau, type, jour
+  // d'origine, durée (préservée), top des colonnes, et position courante (quart +
+  // jour sous le curseur). Miroir dans moveDragRef pour les écouteurs window.
+  const [moveDrag, setMoveDrag] = useState<{
+    slotId: string;
+    isUnique: boolean;
+    fromDay: string;
+    durationMin: number;
+    origMin: number; // début d'origine du créneau
+    grabOffsetMin: number; // décalage curseur ↔ début (préserve le point de saisie)
+    colTop: number;
+    curMin: number; // début courant (snappé)
+    curDay: string;
+  } | null>(null);
+  const moveDragRef = useRef<typeof moveDrag>(null);
   const [detail, setDetail] = useState<Detail>(null);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
@@ -1047,6 +1064,107 @@ export function AgendaGrid({
     run(deleteSlotAction(service.id, slotId));
   }
 
+  // ── Mode création : glisser-DÉPLACER un créneau vide ────────────────────────
+  // Démarre sur le corps d'un bloc vide (× et badges gérés à part). Le créneau suit
+  // le curseur (haut du bloc = quart sous le curseur), durée préservée.
+  function onMoveSlotMouseDown(e: React.MouseEvent, b: Block) {
+    if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
+    if (isDayDisabled(b.dayKey)) return;
+    if ((e.target as HTMLElement).closest("button")) return; // ne pas gêner la croix ×
+    e.stopPropagation(); // n'amorce pas un glisser-CRÉER sur la colonne
+    e.preventDefault();
+    const colTop = (e.currentTarget as HTMLElement)
+      .closest<HTMLElement>(".agenda-day-col")
+      ?.getBoundingClientRect().top;
+    if (colTop == null) return;
+    const grabMin = quarterAtY(colTop, e.clientY);
+    const md = {
+      slotId: b.slotId,
+      isUnique: uniqueIdSet.has(b.slotId),
+      fromDay: b.dayKey,
+      durationMin: Math.max(15, b.endMin - b.startMin),
+      origMin: b.startMin,
+      grabOffsetMin: grabMin - b.startMin,
+      colTop,
+      curMin: b.startMin,
+      curDay: b.dayKey,
+    };
+    moveDragRef.current = md;
+    setMoveDrag(md);
+  }
+
+  // Au relâché : déplace le créneau vers (curDay, curMin → curMin+durée). No-op si
+  // rien ne change. Récurrent → jour + horaires ; ponctuel → date + horaires.
+  function finalizeMove(md: NonNullable<typeof moveDrag>) {
+    let startMin = md.curMin;
+    let endMin = startMin + md.durationMin;
+    if (endMin > gridEndMin) {
+      endMin = gridEndMin;
+      startMin = Math.max(gridStartMin, endMin - md.durationMin);
+    }
+    const startTime = minToHHMM(startMin);
+    const endTime = minToHHMM(endMin);
+    if (md.isUnique) {
+      if (!mondayStr) return;
+      run(
+        moveUniqueSlotAction({
+          serviceId: service.id,
+          slotId: md.slotId,
+          slotDate: ymd(addDays(mondayStr, DAY_OFFSET[md.curDay] ?? 0)),
+          startTime,
+          endTime,
+        }),
+      );
+    } else {
+      run(
+        moveRecurringSlotAction({
+          serviceId: service.id,
+          slotId: md.slotId,
+          fromDayKey: md.fromDay,
+          toDayKey: md.curDay,
+          startTime,
+          endTime,
+        }),
+      );
+    }
+  }
+
+  // Écouteurs window pendant le glisser-déplacer (même schéma que le glisser-créer).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lit moveDragRef (stable) ; (dé)branché sur l'activité du drag
+  useEffect(() => {
+    if (!moveDrag) return;
+    const onMove = (e: MouseEvent) => {
+      const md = moveDragRef.current;
+      if (!md) return;
+      // Début = quart sous le curseur, moins le décalage de saisie, borné à la grille.
+      const raw = quarterAtY(md.colTop, e.clientY) - md.grabOffsetMin;
+      const q = Math.max(gridStartMin, Math.min(gridEndMin - md.durationMin, raw));
+      const colEl = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest<HTMLElement>("[data-daykey]");
+      const dk = colEl?.dataset.daykey;
+      const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : md.curDay;
+      if (q !== md.curMin || curDay !== md.curDay) {
+        const next = { ...md, curMin: q, curDay };
+        moveDragRef.current = next;
+        setMoveDrag(next);
+      }
+    };
+    const onUp = () => {
+      const md = moveDragRef.current;
+      moveDragRef.current = null;
+      setMoveDrag(null);
+      // Pas de no-op : on ne déplace que si jour ou début a changé.
+      if (md && (md.curDay !== md.fromDay || md.curMin !== md.origMin)) finalizeMove(md);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [moveDrag !== null]);
+
   // Clic rapide sur un bloc en mode validation / pointage (sinon : ouvre le menu).
   function onBlockQuickAction(bk: Booking): boolean {
     if (validation) {
@@ -1293,7 +1411,12 @@ export function AgendaGrid({
                 borderColor: "var(--accent)",
               }
             : {}),
+          // Mode création : créneau vide déplaçable (curseur move) ; bloc en cours
+          // de déplacement estompé.
+          ...(creationMode && b.bookings.length === 0 && !allday ? { cursor: "move" } : {}),
+          ...(moveDrag?.slotId === b.slotId ? { opacity: 0.35 } : {}),
         }}
+        onMouseDown={(e) => onMoveSlotMouseDown(e, b)}
         onClick={(e) => {
           // Clic sur la zone vide du créneau → nouvelle réservation.
           e.stopPropagation();
@@ -1970,6 +2093,41 @@ export function AgendaGrid({
                         fontSize: ".62rem",
                         fontWeight: 700,
                         color: drawColor,
+                      }}
+                    >
+                      {minToHHMM(s)}–{minToHHMM(e2)}
+                    </div>
+                  );
+                })()}
+              {/* Aperçu du créneau en cours de déplacement (glisser-déplacer). */}
+              {moveDrag &&
+                moveDrag.curDay === d &&
+                (() => {
+                  const s = moveDrag.curMin;
+                  const e2 = Math.min(gridEndMin, s + moveDrag.durationMin);
+                  const top = mapMinToY(s);
+                  const h = mapMinToY(e2) - top;
+                  const moveColor = moveDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                  return (
+                    <div
+                      className="agenda-move-preview"
+                      style={{
+                        position: "absolute",
+                        left: 2,
+                        right: 2,
+                        top,
+                        height: Math.max(2, h),
+                        background: `color-mix(in srgb, ${moveColor} 28%, transparent)`,
+                        border: `2px solid ${moveColor}`,
+                        borderRadius: 6,
+                        pointerEvents: "none",
+                        zIndex: 4,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: ".62rem",
+                        fontWeight: 700,
+                        color: moveColor,
                       }}
                     >
                       {minToHHMM(s)}–{minToHHMM(e2)}

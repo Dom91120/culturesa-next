@@ -636,6 +636,141 @@ export async function addUniqueSlot(
   return { ok: true, id };
 }
 
+// ─── Déplacement d'UN créneau vide depuis l'agenda (mode « Création ») ──────────
+// Refusé s'il porte la moindre réservation (créneau OU miroirs). Récurrent : maj
+// horaires + jour (déplace la capacité du jour, régénère les miroirs). Ponctuel :
+// maj horaires + date (période re-résolue).
+
+export async function moveRecurringSlot(
+  serviceId: string,
+  slotId: string,
+  fromDayKey: DayKey,
+  toDayKey: DayKey,
+  startTime: string,
+  endTime: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return { ok: false, error: "Service introuvable" };
+  const slot = await prisma.slot.findFirst({
+    where: { id: slotId, serviceId, slotType: "recurring" },
+  });
+  if (!slot) return { ok: false, error: "Créneau introuvable" };
+  const period = await prisma.period.findFirst({ where: { id: slot.periodId ?? 0, serviceId } });
+  if (!period?.dateStart || !period?.dateEnd) {
+    return { ok: false, error: "Période introuvable ou sans dates" };
+  }
+  const existingMirrors = await prisma.slot.findMany({
+    where: { parentSlotId: slotId },
+    select: { id: true },
+  });
+  const bookingCount = await prisma.booking.count({
+    where: { slotId: { in: [slotId, ...existingMirrors.map((m) => m.id)] } },
+  });
+  if (bookingCount > 0) {
+    return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
+  }
+
+  const slotCaps: Record<DayKey, number | null> = {
+    lun: slot.capLun,
+    mar: slot.capMar,
+    mer: slot.capMer,
+    jeu: slot.capJeu,
+    ven: slot.capVen,
+    sam: slot.capSam,
+    dim: slot.capDim,
+  };
+  const capVal = slotCaps[fromDayKey] ?? slot.capacity ?? service.recurCapacity;
+  const newCap: Partial<Record<DayKey, number | null>> = { ...slotCaps };
+  newCap[toDayKey] = capVal;
+  if (fromDayKey !== toDayKey) newCap[fromDayKey] = null;
+  const dayCapData = Object.fromEntries(
+    DAY_KEYS.map((d) => [DAY_COL[d], newCap[d] ?? null]),
+  ) as Record<(typeof DAY_COL)[DayKey], number | null>;
+  const weeks = slot.weeks || "A,B";
+  const activeDays = service.activeDays
+    .split(",")
+    .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
+  const holidays = await prisma.periodHoliday.findMany({
+    where: { periodId: period.id },
+    select: { date: true },
+  });
+  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
+  const startDate = toISO(period.dateStart);
+  const endDate = toISO(period.dateEnd);
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (existingMirrors.length) {
+        await tx.slot.deleteMany({ where: { id: { in: existingMirrors.map((m) => m.id) } } });
+      }
+      await tx.slot.update({
+        where: { id: slotId },
+        data: { startTime, endTime, weeks, state: "actif", ...dayCapData },
+      });
+      const wanted = computeWantedMirrors({
+        startDate,
+        endDate,
+        activeDays,
+        holidaySet,
+        openOnHolidays: service.openOnHolidays,
+        weeks: parseWeeks(weeks),
+        cap: newCap,
+      });
+      for (const [, mv] of wanted) {
+        await tx.slot.create({
+          data: {
+            id: mirrorId(slotId, mv.date),
+            serviceId,
+            slotType: "unique",
+            startTime,
+            endTime,
+            slotDate: fromISO(mv.date),
+            capacity: mv.cap,
+            periodId: period.id,
+            parentSlotId: slotId,
+            state: "actif",
+          },
+        });
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
+  return { ok: true };
+}
+
+export async function moveUniqueSlot(
+  serviceId: string,
+  slotId: string,
+  slotDate: string,
+  startTime: string,
+  endTime: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const slot = await prisma.slot.findFirst({
+    where: { id: slotId, serviceId, slotType: "unique" },
+  });
+  if (!slot) return { ok: false, error: "Créneau introuvable" };
+  if (slot.parentSlotId) return { ok: false, error: "Un miroir ne se déplace pas directement." };
+  const bookingCount = await prisma.booking.count({ where: { slotId } });
+  if (bookingCount > 0) {
+    return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
+  }
+  const period = await prisma.period.findFirst({
+    where: {
+      serviceId,
+      state: "actif",
+      dateStart: { lte: fromISO(slotDate) },
+      dateEnd: { gte: fromISO(slotDate) },
+    },
+    select: { id: true },
+  });
+  if (!period) return { ok: false, error: `Aucune période active ne couvre la date ${slotDate}` };
+  await prisma.slot.update({
+    where: { id: slotId },
+    data: { startTime, endTime, slotDate: fromISO(slotDate), periodId: period.id },
+  });
+  return { ok: true };
+}
+
 // ─── delete (suppression immédiate, fidèle au legacy) ──────────────
 // Supprime des créneaux et tout ce qui en dépend : pour un récurrent, ses
 // miroirs (slot_type=unique avec parentSlotId) + leurs réservations + ses

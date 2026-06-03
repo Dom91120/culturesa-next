@@ -2,7 +2,13 @@
 
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
-import { addRecurringSlot, addUniqueSlot, deleteSlots } from "@/server/services/slots";
+import {
+  addRecurringSlot,
+  addUniqueSlot,
+  deleteSlots,
+  moveRecurringSlot,
+  moveUniqueSlot,
+} from "@/server/services/slots";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -78,6 +84,54 @@ export async function createUniqueSlotAction(input: {
     endTime: input.endTime,
     capacity: input.capacity,
   });
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+/** Déplace un créneau récurrent vide (jour + horaires) depuis l'agenda. */
+export async function moveRecurringSlotAction(input: {
+  serviceId: string;
+  slotId: string;
+  fromDayKey: string;
+  toDayKey: string;
+  startTime: string;
+  endTime: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  if (
+    !(DAY_KEYS as readonly string[]).includes(input.fromDayKey) ||
+    !(DAY_KEYS as readonly string[]).includes(input.toDayKey)
+  ) {
+    return { ok: false, error: "Jour invalide." };
+  }
+  const res = await moveRecurringSlot(
+    input.serviceId,
+    input.slotId,
+    input.fromDayKey as DayKeyT,
+    input.toDayKey as DayKeyT,
+    input.startTime,
+    input.endTime,
+  );
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+/** Déplace un créneau ponctuel vide (date + horaires) depuis l'agenda. */
+export async function moveUniqueSlotAction(input: {
+  serviceId: string;
+  slotId: string;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  const res = await moveUniqueSlot(
+    input.serviceId,
+    input.slotId,
+    input.slotDate,
+    input.startTime,
+    input.endTime,
+  );
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
