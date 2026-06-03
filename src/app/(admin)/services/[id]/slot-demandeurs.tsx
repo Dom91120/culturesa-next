@@ -29,13 +29,44 @@ export function SlotDemandeurs({
   }
 
   return (
-    <div style={{ width: "100%", marginTop: ".5rem", display: "flex", flexWrap: "wrap", gap: ".6rem", alignItems: "center", opacity: pending ? 0.6 : 1 }}>
-      <span style={{ fontSize: ".62rem", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
+    <div
+      style={{
+        width: "100%",
+        marginTop: ".5rem",
+        display: "flex",
+        flexWrap: "wrap",
+        gap: ".6rem",
+        alignItems: "center",
+        opacity: pending ? 0.6 : 1,
+      }}
+    >
+      <span
+        style={{
+          fontSize: ".62rem",
+          fontWeight: 600,
+          letterSpacing: ".08em",
+          textTransform: "uppercase",
+          color: "var(--muted)",
+        }}
+      >
         Réservé aux
       </span>
       {demandeurs.map((d) => (
-        <label key={d.id} style={{ fontSize: ".72rem", display: "inline-flex", alignItems: "center", gap: ".25rem" }}>
-          <input type="checkbox" checked={allowed.has(d.id)} disabled={pending} onChange={(e) => toggle(d.id, e.target.checked)} />
+        <label
+          key={d.id}
+          style={{
+            fontSize: ".72rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: ".25rem",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={allowed.has(d.id)}
+            disabled={pending}
+            onChange={(e) => toggle(d.id, e.target.checked)}
+          />
           {d.label}
         </label>
       ))}

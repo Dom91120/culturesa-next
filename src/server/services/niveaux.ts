@@ -1,5 +1,5 @@
-import { prisma } from "@/server/db";
 import type { NiveauInput } from "@/schemas/referentiels";
+import { prisma } from "@/server/db";
 
 export function listNiveaux() {
   return prisma.niveau.findMany({

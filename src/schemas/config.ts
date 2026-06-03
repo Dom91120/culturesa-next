@@ -17,7 +17,10 @@ export const serviceUpdateSchema = z.object({
   maxReservations: z.coerce.number().int().min(1).default(1),
   maxReservationsPeriod: z.coerce.number().int().min(1).default(1),
   // tableau de jours coché -> stocké en "lun,mar,..."
-  activeDays: z.array(dayEnum).default([]).transform((d) => d.join(",")),
+  activeDays: z
+    .array(dayEnum)
+    .default([])
+    .transform((d) => d.join(",")),
   ponctDuration: z.coerce.number().int().min(1).default(60),
   ponctCapacity: z.coerce.number().int().min(1).default(1),
   recurDuration: z.coerce.number().int().min(1).default(60),
@@ -44,7 +47,10 @@ export const periodSchema = z.object({
   exerciceId: z.coerce.number().int().positive().optional().nullable(),
   dateStart: z.coerce.date().optional().nullable(),
   dateEnd: z.coerce.date().optional().nullable(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Couleur invalide").default("#6dceaa"),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Couleur invalide")
+    .default("#6dceaa"),
   position: z.coerce.number().int().min(0).default(0),
   state: z.enum(["actif", "desactive", "archive"]).default("actif"),
 });

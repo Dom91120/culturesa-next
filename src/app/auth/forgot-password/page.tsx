@@ -1,8 +1,8 @@
 "use client";
 
+import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
 import { useState } from "react";
-import { authClient } from "@/lib/auth-client";
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
@@ -28,11 +28,22 @@ export default function ForgotPasswordPage() {
           <span className="dot" />
           E-mail envoyé
         </div>
-        <p style={{ fontSize: ".88rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.25rem" }}>
-          Si un compte existe pour cette adresse, un lien de réinitialisation vient d&apos;être envoyé
-          (valable 1h).
+        <p
+          style={{
+            fontSize: ".88rem",
+            color: "var(--muted)",
+            lineHeight: 1.6,
+            marginBottom: "1.25rem",
+          }}
+        >
+          Si un compte existe pour cette adresse, un lien de réinitialisation vient d&apos;être
+          envoyé (valable 1h).
         </p>
-        <Link className="btn btn-ghost" href="/auth/login" style={{ fontSize: ".82rem", textDecoration: "none" }}>
+        <Link
+          className="btn btn-ghost"
+          href="/auth/login"
+          style={{ fontSize: ".82rem", textDecoration: "none" }}
+        >
           ← Retour à la connexion
         </Link>
       </div>
@@ -55,7 +66,14 @@ export default function ForgotPasswordPage() {
               <label htmlFor="email">
                 E-mail <span className="required-star">*</span>
               </label>
-              <input id="email" name="email" type="email" required placeholder="marie@exemple.fr" autoComplete="email" />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="marie@exemple.fr"
+                autoComplete="email"
+              />
             </div>
           </div>
           <div className="btn-row">

@@ -1,11 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { slotSchema, stringIdSchema } from "@/schemas/config";
 import type { ActionState } from "@/lib/action-state";
+import { slotSchema, stringIdSchema } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/slots";
+import { revalidatePath } from "next/cache";
 
 function readForm(formData: FormData) {
   const empty = (k: string) => {

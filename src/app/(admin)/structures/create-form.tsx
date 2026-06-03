@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { initialActionState } from "@/lib/action-state";
 import { btnPrimary, inputClass } from "@/components/ui";
+import { initialActionState } from "@/lib/action-state";
+import { useActionState } from "react";
 import { createStructureAction } from "./actions";
 
 type Option = { id: number; label: string };

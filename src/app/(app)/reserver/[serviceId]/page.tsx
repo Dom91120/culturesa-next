@@ -1,8 +1,8 @@
+import { prisma } from "@/server/db";
+import { requireUser } from "@/server/guards";
+import { getServiceWithAvailability } from "@/server/services/bookings";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/server/db";
-import { getServiceWithAvailability } from "@/server/services/bookings";
-import { requireUser } from "@/server/guards";
 import { RecurringBooking } from "./recurring-booking";
 import { ReserveSlot } from "./reserve-slot";
 
@@ -44,7 +44,10 @@ export default async function ServiceReservePage({
       orderBy: [{ position: "asc" }, { id: "asc" }],
       select: { id: true, label: true, color: true },
     }),
-    prisma.user.findUnique({ where: { id: session.user.id }, select: { enfants: true, demandeurId: true } }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { enfants: true, demandeurId: true },
+    }),
   ]);
 
   // Masque les créneaux réservés à d'autres demandeurs (liste vide = ouvert à tous).
@@ -56,16 +59,30 @@ export default async function ServiceReservePage({
     )
     .map((s) => ({ id: s.id, startTime: s.startTime, endTime: s.endTime, capacity: s.capacity }));
 
-  const days = service.activeDays.split(",").map((d) => d.trim()).filter(Boolean);
+  const days = service.activeDays
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean);
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem", flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: ".75rem",
+          flexWrap: "wrap",
+        }}
+      >
         <div className="panel-title" style={{ marginBottom: ".5rem" }}>
           <span className="dot" />
           {service.label}
         </div>
-        <Link href="/reserver" style={{ fontSize: ".8rem", color: "var(--muted)", textDecoration: "none" }}>
+        <Link
+          href="/reserver"
+          style={{ fontSize: ".8rem", color: "var(--muted)", textDecoration: "none" }}
+        >
           ← Activités
         </Link>
       </div>
@@ -93,7 +110,9 @@ export default async function ServiceReservePage({
       </div>
       {availability.length === 0 ? (
         <div className="panel">
-          <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>Aucun créneau ponctuel à venir.</p>
+          <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
+            Aucun créneau ponctuel à venir.
+          </p>
         </div>
       ) : (
         availability.map((slot) => (

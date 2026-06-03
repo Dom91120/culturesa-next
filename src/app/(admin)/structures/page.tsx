@@ -1,4 +1,4 @@
-import { btnDanger, btnGhost, Card, inputClass, PageTitle } from "@/components/ui";
+import { Card, PageTitle, btnDanger, btnGhost, inputClass } from "@/components/ui";
 import { listDemandeurs } from "@/server/services/demandeurs";
 import { listStructures } from "@/server/services/structures";
 import { deleteStructureAction, updateStructureAction } from "./actions";
@@ -40,7 +40,12 @@ export default async function StructuresPage() {
                   </form>
                 </td>
                 <td className="py-2 pr-3">
-                  <select name="demandeurId" form={`upd-str-${s.id}`} defaultValue={s.demandeurId} className={inputClass}>
+                  <select
+                    name="demandeurId"
+                    form={`upd-str-${s.id}`}
+                    defaultValue={s.demandeurId}
+                    className={inputClass}
+                  >
                     {options.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.label}

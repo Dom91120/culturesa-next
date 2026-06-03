@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { initialActionState } from "@/lib/action-state";
 import { btnPrimary, inputClass } from "@/components/ui";
+import { initialActionState } from "@/lib/action-state";
+import { useActionState } from "react";
 import { createSlotAction } from "./slot-actions";
 
 type Option = { id: number; label: string };
@@ -40,7 +40,13 @@ export function SlotCreateForm({
       </label>
       <label className="text-sm">
         <span className="mb-1 block font-medium">Capacité</span>
-        <input name="capacity" type="number" min={0} placeholder="défaut" className={`${inputClass} w-24`} />
+        <input
+          name="capacity"
+          type="number"
+          min={0}
+          placeholder="défaut"
+          className={`${inputClass} w-24`}
+        />
       </label>
       <label className="text-sm">
         <span className="mb-1 block font-medium">Période</span>

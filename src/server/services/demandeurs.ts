@@ -1,5 +1,5 @@
-import { prisma } from "@/server/db";
 import type { DemandeurInput } from "@/schemas/referentiels";
+import { prisma } from "@/server/db";
 
 export function listDemandeurs() {
   return prisma.demandeur.findMany({

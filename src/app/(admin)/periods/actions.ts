@@ -1,11 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import type { ActionState } from "@/lib/action-state";
 import { periodSchema } from "@/schemas/config";
 import { idSchema } from "@/schemas/referentiels";
-import type { ActionState } from "@/lib/action-state";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/periods";
+import { revalidatePath } from "next/cache";
 
 const PATH = "/periods";
 

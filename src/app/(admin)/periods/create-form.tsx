@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { initialActionState } from "@/lib/action-state";
 import { btnPrimary, inputClass } from "@/components/ui";
+import { initialActionState } from "@/lib/action-state";
+import { useActionState } from "react";
 import { createPeriodAction } from "./actions";
 
 type Option = { id: string; label: string };
@@ -37,7 +37,12 @@ export function CreatePeriodForm({ services }: { services: Option[] }) {
       </label>
       <label className="text-sm">
         <span className="mb-1 block font-medium">Couleur</span>
-        <input name="color" type="color" defaultValue="#6dceaa" className="h-9 w-12 rounded border border-neutral-300 dark:border-neutral-700" />
+        <input
+          name="color"
+          type="color"
+          defaultValue="#6dceaa"
+          className="h-9 w-12 rounded border border-neutral-300 dark:border-neutral-700"
+        />
       </label>
       <button type="submit" disabled={pending} className={btnPrimary}>
         {pending ? "Ajout…" : "Ajouter"}

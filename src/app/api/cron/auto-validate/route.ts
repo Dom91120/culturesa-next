@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/server/cron";
+import { NextResponse } from "next/server";
 
 /**
  * Auto-validation des réservations selon `service.autoValidationDelay`.

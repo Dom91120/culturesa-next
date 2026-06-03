@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { notFound } from "next/navigation";
 
 const DAY_ORDER = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
 const DAY_NAMES: Record<string, string> = {
@@ -12,7 +12,11 @@ const DAY_NAMES: Record<string, string> = {
   dim: "Dimanche",
 };
 
-function StatCard({ value, label, color }: { value: number | string; label: string; color?: string }) {
+function StatCard({
+  value,
+  label,
+  color,
+}: { value: number | string; label: string; color?: string }) {
   return (
     <div
       style={{
@@ -24,10 +28,25 @@ function StatCard({ value, label, color }: { value: number | string; label: stri
         padding: "1rem 1.1rem",
       }}
     >
-      <div style={{ fontSize: "1.7rem", fontWeight: 700, color: color ?? "var(--text)", lineHeight: 1.1 }}>
+      <div
+        style={{
+          fontSize: "1.7rem",
+          fontWeight: 700,
+          color: color ?? "var(--text)",
+          lineHeight: 1.1,
+        }}
+      >
         {value}
       </div>
-      <div style={{ fontSize: ".72rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".08em", marginTop: ".25rem" }}>
+      <div
+        style={{
+          fontSize: ".72rem",
+          color: "var(--muted)",
+          textTransform: "uppercase",
+          letterSpacing: ".08em",
+          marginTop: ".25rem",
+        }}
+      >
         {label}
       </div>
     </div>
@@ -38,13 +57,35 @@ function BarRow({ label, value, max }: { label: string; value: number; max: numb
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: ".5rem" }}>
-      <div style={{ width: 110, fontSize: ".75rem", color: "var(--muted)", flexShrink: 0, textAlign: "right" }}>
+      <div
+        style={{
+          width: 110,
+          fontSize: ".75rem",
+          color: "var(--muted)",
+          flexShrink: 0,
+          textAlign: "right",
+        }}
+      >
         {label}
       </div>
-      <div style={{ flex: 1, height: 16, background: "rgba(127,127,127,.12)", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }} />
+      <div
+        style={{
+          flex: 1,
+          height: 16,
+          background: "rgba(127,127,127,.12)",
+          borderRadius: 4,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }}
+        />
       </div>
-      <div style={{ width: 36, fontSize: ".75rem", fontWeight: 600, textAlign: "left", flexShrink: 0 }}>{value}</div>
+      <div
+        style={{ width: 36, fontSize: ".75rem", fontWeight: 600, textAlign: "left", flexShrink: 0 }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -74,7 +115,10 @@ export default async function StatsPage({ params }: { params: Promise<{ id: stri
     if (!b.dayKey) continue;
     byDay.set(b.dayKey, (byDay.get(b.dayKey) ?? 0) + 1);
   }
-  const dayRows = DAY_ORDER.filter((d) => byDay.has(d)).map((d) => ({ label: DAY_NAMES[d], value: byDay.get(d) ?? 0 }));
+  const dayRows = DAY_ORDER.filter((d) => byDay.has(d)).map((d) => ({
+    label: DAY_NAMES[d],
+    value: byDay.get(d) ?? 0,
+  }));
   const dayMax = Math.max(1, ...dayRows.map((r) => r.value));
 
   const byDem = new Map<string, number>();
@@ -101,16 +145,26 @@ export default async function StatsPage({ params }: { params: Promise<{ id: stri
         <StatCard value={pending} label="En attente" color="var(--warn)" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: ".85rem" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: ".85rem",
+        }}
+      >
         <div className="panel">
           <div className="panel-title" style={{ fontSize: ".82rem" }}>
             <span className="dot" />
             Réservations par jour
           </div>
           {dayRows.length === 0 ? (
-            <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune réservation récurrente.</p>
+            <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>
+              Aucune réservation récurrente.
+            </p>
           ) : (
-            dayRows.map((r) => <BarRow key={r.label} label={r.label} value={r.value} max={dayMax} />)
+            dayRows.map((r) => (
+              <BarRow key={r.label} label={r.label} value={r.value} max={dayMax} />
+            ))
           )}
         </div>
 
@@ -122,7 +176,9 @@ export default async function StatsPage({ params }: { params: Promise<{ id: stri
           {demRows.length === 0 ? (
             <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune donnée.</p>
           ) : (
-            demRows.map((r) => <BarRow key={r.label} label={r.label} value={r.value} max={demMax} />)
+            demRows.map((r) => (
+              <BarRow key={r.label} label={r.label} value={r.value} max={demMax} />
+            ))
           )}
         </div>
       </div>

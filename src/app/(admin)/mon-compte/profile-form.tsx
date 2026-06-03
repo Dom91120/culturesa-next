@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
 import { initialActionState } from "@/lib/action-state";
+import { useActionState } from "react";
 import { updateProfileAction } from "./actions";
 
 type Profile = { prenom: string; nom: string; tel: string; email: string };
@@ -41,8 +41,14 @@ export function ProfileForm({ profile }: { profile: Profile }) {
           </div>
         </div>
         <div className="btn-row">
-          {state?.ok && <span style={{ fontSize: ".8rem", color: "var(--accent)" }}>Enregistré ✓</span>}
-          {state?.error && <span className="field-error" style={{ display: "inline" }}>{state.error}</span>}
+          {state?.ok && (
+            <span style={{ fontSize: ".8rem", color: "var(--accent)" }}>Enregistré ✓</span>
+          )}
+          {state?.error && (
+            <span className="field-error" style={{ display: "inline" }}>
+              {state.error}
+            </span>
+          )}
           <button type="submit" className="btn btn-primary" disabled={pending}>
             {pending ? "Enregistrement…" : "💾 Enregistrer"}
           </button>

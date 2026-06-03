@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { initialActionState } from "@/lib/action-state";
 import { btnPrimary, inputClass } from "@/components/ui";
+import { initialActionState } from "@/lib/action-state";
+import { useActionState } from "react";
 import { createNiveauAction } from "./actions";
 
 type Option = { id: number; label: string };
@@ -35,7 +35,14 @@ export function CreateNiveauForm({ demandeurs }: { demandeurs: Option[] }) {
         <label htmlFor="position" className="mb-1 block text-sm font-medium">
           Position
         </label>
-        <input id="position" name="position" type="number" min={0} defaultValue={0} className={inputClass} />
+        <input
+          id="position"
+          name="position"
+          type="number"
+          min={0}
+          defaultValue={0}
+          className={inputClass}
+        />
       </div>
       <button type="submit" disabled={pending} className={btnPrimary}>
         {pending ? "Ajout…" : "Ajouter"}

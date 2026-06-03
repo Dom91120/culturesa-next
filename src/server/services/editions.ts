@@ -10,7 +10,11 @@ const DAY_NAMES: Record<string, string> = {
   dim: "Dimanche",
 };
 
-const dateFmt = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+const dateFmt = new Intl.DateTimeFormat("fr-FR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
 
 export type EditionRow = {
   id: number;

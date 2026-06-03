@@ -1,5 +1,5 @@
-import { prisma } from "@/server/db";
 import type { StructureInput } from "@/schemas/referentiels";
+import { prisma } from "@/server/db";
 
 export function listStructures() {
   return prisma.structure.findMany({

@@ -1,7 +1,7 @@
+import { auth } from "@/server/auth";
+import type { Role } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Role } from "@prisma/client";
-import { auth } from "@/server/auth";
 
 /** Hiérarchie des rôles : un administrateur satisfait aussi un guard gestionnaire. */
 const RANK: Record<Role, number> = {

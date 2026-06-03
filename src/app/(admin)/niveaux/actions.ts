@@ -1,10 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { idSchema, niveauSchema } from "@/schemas/referentiels";
 import type { ActionState } from "@/lib/action-state";
+import { idSchema, niveauSchema } from "@/schemas/referentiels";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/niveaux";
+import { revalidatePath } from "next/cache";
 
 const PATH = "/niveaux";
 

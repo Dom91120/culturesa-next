@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { listEditionRows } from "@/server/services/editions";
+import { notFound } from "next/navigation";
 
 export default async function EditionsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -75,7 +75,10 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)" }}>
+                <td
+                  colSpan={10}
+                  style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)" }}
+                >
                   Aucune réservation pour ce service.
                 </td>
               </tr>

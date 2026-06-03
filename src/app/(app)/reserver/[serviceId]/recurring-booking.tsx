@@ -6,7 +6,14 @@ import { bookRecurringAction, cancelRecurringAction } from "./recurring-actions"
 
 type Slot = { id: string; startTime: string; endTime: string; capacity: number | null };
 type Period = { id: number; label: string; color: string };
-type Booking = { id: number; slotId: string; periodId: number; dayKey: string; enfants: number; userId: string };
+type Booking = {
+  id: number;
+  slotId: string;
+  periodId: number;
+  dayKey: string;
+  enfants: number;
+  userId: string;
+};
 
 const DAY_NAMES: Record<string, string> = {
   lun: "Lundi",
@@ -116,14 +123,25 @@ export function RecurringBooking({
                     const canBook = !mine && remaining >= Math.max(1, myEnfants);
                     return (
                       <td key={d} style={{ textAlign: "center", padding: ".35rem" }}>
-                        <div style={{ fontSize: ".62rem", color: remaining <= 0 ? "var(--danger)" : "var(--muted)", marginBottom: 2 }}>
+                        <div
+                          style={{
+                            fontSize: ".62rem",
+                            color: remaining <= 0 ? "var(--danger)" : "var(--muted)",
+                            marginBottom: 2,
+                          }}
+                        >
                           {used}/{capacity}
                         </div>
                         {mine ? (
                           <button
                             type="button"
                             className="btn btn-ghost"
-                            style={{ fontSize: ".66rem", padding: ".15rem .45rem", borderColor: "rgba(224,107,107,.4)", color: "var(--danger)" }}
+                            style={{
+                              fontSize: ".66rem",
+                              padding: ".15rem .45rem",
+                              borderColor: "rgba(224,107,107,.4)",
+                              color: "var(--danger)",
+                            }}
                             onClick={() => cancel(mine.id)}
                             disabled={pending}
                             title="Annuler ma réservation"
@@ -159,8 +177,8 @@ export function RecurringBooking({
         </p>
       )}
       <p style={{ fontSize: ".68rem", color: "var(--muted)", marginTop: ".4rem" }}>
-        Réservation pour {Math.max(1, myEnfants)} place{myEnfants > 1 ? "s" : ""} (selon votre profil).
-        Cliquez sur « Inscrit ✓ » pour annuler.
+        Réservation pour {Math.max(1, myEnfants)} place{myEnfants > 1 ? "s" : ""} (selon votre
+        profil). Cliquez sur « Inscrit ✓ » pour annuler.
       </p>
     </div>
   );

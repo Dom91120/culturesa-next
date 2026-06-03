@@ -1,4 +1,4 @@
-import { btnDanger, btnGhost, Card, inputClass, PageTitle } from "@/components/ui";
+import { Card, PageTitle, btnDanger, btnGhost, inputClass } from "@/components/ui";
 import { toDateInput } from "@/lib/format";
 import { listPeriods } from "@/server/services/periods";
 import { listServices } from "@/server/services/services";
@@ -47,15 +47,30 @@ export default async function PeriodsPage() {
                 </label>
                 <label className="text-xs">
                   <span className="mb-1 block font-medium text-neutral-500">Début</span>
-                  <input name="dateStart" type="date" defaultValue={toDateInput(p.dateStart)} className={inputClass} />
+                  <input
+                    name="dateStart"
+                    type="date"
+                    defaultValue={toDateInput(p.dateStart)}
+                    className={inputClass}
+                  />
                 </label>
                 <label className="text-xs">
                   <span className="mb-1 block font-medium text-neutral-500">Fin</span>
-                  <input name="dateEnd" type="date" defaultValue={toDateInput(p.dateEnd)} className={inputClass} />
+                  <input
+                    name="dateEnd"
+                    type="date"
+                    defaultValue={toDateInput(p.dateEnd)}
+                    className={inputClass}
+                  />
                 </label>
                 <label className="text-xs">
                   <span className="mb-1 block font-medium text-neutral-500">Couleur</span>
-                  <input name="color" type="color" defaultValue={p.color} className="h-9 w-12 rounded border border-neutral-300 dark:border-neutral-700" />
+                  <input
+                    name="color"
+                    type="color"
+                    defaultValue={p.color}
+                    className="h-9 w-12 rounded border border-neutral-300 dark:border-neutral-700"
+                  />
                 </label>
                 <label className="text-xs">
                   <span className="mb-1 block font-medium text-neutral-500">État</span>

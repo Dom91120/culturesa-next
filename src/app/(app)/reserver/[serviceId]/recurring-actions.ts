@@ -1,10 +1,10 @@
 "use server";
 
+import { prisma } from "@/server/db";
+import { requireUser } from "@/server/guards";
+import { BookingError } from "@/server/services/bookings";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { BookingError } from "@/server/services/bookings";
-import { requireUser } from "@/server/guards";
 
 const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
 
@@ -29,7 +29,12 @@ export async function bookRecurringAction(
           where: { id: slotId },
           include: { service: true, demandeurs: { select: { demandeurId: true } } },
         });
-        if (!slot || slot.serviceId !== serviceId || slot.slotType !== "recurring" || slot.state !== "actif") {
+        if (
+          !slot ||
+          slot.serviceId !== serviceId ||
+          slot.slotType !== "recurring" ||
+          slot.state !== "actif"
+        ) {
           throw new BookingError("Ce créneau n'est pas disponible.");
         }
         const user = await tx.user.findUnique({
@@ -39,7 +44,10 @@ export async function bookRecurringAction(
         const myEnfants = user?.enfants ?? 0;
 
         // Restriction par demandeur (liste vide = ouvert à tous).
-        if (slot.demandeurs.length > 0 && !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)) {
+        if (
+          slot.demandeurs.length > 0 &&
+          !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
+        ) {
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
         }
 

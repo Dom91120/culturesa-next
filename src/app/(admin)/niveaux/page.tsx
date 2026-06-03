@@ -1,4 +1,4 @@
-import { btnDanger, btnGhost, Card, inputClass, PageTitle } from "@/components/ui";
+import { Card, PageTitle, btnDanger, btnGhost, inputClass } from "@/components/ui";
 import { listDemandeurs } from "@/server/services/demandeurs";
 import { listNiveaux } from "@/server/services/niveaux";
 import { deleteNiveauAction, updateNiveauAction } from "./actions";

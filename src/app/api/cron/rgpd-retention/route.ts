@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/server/cron";
+import { NextResponse } from "next/server";
 
 /**
  * Rétention RGPD : préavis aux comptes inactifs (lastLoginAt ancien),
@@ -14,5 +14,10 @@ export async function GET() {
   }
 
   // const { notified, anonymized } = await runRgpdRetention();
-  return NextResponse.json({ ok: true, notified: 0, anonymized: 0, todo: "logique métier à implémenter" });
+  return NextResponse.json({
+    ok: true,
+    notified: 0,
+    anonymized: 0,
+    todo: "logique métier à implémenter",
+  });
 }
