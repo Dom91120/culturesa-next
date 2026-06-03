@@ -1938,12 +1938,28 @@ export function AgendaGrid({
                         <div
                           key={bk.id}
                           className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${bk.pointage != null ? " is-locked" : ""}`}
+                          // Glisser-déplacer depuis la pile : sauf si pointée (verrouillée).
+                          draggable={bk.pointage == null}
                           style={{
                             ...badgeStyle(bk.validated),
-                            cursor: "pointer",
+                            cursor: bk.pointage == null ? "grab" : "default",
                             position: "relative",
+                            opacity: draggingId === bk.id ? 0.4 : 1,
                           }}
                           title={`${bk.demandeur} — ${bk.name}`}
+                          onDragStart={
+                            bk.pointage != null
+                              ? undefined
+                              : (e) => {
+                                  // On amorce le drag, PUIS on ferme la pile au tick suivant
+                                  // pour libérer la grille comme cible de dépôt (port legacy
+                                  // _onDragStartFromStackModal).
+                                  e.stopPropagation();
+                                  setDraggingId(bk.id);
+                                  setTimeout(() => setStackKey(null), 0);
+                                }
+                          }
+                          onDragEnd={bk.pointage != null ? undefined : () => setDraggingId(null)}
                           onClick={() => {
                             if (onBlockQuickAction(bk)) return;
                             // On garde la pile ouverte : la modale détail s'empile
