@@ -2,7 +2,7 @@
 
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   createRecurringBookingAction,
   createUniqueBookingAction,
@@ -949,11 +949,52 @@ export function AgendaGrid({
     setTimeout(() => win.print(), 300);
   }
 
-  // Ancre la semaine réelle sur le lundi courant (client uniquement, évite tout
-  // décalage SSR/hydratation).
+  // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
+  // pour revenir sur la sélection précédente quand on rouvre la page. À défaut, ancre
+  // la semaine réelle sur le lundi courant. (Client uniquement → pas de mismatch SSR.)
+  const persistSkip = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: restauration au montage uniquement
   useEffect(() => {
-    setAnchorMonday(ymd(mondayOf(new Date())));
+    let anchored = false;
+    try {
+      const raw = sessionStorage.getItem(`agenda-admin-view:${service.id}`);
+      if (raw) {
+        const v = JSON.parse(raw) as Partial<{
+          exerciceId: number | null;
+          periodIdx: number;
+          anchorMonday: string;
+          weekAB: "A" | "B";
+        }>;
+        // Ne restaure l'exercice que s'il existe encore (sinon défaut).
+        if (v.exerciceId == null || exercices.some((e) => e.id === v.exerciceId)) {
+          if (v.exerciceId !== undefined) setCurrentExerciceId(v.exerciceId);
+        }
+        if (typeof v.periodIdx === "number" && v.periodIdx >= 0) setPeriodIdx(v.periodIdx);
+        if (v.weekAB === "A" || v.weekAB === "B") setWeekAB(v.weekAB);
+        if (typeof v.anchorMonday === "string") {
+          setAnchorMonday(v.anchorMonday);
+          anchored = true;
+        }
+      }
+    } catch {}
+    if (!anchored) setAnchorMonday(ymd(mondayOf(new Date())));
   }, []);
+
+  // Persiste la vue à chaque changement. On saute le tout 1er run (montage, AVANT que
+  // la restauration ci-dessus n'ait été appliquée) pour ne pas écraser la valeur
+  // stockée avec les valeurs par défaut.
+  useEffect(() => {
+    if (persistSkip.current) {
+      persistSkip.current = false;
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        `agenda-admin-view:${service.id}`,
+        JSON.stringify({ exerciceId: currentExerciceId, periodIdx, anchorMonday, weekAB }),
+      );
+    } catch {}
+  }, [service.id, currentExerciceId, periodIdx, anchorMonday, weekAB]);
 
   // Le mode pointage n'a de sens qu'en semaine réelle : on le désactive si on
   // repasse en "modèle de période" (cohérent avec le legacy).

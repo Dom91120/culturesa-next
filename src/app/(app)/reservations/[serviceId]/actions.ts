@@ -152,6 +152,101 @@ export async function cancelMyBookingAction(serviceId: string, bookingId: number
   return { ok: true };
 }
 
+/**
+ * Déplace une réservation « en attente » de l'usager vers un autre créneau de MÊME type
+ * (récurrent→récurrent, ponctuel→ponctuel), en conservant son id. La validation repasse
+ * « en attente » selon le mode du demandeur (port du legacy `_userOnDrop` + `entry.moved`).
+ */
+export async function moveMyBookingAction(
+  serviceId: string,
+  bookingId: number,
+  target: { slotId: string; ponctuel: boolean; periodId?: number; dayKey?: string; week?: string },
+): Promise<Result> {
+  const session = await requireUser();
+  const wk = target.week === "A" || target.week === "B" ? target.week : "";
+  const dayKey = target.ponctuel ? "" : (target.dayKey ?? "");
+  if (!target.ponctuel && !DAY_KEYS.includes(dayKey)) return { ok: false, error: "Jour invalide." };
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        const booking = await tx.booking.findFirst({
+          where: { id: bookingId, userId: session.user.id, serviceId },
+        });
+        if (!booking) throw new BookingError("Réservation introuvable.");
+        const slot = await tx.slot.findUnique({
+          where: { id: target.slotId },
+          include: { service: true, demandeurs: { select: { demandeurId: true } } },
+        });
+        const wantType = target.ponctuel ? "unique" : "recurring";
+        if (
+          !slot ||
+          slot.serviceId !== serviceId ||
+          slot.slotType !== wantType ||
+          slot.state !== "actif"
+        ) {
+          throw new BookingError("Ce créneau n'est pas disponible.");
+        }
+        const user = await tx.user.findUnique({
+          where: { id: session.user.id },
+          select: { demandeurId: true },
+        });
+        if (
+          slot.demandeurs.length > 0 &&
+          !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
+        ) {
+          throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+        }
+        const capacity = slot.capacity ?? slot.service.recurCapacity;
+        const agg = await tx.booking.aggregate({
+          where: target.ponctuel
+            ? { serviceId, slotId: target.slotId, bookingType: "unique", id: { not: bookingId } }
+            : {
+                serviceId,
+                slotId: target.slotId,
+                periodId: target.periodId ?? 0,
+                dayKey,
+                bookingType: "recurring",
+                id: { not: bookingId },
+              },
+          _sum: { enfants: true },
+        });
+        const used = agg._sum.enfants ?? 0;
+        if (used + booking.enfants > capacity) throw new BookingError("Ce créneau est complet.");
+        const setting = user?.demandeurId
+          ? await tx.serviceDemandeurSettings.findFirst({
+              where: { serviceId, demandeurId: user.demandeurId },
+              select: { validation: true },
+            })
+          : null;
+        const validated = !(setting?.validation ?? false);
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            slotId: target.slotId,
+            periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
+            dayKey,
+            week: target.ponctuel ? "" : wk,
+            validated,
+            autoValidateFrom: new Date(),
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return { ok: false, error: "Vous avez déjà réservé ce créneau." };
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Réservation simultanée détectée, réessayez." };
+    }
+    throw e;
+  }
+  revalidate(serviceId);
+  return { ok: true };
+}
+
 /** Met à jour les compteurs / le thème d'une réservation appartenant à l'usager. */
 export async function updateMyBookingAction(
   serviceId: string,

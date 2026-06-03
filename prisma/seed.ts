@@ -155,35 +155,41 @@ async function main() {
     });
   }
 
-  // ── Compte administrateur par défaut (mot de passe : Admin1234!) ──
+  // ── Compte administrateur par défaut (mot de passe : Admin123456!) ──
+  // Idempotent : crée le compte si absent, et (re)cale toujours le mot de passe.
   const adminEmail = "admin@culturesa.fr";
-  const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
-  if (!existing) {
-    const ctx = await auth.$context;
-    const passwordHash = await ctx.password.hash("Admin1234!");
-    const admin = await prisma.user.create({
-      data: {
-        email: adminEmail,
-        emailVerified: true,
-        name: "Admin CultuRésa",
-        prenom: "Admin",
-        nom: "CultuRésa",
-        role: "administrateur",
-        rgpdOk: true,
-      },
-    });
+  const adminPassword = "Admin123456!";
+  const ctxAdmin = await auth.$context;
+  const admin = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      emailVerified: true,
+      name: "Admin CultuRésa",
+      prenom: "Admin",
+      nom: "CultuRésa",
+      role: "administrateur",
+      rgpdOk: true,
+    },
+  });
+  const adminHash = await ctxAdmin.password.hash(adminPassword);
+  const adminCred = await prisma.account.findFirst({
+    where: { userId: admin.id, providerId: "credential" },
+  });
+  if (adminCred) {
+    await prisma.account.update({ where: { id: adminCred.id }, data: { password: adminHash } });
+  } else {
     await prisma.account.create({
       data: {
         accountId: admin.id,
         providerId: "credential",
         userId: admin.id,
-        password: passwordHash,
+        password: adminHash,
       },
     });
-    console.log(`✓ Admin créé : ${adminEmail} / Admin1234!`);
-  } else {
-    console.log(`• Admin déjà présent : ${adminEmail}`);
   }
+  console.log(`✓ Admin : ${adminEmail} / ${adminPassword}`);
 
   // ── Données de démo pour l'Agenda (réservations récurrentes) ──
   // Capacité des créneaux svc_001 (pour la jauge).
@@ -280,6 +286,113 @@ async function main() {
   // Active le mode semaines A/B sur svc_001 (démo).
   await prisma.service.update({ where: { id: "svc_001" }, data: { semaineAb: true } });
   console.log(`✓ Démo agenda : ${demoBookings.length} réservations récurrentes (svc_001 en A/B).`);
+
+  // ── Échantillon d'utilisateurs FICTIFS pour les tests (connexion mot de passe) ──
+  // Mot de passe commun : « Test0123456! ». Idempotent : relançable sans doublon.
+  // Couvre les 5 types de demandeur (récurrent/ponctuel, jauge, thèmes… dépendent
+  // ensuite de la config du service côté admin).
+  const ctxTest = await auth.$context;
+  const TEST_PASSWORD = "Test0123456!";
+  const testUsers = [
+    {
+      email: "marie.maternelle@test.fr",
+      prenom: "Marie",
+      nom: "MATERNELLE",
+      demandeurId: 1,
+      niveau: "Moyen",
+      enfants: 12,
+      accompagnants: 2,
+    },
+    {
+      email: "paul.elementaire@test.fr",
+      prenom: "Paul",
+      nom: "ELEMENTAIRE",
+      demandeurId: 2,
+      niveau: "CE2",
+      enfants: 20,
+      accompagnants: 2,
+    },
+    {
+      email: "lea.loisir-mat@test.fr",
+      prenom: "Léa",
+      nom: "LOISIR-MAT",
+      demandeurId: 3,
+      niveau: "",
+      enfants: 10,
+      accompagnants: 2,
+    },
+    {
+      email: "tom.loisir-elem@test.fr",
+      prenom: "Tom",
+      nom: "LOISIR-ELEM",
+      demandeurId: 4,
+      niveau: "",
+      enfants: 15,
+      accompagnants: 3,
+    },
+    {
+      email: "nina.assmat@test.fr",
+      prenom: "Nina",
+      nom: "ASSMAT",
+      demandeurId: 5,
+      niveau: "",
+      enfants: 3,
+      accompagnants: 1,
+    },
+  ];
+  for (const u of testUsers) {
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: {
+        prenom: u.prenom,
+        nom: u.nom,
+        demandeurId: u.demandeurId,
+        niveau: u.niveau,
+        enfants: u.enfants,
+        accompagnants: u.accompagnants,
+      },
+      create: {
+        email: u.email,
+        emailVerified: true,
+        name: `${u.prenom} ${u.nom}`,
+        prenom: u.prenom,
+        nom: u.nom,
+        role: "utilisateur",
+        rgpdOk: true,
+        demandeurId: u.demandeurId,
+        niveau: u.niveau,
+        enfants: u.enfants,
+        accompagnants: u.accompagnants,
+      },
+    });
+  }
+  // Donne un mot de passe (compte « credential ») à tous les comptes de test ET aux
+  // 2 usagers de démo existants (huppert/adjani), afin qu'ils soient connectables.
+  const loginEmails = [...testUsers.map((u) => u.email), "huppert@demo.fr", "adjani@demo.fr"];
+  for (const email of loginEmails) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) continue;
+    const hasCred = await prisma.account.findFirst({
+      where: { userId: user.id, providerId: "credential" },
+    });
+    const passwordHash = await ctxTest.password.hash(TEST_PASSWORD);
+    if (hasCred) {
+      // (Re)cale le mot de passe sur la valeur courante (idempotent au changement).
+      await prisma.account.update({ where: { id: hasCred.id }, data: { password: passwordHash } });
+    } else {
+      await prisma.account.create({
+        data: {
+          accountId: user.id,
+          providerId: "credential",
+          userId: user.id,
+          password: passwordHash,
+        },
+      });
+    }
+  }
+  console.log(
+    `✓ ${loginEmails.length} comptes de test connectables (mot de passe : ${TEST_PASSWORD}).`,
+  );
 
   // ── Resync des séquences d'auto-increment ──
   // Les blocs ci-dessus insèrent des id EXPLICITES (1, 2, 3…) sans faire avancer

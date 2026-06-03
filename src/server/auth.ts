@@ -1,8 +1,14 @@
-import { betterAuth } from "better-auth";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { nextCookies } from "better-auth/next-js";
+import { PASSWORD_POLICY_MESSAGE, isPasswordValid } from "@/lib/password";
 import { prisma } from "@/server/db";
 import { sendMail } from "@/server/mailer";
+import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { nextCookies } from "better-auth/next-js";
+
+// Endpoints Better Auth qui définissent/changent un mot de passe : on y impose la
+// politique de complexité (Better Auth ne valide nativement que la longueur min).
+const PASSWORD_ENDPOINTS = new Set(["/sign-up/email", "/reset-password", "/change-password"]);
 
 /**
  * Configuration Better Auth.
@@ -39,6 +45,21 @@ export const auth = betterAuth({
         html: `<p>Bienvenue sur CultuRésa !</p><p>Confirmez votre adresse e-mail en cliquant ici :</p><p><a href="${url}">${url}</a></p>`,
       });
     },
+  },
+
+  // Enforcement serveur de la politique de mot de passe (complexité), en plus du
+  // minPasswordLength ci-dessus. Rejette tout mot de passe non conforme, y compris
+  // une requête qui contournerait la validation côté formulaire.
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (!PASSWORD_ENDPOINTS.has(ctx.path)) return;
+      const body = (ctx.body ?? {}) as { password?: unknown; newPassword?: unknown };
+      const pw = typeof body.password === "string" ? body.password : body.newPassword;
+      if (typeof pw !== "string") return;
+      if (!isPasswordValid(pw)) {
+        throw new APIError("BAD_REQUEST", { message: PASSWORD_POLICY_MESSAGE });
+      }
+    }),
   },
 
   // Limitation du débit des requêtes d'auth (anti-bruteforce).

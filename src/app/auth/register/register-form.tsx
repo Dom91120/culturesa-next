@@ -1,6 +1,7 @@
 "use client";
 
 import { signUp } from "@/lib/auth-client";
+import { PWD_RULES } from "@/lib/password";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -8,14 +9,6 @@ import { useEffect, useRef, useState } from "react";
 type Structure = { id: number; label: string };
 type Demandeur = { id: number; label: string; structures: Structure[] };
 type Niveau = { id: number; label: string; demandeurId: number | null };
-
-const PWD_RULES = [
-  { key: "length", label: "12 caractères", test: (p: string) => p.length >= 12 },
-  { key: "upper", label: "1 majuscule", test: (p: string) => /[A-Z]/.test(p) },
-  { key: "lower", label: "1 minuscule", test: (p: string) => /[a-z]/.test(p) },
-  { key: "digit", label: "1 chiffre", test: (p: string) => /[0-9]/.test(p) },
-  { key: "special", label: "1 caractère spécial", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
-];
 
 export function RegisterForm({
   demandeurs,
