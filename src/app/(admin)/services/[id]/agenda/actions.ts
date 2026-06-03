@@ -2,9 +2,13 @@
 
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
+import { addRecurringSlot, addUniqueSlot, deleteSlots } from "@/server/services/slots";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+
+const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
+type DayKeyT = (typeof DAY_KEYS)[number];
 
 const idSchema = z.coerce.number().int().positive();
 
@@ -30,6 +34,63 @@ export async function setBookingPointageAction(
   if (!id.success) return;
   await prisma.booking.update({ where: { id: id.data }, data: { pointage } });
   revalidatePath(`/services/${serviceId}/agenda`);
+}
+
+// ─── Mode « Création de créneau » (agenda) ───────────────────────────────────
+
+/** Crée un créneau récurrent (vue Modèle de période). */
+export async function createRecurringSlotAction(input: {
+  serviceId: string;
+  periodId: number;
+  dayKey: string;
+  startTime: string;
+  endTime: string;
+  weeks: string;
+  capacity: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  if (!(DAY_KEYS as readonly string[]).includes(input.dayKey)) {
+    return { ok: false, error: "Jour invalide." };
+  }
+  const res = await addRecurringSlot(input.serviceId, input.periodId, {
+    startTime: input.startTime,
+    endTime: input.endTime,
+    weeks: input.weeks,
+    dayKey: input.dayKey as DayKeyT,
+    capacity: input.capacity,
+  });
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+/** Crée un créneau ponctuel daté (vue Semaine réelle). */
+export async function createUniqueSlotAction(input: {
+  serviceId: string;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  const res = await addUniqueSlot(input.serviceId, {
+    slotDate: input.slotDate,
+    startTime: input.startTime,
+    endTime: input.endTime,
+    capacity: input.capacity,
+  });
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+/** Supprime un créneau (et ses miroirs/réservations) depuis l'agenda. */
+export async function deleteSlotAction(
+  serviceId: string,
+  slotId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  const res = await deleteSlots(serviceId, [slotId]);
+  revalidatePath(`/services/${serviceId}/agenda`);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
 export async function deleteBookingAdminAction(bookingId: number, serviceId: string) {

@@ -520,6 +520,122 @@ export async function saveUniqueSlots(
   return { ok: true };
 }
 
+// ─── Ajout d'UN créneau depuis l'agenda (mode « Création de créneau ») ──────────
+// Contrairement à saveRecurringSlots/saveUniqueSlots (upsert en masse qui remplace
+// la liste), ces helpers ajoutent un seul créneau sans toucher aux autres.
+
+/** Ajoute un créneau RÉCURRENT (+ ses miroirs) pour une période/jour donnés. */
+export async function addRecurringSlot(
+  serviceId: string,
+  periodId: number,
+  input: { startTime: string; endTime: string; weeks: string; dayKey: DayKey; capacity: number },
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return { ok: false, error: "Service introuvable" };
+  const period = await prisma.period.findFirst({ where: { id: periodId, serviceId } });
+  if (!period?.dateStart || !period?.dateEnd) {
+    return { ok: false, error: "Période introuvable ou sans dates" };
+  }
+  const activeDays = service.activeDays
+    .split(",")
+    .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
+  const weeks = input.weeks || "A,B";
+  const cap: Partial<Record<DayKey, number | null>> = { [input.dayKey]: input.capacity };
+  const dayCapData = Object.fromEntries(
+    DAY_KEYS.map((d) => [DAY_COL[d], cap[d] ?? null]),
+  ) as Record<(typeof DAY_COL)[DayKey], number | null>;
+  const holidays = await prisma.periodHoliday.findMany({
+    where: { periodId },
+    select: { date: true },
+  });
+  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
+  // Hoisté hors transaction : la restriction de nullité ne survit pas dans la closure.
+  const startDate = toISO(period.dateStart);
+  const endDate = toISO(period.dateEnd);
+  const slId = newRecurId();
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.slot.create({
+        data: {
+          id: slId,
+          serviceId,
+          slotType: "recurring",
+          startTime: input.startTime,
+          endTime: input.endTime,
+          periodId,
+          weeks,
+          state: "actif",
+          ...dayCapData,
+        },
+      });
+      const wanted = computeWantedMirrors({
+        startDate,
+        endDate,
+        activeDays,
+        holidaySet,
+        openOnHolidays: service.openOnHolidays,
+        weeks: parseWeeks(weeks),
+        cap,
+      });
+      for (const [, mv] of wanted) {
+        await tx.slot.create({
+          data: {
+            id: mirrorId(slId, mv.date),
+            serviceId,
+            slotType: "unique",
+            startTime: input.startTime,
+            endTime: input.endTime,
+            slotDate: fromISO(mv.date),
+            capacity: mv.cap,
+            periodId,
+            parentSlotId: slId,
+            state: "actif",
+          },
+        });
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
+  return { ok: true, id: slId };
+}
+
+/** Ajoute un créneau PONCTUEL daté (période résolue depuis la date). */
+export async function addUniqueSlot(
+  serviceId: string,
+  input: { slotDate: string; startTime: string; endTime: string; capacity: number },
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return { ok: false, error: "Service introuvable" };
+  const period = await prisma.period.findFirst({
+    where: {
+      serviceId,
+      state: "actif",
+      dateStart: { lte: fromISO(input.slotDate) },
+      dateEnd: { gte: fromISO(input.slotDate) },
+    },
+    select: { id: true },
+  });
+  if (!period) {
+    return { ok: false, error: `Aucune période active ne couvre la date ${input.slotDate}` };
+  }
+  const id = newRecurId();
+  await prisma.slot.create({
+    data: {
+      id,
+      serviceId,
+      slotType: "unique",
+      startTime: input.startTime,
+      endTime: input.endTime,
+      slotDate: fromISO(input.slotDate),
+      capacity: input.capacity,
+      periodId: period.id,
+      state: "actif",
+    },
+  });
+  return { ok: true, id };
+}
+
 // ─── delete (suppression immédiate, fidèle au legacy) ──────────────
 // Supprime des créneaux et tout ce qui en dépend : pour un récurrent, ses
 // miroirs (slot_type=unique avec parentSlotId) + leurs réservations + ses

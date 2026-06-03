@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   createRecurringBookingAction,
+  createRecurringSlotAction,
   createUniqueBookingAction,
+  createUniqueSlotAction,
   deleteBookingAdminAction,
+  deleteSlotAction,
   moveBookingAction,
   setBookingPointageAction,
   setBookingValidatedAction,
@@ -382,6 +385,21 @@ export function AgendaGrid({
   const [hideEmpty, setHideEmpty] = useState(false);
   const [validation, setValidation] = useState(false);
   const [pointageMode, setPointageMode] = useState(false);
+  // Mode « Création de créneau » : clic = créneau d'1 quart d'heure ; glisser
+  // haut/bas = créneau de plusieurs quarts (validé au relâché). Cf. plus bas.
+  const [creationMode, setCreationMode] = useState(false);
+  // Glisser-créer en cours : top des colonnes (commun), quart de départ/courant (en
+  // minutes, snappés), et jour de départ/courant (le glissé horizontal sélectionne
+  // toutes les colonnes entre startDay et curDay → un créneau par colonne au relâché).
+  // Miroir dans createDragRef pour que les écouteurs window lisent la valeur à jour.
+  const [createDrag, setCreateDrag] = useState<{
+    colTop: number;
+    startMin: number;
+    curMin: number;
+    startDay: string;
+    curDay: string;
+  } | null>(null);
+  const createDragRef = useRef<typeof createDrag>(null);
   const [detail, setDetail] = useState<Detail>(null);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
@@ -883,14 +901,150 @@ export function AgendaGrid({
     });
   }
 
-  // "Mode validation" et "Mode pointage" sont mutuellement exclusifs (comme legacy).
+  // "Mode validation" / "Mode pointage" / "Création de créneau" : mutuellement exclusifs.
   function toggleValidation(on: boolean) {
     setValidation(on);
-    if (on) setPointageMode(false);
+    if (on) {
+      setPointageMode(false);
+      setCreationMode(false);
+    }
   }
   function togglePointageMode(on: boolean) {
     setPointageMode(on);
-    if (on) setValidation(false);
+    if (on) {
+      setValidation(false);
+      setCreationMode(false);
+    }
+  }
+  function toggleCreationMode(on: boolean) {
+    setCreationMode(on);
+    if (on) {
+      setValidation(false);
+      setPointageMode(false);
+    }
+  }
+
+  // ── Mode « Création de créneau » : géométrie + création ─────────────────────
+  const minToHHMM = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+  // Quart d'heure (minutes, snappé au quart) sous le curseur dans une colonne-jour.
+  function quarterAtY(colTop: number, clientY: number): number {
+    const q = Math.floor(yToMin(clientY - colTop) / 15) * 15;
+    return Math.max(gridStartMin, Math.min(gridEndMin - 15, q));
+  }
+
+  // mousedown sur une colonne en mode création : démarre un glisser-créer, mais
+  // seulement sur une zone VIDE (pas sur un bloc existant).
+  function onCreateMouseDown(e: React.MouseEvent, dayKey: string) {
+    if (!creationMode || isDayDisabled(dayKey)) return;
+    if ((e.target as HTMLElement).closest(".agenda-block")) return;
+    if (mode === "model" && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
+    if (mode === "realweek" && !mondayStr) return;
+    e.preventDefault();
+    const colTop = e.currentTarget.getBoundingClientRect().top;
+    const startMin = quarterAtY(colTop, e.clientY);
+    const cd = { colTop, startMin, curMin: startMin, startDay: dayKey, curDay: dayKey };
+    createDragRef.current = cd;
+    setCreateDrag(cd);
+  }
+
+  // Colonnes (jours) couvertes par le glisser : plage contiguë de startDay à curDay
+  // dans l'ordre d'affichage, hors jours fermés.
+  function draggedDays(cd: NonNullable<typeof createDrag>): string[] {
+    const i = days.indexOf(cd.startDay);
+    const j = days.indexOf(cd.curDay);
+    if (i < 0) return [];
+    const [lo, hi] = j < 0 || i <= j ? [i, j < 0 ? i : j] : [j, i];
+    return days.slice(lo, hi + 1).filter((d) => !isDayDisabled(d));
+  }
+
+  // Au relâché : UN créneau par colonne couverte, couvrant [start, max+15] (clic
+  // simple = 1 quart, 1 colonne). Récurrent en Modèle de période (période + jour +
+  // semaine A/B active), ponctuel daté en Semaine réelle. Capacité = recurCapacity.
+  function finalizeCreate(cd: NonNullable<typeof createDrag>) {
+    const startMin = Math.min(cd.startMin, cd.curMin);
+    const endMin = Math.min(gridEndMin, Math.max(cd.startMin, cd.curMin) + 15);
+    if (endMin <= startMin) return;
+    const startTime = minToHHMM(startMin);
+    const endTime = minToHHMM(endMin);
+    const targets = draggedDays(cd);
+    if (!targets.length) return;
+    if (mode === "model") {
+      if (effectivePeriodId == null || effectivePeriodId <= 0) return;
+      const weeks = abMode && effectiveWeek ? effectiveWeek : "A,B";
+      run(
+        Promise.all(
+          targets.map((dayKey) =>
+            createRecurringSlotAction({
+              serviceId: service.id,
+              periodId: effectivePeriodId,
+              dayKey,
+              startTime,
+              endTime,
+              weeks,
+              capacity: service.recurCapacity,
+            }),
+          ),
+        ),
+      );
+    } else {
+      if (!mondayStr) return;
+      run(
+        Promise.all(
+          targets.map((dayKey) =>
+            createUniqueSlotAction({
+              serviceId: service.id,
+              slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
+              startTime,
+              endTime,
+              capacity: service.recurCapacity,
+            }),
+          ),
+        ),
+      );
+    }
+  }
+
+  // Écouteurs window pendant le glisser-créer : suit le quart courant (re-render
+  // seulement quand on change de quart) puis valide au relâché, même hors colonne.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lit createDragRef (stable) ; (dé)branché sur l'activité du drag
+  useEffect(() => {
+    if (!createDrag) return;
+    const onMove = (e: MouseEvent) => {
+      const cd = createDragRef.current;
+      if (!cd) return;
+      const q = quarterAtY(cd.colTop, e.clientY);
+      // Colonne survolée → curDay (sélection horizontale multi-colonnes).
+      const colEl = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest<HTMLElement>("[data-daykey]");
+      const dk = colEl?.dataset.daykey;
+      const curDay = dk && days.includes(dk) ? dk : cd.curDay;
+      if (q !== cd.curMin || curDay !== cd.curDay) {
+        const next = { ...cd, curMin: q, curDay };
+        createDragRef.current = next;
+        setCreateDrag(next);
+      }
+    };
+    const onUp = () => {
+      const cd = createDragRef.current;
+      createDragRef.current = null;
+      setCreateDrag(null);
+      if (cd) finalizeCreate(cd);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [createDrag !== null]);
+
+  // Supprime un créneau existant sans réservation (× en mode création, confirmation).
+  function onDeleteEmptySlot(slotId: string) {
+    if (!window.confirm("Supprimer ce créneau ?")) return;
+    run(deleteSlotAction(service.id, slotId));
   }
 
   // Clic rapide sur un bloc en mode validation / pointage (sinon : ouvre le menu).
@@ -1143,6 +1297,8 @@ export function AgendaGrid({
         onClick={(e) => {
           // Clic sur la zone vide du créneau → nouvelle réservation.
           e.stopPropagation();
+          // Mode création : le bloc ne crée pas de réservation (× = supprimer).
+          if (creationMode) return;
           // Créneau ponctuel : ouvre la création d'une réservation ponctuelle.
           if (uniqueIdSet.has(b.slotId)) {
             const u = uniqueSlots.find((s) => s.id === b.slotId);
@@ -1198,6 +1354,36 @@ export function AgendaGrid({
                 +
               </span>
             </div>
+          )}
+          {/* Mode création : croix de suppression sur les créneaux vides (confirmation). */}
+          {creationMode && b.bookings.length === 0 && (
+            <button
+              type="button"
+              title="Supprimer ce créneau"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteEmptySlot(b.slotId);
+              }}
+              style={{
+                position: "absolute",
+                top: 1,
+                right: 3,
+                border: "none",
+                background: "transparent",
+                color: "var(--danger)",
+                cursor: "pointer",
+                fontSize: ".9rem",
+                lineHeight: 1,
+                padding: 0,
+                zIndex: 4,
+              }}
+            >
+              ×
+            </button>
           )}
           {/* ≥2 réservations → pile de badges (legacy .planning-stack-wrap) :
             jusqu'à 3 badges superposés + compteur ; clic = modale liste. */}
@@ -1531,6 +1717,14 @@ export function AgendaGrid({
                   />
                 </label>
               )}
+              <label className="planning-option">
+                Création de créneau
+                <input
+                  type="checkbox"
+                  checked={creationMode}
+                  onChange={(e) => toggleCreationMode(e.target.checked)}
+                />
+              </label>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
@@ -1682,16 +1876,20 @@ export function AgendaGrid({
             // biome-ignore lint/a11y/useKeyWithClickEvents: grille agenda (clic = créer)
             <div
               key={d}
+              data-daykey={d}
               className={`agenda-day-col${outOfPeriodCls(d)}`}
               // Jour fermé : on neutralise toute interaction (clic créer, drag/drop)
               // sur la colonne ET tout son contenu (blocs/badges) via pointer-events.
               style={{
                 height: totalH,
-                cursor: isDayDisabled(d) ? "not-allowed" : "cell",
+                cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "cell",
                 pointerEvents: isDayDisabled(d) ? "none" : undefined,
               }}
+              // Mode création : on amorce le glisser-créer (les écouteurs window gèrent
+              // la suite + le relâché). Hors mode création, clic = créer une réservation.
+              onMouseDown={(e) => onCreateMouseDown(e, d)}
               onClick={(e) => {
-                if (isDayDisabled(d)) return;
+                if (isDayDisabled(d) || creationMode) return;
                 const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
                 if (slot && effectivePeriodId != null && effectivePeriodId > 0)
                   openCreate(d, slot.id);
@@ -1738,6 +1936,46 @@ export function AgendaGrid({
                 // masque les créneaux vides pour ne pas écraser la grille (cf. legacy).
                 .filter((b) => !b.isAllDay && (!hideEmpty || b.bookings.length > 0))
                 .map((b) => renderBlock(b, false))}
+              {/* Aperçu du créneau en cours de création (glisser-créer). */}
+              {createDrag &&
+                draggedDays(createDrag).includes(d) &&
+                (() => {
+                  const s = Math.min(createDrag.startMin, createDrag.curMin);
+                  const e2 = Math.min(
+                    gridEndMin,
+                    Math.max(createDrag.startMin, createDrag.curMin) + 15,
+                  );
+                  const top = mapMinToY(s);
+                  const h = mapMinToY(e2) - top;
+                  // Couleur du mode dessiné : jaune = récurrent (Modèle de période),
+                  // vert = ponctuel (Semaine réelle).
+                  const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
+                  return (
+                    <div
+                      className="agenda-create-preview"
+                      style={{
+                        position: "absolute",
+                        left: 2,
+                        right: 2,
+                        top,
+                        height: Math.max(2, h),
+                        background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
+                        border: `1px dashed ${drawColor}`,
+                        borderRadius: 6,
+                        pointerEvents: "none",
+                        zIndex: 3,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: ".62rem",
+                        fontWeight: 700,
+                        color: drawColor,
+                      }}
+                    >
+                      {minToHHMM(s)}–{minToHHMM(e2)}
+                    </div>
+                  );
+                })()}
             </div>
           ))}
         </div>
