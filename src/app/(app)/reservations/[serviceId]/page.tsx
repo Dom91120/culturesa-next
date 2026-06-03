@@ -25,6 +25,8 @@ export default async function ReservationsServicePage({
       exercices={data.exercices}
       showPrevious={data.service.showPreviousExercices}
       demandeurLabel={data.demandeurLabel}
+      openOnSchoolHolidays={data.openOnSchoolHolidays}
+      schoolHolidays={data.schoolHolidays}
       userInfo={data.user}
     />
   );

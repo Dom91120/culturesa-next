@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   cancelMyBookingAction,
+  moveMyBookingAction,
   reservePonctuelAction,
   reserveRecurringAction,
   updateMyBookingAction,
@@ -22,6 +23,8 @@ type Service = {
   recurCapacity: number;
   semaineAb: boolean;
   themesMode: "libre" | "liste";
+  maxReservations: number;
+  maxReservationsPeriod: number;
   openOnHolidays: boolean;
 };
 type Period = {
@@ -103,6 +106,7 @@ function ThemeField({
 }) {
   const themeColor = validated ? "var(--accent)" : "rgb(232,164,90)";
   const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -120,7 +124,12 @@ function ThemeField({
   useEffect(() => {
     if (!open) return;
     function onDocDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      // Le menu est en portail (hors wrapRef) : ne pas le considérer comme « extérieur »,
+      // sinon le mousedown sur un item fermerait le menu avant que son onClick (→ onChange)
+      // ne se déclenche, et la sélection serait perdue.
+      if (menuRef.current?.contains(target)) return;
+      if (wrapRef.current && !wrapRef.current.contains(target)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -195,6 +204,7 @@ function ThemeField({
           coords &&
           createPortal(
             <div
+              ref={menuRef}
               className="user-theme-picker-menu"
               style={{
                 position: "fixed",
@@ -259,7 +269,7 @@ function ThemeField({
       placeholder="Saisissez un thème"
       value={value}
       rows={1}
-      style={{ color: themeColor, WebkitTextFillColor: themeColor }}
+      style={{ color: themeColor, WebkitTextFillColor: themeColor, fontSize: ".62rem" }}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
@@ -274,6 +284,343 @@ function ThemeField({
         onChange(e.target.value);
       }}
     />
+  );
+}
+
+// Badge « ma réservation » / sélection en brouillon — RENDU UNIQUE partagé par les
+// réservations existantes de l'usager ET les sélections en attente (pending add).
+// Les deux sont LE MÊME badge : seules la source des compteurs/thème et les callbacks
+// diffèrent (réservation enregistrée ↔ brouillon). Vert si validé, orange sinon.
+function MineBadge({
+  validated,
+  markedRemoval,
+  gaugeOn,
+  themeMode,
+  themesMode,
+  themes,
+  enfants,
+  accompagnants,
+  theme,
+  remaining,
+  stateLabel,
+  closeIcon,
+  onClose,
+  onBump,
+  onSetCount,
+  onSetTheme,
+  onBodyClick,
+  title,
+  draggable = false,
+  dragging = false,
+  onDragStart,
+  onDragEnd,
+}: {
+  validated: boolean;
+  markedRemoval: boolean;
+  gaugeOn: boolean;
+  themeMode: boolean;
+  themesMode: "libre" | "liste";
+  themes: string[];
+  enfants: number;
+  accompagnants: number;
+  theme: string;
+  remaining: number;
+  stateLabel: string;
+  closeIcon: string;
+  onClose: () => void;
+  onBump: (field: "enfants" | "accompagnants", delta: 1 | -1) => void;
+  onSetCount: (field: "enfants" | "accompagnants", value: number) => void;
+  onSetTheme: (v: string) => void;
+  onBodyClick: () => void;
+  // Infobulle au survol (legacy) : horaire + état + semaine.
+  title?: string;
+  // Glisser-déplacer : le badge devient draggable (brouillon / résa « en attente »).
+  draggable?: boolean;
+  dragging?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+}) {
+  // Couleur legacy : vert si validé, orange sinon (jamais « inherit »).
+  const gColor = validated ? "var(--accent)" : "rgb(232,164,90)";
+  const stateColor = markedRemoval ? "var(--danger)" : gColor;
+  const hasWidgets = gaugeOn || themeMode;
+  const editable = gaugeOn && !markedRemoval;
+  const icon = validated ? "✅" : "⏳";
+  const themeField =
+    themeMode && !markedRemoval ? (
+      <ThemeField
+        value={theme}
+        validated={validated}
+        themesMode={themesMode}
+        themes={themes}
+        onChange={onSetTheme}
+      />
+    ) : null;
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic corps = action hors édition)
+    <div
+      className={`user-agenda-mine-badge${hasWidgets ? " has-widgets" : ""} ${
+        validated ? "is-validated" : "is-pending"
+      }`}
+      title={title}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      style={{
+        position: "relative",
+        top: "auto",
+        left: "auto",
+        transform: "none",
+        width: "100%",
+        maxWidth: "100%",
+        maxHeight: "none",
+        boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+        cursor: editable ? "default" : draggable ? "grab" : "pointer",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        // Jauge : interligne resserré (gap 1) pour réduire la hauteur du badge.
+        gap: editable ? 1 : 2,
+        textAlign: "center",
+        opacity: dragging ? 0.4 : markedRemoval ? 0.55 : 1,
+      }}
+      onClick={
+        editable
+          ? (e) => e.stopPropagation()
+          : (e) => {
+              e.stopPropagation();
+              onBodyClick();
+            }
+      }
+    >
+      {/* × : supprime la réservation (ou le brouillon) — caché, affiché au survol via CSS. */}
+      <button
+        type="button"
+        className="slot-btn-close"
+        title={markedRemoval ? "Rétablir" : "Supprimer"}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        // Pas de `font: inherit` ni de fontSize inline ici : ils écrasaient la taille
+        // voulue par .slot-btn-close (1.15rem) en la rabattant sur la police héritée du
+        // bloc agenda (.68rem), d'où une croix minuscule. On laisse la CSS décider.
+        style={{ border: "none", padding: 0 }}
+      >
+        {closeIcon}
+      </button>
+      {editable ? (
+        // Graphique jauge (legacy _createGaugeBadge) : deux colonnes Enfants | icône |
+        // Adultes ; champ nombre centré entre une paire de triangles fantôme (équilibrage)
+        // et une paire visible (▲▼), + libellé en dessous.
+        <div
+          className="gauge-badge"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            cursor: "default",
+            paddingTop: 0,
+            color: gColor,
+          }}
+        >
+          {/* Colonne Enfants */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              width: "calc((100% - .85rem) / 2)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+              }}
+            >
+              <div
+                aria-hidden="true"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  visibility: "hidden",
+                  flexShrink: 0,
+                  width: "55%",
+                }}
+              >
+                <GaugeSpin dir="up" color={gColor} onClick={() => {}} />
+                <GaugeSpin dir="down" color={gColor} onClick={() => {}} />
+              </div>
+              <input
+                type="number"
+                min={1}
+                max={remaining}
+                value={enfants}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
+                style={{
+                  width: "20%",
+                  textAlign: "center",
+                  fontSize: ".75rem",
+                  background: "transparent",
+                  border: "none",
+                  color: gColor,
+                  fontWeight: 600,
+                  padding: 0,
+                  flexShrink: 0,
+                }}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  flexShrink: 0,
+                  width: "25%",
+                }}
+              >
+                <GaugeSpin dir="up" color={gColor} onClick={() => onBump("enfants", 1)} />
+                <GaugeSpin dir="down" color={gColor} onClick={() => onBump("enfants", -1)} />
+              </div>
+            </div>
+            <span
+              className="gauge-txt"
+              style={{
+                color: gColor,
+                paddingLeft: "30%",
+                boxSizing: "border-box",
+                fontSize: ".62rem",
+                lineHeight: 1,
+              }}
+            >
+              {enfants > 1 ? "Enfants" : "Enfant"}
+            </span>
+          </div>
+          {/* Icône d'état */}
+          <span className="slot-icon" style={{ alignSelf: "flex-start" }}>
+            {icon}
+          </span>
+          {/* Colonne Adultes */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              width: "calc((100% - .85rem) / 2)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+              }}
+            >
+              <div
+                aria-hidden="true"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  visibility: "hidden",
+                  flexShrink: 0,
+                  width: "25%",
+                }}
+              >
+                <GaugeSpin dir="up" color={gColor} onClick={() => {}} />
+                <GaugeSpin dir="down" color={gColor} onClick={() => {}} />
+              </div>
+              <input
+                type="number"
+                min={1}
+                max={remaining}
+                value={accompagnants}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
+                style={{
+                  width: "20%",
+                  textAlign: "center",
+                  fontSize: ".75rem",
+                  background: "transparent",
+                  border: "none",
+                  color: gColor,
+                  fontWeight: 600,
+                  padding: 0,
+                  flexShrink: 0,
+                }}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  flexShrink: 0,
+                  width: "55%",
+                }}
+              >
+                <GaugeSpin dir="up" color={gColor} onClick={() => onBump("accompagnants", 1)} />
+                <GaugeSpin dir="down" color={gColor} onClick={() => onBump("accompagnants", -1)} />
+              </div>
+            </div>
+            <span
+              className="gauge-txt"
+              style={{
+                color: gColor,
+                paddingRight: "30%",
+                boxSizing: "border-box",
+                fontSize: ".62rem",
+                lineHeight: 1,
+              }}
+            >
+              {accompagnants > 1 ? "Adultes" : "Adulte"}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <span
+          className="slot-icon"
+          style={{
+            // Icône d'état des badges non-éditables (validé / en attente / à annuler) : .85rem.
+            fontSize: ".85rem",
+            lineHeight: 1,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {icon}
+        </span>
+      )}
+      {/* Libellé d'état (hors mode jauge éditable). */}
+      {!editable && (
+        <span
+          className="slot-spots"
+          style={{
+            fontSize: ".62rem",
+            fontWeight: 600,
+            lineHeight: 1.3,
+            background: "none",
+            color: stateColor,
+          }}
+        >
+          {stateLabel}
+        </span>
+      )}
+      {themeField}
+    </div>
   );
 }
 
@@ -303,6 +650,9 @@ function addDays(iso: string, n: number): Date {
   return x;
 }
 const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+// Format "7 avril" (jour + mois en toutes lettres) pour l'info-bulle « Journées
+// concernées » au survol d'un créneau récurrent (port legacy _scheduleTtShow).
+const tipDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" });
 
 // Calcul de Pâques (algorithme de Gauss/Butcher) — port exact du legacy _easterDate.
 function easterDate(year: number): Date {
@@ -601,6 +951,21 @@ type PendingAdd = {
   accompagnants: number;
 };
 type PendingRemoval = { bookingId: number; label: string };
+// Déplacement en attente d'une réservation existante vers un autre créneau (même type),
+// committé via moveMyBookingAction. Clé = id de la réservation déplacée.
+type PendingMove = {
+  slotId: string;
+  dayKey: string;
+  periodId: number;
+  week: string;
+  ponctuel: boolean;
+  label: string;
+};
+// Élément en cours de glisser-déplacer : un brouillon (pendingAdd) ou une réservation
+// existante « en attente ». `ponctuel` borne les cibles valides au même type de créneau.
+type DragItem =
+  | { kind: "draft"; key: string; ponctuel: boolean }
+  | { kind: "booking"; bookingId: number; ponctuel: boolean };
 
 export function UserAgendaGrid({
   service,
@@ -613,6 +978,8 @@ export function UserAgendaGrid({
   exercices,
   showPrevious,
   demandeurLabel,
+  openOnSchoolHolidays,
+  schoolHolidays,
   userInfo,
 }: {
   service: Service;
@@ -625,6 +992,10 @@ export function UserAgendaGrid({
   exercices: Exercice[];
   showPrevious: boolean;
   demandeurLabel: string | null;
+  // Demandeur de l'usager ouvert pendant les vacances scolaires (filtre des dates prédites).
+  openOnSchoolHolidays: boolean;
+  // Plages de vacances scolaires (YYYY-MM-DD) de la zone configurée.
+  schoolHolidays: { dateStart: string; dateEnd: string }[];
   userInfo: {
     nom: string;
     prenom: string;
@@ -669,17 +1040,28 @@ export function UserAgendaGrid({
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
   const [stackKey, setStackKey] = useState<{ slotId: string; dayKey: string } | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  // Brouillon de réservations (ajouts), d'annulations, et de modifications de
-  // compteurs/thème sur mes réservations existantes (legacy : tout est éditable).
+  // Glisser-déplacer : élément en cours de drag + clé "dayKey|slotId" du créneau survolé
+  // (drop target en surbrillance). Remplace l'ancien `draggingId`.
+  const [dragItem, setDragItem] = useState<DragItem | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+  // Brouillon de réservations (ajouts), d'annulations, de modifications de compteurs/thème,
+  // et de déplacements sur mes réservations existantes (legacy : tout est éditable).
   const [pendingAdds, setPendingAdds] = useState<PendingAdd[]>([]);
   const [pendingRemovals, setPendingRemovals] = useState<PendingRemoval[]>([]);
   const [pendingUpdates, setPendingUpdates] = useState<
     Record<number, { enfants: number; accompagnants: number; theme: string }>
   >({});
+  const [pendingMoves, setPendingMoves] = useState<Record<number, PendingMove>>({});
   const [recapOpen, setRecapOpen] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
+  // ── Info-bulle « Journées concernées » au survol d'un créneau récurrent (vue
+  // Modèle de période) : liste les dates concrètes que la résa couvrira. Rendue en
+  // portail, suit la souris (pointer-events:none → ne gêne pas clic/glisser). Port
+  // legacy _scheduleTtShow / _predictedDatesForCurrentUser.
+  const [tipDates, setTipDates] = useState<string[] | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  const tipPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const days = service.activeDays
     .split(",")
@@ -1050,6 +1432,20 @@ export function UserAgendaGrid({
     };
     const uniqSunday = sundayStr ?? mondayStr;
     for (const b of bookings) {
+      // Réservation DÉPLACÉE (brouillon) : rattachée à son créneau CIBLE, plus à son
+      // créneau d'origine (used/full suivent automatiquement). Hors période/semaine
+      // active (récurrent) ou hors « Semaine réelle » (ponctuel) → masquée.
+      const mv = pendingMoves[b.id];
+      if (mv) {
+        if (mv.ponctuel) {
+          if (mode !== "realweek" || !mondayStr) continue;
+        } else {
+          if (effectivePeriodId != null && mv.periodId !== effectivePeriodId) continue;
+          if (effectiveWeek != null && mv.week !== effectiveWeek && mv.week !== "") continue;
+        }
+        pushGroup(`${mv.dayKey}|${mv.slotId}`, b);
+        continue;
+      }
       // Réservation PONCTUELLE : rattachée à son bloc ponctuel projeté (clé jour =
       // jour de la date du créneau), en ignorant période/semaine (un ponctuel n'en
       // a pas : periodId=0, dayKey="").
@@ -1149,6 +1545,7 @@ export function UserAgendaGrid({
     return byDay;
   }, [
     bookings,
+    pendingMoves,
     slots,
     uniqueSlots,
     uniqueIdSet,
@@ -1229,11 +1626,52 @@ export function UserAgendaGrid({
     setTimeout(() => win.print(), 300);
   }
 
-  // Ancre la semaine réelle sur le lundi courant (client uniquement, évite tout
-  // décalage SSR/hydratation).
+  // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
+  // pour revenir sur la sélection précédente quand on rouvre la page. À défaut, ancre
+  // la semaine réelle sur le lundi courant. (Client uniquement → pas de mismatch SSR.)
+  const persistSkip = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: restauration au montage uniquement
   useEffect(() => {
-    setAnchorMonday(ymd(mondayOf(new Date())));
+    let anchored = false;
+    try {
+      const raw = sessionStorage.getItem(`agenda-view:${service.id}`);
+      if (raw) {
+        const v = JSON.parse(raw) as Partial<{
+          exerciceId: number | null;
+          periodIdx: number;
+          anchorMonday: string;
+          weekAB: "A" | "B";
+        }>;
+        // Ne restaure l'exercice que s'il existe encore (sinon défaut).
+        if (v.exerciceId == null || exercices.some((e) => e.id === v.exerciceId)) {
+          if (v.exerciceId !== undefined) setCurrentExerciceId(v.exerciceId);
+        }
+        if (typeof v.periodIdx === "number" && v.periodIdx >= 0) setPeriodIdx(v.periodIdx);
+        if (v.weekAB === "A" || v.weekAB === "B") setWeekAB(v.weekAB);
+        if (typeof v.anchorMonday === "string") {
+          setAnchorMonday(v.anchorMonday);
+          anchored = true;
+        }
+      }
+    } catch {}
+    if (!anchored) setAnchorMonday(ymd(mondayOf(new Date())));
   }, []);
+
+  // Persiste la vue à chaque changement. On saute le tout 1er run (montage, AVANT que
+  // la restauration ci-dessus n'ait été appliquée) pour ne pas écraser la valeur
+  // stockée avec les valeurs par défaut.
+  useEffect(() => {
+    if (persistSkip.current) {
+      persistSkip.current = false;
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        `agenda-view:${service.id}`,
+        JSON.stringify({ exerciceId: currentExerciceId, periodIdx, anchorMonday, weekAB }),
+      );
+    } catch {}
+  }, [service.id, currentExerciceId, periodIdx, anchorMonday, weekAB]);
 
   // Le mode pointage n'a de sens qu'en semaine réelle : on le désactive si on
   // repasse en "modèle de période" (cohérent avec le legacy).
@@ -1319,6 +1757,105 @@ export function UserAgendaGrid({
       }),
     );
   }
+  // Saisie directe (champ nombre du badge jauge) d'un ajout en attente : valeur ≥ 1,
+  // somme enfants + adultes plafonnée à `remaining` (cf. setMyCount pour mes résas).
+  function setAddCount(
+    key: string,
+    field: "enfants" | "accompagnants",
+    value: number,
+    remaining: number,
+  ) {
+    setCommitError(null);
+    setPendingAdds((prev) =>
+      prev.map((a) => {
+        if (a.key !== key) return a;
+        const other = field === "enfants" ? a.accompagnants : a.enfants;
+        const next = Math.max(1, Math.min(value || 1, Math.max(1, remaining - other)));
+        return { ...a, [field]: next };
+      }),
+    );
+  }
+
+  // ── Glisser-déplacer (brouillons + réservations « en attente ») ──────────────
+  // Libellé « Jour · HH–HH » d'un créneau cible (pour le récap des déplacements).
+  function slotMoveLabel(slotId: string, dayKey: string, ponctuel: boolean) {
+    const time = slotTime(slotId, ponctuel);
+    return ponctuel
+      ? `${ponctuelDateLabel(slotId)} · ${time}`
+      : `${DAY_NAMES[dayKey] ?? dayKey} · ${time}`;
+  }
+  // Un bloc accepte-t-il le dépôt de l'élément en cours de drag ? Cible LIBRE et de
+  // MÊME type (récurrent↔récurrent, ponctuel↔ponctuel) — cf. décision produit.
+  function canDropOn(b: Block): boolean {
+    return dragItem != null && !b.full && dragItem.ponctuel === uniqueIdSet.has(b.slotId);
+  }
+  // Dépôt sur un créneau : relocalise le brouillon, ou enregistre/annule un déplacement.
+  function dropOnBlock(b: Block) {
+    const item = dragItem;
+    setDragItem(null);
+    setDropKey(null);
+    if (!item) return;
+    const ponctuel = uniqueIdSet.has(b.slotId);
+    if (item.ponctuel !== ponctuel || b.full) return; // sécurité (déjà filtré au dragover)
+    const targetPeriodId = ponctuel ? 0 : (effectivePeriodId ?? 0);
+    const targetWeek = !ponctuel && abMode ? (effectiveWeek ?? "") : "";
+    setCommitError(null);
+
+    if (item.kind === "draft") {
+      setPendingAdds((prev) => {
+        const cur = prev.find((a) => a.key === item.key);
+        if (!cur || (cur.slotId === b.slotId && cur.dayKey === b.dayKey)) return prev;
+        const newKey = pendKey(b.slotId, b.dayKey, ponctuel);
+        // Retire l'entrée d'origine + un éventuel doublon déjà présent sur la cible.
+        const rest = prev.filter((a) => a.key !== item.key && a.key !== newKey);
+        return [
+          ...rest,
+          {
+            ...cur,
+            key: newKey,
+            slotId: b.slotId,
+            dayKey: b.dayKey,
+            periodId: targetPeriodId,
+            week: targetWeek,
+            ponctuel,
+            label: slotMoveLabel(b.slotId, b.dayKey, ponctuel),
+          },
+        ];
+      });
+      return;
+    }
+
+    // Déplacement d'une réservation existante.
+    const bk = bookings.find((x) => x.id === item.bookingId);
+    if (!bk) return;
+    // Déposé sur sa position d'origine → annule le déplacement éventuel.
+    const isOrigin = ponctuel
+      ? bk.slotId === b.slotId
+      : bk.slotId === b.slotId &&
+        bk.dayKey === b.dayKey &&
+        bk.periodId === targetPeriodId &&
+        (bk.week || "") === (targetWeek || "");
+    if (isOrigin) {
+      setPendingMoves((prev) => {
+        if (!(item.bookingId in prev)) return prev;
+        const next = { ...prev };
+        delete next[item.bookingId];
+        return next;
+      });
+      return;
+    }
+    setPendingMoves((prev) => ({
+      ...prev,
+      [item.bookingId]: {
+        slotId: b.slotId,
+        dayKey: b.dayKey,
+        periodId: targetPeriodId,
+        week: targetWeek,
+        ponctuel,
+        label: slotMoveLabel(b.slotId, b.dayKey, ponctuel),
+      },
+    }));
+  }
 
   // Compteurs/thème courants d'une de MES réservations (brouillon ou valeur d'origine).
   function myCounts(bk: Booking) {
@@ -1366,6 +1903,14 @@ export function UserAgendaGrid({
   // Marque / démarque une de MES réservations pour annulation (sans appel serveur).
   function togglePendingRemoval(bk: Booking) {
     setCommitError(null);
+    // Supprimer une réservation annule un éventuel déplacement en attente (sinon le
+    // commit échouerait : suppression puis déplacement d'une résa déjà supprimée).
+    setPendingMoves((prev) => {
+      if (!(bk.id in prev)) return prev;
+      const next = { ...prev };
+      delete next[bk.id];
+      return next;
+    });
     setPendingRemovals((prev) => {
       if (prev.some((r) => r.bookingId === bk.id)) return prev.filter((r) => r.bookingId !== bk.id);
       const time = slotTime(bk.slotId, uniqueIdSet.has(bk.slotId));
@@ -1378,12 +1923,16 @@ export function UserAgendaGrid({
     setPendingAdds([]);
     setPendingRemovals([]);
     setPendingUpdates({});
+    setPendingMoves({});
     setCommitError(null);
     setRecapOpen(false);
   }
 
   const pendingCount =
-    pendingAdds.length + pendingRemovals.length + Object.keys(pendingUpdates).length;
+    pendingAdds.length +
+    pendingRemovals.length +
+    Object.keys(pendingUpdates).length +
+    Object.keys(pendingMoves).length;
 
   // « Enregistrer → » : valide le brouillon (crée les ajouts, annule les retraits).
   function commitPending() {
@@ -1391,6 +1940,24 @@ export function UserAgendaGrid({
     setCommitError(null);
     startTransition(async () => {
       try {
+        // Ordre : suppressions (libèrent des places) → modifications → déplacements
+        // (capacité revérifiée côté serveur) → nouvelles réservations.
+        for (const r of pendingRemovals) {
+          await cancelMyBookingAction(service.id, r.bookingId);
+        }
+        for (const [id, u] of Object.entries(pendingUpdates)) {
+          await updateMyBookingAction(service.id, Number(id), u.enfants, u.accompagnants, u.theme);
+        }
+        for (const [id, m] of Object.entries(pendingMoves)) {
+          const res = await moveMyBookingAction(service.id, Number(id), {
+            slotId: m.slotId,
+            ponctuel: m.ponctuel,
+            periodId: m.periodId,
+            dayKey: m.dayKey,
+            week: m.week,
+          });
+          if (!res.ok) throw new Error(res.error ?? "Échec d'un déplacement.");
+        }
         for (const a of pendingAdds) {
           const res = a.ponctuel
             ? await reservePonctuelAction(service.id, a.slotId, a.theme, a.enfants, a.accompagnants)
@@ -1405,12 +1972,6 @@ export function UserAgendaGrid({
                 a.accompagnants,
               );
           if (!res.ok) throw new Error(res.error ?? "Échec d'une réservation.");
-        }
-        for (const r of pendingRemovals) {
-          await cancelMyBookingAction(service.id, r.bookingId);
-        }
-        for (const [id, u] of Object.entries(pendingUpdates)) {
-          await updateMyBookingAction(service.id, Number(id), u.enfants, u.accompagnants, u.theme);
         }
         setCommitting(false);
         clearPending();
@@ -1437,7 +1998,83 @@ export function UserAgendaGrid({
   // horaire et par la bande « Journée entière » (port du legacy
   // _renderAgendaAdminBlock(b, isAlldayBlock)). En all-day : pas de positionnement
   // absolu (le CSS .agenda-block.is-allday gère position/​taille dans la cellule).
+  // Une date (YYYY-MM-DD) tombe-t-elle en vacances scolaires ? Convention data.gouv.fr :
+  // dateStart = soir du dernier jour d'école → 1er jour de vacances = dateStart + 1
+  // (borne stricte à gauche, inclusive à droite). Port legacy _isSchoolVacance.
+  const isSchoolVacance = (date: string): boolean =>
+    (schoolHolidays ?? []).some((p) => date > p.dateStart && date <= p.dateEnd);
+
+  // Dates concrètes couvertes par un créneau récurrent un jour donné : ses miroirs
+  // (créneaux uniques datés générés pour la période, hors jours fériés exclus à la
+  // génération), restreints à la semaine A/B active puis filtrés des vacances
+  // scolaires si le demandeur ferme alors. Trié. Port _predictedDatesForCurrentUser.
+  const concernedDatesForBlock = (slotId: string, dayKey: string): string[] => {
+    const dates = uniqueSlots
+      .filter(
+        (u) => u.parentSlotId === slotId && u.slotDate && dayKeyFromYmd(u.slotDate) === dayKey,
+      )
+      .map((u) => u.slotDate as string)
+      .filter((d) => {
+        if (!abMode || effectiveWeek == null) return true;
+        // Convention serveur (slots.ts slotWeekTag, source des miroirs) : semaine ISO
+        // PAIRE = A, IMPAIRE = B. (À ne pas confondre avec realWeekParity de la grille,
+        // qui suit la convention inverse — sans incidence ici, vue Modèle uniquement.)
+        const parity: "A" | "B" = isoWeek(new Date(`${d}T00:00:00`)) % 2 === 0 ? "A" : "B";
+        return parity === effectiveWeek;
+      })
+      .sort();
+    return openOnSchoolHolidays ? dates : dates.filter((d) => !isSchoolVacance(d));
+  };
+
+  // Saisie de thème en cours (textarea/input focalisé dans un badge, ou picker liste
+  // ouvert) → on n'affiche pas l'info-bulle pour ne pas gêner (port _isThemeBeingEdited).
+  const isThemeBeingEdited = (): boolean => {
+    if (typeof document === "undefined") return false;
+    if (document.querySelector(".user-theme-picker-menu")) return true;
+    const ae = document.activeElement as HTMLElement | null;
+    return !!(
+      ae &&
+      (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT") &&
+      ae.closest(".user-agenda-mine-badge")
+    );
+  };
+  // Positionne l'info-bulle près du curseur, en la rabattant si elle déborde (legacy
+  // _scheduleTtMove). Manipulation directe du DOM → pas de re-render au déplacement.
+  const positionTip = () => {
+    const el = tipRef.current;
+    if (!el) return;
+    const offset = 12;
+    const r = el.getBoundingClientRect();
+    let x = tipPos.current.x + offset;
+    let y = tipPos.current.y + offset;
+    if (x + r.width > window.innerWidth) x = window.innerWidth - r.width - 4;
+    if (y + r.height > window.innerHeight) y = window.innerHeight - r.height - 4;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+  };
+  const showTip = (e: React.MouseEvent, slotId: string, dayKey: string) => {
+    if (isThemeBeingEdited()) return;
+    const dates = concernedDatesForBlock(slotId, dayKey);
+    if (!dates.length) return;
+    tipPos.current = { x: e.clientX, y: e.clientY };
+    setTipDates(dates);
+  };
+  const moveTip = (e: React.MouseEvent) => {
+    if (!tipDates) return;
+    tipPos.current = { x: e.clientX, y: e.clientY };
+    positionTip();
+  };
+  const hideTip = () => setTipDates(null);
+  // Repositionne après affichage (la taille de l'info-bulle dépend du nombre de dates).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: positionTip lit tipPos (ref)
+  useEffect(() => {
+    if (tipDates) positionTip();
+  }, [tipDates]);
+
   const renderBlock = (b: Block, allday: boolean) => {
+    // Info-bulle « Journées concernées » : créneaux RÉCURRENTS en vue Modèle de période
+    // uniquement (en Semaine réelle, les dates sont déjà visibles → inutile).
+    const isRecurringModel = mode === "model" && !uniqueIdSet.has(b.slotId);
     const posStyle: React.CSSProperties = allday
       ? {}
       : (() => {
@@ -1459,7 +2096,9 @@ export function UserAgendaGrid({
         // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
         // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
         // et leurs miroirs (cf. légende Récurrent/Ponctuel).
-        className={`agenda-block${allday ? " is-allday" : ""}`}
+        className={`agenda-block${allday ? " is-allday" : ""}${
+          dropKey === `${b.dayKey}|${b.slotId}` && canDropOn(b) ? " slot-user-drop-target" : ""
+        }`}
         style={{
           ...posStyle,
           // Centrage vertical des badges dans le créneau (inline = priorité
@@ -1487,14 +2126,29 @@ export function UserAgendaGrid({
           togglePendingAdd(b.slotId, b.dayKey, ponctuel);
         }}
         onDragOver={(e) => {
-          if (draggingId != null && !uniqueIdSet.has(b.slotId)) e.preventDefault();
+          // Cible de dépôt valide (libre + même type) → autorise le drop.
+          if (canDropOn(b)) e.preventDefault();
+        }}
+        onDragEnter={(e) => {
+          if (canDropOn(b)) {
+            e.preventDefault();
+            setDropKey(`${b.dayKey}|${b.slotId}`);
+          }
+        }}
+        onDragLeave={(e) => {
+          // Retire la surbrillance uniquement en quittant réellement le bloc.
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDropKey((k) => (k === `${b.dayKey}|${b.slotId}` ? null : k));
+          }
         }}
         onDrop={(e) => {
-          // Agenda usager : pas de déplacement de réservation par glisser-déposer.
           e.preventDefault();
           e.stopPropagation();
-          setDraggingId(null);
+          dropOnBlock(b);
         }}
+        onMouseEnter={isRecurringModel ? (e) => showTip(e, b.slotId, b.dayKey) : undefined}
+        onMouseMove={isRecurringModel ? moveTip : undefined}
+        onMouseLeave={isRecurringModel ? hideTip : undefined}
       >
         {/* Badges centrés via le parent .agenda-block (justify-content:center).
           Le chips ne grandit pas pour que le centrage opère ; la jauge est
@@ -1522,481 +2176,116 @@ export function UserAgendaGrid({
             if (myBk) {
               const mb = myBk;
               const cur = myCounts(mb);
-              // Couleur legacy : vert si validé, orange sinon (jamais « inherit »).
-              const gColor = mb.validated ? "var(--accent)" : "rgb(232,164,90)";
               const stateLabel = markedRemoval
-                ? "À annuler"
+                ? "À supprimer"
                 : mb.validated
                   ? "Validé"
                   : isPonctuelCell
                     ? "En attente"
                     : "★ vous";
-              const stateColor = markedRemoval ? "var(--danger)" : gColor;
-              const hasWidgets = gaugeOn || modes.themeMode;
-              const editable = gaugeOn && !markedRemoval;
               // Place dispo pour CE booking = libre + ses propres enfants déjà comptés.
               const remaining = Math.max(0, b.capacity - b.used + cur.enfants);
-              const themeField =
-                modes.themeMode && !markedRemoval ? (
-                  <ThemeField
-                    value={cur.theme}
-                    validated={mb.validated}
-                    themesMode={service.themesMode}
-                    themes={themes}
-                    onChange={(v) => setMyTheme(mb, v)}
-                  />
-                ) : null;
+              // Infobulle (legacy) : horaire + état + semaine.
+              const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
+              const tipState = markedRemoval
+                ? "🗑️ À supprimer"
+                : mb.validated
+                  ? "✅ Réservé (validé)"
+                  : "⏳ Réservé (en attente)";
+              const tipWeek =
+                abMode && (mb.week === "A" || mb.week === "B") ? `\nSemaine ${mb.week}` : "";
               return (
-                // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic corps = annuler hors édition)
-                <div
-                  className={`user-agenda-mine-badge${hasWidgets ? " has-widgets" : ""} ${
-                    mb.validated ? "is-validated" : "is-pending"
-                  }`}
-                  style={{
-                    position: "relative",
-                    top: "auto",
-                    left: "auto",
-                    transform: "none",
-                    width: "100%",
-                    maxWidth: "100%",
-                    maxHeight: "none",
-                    boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-                    cursor: editable ? "default" : "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 2,
-                    textAlign: "center",
-                    opacity: markedRemoval ? 0.55 : 1,
+                <MineBadge
+                  validated={mb.validated}
+                  markedRemoval={markedRemoval}
+                  gaugeOn={gaugeOn}
+                  themeMode={modes.themeMode}
+                  themesMode={service.themesMode}
+                  themes={themes}
+                  enfants={cur.enfants}
+                  accompagnants={cur.accompagnants}
+                  theme={cur.theme}
+                  remaining={remaining}
+                  stateLabel={stateLabel}
+                  title={isRecurringModel ? undefined : `${tipTime}\n${tipState}${tipWeek}`}
+                  closeIcon={markedRemoval ? "↺" : "×"}
+                  onClose={() => togglePendingRemoval(mb)}
+                  onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
+                  onSetCount={(f, v) => setMyCount(mb, f, v, remaining)}
+                  onSetTheme={(v) => setMyTheme(mb, v)}
+                  onBodyClick={() => onBlockQuickAction(mb)}
+                  // Seules les réservations « en attente » (non validées, non marquées
+                  // pour suppression) sont déplaçables par glisser-déposer.
+                  draggable={!mb.validated && !markedRemoval}
+                  dragging={dragItem?.kind === "booking" && dragItem.bookingId === mb.id}
+                  onDragStart={(e) => {
+                    setDragItem({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell });
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", String(mb.id));
                   }}
-                  onClick={
-                    editable
-                      ? (e) => e.stopPropagation()
-                      : (e) => {
-                          e.stopPropagation();
-                          onBlockQuickAction(mb);
-                        }
-                  }
-                >
-                  {/* × : marque/démarque l'annulation (legacy slot-btn-close —
-                      caché, affiché uniquement au survol du badge via le CSS). */}
-                  <button
-                    type="button"
-                    className="slot-btn-close"
-                    title={markedRemoval ? "Rétablir" : "Supprimer"}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePendingRemoval(mb);
-                    }}
-                    style={{ border: "none", padding: 0, font: "inherit" }}
-                  >
-                    {markedRemoval ? "↺" : "×"}
-                  </button>
-                  {editable ? (
-                    <>
-                      {/* Graphique jauge repris du legacy (_createGaugeBadge) :
-                          deux colonnes Enfants | icône | Adultes ; chaque colonne a
-                          un champ nombre centré entre une paire de triangles fantôme
-                          (équilibrage) et une paire visible, + libellé en dessous. */}
-                      <div
-                        className="gauge-badge"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "100%",
-                          cursor: "default",
-                          paddingTop: 1,
-                          color: gColor,
-                        }}
-                      >
-                        {/* Colonne Enfants */}
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-start",
-                            width: "calc((100% - .85rem) / 2)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "100%",
-                            }}
-                          >
-                            <div
-                              aria-hidden="true"
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "flex-start",
-                                visibility: "hidden",
-                                flexShrink: 0,
-                                width: "55%",
-                              }}
-                            >
-                              <GaugeSpin dir="up" color={gColor} onClick={() => {}} />
-                              <GaugeSpin dir="down" color={gColor} onClick={() => {}} />
-                            </div>
-                            <input
-                              type="number"
-                              min={1}
-                              max={remaining}
-                              value={cur.enfants}
-                              onClick={(e) => e.stopPropagation()}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onChange={(e) =>
-                                setMyCount(
-                                  mb,
-                                  "enfants",
-                                  Number.parseInt(e.target.value, 10),
-                                  remaining,
-                                )
-                              }
-                              style={{
-                                width: "20%",
-                                textAlign: "center",
-                                fontSize: ".75rem",
-                                background: "transparent",
-                                border: "none",
-                                color: gColor,
-                                fontWeight: 600,
-                                padding: 0,
-                                flexShrink: 0,
-                              }}
-                            />
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "flex-start",
-                                flexShrink: 0,
-                                width: "25%",
-                              }}
-                            >
-                              <GaugeSpin
-                                dir="up"
-                                color={gColor}
-                                onClick={() => bumpMyCount(mb, "enfants", 1, remaining)}
-                              />
-                              <GaugeSpin
-                                dir="down"
-                                color={gColor}
-                                onClick={() => bumpMyCount(mb, "enfants", -1, remaining)}
-                              />
-                            </div>
-                          </div>
-                          <span
-                            className="gauge-txt"
-                            style={{ color: gColor, paddingLeft: "30%", boxSizing: "border-box" }}
-                          >
-                            {cur.enfants > 1 ? "Enfants" : "Enfant"}
-                          </span>
-                        </div>
-                        {/* Icône d'état */}
-                        <span className="slot-icon" style={{ alignSelf: "flex-start" }}>
-                          {mb.validated ? "✅" : "⏳"}
-                        </span>
-                        {/* Colonne Adultes */}
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-start",
-                            width: "calc((100% - .85rem) / 2)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "100%",
-                            }}
-                          >
-                            <div
-                              aria-hidden="true"
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "flex-start",
-                                visibility: "hidden",
-                                flexShrink: 0,
-                                width: "25%",
-                              }}
-                            >
-                              <GaugeSpin dir="up" color={gColor} onClick={() => {}} />
-                              <GaugeSpin dir="down" color={gColor} onClick={() => {}} />
-                            </div>
-                            <input
-                              type="number"
-                              min={1}
-                              max={remaining}
-                              value={cur.accompagnants}
-                              onClick={(e) => e.stopPropagation()}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onChange={(e) =>
-                                setMyCount(
-                                  mb,
-                                  "accompagnants",
-                                  Number.parseInt(e.target.value, 10),
-                                  remaining,
-                                )
-                              }
-                              style={{
-                                width: "20%",
-                                textAlign: "center",
-                                fontSize: ".75rem",
-                                background: "transparent",
-                                border: "none",
-                                color: gColor,
-                                fontWeight: 600,
-                                padding: 0,
-                                flexShrink: 0,
-                              }}
-                            />
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "flex-start",
-                                flexShrink: 0,
-                                width: "55%",
-                              }}
-                            >
-                              <GaugeSpin
-                                dir="up"
-                                color={gColor}
-                                onClick={() => bumpMyCount(mb, "accompagnants", 1, remaining)}
-                              />
-                              <GaugeSpin
-                                dir="down"
-                                color={gColor}
-                                onClick={() => bumpMyCount(mb, "accompagnants", -1, remaining)}
-                              />
-                            </div>
-                          </div>
-                          <span
-                            className="gauge-txt"
-                            style={{ color: gColor, paddingRight: "30%", boxSizing: "border-box" }}
-                          >
-                            {cur.accompagnants > 1 ? "Adultes" : "Adulte"}
-                          </span>
-                        </div>
-                      </div>
-                      {themeField}
-                    </>
-                  ) : (
-                    <>
-                      <span
-                        className="slot-icon"
-                        style={{
-                          fontSize: 24,
-                          lineHeight: 1,
-                          width: 24,
-                          height: 24,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {mb.validated ? "✅" : "⏳"}
-                      </span>
-                      <span
-                        className="slot-spots"
-                        style={{
-                          fontSize: ".62rem",
-                          fontWeight: 600,
-                          lineHeight: 1.3,
-                          background: "none",
-                          color: stateColor,
-                        }}
-                      >
-                        {stateLabel}
-                      </span>
-                    </>
-                  )}
-                </div>
+                  onDragEnd={() => {
+                    setDragItem(null);
+                    setDropKey(null);
+                  }}
+                />
               );
             }
             if (pendingSel) {
-              // Créneau coché (réservation en attente). En mode jauge : graphique
-              // éditable enfants/adultes (▲▼) ; en mode thèmes : champ thème (legacy).
+              // Sélection en brouillon : LE MÊME badge que « ma réservation », alimenté
+              // par l'entrée pendingAdds. Jamais validé → orange « En attente » ; le ×
+              // (et le clic hors jauge) retire le brouillon de la sélection.
               const add = pendingAdds.find(
                 (a) => a.key === pendKey(b.slotId, b.dayKey, isPonctuelCell),
               );
+              if (!add) return null;
               const remaining = Math.max(0, b.capacity - b.used);
-              const spinStyle: React.CSSProperties = {
-                background: "none",
-                border: "none",
-                padding: 0,
-                margin: 0,
-                lineHeight: 0.6,
-                cursor: "pointer",
-                color: "var(--accent)",
-                fontSize: ".5rem",
-              };
-              const setTheme = (v: string) =>
-                add &&
-                setPendingAdds((prev) =>
-                  prev.map((x) => (x.key === add.key ? { ...x, theme: v } : x)),
-                );
-              const themeField =
-                modes.themeMode && add ? (
-                  service.themesMode === "liste" ? (
-                    <select
-                      value={add.theme}
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setTheme(e.target.value);
-                      }}
-                      style={{ fontSize: ".6rem", maxWidth: "100%" }}
-                    >
-                      <option value="">Choisir un thème</option>
-                      {themes.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      value={add.theme}
-                      placeholder="Saisissez un thème"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setTheme(e.target.value);
-                      }}
-                      style={{ fontSize: ".6rem", width: "92%", textAlign: "center" }}
-                    />
-                  )
-                ) : null;
-              if (gaugeOn && add) {
-                return (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 2,
-                      width: "100%",
-                    }}
-                  >
-                    <div
-                      className="gauge-badge"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: ".25rem",
-                        width: "100%",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      <div
-                        style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
-                      >
-                        <span style={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <span style={{ fontSize: ".75rem", fontWeight: 700 }}>{add.enfants}</span>
-                          <span style={{ display: "flex", flexDirection: "column" }}>
-                            <button
-                              type="button"
-                              style={spinStyle}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                bumpAddCount(add.key, "enfants", 1, remaining);
-                              }}
-                            >
-                              ▲
-                            </button>
-                            <button
-                              type="button"
-                              style={spinStyle}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                bumpAddCount(add.key, "enfants", -1, remaining);
-                              }}
-                            >
-                              ▼
-                            </button>
-                          </span>
-                        </span>
-                        <span className="gauge-txt" style={{ fontSize: ".55rem" }}>
-                          {add.enfants > 1 ? "Enfants" : "Enfant"}
-                        </span>
-                      </div>
-                      <span className="slot-icon" style={{ fontSize: "1rem", lineHeight: 1 }}>
-                        ⏳
-                      </span>
-                      <div
-                        style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
-                      >
-                        <span style={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <span style={{ display: "flex", flexDirection: "column" }}>
-                            <button
-                              type="button"
-                              style={spinStyle}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                bumpAddCount(add.key, "accompagnants", 1, remaining);
-                              }}
-                            >
-                              ▲
-                            </button>
-                            <button
-                              type="button"
-                              style={spinStyle}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                bumpAddCount(add.key, "accompagnants", -1, remaining);
-                              }}
-                            >
-                              ▼
-                            </button>
-                          </span>
-                          <span style={{ fontSize: ".75rem", fontWeight: 700 }}>
-                            {add.accompagnants}
-                          </span>
-                        </span>
-                        <span className="gauge-txt" style={{ fontSize: ".55rem" }}>
-                          {add.accompagnants > 1 ? "Adultes" : "Adulte"}
-                        </span>
-                      </div>
-                    </div>
-                    {themeField}
-                  </div>
-                );
-              }
+              const removeDraft = () =>
+                setPendingAdds((prev) => prev.filter((a) => a.key !== add.key));
+              // Infobulle (legacy) : horaire + état brouillon + semaine.
+              const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
+              const tipWeek =
+                abMode && (add.week === "A" || add.week === "B") ? `\nSemaine ${add.week}` : "";
               return (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 2,
-                    height: "100%",
-                    textAlign: "center",
-                    color: "var(--accent)",
-                    fontWeight: 700,
+                <MineBadge
+                  validated={false}
+                  markedRemoval={false}
+                  gaugeOn={gaugeOn}
+                  themeMode={modes.themeMode}
+                  themesMode={service.themesMode}
+                  themes={themes}
+                  enfants={add.enfants}
+                  accompagnants={add.accompagnants}
+                  theme={add.theme}
+                  remaining={remaining}
+                  stateLabel={isPonctuelCell ? "En attente" : "★ vous"}
+                  title={
+                    isRecurringModel
+                      ? undefined
+                      : `${tipTime}\n📝 Brouillon — à enregistrer${tipWeek}`
+                  }
+                  closeIcon="×"
+                  onClose={removeDraft}
+                  onBump={(f, d) => bumpAddCount(add.key, f, d, remaining)}
+                  onSetCount={(f, v) => setAddCount(add.key, f, v, remaining)}
+                  onSetTheme={(v) =>
+                    setPendingAdds((prev) =>
+                      prev.map((x) => (x.key === add.key ? { ...x, theme: v } : x)),
+                    )
+                  }
+                  onBodyClick={removeDraft}
+                  // Brouillon : toujours déplaçable (relocalise simplement l'ajout).
+                  draggable
+                  dragging={dragItem?.kind === "draft" && dragItem.key === add.key}
+                  onDragStart={(e) => {
+                    setDragItem({ kind: "draft", key: add.key, ponctuel: isPonctuelCell });
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", add.key);
                   }}
-                >
-                  <span style={{ fontSize: 20, lineHeight: 1 }}>✓</span>
-                  <span style={{ fontSize: ".62rem" }}>Sélectionné</span>
-                  {themeField}
-                </div>
+                  onDragEnd={() => {
+                    setDragItem(null);
+                    setDropKey(null);
+                  }}
+                />
               );
             }
             if (b.full) {
@@ -2066,14 +2355,52 @@ export function UserAgendaGrid({
 
   return (
     <div id="tab-content-agenda">
+      {/* Info-bulle « Journées concernées » (survol créneau récurrent, Modèle de période). */}
+      {tipDates &&
+        createPortal(
+          <div
+            ref={tipRef}
+            // Pas de className "schedule-tooltip" : la classe legacy (app-legacy.css)
+            // est `display:none` tant qu'on n'ajoute pas `is-visible` → l'info-bulle
+            // resterait invisible. On la stylise donc entièrement en inline.
+            style={{
+              display: "block",
+              position: "fixed",
+              top: 0,
+              left: 0,
+              zIndex: 10001,
+              pointerEvents: "none",
+              background: "var(--surface1, #1f2430)",
+              color: "var(--text, #e8e8e8)",
+              border: "1px solid var(--border, rgba(255,255,255,.15))",
+              borderRadius: 6,
+              padding: "6px 8px",
+              fontSize: ".62rem",
+              lineHeight: 1.1,
+              boxShadow: "0 6px 18px rgba(0,0,0,.35)",
+              maxWidth: 520,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Journées concernées :</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0 12px" }}>
+              {tipDates.map((d) => (
+                <div key={d}>• {tipDateFmt.format(new Date(`${d}T12:00:00`))}</div>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
       <div
         style={{
+          // position:relative → la nav semaine peut être centrée en absolu sur toute
+          // la largeur (= largeur du tableau), indépendamment des éléments latéraux.
+          position: "relative",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: ".75rem",
           flexWrap: "wrap",
-          marginBottom: ".5rem",
+          margin: "2rem 0 .75rem",
         }}
       >
         <div className="panel-title" style={{ marginBottom: 0 }}>
@@ -2108,7 +2435,15 @@ export function UserAgendaGrid({
         {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
             titre et le sélecteur. */}
         {mode === "realweek" && (
-          <div className="periode-nav" style={{ margin: "0 auto" }}>
+          <div
+            className="periode-nav"
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+          >
             <button
               type="button"
               className="ex-arrow"
@@ -2180,7 +2515,7 @@ export function UserAgendaGrid({
           justifyContent: "space-between",
           gap: ".75rem",
           flexWrap: "wrap",
-          marginBottom: ".5rem",
+          marginBottom: ".75rem",
         }}
       >
         <div className="period-tabs" id="agenda-period-tabs">
@@ -2395,12 +2730,15 @@ export function UserAgendaGrid({
               }}
               onDragOver={(e) => {
                 if (isDayDisabled(d)) return;
-                if (draggingId != null) e.preventDefault();
+                if (dragItem != null) e.preventDefault();
               }}
               onDrop={(e) => {
+                // Dépôt dans l'inter-bloc (pas sur un créneau) → on annule simplement le drag ;
+                // les dépôts utiles sont gérés par le bloc-créneau (stopPropagation).
                 if (isDayDisabled(d)) return;
                 e.preventDefault();
-                setDraggingId(null);
+                setDragItem(null);
+                setDropKey(null);
               }}
             >
               {/* Lignes de grille sur les quarts VISIBLES (compactage pause) :
@@ -2463,6 +2801,41 @@ export function UserAgendaGrid({
           Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers
           un autre créneau pour le déplacer.
         </p>
+        {/* Compteur du brouillon (déplacé ici depuis la barre d'actions) : nombre de
+            réservations/annulations en attente, ou « Aucune modification en attente ». */}
+        <p
+          style={{
+            fontSize: ".75rem",
+            // Modifications en attente → couleur warning ; sinon muté.
+            color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
+            margin: 0,
+            flexShrink: 0,
+            textAlign: "right",
+          }}
+        >
+          {pendingCount > 0
+            ? [
+                pendingAdds.length > 0
+                  ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
+                  : "",
+                pendingRemovals.length > 0
+                  ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
+                  : "",
+                Object.keys(pendingUpdates).length > 0
+                  ? `${Object.keys(pendingUpdates).length} élément${
+                      Object.keys(pendingUpdates).length > 1 ? "s" : ""
+                    } à modifier`
+                  : "",
+                Object.keys(pendingMoves).length > 0
+                  ? `${Object.keys(pendingMoves).length} élément${
+                      Object.keys(pendingMoves).length > 1 ? "s" : ""
+                    } à déplacer`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : "Aucune modification en attente"}
+        </p>
       </div>
 
       {/* Barre d'actions du brouillon (legacy « Annuler » / « Enregistrer → ») :
@@ -2477,15 +2850,31 @@ export function UserAgendaGrid({
           flexWrap: "wrap",
         }}
       >
+        {/* Ligne d'information « max. réservations » (déplacée ici depuis sous le tableau). */}
         <span style={{ fontSize: ".8rem", color: "var(--muted)", marginRight: "auto" }}>
-          {pendingCount > 0
-            ? [
-                pendingAdds.length > 0 ? `${pendingAdds.length} à réserver` : "",
-                pendingRemovals.length > 0 ? `${pendingRemovals.length} à annuler` : "",
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : "Aucune modification en attente"}
+          ℹ️{" "}
+          {modes.recurringMode ? (
+            <>
+              Vous pouvez réserver{" "}
+              <strong>
+                {service.maxReservationsPeriod} créneau
+                {service.maxReservationsPeriod > 1 ? "x" : ""} par période
+              </strong>{" "}
+              et{" "}
+              <strong>
+                {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
+              </strong>
+              .
+            </>
+          ) : (
+            <>
+              Vous pouvez réserver{" "}
+              <strong>
+                {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
+              </strong>
+              .
+            </>
+          )}
         </span>
         <button
           type="button"
@@ -2834,7 +3223,9 @@ export function UserAgendaGrid({
               <span className="dot" />
               Mes réservations
             </div>
-            {pendingAdds.length === 0 && pendingRemovals.length === 0 ? (
+            {pendingAdds.length === 0 &&
+            pendingRemovals.length === 0 &&
+            Object.keys(pendingMoves).length === 0 ? (
               <p className="no-booking-msg">Aucune modification.</p>
             ) : (
               <div className="recap-period-entries">
@@ -2928,6 +3319,17 @@ export function UserAgendaGrid({
                       <div className="val" style={{ textDecoration: "line-through", opacity: 0.6 }}>
                         {r.label}
                       </div>
+                    </div>
+                  </div>
+                ))}
+                {Object.entries(pendingMoves).map(([id, m]) => (
+                  <div key={`move-${id}`} className="recap-period-entry">
+                    <div className="recap-period-dot" style={{ background: "var(--warn)" }} />
+                    <div className="recap-period-info" style={{ flex: 1 }}>
+                      <div className="key" style={{ color: "var(--warn)" }}>
+                        Déplacée
+                      </div>
+                      <div className="val">→ {m.label}</div>
                     </div>
                   </div>
                 ))}

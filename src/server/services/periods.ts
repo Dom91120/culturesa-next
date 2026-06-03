@@ -1,6 +1,38 @@
 import type { PeriodInput } from "@/schemas/config";
 import { prisma } from "@/server/db";
-import type { EntityState } from "@prisma/client";
+import type { EntityState, Prisma } from "@prisma/client";
+import { holidaysInRange } from "./exercice";
+
+/** Format UTC 'YYYY-MM-DD' (cohérent avec toISO/fromISO de slots.ts). */
+function ymdUtc(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * (Re)remplit `period_holidays` avec les jours fériés français tombant dans
+ * [dateStart, dateEnd] de la période. Port du legacy `refresh_period_holidays` :
+ * appelé à chaque création/màj de période. La génération des miroirs des créneaux
+ * récurrents (`saveRecurringSlots` → `computeWantedMirrors`) s'appuie sur cette
+ * table pour ne PAS matérialiser de créneau un jour férié quand le service est
+ * fermé les fériés. Sans ce remplissage, la table reste vide et les fériés fuient.
+ */
+export async function refreshPeriodHolidays(
+  periodId: number,
+  client: Prisma.TransactionClient = prisma,
+): Promise<void> {
+  const period = await client.period.findUnique({
+    where: { id: periodId },
+    select: { dateStart: true, dateEnd: true },
+  });
+  await client.periodHoliday.deleteMany({ where: { periodId } });
+  if (!period?.dateStart || !period?.dateEnd) return;
+  const rows = holidaysInRange(ymdUtc(period.dateStart), ymdUtc(period.dateEnd)).map((h) => ({
+    periodId,
+    date: new Date(`${h.date}T00:00:00Z`),
+    label: h.label,
+  }));
+  if (rows.length) await client.periodHoliday.createMany({ data: rows, skipDuplicates: true });
+}
 
 export function listPeriods() {
   return prisma.period.findMany({
@@ -23,12 +55,16 @@ function toData(data: PeriodInput) {
   };
 }
 
-export function createPeriod(data: PeriodInput) {
-  return prisma.period.create({ data: toData(data) });
+export async function createPeriod(data: PeriodInput) {
+  const period = await prisma.period.create({ data: toData(data) });
+  await refreshPeriodHolidays(period.id);
+  return period;
 }
 
-export function updatePeriod(id: number, data: PeriodInput) {
-  return prisma.period.update({ where: { id }, data: toData(data) });
+export async function updatePeriod(id: number, data: PeriodInput) {
+  const period = await prisma.period.update({ where: { id }, data: toData(data) });
+  await refreshPeriodHolidays(id);
+  return period;
 }
 
 export function deletePeriod(id: number) {
@@ -153,7 +189,7 @@ export async function createServicePeriod(
   input: CreateServicePeriodInput,
 ): Promise<PeriodRow> {
   const exerciceId = await exerciceIdForPeriod(input.dateStart, input.dateEnd);
-  return prisma.period.create({
+  const period = await prisma.period.create({
     data: {
       serviceId,
       exerciceId,
@@ -166,6 +202,8 @@ export async function createServicePeriod(
     },
     select: PERIOD_SELECT,
   });
+  await refreshPeriodHolidays(period.id);
+  return period;
 }
 
 export type UpdateServicePeriodInput = {
@@ -213,7 +251,10 @@ export async function updateServicePeriod(
     data.exerciceId = await exerciceIdForPeriod(nextStart, nextEnd);
   }
 
-  return prisma.period.update({ where: { id }, data, select: PERIOD_SELECT });
+  const period = await prisma.period.update({ where: { id }, data, select: PERIOD_SELECT });
+  // Les dates ont pu changer → on resynchronise les fériés de la période.
+  if (datesChange) await refreshPeriodHolidays(id);
+  return period;
 }
 
 export function deleteServicePeriod(id: number) {

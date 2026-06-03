@@ -1,5 +1,6 @@
 import { toDateInput } from "@/lib/format";
 import type { BookingCreateInput } from "@/schemas/booking";
+import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { Prisma } from "@prisma/client";
 import { getServiceDemandeurSettings } from "./demandeur-settings";
@@ -201,7 +202,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     where: { id: userId },
     select: {
       demandeurId: true,
-      demandeur: { select: { label: true } },
+      demandeur: { select: { label: true, openOnSchoolHolidays: true } },
       nom: true,
       prenom: true,
       email: true,
@@ -295,6 +296,17 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     : [];
   const modes = deriveServiceModes(mineSettings.length ? mineSettings : settings);
 
+  // Vacances scolaires de la zone configurée : sert à filtrer les dates « prédites »
+  // d'un créneau récurrent quand le demandeur de l'usager ferme pendant les vacances
+  // (port legacy _predictedDatesForCurrentUser / _isSchoolVacance).
+  const schoolZone = (await getConfigMany(["school.zone"]))["school.zone"] || "A";
+  const schoolHolidays = (
+    await prisma.schoolHoliday.findMany({
+      where: { zone: schoolZone },
+      select: { dateStart: true, dateEnd: true },
+    })
+  ).map((h) => ({ dateStart: toDateInput(h.dateStart), dateEnd: toDateInput(h.dateEnd) }));
+
   const exerciceIds = [
     ...new Set(periods.map((p) => p.exerciceId).filter((x): x is number => x != null)),
   ];
@@ -320,6 +332,8 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       ponctCapacity: service.ponctCapacity,
       semaineAb: service.semaineAb,
       themesMode: service.themesMode,
+      maxReservations: service.maxReservations,
+      maxReservationsPeriod: service.maxReservationsPeriod,
       openOnHolidays: service.openOnHolidays,
       showPreviousExercices: service.showPreviousExercices,
     },
@@ -364,6 +378,11 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     themes: themeRows.map((t) => t.label),
     // Libellé du demandeur de l'usager (bandeau debug, cf. legacy #dem-info).
     demandeurLabel: user?.demandeur?.label ?? null,
+    // Demandeur ouvert pendant les vacances scolaires ? (défaut true si non rattaché,
+    // comme legacy : `if (!dem || dem.open_on_school_holidays) return mirrorDates`).
+    openOnSchoolHolidays: user?.demandeur?.openOnSchoolHolidays ?? true,
+    // Plages de vacances scolaires (YYYY-MM-DD) de la zone configurée.
+    schoolHolidays,
     // Infos usager pour le récapitulatif de la modale de confirmation (legacy).
     user: {
       nom: user?.nom ?? "",
