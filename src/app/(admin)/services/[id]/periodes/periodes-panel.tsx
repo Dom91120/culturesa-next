@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   createPeriodAction,
   deletePeriodAction,
@@ -270,10 +270,9 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   const [afternoonEnd, setAfternoonEnd] = useState(opening.afternoonEnd);
   const [openingError, setOpeningError] = useState<string | null>(null);
   const [openingSaved, setOpeningSaved] = useState(false);
-
-  function touchOpening() {
-    setOpeningSaved(false);
-  }
+  // Vrai dès que l'usager a modifié une plage horaire → arme l'auto-save débouncé
+  // (évite une sauvegarde au montage / après router.refresh).
+  const hoursTouchedRef = useRef(false);
 
   // Enregistre la config d'ouverture. `overrides` permet de sauvegarder une valeur
   // qui vient d'être calculée sans attendre le re-render (setState asynchrone) — sert
@@ -325,42 +324,50 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
     persistOpening({ activeDays: nextDays });
   }
 
-  // Le bouton « Enregistrer » (section Plages horaires) sauvegarde l'état courant.
-  function saveOpening() {
-    persistOpening();
-  }
+  // Plages horaires : auto-save débouncé (700 ms). Le timer est ré-armé à chaque
+  // changement → une seule sauvegarde après la fin du réglage (utile en clic-maintenu
+  // sur les flèches ±15 min). persistOpening lit l'état courant au déclenchement.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: déclenché par les horaires uniquement
+  useEffect(() => {
+    if (!hoursTouchedRef.current) return;
+    const t = setTimeout(() => persistOpening(), 700);
+    return () => clearTimeout(t);
+  }, [morningStart, morningEnd, afternoonStart, afternoonEnd]);
 
   return (
     <div className="panel">
       {/* ── Ligne périodes : titre · nav exercice · tableau · actions ──────── */}
       <div id="periods-row">
-        <div className="panel-title pr-title">
-          <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            <span className="dot" style={{ background: "var(--warn)" }} />
-            Périodes
-          </span>
-        </div>
+        {/* Titre + navigation exercice sur une même ligne ; tableau en dessous. */}
+        <div className="pr-head">
+          <div className="panel-title pr-title">
+            <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+              <span className="dot" style={{ background: "var(--warn)" }} />
+              Périodes
+            </span>
+          </div>
 
-        <div className="periode-nav">
-          <button
-            type="button"
-            className="ex-arrow"
-            onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
-            disabled={!canPrev}
-            aria-label="Exercice précédent"
-          >
-            ◀
-          </button>
-          <span className="ex-nav-label">{exerciceLabel}</span>
-          <button
-            type="button"
-            className="ex-arrow"
-            onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
-            disabled={!canNext}
-            aria-label="Exercice suivant"
-          >
-            ▶
-          </button>
+          <div className="periode-nav">
+            <button
+              type="button"
+              className="ex-arrow"
+              onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
+              disabled={!canPrev}
+              aria-label="Exercice précédent"
+            >
+              ◀
+            </button>
+            <span className="ex-nav-label">{exerciceLabel}</span>
+            <button
+              type="button"
+              className="ex-arrow"
+              onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
+              disabled={!canNext}
+              aria-label="Exercice suivant"
+            >
+              ▶
+            </button>
+          </div>
         </div>
 
         <div className="pr-editor">
@@ -587,14 +594,16 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
           <TimeStepper
             value={morningStart}
             onChange={(v) => {
-              touchOpening();
+              hoursTouchedRef.current = true;
+              setOpeningSaved(false);
               setMorningStart(v);
             }}
           />
           <TimeStepper
             value={morningEnd}
             onChange={(v) => {
-              touchOpening();
+              hoursTouchedRef.current = true;
+              setOpeningSaved(false);
               setMorningEnd(v);
             }}
           />
@@ -614,36 +623,33 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
           <TimeStepper
             value={afternoonStart}
             onChange={(v) => {
-              touchOpening();
+              hoursTouchedRef.current = true;
+              setOpeningSaved(false);
               setAfternoonStart(v);
             }}
           />
           <TimeStepper
             value={afternoonEnd}
             onChange={(v) => {
-              touchOpening();
+              hoursTouchedRef.current = true;
+              setOpeningSaved(false);
               setAfternoonEnd(v);
             }}
           />
         </div>
+        {/* Auto-save : statut seulement (plus de bouton « Enregistrer »). */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".5rem" }}>
           {openingError && (
             <span className="field-error" style={{ display: "inline" }}>
               {openingError}
             </span>
           )}
-          {openingSaved && (
+          {!openingError && pending && (
+            <span style={{ fontSize: ".78rem", color: "var(--muted)" }}>Enregistrement…</span>
+          )}
+          {!openingError && !pending && openingSaved && (
             <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
           )}
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={saveOpening}
-            disabled={pending}
-            style={{ background: "var(--warn)", color: "#0f1117" }}
-          >
-            {pending ? "Enregistrement…" : "💾 Enregistrer"}
-          </button>
         </div>
       </div>
 
@@ -751,8 +757,12 @@ function TimeStepper({ value, onChange }: { value: string; onChange: (v: string)
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: 50,
+          // Hauteur calée sur la pile des flèches ▲/▼ : 2 × 10px + 1px de gap = 21px
+          // (cf. .time-step-btn / .time-step-btns dans app-legacy.css).
+          height: 21,
+          boxSizing: "border-box",
           fontSize: ".78rem",
-          padding: ".15rem .35rem",
+          padding: "0 .35rem",
           borderRadius: "var(--rad-sm)",
           border: "1px solid var(--border)",
           background: "var(--surface2)",

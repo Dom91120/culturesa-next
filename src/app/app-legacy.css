@@ -712,7 +712,10 @@ textarea.theme-pending:focus::placeholder {
 #admin-table td { padding: .18rem .45rem; }
 .periods-table { border-collapse: collapse; }
 .periods-table th { padding: .25rem .4rem; font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; }
-.periods-table td { padding: .12rem .4rem; text-align: center; }
+.periods-table td { padding: .12rem .4rem; text-align: center; vertical-align: middle; }
+/* Contenu inline des cellules (case à cocher, pastille couleur) centré verticalement
+   comme le texte → tous les éléments d'une ligne à la même hauteur. */
+.periods-table td > * { vertical-align: middle; }
 .periods-table td.td-left { text-align: left; }
 .periods-table input[type=text],
 .periods-table input[type=date] { padding: 0 .4rem !important; font-size: .72rem !important; height: 22px; line-height: 22px; }
@@ -722,13 +725,15 @@ textarea.theme-pending:focus::placeholder {
 #periods-row {
   display: grid;
   grid-template-columns: max-content max-content;
-  grid-template-rows: auto auto auto auto;
+  grid-template-rows: auto auto auto;
   column-gap: 8rem;
 }
-#periods-row > .pr-title  { grid-column: 1; grid-row: 1; }
-#periods-row > #periode-nav { grid-column: 1; grid-row: 2; }
-#periods-row > .pr-editor { grid-column: 1; grid-row: 3; }
-#periods-row > .pr-add    { grid-column: 1; grid-row: 4; display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
+/* Titre + navigation exercice réunis sur une même ligne de titre ; tableau en dessous. */
+#periods-row > .pr-head   { grid-column: 1; grid-row: 1; display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; margin-bottom: .85rem; }
+#periods-row > .pr-head > .pr-title { margin-bottom: 0; }
+#periods-row > .pr-head > .periode-nav { margin: 0; }
+#periods-row > .pr-editor { grid-column: 1; grid-row: 2; }
+#periods-row > .pr-add    { grid-column: 1; grid-row: 3; display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
 /* Verrou visuel quand on consulte un exercice ancien — appliqué soit sur le pane entier
    (Créneaux, Réservations, Demandeurs), soit sur des éléments ciblés (Périodes : éditeur,
    jours d'ouverture, barre d'actions) pour préserver la navigation .periode-nav. */
@@ -790,7 +795,7 @@ textarea.theme-pending:focus::placeholder {
     column-gap: 0;
     row-gap: 1rem;
   }
-  #periods-row > .pr-title,
+  #periods-row > .pr-head,
   #periods-row > .pr-editor,
   #periods-row > .pr-add     { grid-column: 1; }
 }
@@ -923,13 +928,11 @@ textarea.theme-pending:focus::placeholder {
 .planning-uniq-table { table-layout: auto; }
 .planning-uniq-table tbody tr:nth-child(odd)  td { background: var(--surface); }
 .planning-uniq-table tbody tr:nth-child(even) td { background: var(--surface2); }
-.planning-uniq-table tbody tr td {  }
 .planning-uniq-table td { padding: 0 .6rem; }
 .planning-uniq-table td { vertical-align: middle; }
 .planning-uniq-table td:nth-child(1),
 .planning-uniq-table td:nth-child(2),
 .planning-uniq-table td:nth-child(3) { white-space: nowrap; width: 1%; color: var(--text) !important; font-weight: 300 !important; }
-.planning-uniq-table td:nth-child(4) { }
 .planning-uniq-table .planning-name-tag { width: 160px; flex-shrink: 0; }
 .planning-uniq-table td:nth-child(4) { width: auto; }
 /* Planning général / ponctuel (.planning-uniq-table) → contenu aligné à gauche */
@@ -1316,8 +1319,8 @@ textarea.theme-pending:focus::placeholder {
 /* La grille agenda tient en pleine largeur (colonnes minmax(0,1fr)) : pas d'ascenseur. */
 #agenda-print-grid { overflow: visible; }
 #agenda-period-tabs .period-btn {
-  padding: .12rem .5rem;
-  font-size: .64rem;
+  padding: .2rem .6rem;
+  font-size: .7rem;
 }
 /* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda et dans la
    modale multi-badges (cell-stack-modal) — même taille texte + même scale de case. */
@@ -1721,7 +1724,7 @@ textarea.theme-pending:focus::placeholder {
 }
 .user-agenda-mine-badge.has-widgets {
   height: auto;
-  min-height: 44px;
+  min-height: 38px;
 }
 /* Curseur de drag sur les blocs draggable (réservés par le user). */
 .user-agenda-block[draggable="true"] { cursor: grab; }
