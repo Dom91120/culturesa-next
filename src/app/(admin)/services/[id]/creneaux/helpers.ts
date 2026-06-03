@@ -71,21 +71,44 @@ export function addMinutes(t: string, m: number): string {
   return minToTime(timeToMin(t) + m);
 }
 
-// Next free start in morning (08:00-12:00) / afternoon (13:30-18:00) windows.
-export function nextSlotStart(existingStarts: string[], dur: number): number {
-  const taken = new Set(existingStarts.map((s) => timeToMin(s)));
-  const windows: [number, number][] = [
-    [480, 720],
-    [810, 1080],
-  ];
-  for (const [start, endW] of windows) {
-    let cur = start;
-    while (cur + dur <= endW) {
-      if (!taken.has(cur)) return cur;
-      cur += dur;
+// Prochain début de créneau disponible dans les plages d'ouverture du service
+// (matin puis après-midi) : on empile juste après la fin du dernier créneau déjà
+// placé dans la plage. Renvoie les minutes, ou null si plus de place dans aucune
+// plage. Port fidèle du legacy nextSlotStart / nextSlotForDate (utilise les vraies
+// morning/afternoon du service, pas une fenêtre figée). `ranges` = paires
+// [début, fin] "HH:MM" (plage vide/inversée ignorée). `existing` = créneaux à
+// considérer : tous pour le récurrent, ceux d'une date donnée pour le ponctuel.
+export function nextSlotInRanges(
+  existing: { startTime: string; endTime: string }[],
+  dur: number,
+  ranges: [string, string][],
+): number | null {
+  for (const [rangeStart, rangeEnd] of ranges) {
+    const rsMin = timeToMin(rangeStart);
+    const reMin = timeToMin(rangeEnd);
+    if (reMin <= rsMin) continue;
+    let fill = rsMin;
+    for (const s of existing) {
+      if (!s.startTime || !s.endTime) continue;
+      const sMin = timeToMin(s.startTime);
+      const eMin = timeToMin(s.endTime);
+      if (sMin >= rsMin && eMin <= reMin) fill = Math.max(fill, eMin);
     }
+    if (fill + dur <= reMin) return fill;
   }
-  return windows[0][0];
+  return null;
+}
+
+// Prochaine date (≥ lendemain) tombant un jour actif du service — port legacy
+// nextWorkingDay. Renvoie 'YYYY-MM-DD'. Cherche sur 14 jours, sinon J+1.
+export function nextWorkingDay(dateStr: string, activeDays: DayKey[]): string {
+  const keys = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"] as const;
+  const base = new Date(`${dateStr}T00:00:00Z`);
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(base.getTime() + i * 86400000);
+    if (activeDays.includes(keys[d.getUTCDay()] as DayKey)) return d.toISOString().slice(0, 10);
+  }
+  return new Date(base.getTime() + 86400000).toISOString().slice(0, 10);
 }
 
 function isoWeek(dateStr: string): number {

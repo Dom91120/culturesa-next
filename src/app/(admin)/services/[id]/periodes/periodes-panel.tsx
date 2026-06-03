@@ -274,22 +274,38 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   function touchOpening() {
     setOpeningSaved(false);
   }
-  function toggleDay(key: string) {
-    touchOpening();
-    setActiveDays((prev) => (prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]));
-  }
 
-  function saveOpening() {
+  // Enregistre la config d'ouverture. `overrides` permet de sauvegarder une valeur
+  // qui vient d'être calculée sans attendre le re-render (setState asynchrone) — sert
+  // à l'auto-save des « Jours d'ouverture ». `??` préserve `false`/`[]` (ne retombe
+  // que sur null/undefined).
+  type OpeningOverrides = Partial<{
+    activeDays: string[];
+    openOnHolidays: boolean;
+    morningStart: string;
+    morningEnd: string;
+    afternoonStart: string;
+    afternoonEnd: string;
+  }>;
+  function persistOpening(overrides: OpeningOverrides = {}) {
     setOpeningError(null);
     startTransition(async () => {
       const res = await saveOpeningConfigAction({
         serviceId,
-        activeDays: activeDays as ("lun" | "mar" | "mer" | "jeu" | "ven" | "sam" | "dim")[],
-        openOnHolidays,
-        morningStart,
-        morningEnd,
-        afternoonStart,
-        afternoonEnd,
+        activeDays: (overrides.activeDays ?? activeDays) as (
+          | "lun"
+          | "mar"
+          | "mer"
+          | "jeu"
+          | "ven"
+          | "sam"
+          | "dim"
+        )[],
+        openOnHolidays: overrides.openOnHolidays ?? openOnHolidays,
+        morningStart: overrides.morningStart ?? morningStart,
+        morningEnd: overrides.morningEnd ?? morningEnd,
+        afternoonStart: overrides.afternoonStart ?? afternoonStart,
+        afternoonEnd: overrides.afternoonEnd ?? afternoonEnd,
       });
       if (res && !res.ok) {
         setOpeningError(res.error ?? "Échec de l'enregistrement.");
@@ -298,6 +314,20 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
       setOpeningSaved(true);
       router.refresh();
     });
+  }
+
+  // Jours d'ouverture : auto-save immédiat au clic (pas de bouton « Enregistrer »).
+  function toggleDay(key: string) {
+    const nextDays = activeDays.includes(key)
+      ? activeDays.filter((d) => d !== key)
+      : [...activeDays, key];
+    setActiveDays(nextDays);
+    persistOpening({ activeDays: nextDays });
+  }
+
+  // Le bouton « Enregistrer » (section Plages horaires) sauvegarde l'état courant.
+  function saveOpening() {
+    persistOpening();
   }
 
   return (
@@ -524,8 +554,8 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             className="admin-cb"
             checked={openOnHolidays}
             onChange={(e) => {
-              touchOpening();
               setOpenOnHolidays(e.target.checked);
+              persistOpening({ openOnHolidays: e.target.checked });
             }}
             style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
           />

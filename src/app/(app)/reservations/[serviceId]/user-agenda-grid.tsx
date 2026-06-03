@@ -702,6 +702,18 @@ function dayKeyFromYmd(ymd: string): string {
   return YMD_DAY_KEYS[new Date(`${ymd}T00:00:00`).getDay()] ?? "";
 }
 
+// Une date 'YYYY-MM-DD' tombe-t-elle dans une plage de vacances scolaires ?
+// Convention data.education.gouv.fr : dateStart = soir du dernier jour d'école →
+// 1er jour de vacances = dateStart + 1 (borne gauche stricte, droite incluse).
+// Port legacy _isSchoolVacance. Vacances = par demandeur (pas par service), donc
+// filtré côté user selon openOnSchoolHolidays du demandeur de l'usager.
+function inSchoolHolidayRange(
+  date: string,
+  ranges: { dateStart: string; dateEnd: string }[],
+): boolean {
+  return ranges.some((p) => date > p.dateStart && date <= p.dateEnd);
+}
+
 /** Numéro de semaine ISO (1..53) — sert à déduire la parité A/B en semaine réelle. */
 function isoWeek(d: Date): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -1212,8 +1224,10 @@ export function UserAgendaGrid({
       weekDateByDay[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
   }
   // Jour fermé : uniquement en semaine réelle, pour un jour hors de la période
-  // active OU férié quand le service ferme les fériés. Contrairement au legacy
-  // (grisage purement visuel), on bloque ici aussi toutes les interactions.
+  // active, OU férié quand le service ferme les fériés, OU en vacances scolaires
+  // quand le demandeur de l'usager ferme pendant les vacances. Contrairement au
+  // legacy (grisage purement visuel), on bloque ici aussi toutes les interactions
+  // → l'usager ne peut pas réserver ce jour-là (créneau miroir inclus).
   const isDayDisabled = (dayKey: string): boolean => {
     if (mode !== "realweek" || !mondayStr) return false;
     const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
@@ -1224,7 +1238,9 @@ export function UserAgendaGrid({
     ) {
       return true;
     }
-    return !service.openOnHolidays && isFrenchHoliday(dayYmd);
+    if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
+    // Vacances scolaires : fermé pour un demandeur fermé pendant les vacances.
+    return !openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
   };
   // Classe de grisage (hachures + opacité), portée du legacy _outOfPeriodCls.
   const outOfPeriodCls = (dayKey: string): string =>
@@ -2002,7 +2018,7 @@ export function UserAgendaGrid({
   // dateStart = soir du dernier jour d'école → 1er jour de vacances = dateStart + 1
   // (borne stricte à gauche, inclusive à droite). Port legacy _isSchoolVacance.
   const isSchoolVacance = (date: string): boolean =>
-    (schoolHolidays ?? []).some((p) => date > p.dateStart && date <= p.dateEnd);
+    inSchoolHolidayRange(date, schoolHolidays ?? []);
 
   // Dates concrètes couvertes par un créneau récurrent un jour donné : ses miroirs
   // (créneaux uniques datés générés pour la période, hors jours fériés exclus à la
@@ -2921,6 +2937,10 @@ export function UserAgendaGrid({
               ["Validation", modes.validationMode],
               ["Thèmes", modes.themeMode],
               ["Jauge", modes.gaugeRec || modes.gaugePonct],
+              // Ouvert les jours fériés = niveau service ; Ouvert vacances scolaires =
+              // niveau demandeur de l'usager (openOnSchoolHolidays).
+              ["Ouvert les jours fériés", service.openOnHolidays],
+              ["Ouvert vacances scolaires", openOnSchoolHolidays],
             ] as [string, boolean][]
           ).map(([label, on]) => (
             <span key={label} style={{ opacity: on ? 1 : 0.35 }}>

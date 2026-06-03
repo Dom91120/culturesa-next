@@ -150,6 +150,12 @@ export type CreneauxData = {
     recurDuration: number;
     ponctDuration: number;
     ponctCapacity: number;
+    // Plages horaires d'ouverture (matin / après-midi) — bornent le placement
+    // automatique des créneaux récurrents (cf. legacy nextSlotStart).
+    morningStart: string;
+    morningEnd: string;
+    afternoonStart: string;
+    afternoonEnd: string;
   };
   periods: { id: number; name: string; startDate: string; endDate: string }[];
   demandeurs: { id: number; name: string }[];
@@ -202,6 +208,10 @@ export async function getCreneauxData(serviceId: string): Promise<CreneauxData |
       recurDuration: service.recurDuration,
       ponctDuration: service.ponctDuration,
       ponctCapacity: service.ponctCapacity,
+      morningStart: service.morningStart,
+      morningEnd: service.morningEnd,
+      afternoonStart: service.afternoonStart,
+      afternoonEnd: service.afternoonEnd,
     },
     periods: periods
       .filter((p) => p.dateStart != null && p.dateEnd != null)

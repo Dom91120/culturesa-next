@@ -19,7 +19,7 @@ import {
   isAllDay,
   minToTime,
   newClientSlotId,
-  nextSlotStart,
+  nextSlotInRanges,
   parseWeeks,
   stepDuration,
 } from "./shared";
@@ -95,6 +95,8 @@ export function RecurringEditor({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // Message informatif (non bloquant) : ex. plus de place dans les plages horaires.
+  const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [demModal, setDemModal] = useState<string | null>(null);
 
@@ -170,21 +172,37 @@ export function RecurringEditor({
     const id = newClientSlotId();
     // Durée = 1 jour → créneau « journée entière » : pas d'horaire (début/fin vides).
     const allday = recurDuration >= ALLDAY_DURATION;
-    const start = allday
-      ? ""
-      : minToTime(
-          nextSlotStart(
-            slots.map((s) => s.startTime),
-            recurDuration,
-          ),
+    let start = "";
+    setNotice(null);
+    if (!allday) {
+      // Placement automatique dans les VRAIES plages d'ouverture du service
+      // (matin / après-midi), juste après le dernier créneau (port legacy).
+      const ranges: [string, string][] = [
+        [data.service.morningStart, data.service.morningEnd],
+        [data.service.afternoonStart, data.service.afternoonEnd],
+      ];
+      const startMin = nextSlotInRanges(
+        slots.map((s) => ({ startTime: s.startTime, endTime: s.endTime })),
+        recurDuration,
+        ranges,
+      );
+      if (startMin == null) {
+        // Plus de place dans les plages → créneau « journée entière » à ajuster
+        // manuellement (cf. legacy : toast + slot sans horaire).
+        setNotice(
+          "Plus de place dans les plages horaires — créneau « journée entière » ajouté, ajustez les horaires.",
         );
+      } else {
+        start = minToTime(startMin);
+      }
+    }
     setSlots((prev) => [
       ...prev,
       {
         id,
         startTime: start,
-        endTime: allday ? "" : addMinutes(start, recurDuration),
-        weeks: abMode ? "A,B" : "A,B",
+        endTime: start ? addMinutes(start, recurDuration) : "",
+        weeks: "A,B",
         cap,
         demandeurIds: [],
       },
@@ -228,12 +246,14 @@ export function RecurringEditor({
     setSlots(initialSlots);
     setSelected(new Set());
     setError(null);
+    setNotice(null);
   }
 
   async function save() {
     if (!period) return;
     setSaving(true);
     setError(null);
+    setNotice(null);
     const res = await saveRecurring(period.id, slots);
     setSaving(false);
     if (!res.ok) {
@@ -668,6 +688,9 @@ export function RecurringEditor({
               <span className="field-error" style={{ display: "inline" }}>
                 {error}
               </span>
+            )}
+            {notice && !error && (
+              <span style={{ fontSize: ".7rem", color: "var(--muted)" }}>{notice}</span>
             )}
             {dirty && (
               <button

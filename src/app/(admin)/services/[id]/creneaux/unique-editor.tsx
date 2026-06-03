@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DemandeursModal } from "./demandeurs-modal";
 import { DurationStepper } from "./duration-stepper";
 import {
@@ -9,13 +9,14 @@ import {
   type EditUniqueSlot,
   SLOT_PAGE_SIZE,
   type SaveResult,
+  activeDayKeys,
   addMinutes,
   isAllDay,
   isNewSlot,
   minToTime,
   newClientSlotId,
-  nextSlotStart,
-  slotWeekTag,
+  nextSlotInRanges,
+  nextWorkingDay,
 } from "./shared";
 
 type Props = {
@@ -30,11 +31,6 @@ type Props = {
   setDemandeurs: (slotId: string, ids: number[]) => Promise<SaveResult>;
   refresh: () => void;
 };
-
-function weekBadge(date: string | null): string {
-  if (!date) return "";
-  return `Semaine ${slotWeekTag(date)}`;
-}
 
 export function UniqueEditor({
   serviceId: _serviceId,
@@ -99,6 +95,56 @@ export function UniqueEditor({
     );
   }
 
+  // ── Flèches ▲/▼ de réglage de l'heure de début (port du legacy timeStep) ──
+  // ±15 min, bornées sur 24h (wrap), avec clic-maintenu : 1er tick immédiat puis
+  // répétition après 400 ms toutes les 80 ms. La fin suit (start + durée) via update().
+  const holdRef = useRef<{
+    timeout?: ReturnType<typeof setTimeout>;
+    interval?: ReturnType<typeof setInterval>;
+  }>({});
+  function stopHold() {
+    if (holdRef.current.timeout) clearTimeout(holdRef.current.timeout);
+    if (holdRef.current.interval) clearInterval(holdRef.current.interval);
+    holdRef.current = {};
+  }
+  // Filet de sécurité : un relâchement souris/tactile hors bouton stoppe la répétition.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stopHold ne touche que holdRef (stable) — écouteurs liés au montage
+  useEffect(() => {
+    window.addEventListener("mouseup", stopHold);
+    window.addEventListener("touchend", stopHold);
+    window.addEventListener("touchcancel", stopHold);
+    return () => {
+      window.removeEventListener("mouseup", stopHold);
+      window.removeEventListener("touchend", stopHold);
+      window.removeEventListener("touchcancel", stopHold);
+      stopHold();
+    };
+  }, []);
+  function stepStart(id: string, delta: number) {
+    if (ponctDuration >= ALLDAY_DURATION) return; // « journée entière » : pas d'heure
+    setSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        const m = (s.startTime || "09:00")
+          .trim()
+          .replace("h", ":")
+          .match(/^(\d{1,2}):(\d{1,2})$/);
+        let total = m ? Number.parseInt(m[1], 10) * 60 + Number.parseInt(m[2], 10) : 9 * 60;
+        total = (((total + delta) % 1440) + 1440) % 1440; // wrap [0..1439]
+        const start = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+        return { ...s, startTime: start, endTime: addMinutes(start, ponctDuration) };
+      }),
+    );
+  }
+  function startStepHold(id: string, delta: number, ev: React.MouseEvent | React.TouchEvent) {
+    ev.preventDefault();
+    stopHold();
+    stepStart(id, delta);
+    holdRef.current.timeout = setTimeout(() => {
+      holdRef.current.interval = setInterval(() => stepStart(id, delta), 80);
+    }, 400);
+  }
+
   // Passe une ligne en « journée entière » (efface début + fin, cf. legacy 🚫).
   function setAllDay(id: string) {
     update(id, { startTime: "", endTime: "" });
@@ -114,17 +160,40 @@ export function UniqueEditor({
     let lastDate = "";
     for (const s of slots) if (s.slotDate && s.slotDate > lastDate) lastDate = s.slotDate;
     const firstPeriod = data.periods[0];
-    const targetDate = lastDate || firstPeriod?.startDate || "";
+    let targetDate = lastDate || firstPeriod?.startDate || "";
+    const activeDays = activeDayKeys(data.service);
+    // Plages d'ouverture réelles du service (port legacy nextSlotForDate).
+    const ranges: [string, string][] = [
+      [data.service.morningStart, data.service.morningEnd],
+      [data.service.afternoonStart, data.service.afternoonEnd],
+    ];
     // Durée = 1 jour → créneau ponctuel « journée entière » : sans horaire.
     const allday = ponctDuration >= ALLDAY_DURATION;
-    const start = allday
-      ? ""
-      : minToTime(
-          nextSlotStart(
-            slots.filter((s) => s.slotDate === targetDate).map((s) => s.startTime),
-            ponctDuration,
-          ),
+    let start = "";
+    if (allday) {
+      // Journée entière : on avance au jour ouvré suivant si une date existe déjà.
+      if (lastDate) targetDate = nextWorkingDay(lastDate, activeDays);
+    } else if (lastDate) {
+      // Place dans les plages de la date courante ; si pleine, jour ouvré suivant
+      // (port legacy addSlotUniq). En dernier recours : ouverture du matin.
+      const freeStartOn = () =>
+        nextSlotInRanges(
+          slots
+            .filter((s) => s.slotDate === targetDate)
+            .map((s) => ({ startTime: s.startTime, endTime: s.endTime })),
+          ponctDuration,
+          ranges,
         );
+      let m = freeStartOn();
+      if (m == null) {
+        targetDate = nextWorkingDay(targetDate, activeDays);
+        m = freeStartOn();
+      }
+      start = m != null ? minToTime(m) : data.service.morningStart || "09:00";
+    } else {
+      // Première date : début = ouverture du matin (cf. legacy morningStart).
+      start = data.service.morningStart || "09:00";
+    }
     const id = newClientSlotId();
     setSlots((prev) => [
       ...prev,
@@ -132,7 +201,7 @@ export function UniqueEditor({
         id,
         slotDate: targetDate,
         startTime: start,
-        endTime: allday ? "" : addMinutes(start, ponctDuration),
+        endTime: start ? addMinutes(start, ponctDuration) : "",
         capacity: ponctCapacity,
         demandeurIds: [],
       },
@@ -236,7 +305,6 @@ export function UniqueEditor({
           <thead>
             <tr>
               <th className="col-check" style={{ width: 32 }} />
-              <th style={{ width: 52, textAlign: "center" }}>Semaine</th>
               <th style={{ width: 130, textAlign: "center" }}>Date</th>
               <th style={{ width: 80, textAlign: "center" }}>Début</th>
               <th style={{ width: 80, textAlign: "center" }}>Fin</th>
@@ -264,7 +332,6 @@ export function UniqueEditor({
                       onChange={(e) => toggle(sl.id, e.target.checked)}
                     />
                   </td>
-                  <td style={{ textAlign: "center" }}>{weekBadge(sl.slotDate)}</td>
                   <td style={{ textAlign: "center" }}>
                     <input
                       type="date"
@@ -312,6 +379,31 @@ export function UniqueEditor({
                             }
                             style={{ width: 58, fontSize: ".78rem", textAlign: "center" }}
                           />
+                          {/* Flèches ±15 min (port legacy _timeStepBtns). */}
+                          <span className="time-step-btns">
+                            <button
+                              type="button"
+                              className="time-step-btn"
+                              tabIndex={-1}
+                              disabled={disTime}
+                              onMouseDown={(e) => startStepHold(sl.id, 15, e)}
+                              onTouchStart={(e) => startStepHold(sl.id, 15, e)}
+                              onMouseLeave={stopHold}
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              className="time-step-btn"
+                              tabIndex={-1}
+                              disabled={disTime}
+                              onMouseDown={(e) => startStepHold(sl.id, -15, e)}
+                              onTouchStart={(e) => startStepHold(sl.id, -15, e)}
+                              onMouseLeave={stopHold}
+                            >
+                              ▼
+                            </button>
+                          </span>
                           {!disTime && (
                             <button
                               type="button"
@@ -383,7 +475,7 @@ export function UniqueEditor({
             {slots.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={6}
                   style={{ textAlign: "center", color: "var(--muted)", padding: ".6rem" }}
                 >
                   Aucun créneau ponctuel.
