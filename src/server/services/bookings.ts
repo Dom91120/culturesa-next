@@ -112,8 +112,26 @@ export async function createUniqueBooking(
         }
 
         const capacity = slot.capacity ?? slot.service.ponctCapacity;
-        const booked = await tx.booking.count({ where: { slotId: slot.id } });
-        if (booked >= capacity) {
+        // Capacité selon le mode jauge du service (même règle que l'affichage et les
+        // créneaux récurrents) : jauge = enfants + adultes ; hors jauge = 1 par réservation.
+        const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
+          where: { serviceId: slot.serviceId, jauge: true },
+          select: { serviceId: true },
+        }));
+        let used: number;
+        let mine: number;
+        if (gaugeOn) {
+          const agg = await tx.booking.aggregate({
+            where: { slotId: slot.id },
+            _sum: { enfants: true, accompagnants: true },
+          });
+          used = (agg._sum.enfants ?? 0) + (agg._sum.accompagnants ?? 0);
+          mine = input.enfants + input.accompagnants;
+        } else {
+          used = await tx.booking.count({ where: { slotId: slot.id } });
+          mine = 1;
+        }
+        if (used + mine > capacity) {
           throw new BookingError("Ce créneau est complet.");
         }
 

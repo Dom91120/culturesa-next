@@ -271,6 +271,9 @@ function ThemeField({
       rows={1}
       style={{ color: themeColor, WebkitTextFillColor: themeColor, fontSize: ".62rem" }}
       onMouseDown={(e) => e.stopPropagation()}
+      // Sans ça, le clic remonte au corps du badge (onBodyClick = action rapide) et
+      // empêche d'éditer le thème. stopPropagation → le clic ne fait que focus le champ.
+      onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Enter") {
@@ -593,9 +596,11 @@ function MineBadge({
         <span
           className="slot-icon"
           style={{
-            // Icône d'état des badges non-éditables (validé / en attente / à annuler) : .85rem.
-            fontSize: ".85rem",
+            // Icône d'état des badges non-éditables (validé / en attente / à annuler) : 18×18 px.
+            fontSize: 18,
             lineHeight: 1,
+            width: 18,
+            height: 18,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
@@ -605,7 +610,7 @@ function MineBadge({
         </span>
       )}
       {/* Libellé d'état (hors mode jauge éditable). */}
-      {!editable && (
+      {!editable && stateLabel && (
         <span
           className="slot-spots"
           style={{
@@ -1516,7 +1521,12 @@ export function UserAgendaGrid({
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
       const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.recurCapacity;
-      const used = list.reduce((sum, b) => sum + b.enfants, 0);
+      // Places occupées (même règle que l'agenda admin) : en mode jauge = enfants +
+      // adultes (accompagnants) ; hors jauge = 1 par réservation.
+      const used =
+        modes.gaugeRec || modes.gaugePonct
+          ? list.reduce((sum, b) => sum + b.enfants + b.accompagnants, 0)
+          : list.length;
       // Un bloc vide (used=0) n'est jamais "complet".
       const full = used >= capacity && used > 0;
       // biome-ignore lint/suspicious/noAssignInExpressions: init-or-push concis sur la map par jour
@@ -1574,6 +1584,8 @@ export function UserAgendaGrid({
     effectiveWeek,
     gridStartMin,
     service.recurCapacity,
+    modes.gaugeRec,
+    modes.gaugePonct,
   ]);
 
   function run(p: Promise<unknown>) {
@@ -2198,9 +2210,13 @@ export function UserAgendaGrid({
                   ? "Validé"
                   : isPonctuelCell
                     ? "En attente"
-                    : "★ vous";
-              // Place dispo pour CE booking = libre + ses propres enfants déjà comptés.
-              const remaining = Math.max(0, b.capacity - b.used + cur.enfants);
+                    : "";
+              // Place dispo pour CE booking = libre + sa propre occupation déjà comptée
+              // (enfants + adultes en jauge ; 1 réservation hors jauge).
+              const remaining = Math.max(
+                0,
+                b.capacity - b.used + (gaugeOn ? cur.enfants + cur.accompagnants : 1),
+              );
               // Infobulle (legacy) : horaire + état + semaine.
               const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
               const tipState = markedRemoval
@@ -2273,7 +2289,7 @@ export function UserAgendaGrid({
                   accompagnants={add.accompagnants}
                   theme={add.theme}
                   remaining={remaining}
-                  stateLabel={isPonctuelCell ? "En attente" : "★ vous"}
+                  stateLabel={isPonctuelCell ? "En attente" : ""}
                   title={
                     isRecurringModel
                       ? undefined

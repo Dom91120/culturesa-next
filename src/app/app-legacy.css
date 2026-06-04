@@ -323,7 +323,7 @@ header {
   display: flex;
   align-items: center;
   gap: .3rem;
-  padding: .4rem .8rem .4rem;
+  padding: .3rem .8rem .3rem;
   background: var(--surface2);
   border: 1px solid var(--surface);
   border-bottom: 1px solid var(--border);
@@ -636,7 +636,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
-  padding: .4rem .8rem .4rem;
+  padding: .3rem .8rem .3rem;
   font-family: inherit;
   font-size: .82rem;
   font-weight: 500;
@@ -678,7 +678,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
-  padding: .45rem 1rem .35rem;
+  padding: .3rem .8rem .3rem;
   font-family: inherit;
   font-size: .78rem;
   font-weight: 500;
@@ -2444,12 +2444,12 @@ textarea.theme-pending:focus::placeholder {
   transform: none;
 }
 .planning-stack-wrap .stack-back2 {
-  transform: translate(10px, 10px);
+  transform: translate(8px, 8px);
   z-index: 1;
   border-radius: 6px;
 }
 .planning-stack-wrap .stack-back {
-  transform: translate(5px, 5px);
+  transform: translate(4px, 4px);
   z-index: 2;
   background: var(--surface);
   border-radius: 6px;
@@ -2859,10 +2859,11 @@ textarea.theme-pending:focus::placeholder {
 
 .agenda-mode-toggles-wrap {
   display: flex;
-  align-items: end;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 1.7rem;
   flex-wrap: wrap;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: flex-end;
 }
 .agenda-mode-toggle {
   display: inline-flex;
@@ -3010,17 +3011,21 @@ textarea.theme-pending:focus::placeholder {
 .agenda-block {
   position: absolute;
   /* left & width sont injectés inline (layout multi-colonnes pour chevauchements) */
-  /* Couleur fixe pour tous les creneaux de l'agenda, quelle que soit la periode. */
-  --agenda-block-color: #ffff00;
+  /* Couleur fixe pour tous les creneaux de l'agenda, quelle que soit la periode.
+     #ffee24 (jaune légèrement plus dense que #ffff00) : la bordure ressort mieux. */
+  --agenda-block-color: #ffee24;
   --block-color: var(--agenda-block-color);
   border-radius: var(--rad-sm);
   background: color-mix(in srgb, var(--block-color) 25%, transparent);
   border-left: 3px dashed var(--block-color, var(--accent));
   border-top: 3px dashed var(--block-color);
-  padding: 3px 6px 3px 5px;
+  padding: 3px 7px;
   font-size: .68rem;
   color: var(--text);
-  overflow: hidden;
+  /* clip (et non hidden) + marge de débord : laisse la pastille compteur (top/right -4)
+     dépasser légèrement, tout en clippant le contenu des badges au-delà. */
+  overflow: clip;
+  overflow-clip-margin: 6px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3062,7 +3067,8 @@ textarea.theme-pending:focus::placeholder {
   gap: .35rem;
 }
 .agenda-legend-swatch {
-  --legend-color: #ffff00;
+  /* Même jaune que la bordure des créneaux récurrents (--agenda-block-color). */
+  --legend-color: #ffee24;
   display: inline-block;
   width: 30px;
   height: 20px;
@@ -3091,6 +3097,7 @@ textarea.theme-pending:focus::placeholder {
   bottom: 1px;
   left: 5px;
   font-size: .6rem;
+  font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -3133,6 +3140,9 @@ textarea.theme-pending:focus::placeholder {
   width: 100%;
   border-radius: 6px;
   overflow: hidden;
+  /* Hauteur réduite (44px global → 38px) pour gagner de la place dans l'agenda ;
+     overflow:hidden garde-fou anti-débordement. Agenda uniquement (override). */
+  height: 38px;
 }
 /* Stack : ombres (back / back2) et carte de devant suivent le meme rayon. */
 .agenda-block-chips .planning-stack-wrap .stack-back,
@@ -3141,23 +3151,15 @@ textarea.theme-pending:focus::placeholder {
   border-radius: 6px;
 }
 .agenda-block-chips .planning-name-tag > span {
-  line-height: 1.15;
+  line-height: 1.05;
 }
-/* Stack des multi-résa : scale dynamique exprimé en fonction de la largeur
-   réelle du badge via container queries (cqw = % de la largeur du conteneur).
-   - 100cqw = largeur du .planning-stack-wrap (= largeur du badge)
-   - scale(calc(1 - 6px / 100cqw))  = badge réduit de 6 px en largeur
-   - scale(calc(1 - 12px / 100cqw)) = badge réduit de 12 px en largeur
-   transform-origin: top left → le front s'aligne au bord gauche du chip
-   (comme un badge unique) et back/back2 s'étalent vers le bas-droite.
-   - Pile de 2 badges (.stack-back sans .stack-back2) :
-       front : scale(1 - 6/W), back : translate(6,6) scale(1 - 6/W)
-   - Pile de 3 badges (.stack-back2 présent) :
-       front : scale(1 - 12/W), back : translate(6,6) scale(1 - 12/W),
-       back2 : translate(12,12) scale(1 - 12/W) */
+/* Pile multi-résa de l'agenda : décalage simple aligné sur le système global
+   (.planning-stack-wrap), sans scale. Cf. règles .stack-back / .stack-back2 plus bas. */
 .agenda-block-chips .planning-stack-wrap {
-  transform: none;
-  container-type: inline-size;
+  /* Centrage horizontal : la pile déborde à DROITE (décalage du badge le plus profond
+     + ombre ~6px). On décale le wrap à gauche de la moitié pour équilibrer le débord :
+     -5px à 2 badges (back 4 + ombre 6 = 10, /2), -7px à 3 badges (back2 8 + 6 = 14, /2). */
+  transform: translateX(-5px);
   /* Largeur ≤ celle du parent (.agenda-block-chips). max-width + min-width:0
      évitent que le grid 1fr grossisse au-delà de la largeur du parent à cause
      du min-content de ses enfants (sans ça, le wrap pouvait déborder du bloc). */
@@ -3168,28 +3170,22 @@ textarea.theme-pending:focus::placeholder {
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
 }
+.agenda-block-chips .planning-stack-wrap:has(.stack-back2) {
+  transform: translateX(-7px);
+}
 .agenda-block-chips .planning-stack-wrap:hover {
-  transform: translate(0, -1px);
+  transform: translate(-5px, -1px);
 }
-.agenda-block-chips .planning-stack-wrap .stack-front,
-.agenda-block-chips .planning-stack-wrap .stack-back,
+.agenda-block-chips .planning-stack-wrap:has(.stack-back2):hover {
+  transform: translate(-7px, -1px);
+}
+/* Aligné sur le système global (.planning-stack-wrap) : décalage simple, sans scale.
+   back +4/+4px, back2 +8/+8px. */
+.agenda-block-chips .planning-stack-wrap .stack-back {
+  transform: translate(4px, 4px);
+}
 .agenda-block-chips .planning-stack-wrap .stack-back2 {
-  transform-origin: top left;
-}
-.agenda-block-chips .planning-stack-wrap:not(:has(.stack-back2)) .stack-front {
-  transform: scale(calc(1 - 6px / 100cqw));
-}
-.agenda-block-chips .planning-stack-wrap:not(:has(.stack-back2)) .stack-back {
-  transform: translate(6px, 6px) scale(calc(1 - 6px / 100cqw));
-}
-.agenda-block-chips .planning-stack-wrap:has(.stack-back2) .stack-front {
-  transform: scale(calc(1 - 12px / 100cqw));
-}
-.agenda-block-chips .planning-stack-wrap:has(.stack-back2) .stack-back {
-  transform: translate(6px, 6px) scale(calc(1 - 12px / 100cqw));
-}
-.agenda-block-chips .planning-stack-wrap:has(.stack-back2) .stack-back2 {
-  transform: translate(12px, 12px) scale(calc(1 - 12px / 100cqw));
+  transform: translate(8px, 8px);
 }
 
 .agenda-empty-overlay {

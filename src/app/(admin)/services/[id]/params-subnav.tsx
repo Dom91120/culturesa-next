@@ -8,6 +8,7 @@ type SubTab = { slug: string; label: string; icon: string };
 const SUB_TABS: SubTab[] = [
   { slug: "reservations", label: "Réservations", icon: "📝" },
   { slug: "periodes", label: "Périodes d'ouverture", icon: "🗓️" },
+  { slug: "config", label: "Configuration", icon: "✨" },
   { slug: "demandeurs", label: "Demandeurs", icon: "👥" },
   { slug: "themes", label: "Thèmes", icon: "🎨" },
   { slug: "exercice", label: "Changement d'exercice", icon: "🔄" },

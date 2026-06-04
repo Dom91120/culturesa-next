@@ -4,6 +4,7 @@ import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
+  copyWeekSlotsAction,
   createRecurringBookingAction,
   createRecurringSlotAction,
   createUniqueBookingAction,
@@ -13,8 +14,10 @@ import {
   moveBookingAction,
   moveRecurringSlotAction,
   moveUniqueSlotAction,
+  saveSlotConfigAction,
   setBookingPointageAction,
   setBookingValidatedAction,
+  setServiceDefaultCapacityAction,
   updateBookingDetailAction,
 } from "./actions";
 
@@ -27,6 +30,7 @@ type Service = {
   afternoonStart: string;
   afternoonEnd: string;
   recurCapacity: number;
+  ponctCapacity: number;
   semaineAb: boolean;
   themesMode: "libre" | "liste";
   openOnHolidays: boolean;
@@ -357,6 +361,8 @@ export function AgendaGrid({
   modes,
   exercices,
   showPrevious,
+  slotDemandeurs,
+  serviceDemandeurs,
 }: {
   service: Service;
   periods: Period[];
@@ -368,6 +374,9 @@ export function AgendaGrid({
   modes: ServiceModes;
   exercices: Exercice[];
   showPrevious: boolean;
+  // Demandeurs autorisés par créneau (slotId → ids) et liste des demandeurs du service.
+  slotDemandeurs: Record<string, number[]>;
+  serviceDemandeurs: { id: number; label: string }[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -376,7 +385,11 @@ export function AgendaGrid({
     exercices.length ? exercices[exercices.length - 1].id : null,
   );
   const [periodIdx, setPeriodIdx] = useState(0);
-  const [mode, setMode] = useState<"model" | "realweek">("model");
+  // Sans demandeur récurrent, le « Modèle de période » n'a pas de sens : on démarre
+  // (et on reste) en « Semaine réelle » — le bouton Modèle est masqué (cf. sélecteur).
+  const [mode, setMode] = useState<"model" | "realweek">(
+    modes.recurringMode ? "model" : "realweek",
+  );
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
   // Mode "Semaine réelle" : période active verrouillée. Sans ce verrou, on
   // re-dérive la période depuis la semaine à chaque ◀/▶ — et quand une semaine
@@ -390,6 +403,49 @@ export function AgendaGrid({
   // Mode « Création de créneau » : clic = créneau d'1 quart d'heure ; glisser
   // haut/bas = créneau de plusieurs quarts (validé au relâché). Cf. plus bas.
   const [creationMode, setCreationMode] = useState(false);
+  // Capacité appliquée aux créneaux créés en mode création (champ remplaçant la
+  // légende). Initialisée à la capacité par défaut du service.
+  // Capacité par défaut éditable PAR MODE, AUTOSAUVEGARDÉE dans le service :
+  // recurCapacity en Modèle de période, ponctCapacity en Semaine réelle.
+  const [recurCapStr, setRecurCapStr] = useState(String(service.recurCapacity));
+  const [ponctCapStr, setPonctCapStr] = useState(String(service.ponctCapacity));
+  const isModelMode = mode === "model";
+  const capStr = isModelMode ? recurCapStr : ponctCapStr;
+  const createCap = Math.max(
+    1,
+    Number.parseInt(capStr, 10) || (isModelMode ? service.recurCapacity : service.ponctCapacity),
+  );
+  const [capSaved, setCapSaved] = useState(false);
+  const capSaveTimer = useRef<number | null>(null);
+  const capFlashTimer = useRef<number | null>(null);
+  // Édition du champ Capacité : met à jour l'état du mode courant et autosauvegarde
+  // (débounce 500 ms) la capacité par défaut correspondante du service.
+  function onCapChange(v: string) {
+    const kind: "recur" | "ponct" = isModelMode ? "recur" : "ponct";
+    const fallback = isModelMode ? service.recurCapacity : service.ponctCapacity;
+    if (isModelMode) setRecurCapStr(v);
+    else setPonctCapStr(v);
+    setCapSaved(false);
+    if (capSaveTimer.current) window.clearTimeout(capSaveTimer.current);
+    capSaveTimer.current = window.setTimeout(() => {
+      const n = Math.max(1, Number.parseInt(v, 10) || fallback);
+      startTransition(async () => {
+        const res = await setServiceDefaultCapacityAction({
+          serviceId: service.id,
+          kind,
+          value: n,
+        });
+        if (res?.ok) {
+          setCapSaved(true);
+          if (capFlashTimer.current) window.clearTimeout(capFlashTimer.current);
+          capFlashTimer.current = window.setTimeout(() => setCapSaved(false), 1400);
+        }
+      });
+    }, 500);
+  }
+  // Demandeurs autorisés par défaut appliqués aux créneaux créés (vide = ouvert à tous).
+  const [createDemIds, setCreateDemIds] = useState<number[]>([]);
+  const [createDemModal, setCreateDemModal] = useState(false);
   // Glisser-créer en cours : top des colonnes (commun), quart de départ/courant (en
   // minutes, snappés), et jour de départ/courant (le glissé horizontal sélectionne
   // toutes les colonnes entre startDay et curDay → un créneau par colonne au relâché).
@@ -417,6 +473,36 @@ export function AgendaGrid({
     curDay: string;
   } | null>(null);
   const moveDragRef = useRef<typeof moveDrag>(null);
+  // Glisser-REDIMENSIONNER un créneau vide par une poignée de bord (mode création) :
+  // le bord opposé reste fixe (fixedMin), on étire le bord saisi jusqu'au quart sous
+  // le curseur (durée minimale d'un quart). Réutilise les actions de déplacement
+  // (même jour/date, horaires modifiés). Miroir dans resizeDragRef.
+  const [resizeDrag, setResizeDrag] = useState<{
+    slotId: string;
+    isUnique: boolean;
+    dayKey: string;
+    edge: "top" | "bottom";
+    fixedMin: number; // bord opposé, immobile
+    origStart: number;
+    origEnd: number;
+    colTop: number;
+    curStart: number;
+    curEnd: number;
+  } | null>(null);
+  const resizeDragRef = useRef<typeof resizeDrag>(null);
+  // Glisser-ÉTENDRE un créneau vide latéralement (mode création) : on saisit le bord
+  // gauche/droit et, en traversant les colonnes, on génère un créneau par jour couvert
+  // (même plage horaire) — comme le glisser-créer. Miroir dans hResizeDragRef.
+  const [hResizeDrag, setHResizeDrag] = useState<{
+    slotId: string;
+    isUnique: boolean;
+    startMin: number;
+    endMin: number;
+    edge: "left" | "right";
+    fromDay: string;
+    curDay: string;
+  } | null>(null);
+  const hResizeDragRef = useRef<typeof hResizeDrag>(null);
   const [detail, setDetail] = useState<Detail>(null);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
@@ -425,8 +511,17 @@ export function AgendaGrid({
   const [createCtx, setCreateCtx] = useState<CreateCtx>(null);
   const [cUser, setCUser] = useState("");
   const [cEnfants, setCEnfants] = useState("0");
+  const [cAccompagnants, setCAccompagnants] = useState("0");
   const [cTheme, setCTheme] = useState("");
   const [cError, setCError] = useState<string | null>(null);
+  // Modale « configuration de créneau » (mode création) : capacité + demandeurs autorisés.
+  const [capModal, setCapModal] = useState<{ slotId: string } | null>(null);
+  const [capValue, setCapValue] = useState("0");
+  const [capDemIds, setCapDemIds] = useState<number[]>([]);
+  const [capError, setCapError] = useState<string | null>(null);
+  const [capSaving, startCapSave] = useTransition();
+  // Distingue un clic (ouvre la modale) d'un glisser-déplacer terminé (ne l'ouvre pas).
+  const justMovedRef = useRef(false);
 
   const days = service.activeDays
     .split(",")
@@ -851,7 +946,9 @@ export function AgendaGrid({
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
       const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.recurCapacity;
-      const used = list.reduce((sum, b) => sum + b.enfants, 0);
+      // Jauge = enfants + adultes (accompagnants), comme la modale pile et le legacy
+      // _renderCsmCapInfo.
+      const used = list.reduce((sum, b) => sum + b.enfants + b.accompagnants, 0);
       // Un bloc vide (used=0) n'est jamais "complet".
       const full = used >= capacity && used > 0;
       // biome-ignore lint/suspicious/noAssignInExpressions: init-or-push concis sur la map par jour
@@ -941,6 +1038,26 @@ export function AgendaGrid({
     }
   }
 
+  // Mode création + Modèle de période + A/B : copie les créneaux récurrents de la
+  // semaine active vers l'autre (non destructif).
+  function copyWeek() {
+    if (mode !== "model" || !abMode || effectiveWeek == null) return;
+    if (effectivePeriodId == null || effectivePeriodId <= 0) return;
+    const from = effectiveWeek;
+    const to: "A" | "B" = from === "A" ? "B" : "A";
+    if (!window.confirm(`Copier les créneaux de la semaine ${from} vers la semaine ${to} ?`)) {
+      return;
+    }
+    run(
+      copyWeekSlotsAction({
+        serviceId: service.id,
+        periodId: effectivePeriodId,
+        fromWeek: from,
+        toWeek: to,
+      }),
+    );
+  }
+
   // ── Mode « Création de créneau » : géométrie + création ─────────────────────
   const minToHHMM = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -949,6 +1066,19 @@ export function AgendaGrid({
   function quarterAtY(colTop: number, clientY: number): number {
     const q = Math.floor(yToMin(clientY - colTop) / 15) * 15;
     return Math.max(gridStartMin, Math.min(gridEndMin - 15, q));
+  }
+
+  // Découpe une plage [s, e] en retirant la pause méridienne : un créneau ne peut pas
+  // chevaucher [lunchStart, lunchEnd]. Renvoie 0, 1 ou 2 segments :
+  //   - pas de pause / pas de chevauchement → [[s, e]] ;
+  //   - chevauche → la part matin [s, lunchStart] et/ou la part après-midi [lunchEnd, e] ;
+  //   - entièrement dans la pause → [] (rien à créer).
+  function lunchSplitSegments(s: number, e: number): [number, number][] {
+    if (!hasLunch || e <= lunchStart || s >= lunchEnd) return [[s, e]];
+    const segs: [number, number][] = [];
+    if (s < lunchStart) segs.push([s, lunchStart]);
+    if (e > lunchEnd) segs.push([lunchEnd, e]);
+    return segs;
   }
 
   // mousedown sur une colonne en mode création : démarre un glisser-créer, mais
@@ -968,23 +1098,28 @@ export function AgendaGrid({
 
   // Colonnes (jours) couvertes par le glisser : plage contiguë de startDay à curDay
   // dans l'ordre d'affichage, hors jours fermés.
-  function draggedDays(cd: NonNullable<typeof createDrag>): string[] {
-    const i = days.indexOf(cd.startDay);
-    const j = days.indexOf(cd.curDay);
+  function daysSpan(startDay: string, curDay: string): string[] {
+    const i = days.indexOf(startDay);
+    const j = days.indexOf(curDay);
     if (i < 0) return [];
     const [lo, hi] = j < 0 || i <= j ? [i, j < 0 ? i : j] : [j, i];
     return days.slice(lo, hi + 1).filter((d) => !isDayDisabled(d));
+  }
+  function draggedDays(cd: NonNullable<typeof createDrag>): string[] {
+    return daysSpan(cd.startDay, cd.curDay);
   }
 
   // Au relâché : UN créneau par colonne couverte, couvrant [start, max+15] (clic
   // simple = 1 quart, 1 colonne). Récurrent en Modèle de période (période + jour +
   // semaine A/B active), ponctuel daté en Semaine réelle. Capacité = recurCapacity.
   function finalizeCreate(cd: NonNullable<typeof createDrag>) {
-    const startMin = Math.min(cd.startMin, cd.curMin);
-    const endMin = Math.min(gridEndMin, Math.max(cd.startMin, cd.curMin) + 15);
-    if (endMin <= startMin) return;
-    const startTime = minToHHMM(startMin);
-    const endTime = minToHHMM(endMin);
+    const rawStart = Math.min(cd.startMin, cd.curMin);
+    const rawEnd = Math.min(gridEndMin, Math.max(cd.startMin, cd.curMin) + 15);
+    if (rawEnd <= rawStart) return;
+    // La pause méridienne découpe la sélection : 1 créneau par segment hors pause
+    // (2 si la sélection déborde de part et d'autre, 0 si elle est dans la pause).
+    const segments = lunchSplitSegments(rawStart, rawEnd).filter(([s, e]) => e > s);
+    if (!segments.length) return;
     const targets = draggedDays(cd);
     if (!targets.length) return;
     if (mode === "model") {
@@ -992,16 +1127,19 @@ export function AgendaGrid({
       const weeks = abMode && effectiveWeek ? effectiveWeek : "A,B";
       run(
         Promise.all(
-          targets.map((dayKey) =>
-            createRecurringSlotAction({
-              serviceId: service.id,
-              periodId: effectivePeriodId,
-              dayKey,
-              startTime,
-              endTime,
-              weeks,
-              capacity: service.recurCapacity,
-            }),
+          targets.flatMap((dayKey) =>
+            segments.map(([s, e]) =>
+              createRecurringSlotAction({
+                serviceId: service.id,
+                periodId: effectivePeriodId,
+                dayKey,
+                startTime: minToHHMM(s),
+                endTime: minToHHMM(e),
+                weeks,
+                capacity: createCap,
+                demandeurIds: createDemIds,
+              }),
+            ),
           ),
         ),
       );
@@ -1009,14 +1147,17 @@ export function AgendaGrid({
       if (!mondayStr) return;
       run(
         Promise.all(
-          targets.map((dayKey) =>
-            createUniqueSlotAction({
-              serviceId: service.id,
-              slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
-              startTime,
-              endTime,
-              capacity: service.recurCapacity,
-            }),
+          targets.flatMap((dayKey) =>
+            segments.map(([s, e]) =>
+              createUniqueSlotAction({
+                serviceId: service.id,
+                slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
+                startTime: minToHHMM(s),
+                endTime: minToHHMM(e),
+                capacity: createCap,
+                demandeurIds: createDemIds,
+              }),
+            ),
           ),
         ),
       );
@@ -1064,10 +1205,46 @@ export function AgendaGrid({
     run(deleteSlotAction(service.id, slotId));
   }
 
+  // Ouvre la modale de configuration d'un créneau (capacité + demandeurs autorisés),
+  // pré-remplie depuis les données du créneau cliqué.
+  function openCapModal(slotId: string) {
+    const slot =
+      slots.find((s) => s.id === slotId) ?? uniqueSlots.find((s) => s.id === slotId) ?? null;
+    setCapValue(String(slot?.capacity ?? service.recurCapacity));
+    setCapDemIds(slotDemandeurs[slotId] ?? []);
+    setCapError(null);
+    setCapModal({ slotId });
+  }
+
+  function submitCapConfig() {
+    if (!capModal) return;
+    const capacity = Number.parseInt(capValue, 10);
+    if (!Number.isFinite(capacity) || capacity < 0) {
+      setCapError("Capacité invalide.");
+      return;
+    }
+    setCapError(null);
+    startCapSave(async () => {
+      const res = await saveSlotConfigAction({
+        serviceId: service.id,
+        slotId: capModal.slotId,
+        capacity,
+        demandeurIds: capDemIds,
+      });
+      if (res && !res.ok) {
+        setCapError(res.error ?? "Échec de l'enregistrement.");
+        return;
+      }
+      setCapModal(null);
+      router.refresh();
+    });
+  }
+
   // ── Mode création : glisser-DÉPLACER un créneau vide ────────────────────────
   // Démarre sur le corps d'un bloc vide (× et badges gérés à part). Le créneau suit
   // le curseur (haut du bloc = quart sous le curseur), durée préservée.
   function onMoveSlotMouseDown(e: React.MouseEvent, b: Block) {
+    justMovedRef.current = false; // nouvelle interaction : on repart d'un « pas déplacé »
     if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
     if (isDayDisabled(b.dayKey)) return;
     if ((e.target as HTMLElement).closest("button")) return; // ne pas gêner la croix ×
@@ -1154,8 +1331,12 @@ export function AgendaGrid({
       const md = moveDragRef.current;
       moveDragRef.current = null;
       setMoveDrag(null);
-      // Pas de no-op : on ne déplace que si jour ou début a changé.
-      if (md && (md.curDay !== md.fromDay || md.curMin !== md.origMin)) finalizeMove(md);
+      // Pas de no-op : on ne déplace que si jour ou début a changé. Si déplacé, on
+      // marque le coup pour que le clic qui suit n'ouvre pas la modale de config.
+      if (md && (md.curDay !== md.fromDay || md.curMin !== md.origMin)) {
+        finalizeMove(md);
+        justMovedRef.current = true;
+      }
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -1164,6 +1345,203 @@ export function AgendaGrid({
       window.removeEventListener("mouseup", onUp);
     };
   }, [moveDrag !== null]);
+
+  // ── Mode création : glisser-REDIMENSIONNER un créneau vide par un bord ───────
+  // Poignée haut/bas sur un bloc vide. Le bord opposé reste fixe ; on étire jusqu'au
+  // quart sous le curseur (durée minimale d'un quart). Validé au relâché.
+  function onResizeSlotMouseDown(e: React.MouseEvent, b: Block, edge: "top" | "bottom") {
+    if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
+    if (isDayDisabled(b.dayKey)) return;
+    justMovedRef.current = true; // redimensionnement → le clic résiduel n'ouvre pas la modale
+    e.stopPropagation(); // n'amorce ni un glisser-déplacer ni un glisser-créer
+    e.preventDefault();
+    const colTop = (e.currentTarget as HTMLElement)
+      .closest<HTMLElement>(".agenda-day-col")
+      ?.getBoundingClientRect().top;
+    if (colTop == null) return;
+    const rd = {
+      slotId: b.slotId,
+      isUnique: uniqueIdSet.has(b.slotId),
+      dayKey: b.dayKey,
+      edge,
+      fixedMin: edge === "top" ? b.endMin : b.startMin,
+      origStart: b.startMin,
+      origEnd: b.endMin,
+      colTop,
+      curStart: b.startMin,
+      curEnd: b.endMin,
+    };
+    resizeDragRef.current = rd;
+    setResizeDrag(rd);
+  }
+
+  // Au relâché : applique les nouveaux horaires (même jour/date) via les actions de
+  // déplacement. Récurrent → jour identique ; ponctuel → même date.
+  function finalizeResize(rd: NonNullable<typeof resizeDrag>) {
+    const startTime = minToHHMM(rd.curStart);
+    const endTime = minToHHMM(rd.curEnd);
+    if (rd.isUnique) {
+      if (!mondayStr) return;
+      run(
+        moveUniqueSlotAction({
+          serviceId: service.id,
+          slotId: rd.slotId,
+          slotDate: ymd(addDays(mondayStr, DAY_OFFSET[rd.dayKey] ?? 0)),
+          startTime,
+          endTime,
+        }),
+      );
+    } else {
+      run(
+        moveRecurringSlotAction({
+          serviceId: service.id,
+          slotId: rd.slotId,
+          fromDayKey: rd.dayKey,
+          toDayKey: rd.dayKey,
+          startTime,
+          endTime,
+        }),
+      );
+    }
+  }
+
+  // Écouteurs window pendant le glisser-redimensionner (même schéma que déplacer).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lit resizeDragRef (stable) ; (dé)branché sur l'activité du drag
+  useEffect(() => {
+    if (!resizeDrag) return;
+    const onMove = (e: MouseEvent) => {
+      const rd = resizeDragRef.current;
+      if (!rd) return;
+      const q = quarterAtY(rd.colTop, e.clientY);
+      let curStart = rd.curStart;
+      let curEnd = rd.curEnd;
+      if (rd.edge === "top") {
+        // Bord haut : début = quart sous le curseur, au plus fixedMin − 15.
+        curStart = Math.max(gridStartMin, Math.min(q, rd.fixedMin - 15));
+        curEnd = rd.fixedMin;
+      } else {
+        // Bord bas : fin = quart sous le curseur + 15, au moins fixedMin + 15.
+        curStart = rd.fixedMin;
+        curEnd = Math.min(gridEndMin, Math.max(q + 15, rd.fixedMin + 15));
+      }
+      if (curStart !== rd.curStart || curEnd !== rd.curEnd) {
+        const next = { ...rd, curStart, curEnd };
+        resizeDragRef.current = next;
+        setResizeDrag(next);
+      }
+    };
+    const onUp = () => {
+      const rd = resizeDragRef.current;
+      resizeDragRef.current = null;
+      setResizeDrag(null);
+      if (rd && (rd.curStart !== rd.origStart || rd.curEnd !== rd.origEnd)) finalizeResize(rd);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [resizeDrag !== null]);
+
+  // ── Mode création : glisser-ÉTENDRE un créneau vide latéralement (gauche/droite) ──
+  // Poignée gauche/droite sur un bloc vide. En traversant les colonnes, on prépare un
+  // créneau par jour couvert (même plage horaire que la source). Validé au relâché.
+  function onResizeSlotMouseDownH(e: React.MouseEvent, b: Block, edge: "left" | "right") {
+    if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
+    if (isDayDisabled(b.dayKey)) return;
+    justMovedRef.current = true; // extension latérale → le clic résiduel n'ouvre pas la modale
+    e.stopPropagation(); // n'amorce ni déplacer, ni créer, ni redimensionner vertical
+    e.preventDefault();
+    const hd = {
+      slotId: b.slotId,
+      isUnique: uniqueIdSet.has(b.slotId),
+      startMin: b.startMin,
+      endMin: b.endMin,
+      edge,
+      fromDay: b.dayKey,
+      curDay: b.dayKey,
+    };
+    hResizeDragRef.current = hd;
+    setHResizeDrag(hd);
+  }
+
+  // Au relâché : crée un créneau (même horaire) dans chaque colonne couverte hormis la
+  // source. Récurrent en Modèle de période, ponctuel daté en Semaine réelle.
+  function finalizeHResize(hd: NonNullable<typeof hResizeDrag>) {
+    const targets = daysSpan(hd.fromDay, hd.curDay).filter((d) => d !== hd.fromDay);
+    if (!targets.length) return;
+    const startTime = minToHHMM(hd.startMin);
+    const endTime = minToHHMM(hd.endMin);
+    if (hd.isUnique) {
+      if (!mondayStr) return;
+      run(
+        Promise.all(
+          targets.map((dayKey) =>
+            createUniqueSlotAction({
+              serviceId: service.id,
+              slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
+              startTime,
+              endTime,
+              capacity: createCap,
+              demandeurIds: createDemIds,
+            }),
+          ),
+        ),
+      );
+    } else {
+      if (effectivePeriodId == null || effectivePeriodId <= 0) return;
+      const weeks = abMode && effectiveWeek ? effectiveWeek : "A,B";
+      run(
+        Promise.all(
+          targets.map((dayKey) =>
+            createRecurringSlotAction({
+              serviceId: service.id,
+              periodId: effectivePeriodId,
+              dayKey,
+              startTime,
+              endTime,
+              weeks,
+              capacity: createCap,
+              demandeurIds: createDemIds,
+            }),
+          ),
+        ),
+      );
+    }
+  }
+
+  // Écouteurs window pendant le glisser-étendre : suit la colonne survolée puis valide.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lit hResizeDragRef (stable) ; (dé)branché sur l'activité du drag
+  useEffect(() => {
+    if (!hResizeDrag) return;
+    const onMove = (e: MouseEvent) => {
+      const hd = hResizeDragRef.current;
+      if (!hd) return;
+      const colEl = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest<HTMLElement>("[data-daykey]");
+      const dk = colEl?.dataset.daykey;
+      const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : hd.curDay;
+      if (curDay !== hd.curDay) {
+        const next = { ...hd, curDay };
+        hResizeDragRef.current = next;
+        setHResizeDrag(next);
+      }
+    };
+    const onUp = () => {
+      const hd = hResizeDragRef.current;
+      hResizeDragRef.current = null;
+      setHResizeDrag(null);
+      if (hd && hd.curDay !== hd.fromDay) finalizeHResize(hd);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [hResizeDrag !== null]);
 
   // Clic rapide sur un bloc en mode validation / pointage (sinon : ouvre le menu).
   function onBlockQuickAction(bk: Booking): boolean {
@@ -1288,6 +1666,7 @@ export function AgendaGrid({
   function openCreate(dayKey: string, slotId: string, ponctuel = false, slotDate?: string) {
     setCUser("");
     setCEnfants("0");
+    setCAccompagnants("0");
     setCTheme("");
     setCError(null);
     setCreateCtx({ dayKey, slotId, ponctuel, slotDate });
@@ -1308,6 +1687,7 @@ export function AgendaGrid({
           slotId,
           userId: cUser,
           enfants: Number(cEnfants) || 0,
+          accompagnants: Number(cAccompagnants) || 0,
           theme: cTheme,
         });
         if (!res.ok) {
@@ -1333,6 +1713,7 @@ export function AgendaGrid({
         dayKey: createCtx.dayKey,
         userId: cUser,
         enfants: Number(cEnfants) || 0,
+        accompagnants: Number(cAccompagnants) || 0,
         theme: cTheme,
         week: effectiveWeek ?? "",
       });
@@ -1373,6 +1754,12 @@ export function AgendaGrid({
     // vert < 70 %, orange ≥ 70 %, rouge à 100 %. Indépendant de la couleur du
     // créneau (jaune/vert), qui ne varie plus.
     const fillColor = pct >= 100 ? "var(--danger)" : pct >= 70 ? "#e8a45a" : "var(--accent)";
+    // Mode NON-jauge : le compteur reflète le NOMBRE de réservations (1 par résa),
+    // indépendamment du nombre d'enfants/adultes. Couleur selon ce ratio.
+    const count = b.bookings.length;
+    const countPct = Math.min(100, b.capacity > 0 ? (count / b.capacity) * 100 : 0);
+    const countColor =
+      countPct >= 100 ? "var(--danger)" : countPct >= 70 ? "#e8a45a" : "var(--accent)";
     const posStyle: React.CSSProperties = allday
       ? {}
       : (() => {
@@ -1414,14 +1801,24 @@ export function AgendaGrid({
           // Mode création : créneau vide déplaçable (curseur move) ; bloc en cours
           // de déplacement estompé.
           ...(creationMode && b.bookings.length === 0 && !allday ? { cursor: "move" } : {}),
-          ...(moveDrag?.slotId === b.slotId ? { opacity: 0.35 } : {}),
+          ...(moveDrag?.slotId === b.slotId || resizeDrag?.slotId === b.slotId
+            ? { opacity: 0.35 }
+            : {}),
         }}
         onMouseDown={(e) => onMoveSlotMouseDown(e, b)}
         onClick={(e) => {
           // Clic sur la zone vide du créneau → nouvelle réservation.
           e.stopPropagation();
-          // Mode création : le bloc ne crée pas de réservation (× = supprimer).
-          if (creationMode) return;
+          // Mode création : le bloc ne crée pas de réservation (× = supprimer). Un clic
+          // (pas un glisser-déplacer) ouvre la modale de configuration du créneau.
+          if (creationMode) {
+            if (justMovedRef.current) {
+              justMovedRef.current = false;
+              return;
+            }
+            openCapModal(b.slotId);
+            return;
+          }
           // Créneau ponctuel : ouvre la création d'une réservation ponctuelle.
           if (uniqueIdSet.has(b.slotId)) {
             const u = uniqueSlots.find((s) => s.id === b.slotId);
@@ -1444,6 +1841,68 @@ export function AgendaGrid({
           run(moveBookingAction(id, service.id, b.dayKey, b.slotId));
         }}
       >
+        {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
+          vide. Curseur ns-resize au survol ; le mousedown amorce le glisser-étirer
+          (stopPropagation → n'amorce ni déplacer ni créer). */}
+        {creationMode && b.bookings.length === 0 && !allday && (
+          <>
+            <div
+              title="Étirer le créneau"
+              onMouseDown={(e) => onResizeSlotMouseDown(e, b, "top")}
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: 0,
+                height: 7,
+                cursor: "ns-resize",
+                zIndex: 3,
+              }}
+            />
+            <div
+              title="Étirer le créneau"
+              onMouseDown={(e) => onResizeSlotMouseDown(e, b, "bottom")}
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 7,
+                cursor: "ns-resize",
+                zIndex: 3,
+              }}
+            />
+            {/* Poignées gauche/droite : étendre le créneau aux colonnes voisines (un
+              créneau par jour couvert). Bande centrale (top/bottom 7px) pour laisser
+              les coins aux poignées verticales. */}
+            <div
+              title="Étendre aux jours voisins"
+              onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "left")}
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 7,
+                bottom: 7,
+                width: 7,
+                cursor: "ew-resize",
+                zIndex: 3,
+              }}
+            />
+            <div
+              title="Étendre aux jours voisins"
+              onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "right")}
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 7,
+                bottom: 7,
+                width: 7,
+                cursor: "ew-resize",
+                zIndex: 3,
+              }}
+            />
+          </>
+        )}
         {/* Badges centrés via le parent .agenda-block (justify-content:center).
           Le chips ne grandit pas pour que le centrage opère ; la jauge est
           sortie du flux (position absolue en bas). */}
@@ -1515,6 +1974,15 @@ export function AgendaGrid({
             <div
               className="planning-stack-wrap"
               title={`${b.bookings.length} réservations — cliquer pour voir la liste`}
+              style={{
+                // La pile a une hauteur de mise en page d'un seul badge (44px), mais
+                // l'empilement déborde dessous : badge le plus profond décalé de +8px
+                // (3+ résas, .stack-back2) ou +4px (2 résas, .stack-back), plus son ombre
+                // (offset 2 + blur 4 ≈ 6px). On réserve ce débordement sous la pile pour
+                // que le centrage vertical tienne compte de la pile entière (pastille
+                // exclue, son débordement en haut n'est volontairement pas compensé).
+                marginBottom: (b.bookings.length >= 3 ? 8 : 4) + 6,
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 setStackKey({ slotId: b.slotId, dayKey: b.dayKey });
@@ -1536,9 +2004,11 @@ export function AgendaGrid({
                         de la pile (cf. legacy), pas seulement dans la modale. */}
                     <PointagePill pointage={bk.pointage} />
                     {(bk.structure || bk.demandeur) && (
-                      <span style={{ fontWeight: 700 }}>{bk.structure || bk.demandeur}</span>
+                      <span style={{ fontSize: ".62rem", fontWeight: 700 }}>
+                        {bk.structure || bk.demandeur}
+                      </span>
                     )}
-                    <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>{bk.name}</span>
+                    <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>{bk.name}</span>
                     {modes.themeMode && bk.theme && (
                       <span
                         style={{
@@ -1578,6 +2048,11 @@ export function AgendaGrid({
                     position: "relative",
                     opacity: draggingId === bk.id ? 0.4 : 1,
                     cursor: quickActive ? "pointer" : locked ? "default" : "grab",
+                    // L'ombre portée (box-shadow 2px 2px 4px) déborde sous le badge sans
+                    // occuper de hauteur en flux : on réserve l'extent de l'ombre (offset 2
+                    // + blur 4 = 6px) afin que le centrage vertical (justify-content du
+                    // créneau) tienne compte de l'ombre, plutôt que de centrer la seule boîte.
+                    marginBottom: 6,
                   }}
                   title={`${bk.demandeur} — ${bk.name}`}
                   onDragStart={
@@ -1598,8 +2073,10 @@ export function AgendaGrid({
                   }}
                 >
                   <PointagePill pointage={bk.pointage} />
-                  {primaryLabel && <span style={{ fontWeight: 700 }}>{primaryLabel}</span>}
-                  <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>{bk.name}</span>
+                  {primaryLabel && (
+                    <span style={{ fontSize: ".62rem", fontWeight: 700 }}>{primaryLabel}</span>
+                  )}
+                  <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>{bk.name}</span>
                   {modes.themeMode && bk.theme && (
                     <span style={{ fontSize: ".62rem", fontWeight: 600, color: accentColor }}>
                       {bk.theme}
@@ -1617,7 +2094,7 @@ export function AgendaGrid({
               className="agenda-block-meta is-gauge"
               style={{
                 position: "absolute",
-                bottom: 1,
+                bottom: 0,
                 left: 4,
                 display: "flex",
                 alignItems: "center",
@@ -1634,9 +2111,9 @@ export function AgendaGrid({
           ) : (
             <div
               className="agenda-block-meta"
-              style={{ position: "absolute", bottom: 1, left: 4, color: fillColor }}
+              style={{ position: "absolute", bottom: 0, left: 4, color: countColor }}
             >
-              {b.used}/{b.capacity}
+              {count}/{b.capacity}
             </div>
           ))}
       </div>
@@ -1724,18 +2201,22 @@ export function AgendaGrid({
             </button>
           </div>
         )}
-        {/* Sélecteurs empilés (cf. legacy .agenda-mode-toggles-wrap, colonne,
-            alignés à droite) : Modèle/Semaine réelle, puis EN DESSOUS le toggle
-            Semaine A/B en mode modèle, ou l'indicateur de semaine en semaine réelle. */}
+        {/* Sélecteurs sur une même ligne (alignés à droite) : Modèle/Semaine réelle,
+            puis À DROITE le toggle Semaine A/B en mode modèle, ou l'indicateur de
+            semaine en semaine réelle. */}
         <div className="agenda-mode-toggles-wrap">
           <div className="agenda-mode-toggle" role="tablist" aria-label="Mode d&apos;affichage">
-            <button
-              type="button"
-              className={`agenda-mode-btn${mode === "model" ? " active" : ""}`}
-              onClick={() => setMode("model")}
-            >
-              Modèle de période
-            </button>
+            {/* « Modèle de période » n'a de sens qu'avec au moins un demandeur récurrent ;
+                sinon on masque ce demi-sélecteur (la vue reste en « Semaine réelle »). */}
+            {modes.recurringMode && (
+              <button
+                type="button"
+                className={`agenda-mode-btn${mode === "model" ? " active" : ""}`}
+                onClick={() => setMode("model")}
+              >
+                Modèle de période
+              </button>
+            )}
             <button
               type="button"
               className={`agenda-mode-btn${mode === "realweek" ? " active" : ""}`}
@@ -1745,21 +2226,25 @@ export function AgendaGrid({
             </button>
           </div>
           {abMode && mode === "model" && (
-            <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
-              <button
-                type="button"
-                className={`agenda-mode-btn${weekAB === "A" ? " active" : ""}`}
-                onClick={() => setWeekAB("A")}
-              >
-                Semaine A
-              </button>
-              <button
-                type="button"
-                className={`agenda-mode-btn${weekAB === "B" ? " active" : ""}`}
-                onClick={() => setWeekAB("B")}
-              >
-                Semaine B
-              </button>
+            // « Semaine » en libellé devant le toggle A / B (boutons réduits à A et B).
+            <div style={{ display: "flex", alignItems: "center", gap: ".3rem" }}>
+              <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>Semaine</span>
+              <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
+                <button
+                  type="button"
+                  className={`agenda-mode-btn${weekAB === "A" ? " active" : ""}`}
+                  onClick={() => setWeekAB("A")}
+                >
+                  A
+                </button>
+                <button
+                  type="button"
+                  className={`agenda-mode-btn${weekAB === "B" ? " active" : ""}`}
+                  onClick={() => setWeekAB("B")}
+                >
+                  B
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1809,59 +2294,221 @@ export function AgendaGrid({
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-          <div
-            className="planning-options-row"
-            style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
-          >
-            <label className="planning-option">
-              Masquer les horaires sans réservation
+          {/* En mode création, les cases (Masquer horaires / Mode validation / pointage)
+              laissent place au champ « Capacité » appliqué aux créneaux créés. */}
+          {creationMode ? (
+            <div style={{ display: "flex", alignItems: "center", gap: ".45rem" }}>
+              <label
+                htmlFor="create-cap"
+                style={{
+                  fontSize: ".72rem",
+                  fontWeight: 600,
+                  color: "var(--muted)",
+                  textTransform: "none",
+                  letterSpacing: "normal",
+                }}
+              >
+                Capacité
+              </label>
               <input
-                type="checkbox"
-                checked={hideEmpty}
-                onChange={(e) => setHideEmpty(e.target.checked)}
+                id="create-cap"
+                type="number"
+                min={1}
+                title="Capacité par défaut"
+                value={capStr}
+                onChange={(e) => onCapChange(e.target.value)}
+                style={{
+                  width: 46,
+                  fontSize: ".72rem",
+                  padding: ".12rem .3rem",
+                  background: "var(--surface2)",
+                  color: "var(--text)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--rad-sm)",
+                }}
               />
-            </label>
-            <div style={{ display: "flex", gap: ".6rem", alignItems: "center" }}>
+              <span
+                style={{
+                  fontSize: ".7rem",
+                  color: "var(--accent)",
+                  opacity: capSaved ? 1 : 0,
+                  transition: "opacity .2s",
+                }}
+              >
+                ✓
+              </span>
+              {/* 👥 : demandeurs autorisés par défaut des créneaux créés (modale). */}
+              <button
+                type="button"
+                onClick={() => setCreateDemModal(true)}
+                title="Demandeurs autorisés par défaut"
+                style={{
+                  background: createDemIds.length ? "var(--accent-dim)" : "none",
+                  border: `1px solid ${createDemIds.length ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: "var(--rad-sm)",
+                  // Même hauteur que le bouton « Mode création » (padding .28rem + icône 15px).
+                  padding: ".28rem .38rem",
+                  cursor: "pointer",
+                  color: createDemIds.length ? "var(--accent)" : "var(--muted)",
+                  fontSize: 15,
+                  lineHeight: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: ".15rem",
+                  marginLeft: ".4rem",
+                }}
+              >
+                👥
+                {createDemIds.length > 0 && (
+                  <span style={{ fontSize: ".6rem", fontWeight: 700 }}>{createDemIds.length}</span>
+                )}
+              </button>
+              {/* Copie des créneaux d'une semaine A/B vers l'autre (Modèle + A/B). */}
+              {abMode &&
+                mode === "model" &&
+                effectiveWeek != null &&
+                effectivePeriodId != null &&
+                effectivePeriodId > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={copyWeek}
+                    title={`Copier les créneaux de la semaine ${effectiveWeek} vers la semaine ${effectiveWeek === "A" ? "B" : "A"}`}
+                    style={{
+                      fontSize: ".68rem",
+                      height: 25.55,
+                      padding: "0 .5rem",
+                      marginLeft: ".4rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      lineHeight: 1,
+                    }}
+                  >
+                    Copier → {effectiveWeek === "A" ? "B" : "A"}
+                  </button>
+                )}
+            </div>
+          ) : (
+            <div
+              className="planning-options-row"
+              style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
+            >
               <label className="planning-option">
-                Mode validation
+                Masquer les horaires sans réservation
                 <input
                   type="checkbox"
-                  checked={validation}
-                  onChange={(e) => toggleValidation(e.target.checked)}
+                  checked={hideEmpty}
+                  onChange={(e) => setHideEmpty(e.target.checked)}
                 />
               </label>
-              {mode === "realweek" && (
+              <div style={{ display: "flex", gap: ".6rem", alignItems: "center" }}>
                 <label className="planning-option">
-                  Mode pointage
+                  Mode validation
                   <input
                     type="checkbox"
-                    checked={pointageMode}
-                    onChange={(e) => togglePointageMode(e.target.checked)}
+                    checked={validation}
+                    onChange={(e) => toggleValidation(e.target.checked)}
                   />
                 </label>
-              )}
-              <label className="planning-option">
-                Création de créneau
-                <input
-                  type="checkbox"
-                  checked={creationMode}
-                  onChange={(e) => toggleCreationMode(e.target.checked)}
-                />
-              </label>
+                {mode === "realweek" && (
+                  <label className="planning-option">
+                    Mode pointage
+                    <input
+                      type="checkbox"
+                      checked={pointageMode}
+                      onChange={(e) => togglePointageMode(e.target.checked)}
+                    />
+                  </label>
+                )}
+              </div>
             </div>
-          </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            {/* Boutons d'impression masqués en mode création. */}
+            {!creationMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => printAgenda(true)}
+                  title="Imprimer en noir & blanc"
+                  style={{
+                    background: "none",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--rad-sm)",
+                    padding: ".28rem .38rem",
+                    cursor: "pointer",
+                    color: "var(--muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <title>Imprimer N&amp;B</title>
+                    <polyline points="6 9 6 2 18 2 18 9" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => printAgenda(false)}
+                  title="Imprimer en couleur"
+                  style={{
+                    background: "none",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--rad-sm)",
+                    padding: ".28rem .38rem",
+                    cursor: "pointer",
+                    color: "var(--accent)",
+                    display: "flex",
+                    alignItems: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <title>Imprimer couleur</title>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" />
+                    <rect x="6" y="14" width="12" height="8" rx="1" />
+                  </svg>
+                </button>
+              </>
+            )}
             <button
               type="button"
-              onClick={() => printAgenda(true)}
-              title="Imprimer en noir & blanc"
+              onClick={() => toggleCreationMode(!creationMode)}
+              title="Mode création"
+              aria-pressed={creationMode}
               style={{
-                background: "none",
-                border: "1px solid var(--border)",
+                background: creationMode ? "var(--danger)" : "none",
+                border: `1px solid ${creationMode ? "var(--danger)" : "var(--border)"}`,
                 borderRadius: "var(--rad-sm)",
                 padding: ".28rem .38rem",
                 cursor: "pointer",
-                color: "var(--muted)",
+                color: creationMode ? "var(--accent-contrast, #fff)" : "var(--danger)",
                 display: "flex",
                 alignItems: "center",
                 lineHeight: 1,
@@ -1879,44 +2526,9 @@ export function AgendaGrid({
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <title>Imprimer N&amp;B</title>
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => printAgenda(false)}
-              title="Imprimer en couleur"
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--accent)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <title>Imprimer couleur</title>
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" />
-                <rect x="6" y="14" width="12" height="8" rx="1" />
+                <title>Mode création</title>
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                <path d="m15 5 4 4" />
               </svg>
             </button>
           </div>
@@ -2059,7 +2671,8 @@ export function AgendaGrid({
                 // masque les créneaux vides pour ne pas écraser la grille (cf. legacy).
                 .filter((b) => !b.isAllDay && (!hideEmpty || b.bookings.length > 0))
                 .map((b) => renderBlock(b, false))}
-              {/* Aperçu du créneau en cours de création (glisser-créer). */}
+              {/* Aperçu du/des créneau(x) en cours de création (glisser-créer). La pause
+                  méridienne découpe l'aperçu en 1 ou 2 blocs hors pause. */}
               {createDrag &&
                 draggedDays(createDrag).includes(d) &&
                 (() => {
@@ -2068,36 +2681,41 @@ export function AgendaGrid({
                     gridEndMin,
                     Math.max(createDrag.startMin, createDrag.curMin) + 15,
                   );
-                  const top = mapMinToY(s);
-                  const h = mapMinToY(e2) - top;
                   // Couleur du mode dessiné : jaune = récurrent (Modèle de période),
                   // vert = ponctuel (Semaine réelle).
                   const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
-                  return (
-                    <div
-                      className="agenda-create-preview"
-                      style={{
-                        position: "absolute",
-                        left: 2,
-                        right: 2,
-                        top,
-                        height: Math.max(2, h),
-                        background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
-                        border: `1px dashed ${drawColor}`,
-                        borderRadius: 6,
-                        pointerEvents: "none",
-                        zIndex: 3,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: ".62rem",
-                        fontWeight: 700,
-                        color: drawColor,
-                      }}
-                    >
-                      {minToHHMM(s)}–{minToHHMM(e2)}
-                    </div>
-                  );
+                  return lunchSplitSegments(s, e2)
+                    .filter(([a, b]) => b > a)
+                    .map(([segS, segE]) => {
+                      const top = mapMinToY(segS);
+                      const h = mapMinToY(segE) - top;
+                      return (
+                        <div
+                          key={segS}
+                          className="agenda-create-preview"
+                          style={{
+                            position: "absolute",
+                            left: 2,
+                            right: 2,
+                            top,
+                            height: Math.max(2, h),
+                            background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
+                            border: `1px dashed ${drawColor}`,
+                            borderRadius: 6,
+                            pointerEvents: "none",
+                            zIndex: 3,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: ".62rem",
+                            fontWeight: 700,
+                            color: drawColor,
+                          }}
+                        >
+                          {minToHHMM(segS)}–{minToHHMM(segE)}
+                        </div>
+                      );
+                    });
                 })()}
               {/* Aperçu du créneau en cours de déplacement (glisser-déplacer). */}
               {moveDrag &&
@@ -2134,6 +2752,74 @@ export function AgendaGrid({
                     </div>
                   );
                 })()}
+              {/* Aperçu du créneau en cours de redimensionnement (glisser-étirer). */}
+              {resizeDrag &&
+                resizeDrag.dayKey === d &&
+                (() => {
+                  const top = mapMinToY(resizeDrag.curStart);
+                  const h = mapMinToY(resizeDrag.curEnd) - top;
+                  const rColor = resizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                  return (
+                    <div
+                      className="agenda-resize-preview"
+                      style={{
+                        position: "absolute",
+                        left: 2,
+                        right: 2,
+                        top,
+                        height: Math.max(2, h),
+                        background: `color-mix(in srgb, ${rColor} 28%, transparent)`,
+                        border: `2px solid ${rColor}`,
+                        borderRadius: 6,
+                        pointerEvents: "none",
+                        zIndex: 4,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: ".62rem",
+                        fontWeight: 700,
+                        color: rColor,
+                      }}
+                    >
+                      {minToHHMM(resizeDrag.curStart)}–{minToHHMM(resizeDrag.curEnd)}
+                    </div>
+                  );
+                })()}
+              {/* Aperçu des créneaux générés en étendant latéralement (un par colonne
+                  couverte, hormis la source). Pointillé = à créer, comme le glisser-créer. */}
+              {hResizeDrag &&
+                hResizeDrag.fromDay !== d &&
+                daysSpan(hResizeDrag.fromDay, hResizeDrag.curDay).includes(d) &&
+                (() => {
+                  const top = mapMinToY(hResizeDrag.startMin);
+                  const h = mapMinToY(hResizeDrag.endMin) - top;
+                  const rColor = hResizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                  return (
+                    <div
+                      className="agenda-hresize-preview"
+                      style={{
+                        position: "absolute",
+                        left: 2,
+                        right: 2,
+                        top,
+                        height: Math.max(2, h),
+                        background: `color-mix(in srgb, ${rColor} 22%, transparent)`,
+                        border: `1px dashed ${rColor}`,
+                        borderRadius: 6,
+                        pointerEvents: "none",
+                        zIndex: 3,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: ".62rem",
+                        fontWeight: 700,
+                        color: rColor,
+                      }}
+                    >
+                      {minToHHMM(hResizeDrag.startMin)}–{minToHHMM(hResizeDrag.endMin)}
+                    </div>
+                  );
+                })()}
             </div>
           ))}
         </div>
@@ -2163,15 +2849,24 @@ export function AgendaGrid({
             minWidth: 0,
           }}
         >
-          Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers
-          un autre créneau pour le déplacer.
+          {/* « Astuce » en couleur de texte principale (noir en thème clair), « : » et
+              la suite gardent la couleur courante. Le conseil dépend du mode création. */}
+          <span style={{ color: "var(--text)" }}>Astuce</span>
+          {" : "}
+          {creationMode
+            ? "saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
+            : "cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un autre créneau pour le déplacer."}
         </p>
         {mode === "realweek" && (
           <div className="agenda-legend" style={{ flexShrink: 0 }}>
-            <span className="agenda-legend-item">
-              <span className="agenda-legend-swatch is-rec" />
-              Récurrent
-            </span>
+            {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
+                cet item de légende. */}
+            {modes.recurringMode && (
+              <span className="agenda-legend-item">
+                <span className="agenda-legend-swatch is-rec" />
+                Récurrent
+              </span>
+            )}
             <span className="agenda-legend-item">
               <span className="agenda-legend-swatch is-uniq" />
               Ponctuel
@@ -2508,6 +3203,16 @@ export function AgendaGrid({
               />
             </div>
             <div className="field">
+              <label htmlFor="ag-adultes">Adultes</label>
+              <input
+                id="ag-adultes"
+                type="number"
+                min={0}
+                value={cAccompagnants}
+                onChange={(e) => setCAccompagnants(e.target.value)}
+              />
+            </div>
+            <div className="field">
               <label htmlFor="ag-theme">Thème</label>
               <input
                 id="ag-theme"
@@ -2532,6 +3237,187 @@ export function AgendaGrid({
           </div>
         </ModalOverlay>
       )}
+
+      {/* Mode création : modale de choix des demandeurs autorisés PAR DÉFAUT (créneaux créés). */}
+      {createDemModal && (
+        <ModalOverlay onClose={() => setCreateDemModal(false)}>
+          <div className="modal-title">Demandeurs autorisés par défaut</div>
+          <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: "0 0 .6rem" }}>
+            Appliqués aux créneaux que vous créez. Aucune coche = ouvert à tous.
+          </p>
+          {serviceDemandeurs.length === 0 ? (
+            <p style={{ fontSize: ".8rem", color: "var(--muted)" }}>
+              Aucun demandeur configuré pour ce service.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem .9rem" }}>
+              {serviceDemandeurs.map((d) => (
+                <label
+                  key={d.id}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: ".35rem",
+                    fontSize: ".82rem",
+                    fontWeight: 400,
+                    color: "var(--text)",
+                    textTransform: "none",
+                    letterSpacing: "normal",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={createDemIds.includes(d.id)}
+                    onChange={(e) =>
+                      setCreateDemIds((prev) =>
+                        e.target.checked
+                          ? [...new Set([...prev, d.id])]
+                          : prev.filter((x) => x !== d.id),
+                      )
+                    }
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  {d.label}
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setCreateDemIds([])}
+              disabled={createDemIds.length === 0}
+            >
+              Tout décocher
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setCreateDemModal(false)}
+            >
+              OK
+            </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* Mode création : modale de configuration d'un créneau (capacité + demandeurs). */}
+      {capModal &&
+        (() => {
+          const slot =
+            slots.find((s) => s.id === capModal.slotId) ??
+            uniqueSlots.find((s) => s.id === capModal.slotId) ??
+            null;
+          return (
+            <ModalOverlay onClose={() => setCapModal(null)}>
+              <div className="modal-title">
+                Configuration du créneau
+                {slot ? ` · ${slot.startTime}–${slot.endTime}` : ""}
+              </div>
+              <div className="form-grid">
+                <div className="field full">
+                  <label htmlFor="cap-input">Capacité (places)</label>
+                  <input
+                    id="cap-input"
+                    type="number"
+                    min={0}
+                    value={capValue}
+                    onChange={(e) => setCapValue(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="field full" style={{ marginTop: ".6rem" }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: ".7rem",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: ".06em",
+                    color: "var(--muted)",
+                    marginBottom: ".2rem",
+                  }}
+                >
+                  Demandeurs autorisés
+                </span>
+                {serviceDemandeurs.length === 0 ? (
+                  <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: ".3rem 0 0" }}>
+                    Aucun demandeur configuré pour ce service.
+                  </p>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: ".5rem .9rem",
+                      marginTop: ".4rem",
+                    }}
+                  >
+                    {serviceDemandeurs.map((d) => (
+                      <label
+                        key={d.id}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: ".35rem",
+                          fontSize: ".82rem",
+                          fontWeight: 400,
+                          color: "var(--text)",
+                          textTransform: "none",
+                          letterSpacing: "normal",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={capDemIds.includes(d.id)}
+                          onChange={(e) =>
+                            setCapDemIds((prev) =>
+                              e.target.checked
+                                ? [...new Set([...prev, d.id])]
+                                : prev.filter((x) => x !== d.id),
+                            )
+                          }
+                          style={{ accentColor: "var(--accent)" }}
+                        />
+                        {d.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: ".4rem",
+                    fontSize: ".72rem",
+                    fontStyle: "italic",
+                    color: "var(--muted)",
+                  }}
+                >
+                  Aucune coche = ouvert à tous les demandeurs.
+                </span>
+              </div>
+              {capError && (
+                <p className="field-error" style={{ display: "block" }}>
+                  {capError}
+                </p>
+              )}
+              <div className="btn-row">
+                <button type="button" className="btn btn-ghost" onClick={() => setCapModal(null)}>
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={submitCapConfig}
+                  disabled={capSaving}
+                >
+                  {capSaving ? "Enregistrement…" : "Enregistrer"}
+                </button>
+              </div>
+            </ModalOverlay>
+          );
+        })()}
     </div>
   );
 }

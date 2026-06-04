@@ -1,4 +1,6 @@
+import { AdminDemInfo } from "@/components/admin-dem-info";
 import { prisma } from "@/server/db";
+import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { listEditionRows } from "@/server/services/editions";
 import { notFound } from "next/navigation";
 
@@ -8,6 +10,7 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
   if (!service) notFound();
 
   const rows = await listEditionRows(id);
+  const demRows = await getServiceDemandeurSettingsLabeled(id);
 
   return (
     <div>
@@ -91,6 +94,8 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
         {rows.length} réservation{rows.length > 1 ? "s" : ""}. Le CSV est compatible Excel (UTF-8,
         séparateur point-virgule).
       </p>
+
+      <AdminDemInfo rows={demRows} />
     </div>
   );
 }
