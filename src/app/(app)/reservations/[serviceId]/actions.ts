@@ -57,12 +57,34 @@ export async function reserveRecurringAction(
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
         }
         const capacity = slot.capacity ?? slot.service.recurCapacity;
-        const agg = await tx.booking.aggregate({
-          where: { serviceId, slotId, periodId, dayKey, bookingType: "recurring" },
-          _sum: { enfants: true },
-        });
-        const used = agg._sum.enfants ?? 0;
-        if (used + myEnfants > capacity) throw new BookingError("Ce créneau est complet.");
+        // Capacité selon le mode jauge du service (même règle que l'affichage) : jauge =
+        // enfants + adultes ; hors jauge = 1 par réservation. Sinon les enfants du PROFIL
+        // de l'usager « remplissent » à tort un créneau (faux « complet »).
+        const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
+          where: { serviceId, jauge: true },
+          select: { serviceId: true },
+        }));
+        const occWhere = {
+          serviceId,
+          slotId,
+          periodId,
+          dayKey,
+          bookingType: "recurring" as const,
+        };
+        let used: number;
+        let mine: number;
+        if (gaugeOn) {
+          const agg = await tx.booking.aggregate({
+            where: occWhere,
+            _sum: { enfants: true, accompagnants: true },
+          });
+          used = (agg._sum.enfants ?? 0) + (agg._sum.accompagnants ?? 0);
+          mine = myEnfants + myAcc;
+        } else {
+          used = await tx.booking.count({ where: occWhere });
+          mine = 1;
+        }
+        if (used + mine > capacity) throw new BookingError("Ce créneau est complet.");
         // Validation : si le demandeur de l'usager n'est pas en mode « validation »,
         // la réservation est validée d'emblée ; sinon elle reste en attente.
         const setting = user?.demandeurId
@@ -197,21 +219,41 @@ export async function moveMyBookingAction(
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
         }
         const capacity = slot.capacity ?? slot.service.recurCapacity;
-        const agg = await tx.booking.aggregate({
-          where: target.ponctuel
-            ? { serviceId, slotId: target.slotId, bookingType: "unique", id: { not: bookingId } }
-            : {
-                serviceId,
-                slotId: target.slotId,
-                periodId: target.periodId ?? 0,
-                dayKey,
-                bookingType: "recurring",
-                id: { not: bookingId },
-              },
-          _sum: { enfants: true },
-        });
-        const used = agg._sum.enfants ?? 0;
-        if (used + booking.enfants > capacity) throw new BookingError("Ce créneau est complet.");
+        // Capacité selon le mode jauge (même règle que l'affichage et que la création) :
+        // jauge = enfants + adultes ; hors jauge = 1 par réservation.
+        const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
+          where: { serviceId, jauge: true },
+          select: { serviceId: true },
+        }));
+        const occWhere = target.ponctuel
+          ? {
+              serviceId,
+              slotId: target.slotId,
+              bookingType: "unique" as const,
+              id: { not: bookingId },
+            }
+          : {
+              serviceId,
+              slotId: target.slotId,
+              periodId: target.periodId ?? 0,
+              dayKey,
+              bookingType: "recurring" as const,
+              id: { not: bookingId },
+            };
+        let used: number;
+        let mine: number;
+        if (gaugeOn) {
+          const agg = await tx.booking.aggregate({
+            where: occWhere,
+            _sum: { enfants: true, accompagnants: true },
+          });
+          used = (agg._sum.enfants ?? 0) + (agg._sum.accompagnants ?? 0);
+          mine = booking.enfants + booking.accompagnants;
+        } else {
+          used = await tx.booking.count({ where: occWhere });
+          mine = 1;
+        }
+        if (used + mine > capacity) throw new BookingError("Ce créneau est complet.");
         const setting = user?.demandeurId
           ? await tx.serviceDemandeurSettings.findFirst({
               where: { serviceId, demandeurId: user.demandeurId },

@@ -565,6 +565,10 @@ export async function addRecurringSlot(
           periodId,
           weeks,
           state: "actif",
+          // Capacité globale ET par-jour : le serveur (réservation) et la modale lisent
+          // `slot.capacity ?? recurCapacity` ; sans le champ global, un créneau créé à 5
+          // retombait à recurCapacity (souvent 1). On garde les deux cohérents.
+          capacity: input.capacity,
           ...dayCapData,
         },
       });
@@ -598,6 +602,139 @@ export async function addRecurringSlot(
     return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
   }
   return { ok: true, id: slId };
+}
+
+/**
+ * Copie les créneaux récurrents d'une semaine A/B vers l'autre (même période). Pour
+ * chaque créneau qui tourne sur `fromWeek` mais PAS sur `toWeek`, crée un créneau
+ * identique sur `toWeek` : mêmes horaires, capacités par-jour, demandeurs autorisés,
+ * + miroirs. Ignore les créneaux déjà « A,B » (présents sur les deux) et les doublons
+ * (un créneau identique existant déjà sur `toWeek`). Ne supprime rien.
+ */
+export async function copyRecurringWeek(
+  serviceId: string,
+  periodId: number,
+  fromWeek: "A" | "B",
+  toWeek: "A" | "B",
+): Promise<{ ok: true; created: number } | { ok: false; error: string }> {
+  if (fromWeek === toWeek) return { ok: false, error: "Semaines identiques" };
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return { ok: false, error: "Service introuvable" };
+  const period = await prisma.period.findFirst({ where: { id: periodId, serviceId } });
+  if (!period?.dateStart || !period?.dateEnd) {
+    return { ok: false, error: "Période introuvable ou sans dates" };
+  }
+  const activeDays = service.activeDays
+    .split(",")
+    .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
+  const holidays = await prisma.periodHoliday.findMany({
+    where: { periodId },
+    select: { date: true },
+  });
+  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
+  const startDate = toISO(period.dateStart);
+  const endDate = toISO(period.dateEnd);
+
+  const slots = await prisma.slot.findMany({
+    where: { serviceId, periodId, slotType: "recurring", state: "actif" },
+  });
+  const capCols = ["capLun", "capMar", "capMer", "capJeu", "capVen", "capSam", "capDim"] as const;
+  const sig = (s: (typeof slots)[number]) =>
+    [s.startTime, s.endTime, ...capCols.map((c) => s[c] ?? "")].join("|");
+
+  // Signatures déjà présentes sur toWeek (anti-doublon).
+  const existingOnTo = new Set(slots.filter((s) => parseWeeks(s.weeks).includes(toWeek)).map(sig));
+  // À copier : tourne sur fromWeek, pas sur toWeek, et pas déjà présent à l'identique.
+  const toCopy = slots.filter(
+    (s) =>
+      parseWeeks(s.weeks).includes(fromWeek) &&
+      !parseWeeks(s.weeks).includes(toWeek) &&
+      !existingOnTo.has(sig(s)),
+  );
+
+  // Demandeurs autorisés des créneaux sources.
+  const demRows = toCopy.length
+    ? await prisma.slotDemandeur.findMany({
+        where: { slotId: { in: toCopy.map((s) => s.id) } },
+        select: { slotId: true, demandeurId: true },
+      })
+    : [];
+  const demBySlot = new Map<string, number[]>();
+  for (const r of demRows) {
+    const list = demBySlot.get(r.slotId) ?? [];
+    list.push(r.demandeurId);
+    demBySlot.set(r.slotId, list);
+  }
+
+  let created = 0;
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const s of toCopy) {
+        const cap: Partial<Record<DayKey, number | null>> = {
+          lun: s.capLun,
+          mar: s.capMar,
+          mer: s.capMer,
+          jeu: s.capJeu,
+          ven: s.capVen,
+          sam: s.capSam,
+          dim: s.capDim,
+        };
+        const dayCapData = Object.fromEntries(
+          DAY_KEYS.map((d) => [DAY_COL[d], cap[d] ?? null]),
+        ) as Record<(typeof DAY_COL)[DayKey], number | null>;
+        const newId = newRecurId();
+        await tx.slot.create({
+          data: {
+            id: newId,
+            serviceId,
+            slotType: "recurring",
+            startTime: s.startTime,
+            endTime: s.endTime,
+            periodId,
+            weeks: toWeek,
+            state: "actif",
+            capacity: s.capacity,
+            ...dayCapData,
+          },
+        });
+        const wanted = computeWantedMirrors({
+          startDate,
+          endDate,
+          activeDays,
+          holidaySet,
+          openOnHolidays: service.openOnHolidays,
+          weeks: parseWeeks(toWeek),
+          cap,
+        });
+        for (const [, mv] of wanted) {
+          await tx.slot.create({
+            data: {
+              id: mirrorId(newId, mv.date),
+              serviceId,
+              slotType: "unique",
+              startTime: s.startTime,
+              endTime: s.endTime,
+              slotDate: fromISO(mv.date),
+              capacity: mv.cap,
+              periodId,
+              parentSlotId: newId,
+              state: "actif",
+            },
+          });
+        }
+        const ids = demBySlot.get(s.id);
+        if (ids?.length) {
+          await tx.slotDemandeur.createMany({
+            data: ids.map((demandeurId) => ({ slotId: newId, demandeurId })),
+          });
+        }
+        created++;
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
+  return { ok: true, created };
 }
 
 /** Ajoute un créneau PONCTUEL daté (période résolue depuis la date). */

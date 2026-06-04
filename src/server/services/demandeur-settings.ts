@@ -40,6 +40,59 @@ export async function getServiceDemandeurSettings(
 }
 
 /**
+ * Une ligne de la matrice enrichie pour le bandeau debug admin :
+ *   - `label`                : libellé du demandeur.
+ *   - `openOnHolidays`       : ouvert les jours fériés (niveau SERVICE, donc même
+ *                              valeur sur toutes les lignes).
+ *   - `openOnSchoolHolidays` : ouvert pendant les vacances scolaires (niveau
+ *                              DEMANDEUR, propre à chaque ligne).
+ */
+export type DemandeurSettingLabeledRow = DemandeurSettingRow & {
+  label: string;
+  openOnHolidays: boolean;
+  openOnSchoolHolidays: boolean;
+};
+
+/**
+ * Comme {@link getServiceDemandeurSettings} mais avec le libellé du demandeur et
+ * les deux flags « ouverture » (jours fériés / vacances scolaires), pour le bandeau
+ * debug admin (port legacy `dem-info`). Trié par libellé.
+ */
+export async function getServiceDemandeurSettingsLabeled(
+  serviceId: string,
+): Promise<DemandeurSettingLabeledRow[]> {
+  const [service, rows] = await Promise.all([
+    prisma.service.findUnique({ where: { id: serviceId }, select: { openOnHolidays: true } }),
+    prisma.serviceDemandeurSettings.findMany({
+      where: { serviceId },
+      select: {
+        demandeurId: true,
+        recurrent: true,
+        semaineAb: true,
+        validation: true,
+        themes: true,
+        jauge: true,
+        demandeur: { select: { label: true, openOnSchoolHolidays: true } },
+      },
+    }),
+  ]);
+  const openOnHolidays = service?.openOnHolidays ?? false;
+  return rows
+    .map((r) => ({
+      demandeurId: r.demandeurId,
+      label: r.demandeur?.label ?? "",
+      recurrent: r.recurrent,
+      semaineAb: r.semaineAb,
+      validation: r.validation,
+      themes: r.themes,
+      jauge: r.jauge,
+      openOnHolidays,
+      openOnSchoolHolidays: r.demandeur?.openOnSchoolHolidays ?? false,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
  * Remplace TOUTE la matrice des demandeurs d'un service (fidèle au legacy :
  * delete-all puis recreate, en transaction). Ne conserve que les lignes ayant
  * un `demandeurId` valide (> 0), dédupliquées par `demandeurId` (première

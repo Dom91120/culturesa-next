@@ -5,6 +5,7 @@ import { requireRole } from "@/server/guards";
 import {
   addRecurringSlot,
   addUniqueSlot,
+  copyRecurringWeek,
   deleteSlots,
   moveRecurringSlot,
   moveUniqueSlot,
@@ -42,7 +43,93 @@ export async function setBookingPointageAction(
   revalidatePath(`/services/${serviceId}/agenda`);
 }
 
+/**
+ * Mode création (agenda) : enregistre la CONFIGURATION d'un créneau — sa capacité et
+ * la liste des demandeurs autorisés (vide = ouvert à tous). Remplace l'ensemble des
+ * SlotDemandeur du créneau. Fonctionne pour les créneaux récurrents comme ponctuels.
+ */
+export async function saveSlotConfigAction(input: {
+  serviceId: string;
+  slotId: string;
+  capacity: number;
+  demandeurIds: number[];
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  const { serviceId, slotId, capacity, demandeurIds } = input;
+  if (!Number.isInteger(capacity) || capacity < 0) {
+    return { ok: false, error: "Capacité invalide." };
+  }
+  const ids = [...new Set(demandeurIds.filter((d) => Number.isInteger(d) && d > 0))];
+  try {
+    await prisma.$transaction(async (tx) => {
+      const slot = await tx.slot.findFirst({ where: { id: slotId, serviceId } });
+      if (!slot) throw new Error("Créneau introuvable");
+      await tx.slot.update({ where: { id: slotId }, data: { capacity } });
+      await tx.slotDemandeur.deleteMany({ where: { slotId } });
+      if (ids.length > 0) {
+        await tx.slotDemandeur.createMany({
+          data: ids.map((demandeurId) => ({ slotId, demandeurId })),
+        });
+      }
+    });
+  } catch {
+    return { ok: false, error: "Échec de l'enregistrement." };
+  }
+  revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true };
+}
+
+/**
+ * Mode création (agenda, A/B) : copie les créneaux récurrents d'une semaine vers
+ * l'autre (même période). Non destructif (cf. copyRecurringWeek).
+ */
+export async function copyWeekSlotsAction(input: {
+  serviceId: string;
+  periodId: number;
+  fromWeek: "A" | "B";
+  toWeek: "A" | "B";
+}): Promise<{ ok: boolean; error?: string; created?: number }> {
+  await requireRole("gestionnaire");
+  const res = await copyRecurringWeek(
+    input.serviceId,
+    input.periodId,
+    input.fromWeek,
+    input.toWeek,
+  );
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return res.ok ? { ok: true, created: res.created } : { ok: false, error: res.error };
+}
+
 // ─── Mode « Création de créneau » (agenda) ───────────────────────────────────
+
+/**
+ * Mode création (agenda) : met à jour la CAPACITÉ PAR DÉFAUT du service — récurrente
+ * (`recurCapacity`) ou ponctuelle (`ponctCapacity`). Autosave du champ « Capacité ».
+ */
+export async function setServiceDefaultCapacityAction(input: {
+  serviceId: string;
+  kind: "recur" | "ponct";
+  value: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  const value = Math.max(1, Math.floor(input.value));
+  if (!Number.isFinite(value)) return { ok: false, error: "Capacité invalide." };
+  await prisma.service.update({
+    where: { id: input.serviceId },
+    data: input.kind === "recur" ? { recurCapacity: value } : { ponctCapacity: value },
+  });
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return { ok: true };
+}
+
+/** Pose la liste de demandeurs autorisés sur un créneau (vide = ouvert à tous). */
+async function setSlotDemandeurs(slotId: string, demandeurIds: number[] | undefined) {
+  const ids = [...new Set((demandeurIds ?? []).filter((d) => Number.isInteger(d) && d > 0))];
+  if (ids.length === 0) return;
+  await prisma.slotDemandeur.createMany({
+    data: ids.map((demandeurId) => ({ slotId, demandeurId })),
+  });
+}
 
 /** Crée un créneau récurrent (vue Modèle de période). */
 export async function createRecurringSlotAction(input: {
@@ -53,6 +140,7 @@ export async function createRecurringSlotAction(input: {
   endTime: string;
   weeks: string;
   capacity: number;
+  demandeurIds?: number[];
 }): Promise<{ ok: boolean; error?: string }> {
   await requireRole("gestionnaire");
   if (!(DAY_KEYS as readonly string[]).includes(input.dayKey)) {
@@ -65,6 +153,7 @@ export async function createRecurringSlotAction(input: {
     dayKey: input.dayKey as DayKeyT,
     capacity: input.capacity,
   });
+  if (res.ok) await setSlotDemandeurs(res.id, input.demandeurIds);
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
@@ -76,6 +165,7 @@ export async function createUniqueSlotAction(input: {
   startTime: string;
   endTime: string;
   capacity: number;
+  demandeurIds?: number[];
 }): Promise<{ ok: boolean; error?: string }> {
   await requireRole("gestionnaire");
   const res = await addUniqueSlot(input.serviceId, {
@@ -84,6 +174,7 @@ export async function createUniqueSlotAction(input: {
     endTime: input.endTime,
     capacity: input.capacity,
   });
+  if (res.ok) await setSlotDemandeurs(res.id, input.demandeurIds);
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
@@ -220,6 +311,7 @@ const createSchema = z.object({
   dayKey: z.string().min(1),
   userId: z.string().min(1),
   enfants: z.coerce.number().int().min(0).max(999).default(0),
+  accompagnants: z.coerce.number().int().min(0).max(999).default(0),
   theme: z.string().trim().max(255).default(""),
   week: z.enum(["", "A", "B"]).default(""),
 });
@@ -232,6 +324,7 @@ export async function createRecurringBookingAction(input: {
   dayKey: string;
   userId: string;
   enfants: number;
+  accompagnants: number;
   theme: string;
   week: "" | "A" | "B";
 }): Promise<{ ok: boolean; error?: string }> {
@@ -250,6 +343,7 @@ export async function createRecurringBookingAction(input: {
         dayKey: d.dayKey,
         week: d.week,
         enfants: d.enfants,
+        accompagnants: d.accompagnants,
         themeLabel: d.theme,
         validated: true,
         autoValidateFrom: new Date(),
@@ -270,6 +364,7 @@ const createUniqueSchema = z.object({
   slotId: z.string().min(1),
   userId: z.string().min(1),
   enfants: z.coerce.number().int().min(0).max(999).default(0),
+  accompagnants: z.coerce.number().int().min(0).max(999).default(0),
   theme: z.string().trim().max(255).default(""),
 });
 
@@ -285,6 +380,7 @@ export async function createUniqueBookingAction(input: {
   slotId: string;
   userId: string;
   enfants: number;
+  accompagnants: number;
   theme: string;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireRole("gestionnaire");
@@ -309,6 +405,7 @@ export async function createUniqueBookingAction(input: {
         dayKey: "",
         week: "",
         enfants: d.enfants,
+        accompagnants: d.accompagnants,
         themeLabel: d.theme,
         validated: true,
         autoValidateFrom: new Date(),

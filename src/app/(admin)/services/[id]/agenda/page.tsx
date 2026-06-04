@@ -1,6 +1,7 @@
+import { AdminDemInfo } from "@/components/admin-dem-info";
 import { toDateInput } from "@/lib/format";
 import { prisma } from "@/server/db";
-import { getServiceDemandeurSettings } from "@/server/services/demandeur-settings";
+import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { deriveServiceModes } from "@/server/services/service-modes";
 import { notFound } from "next/navigation";
 import { AgendaGrid } from "./agenda-grid";
@@ -18,6 +19,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       afternoonStart: true,
       afternoonEnd: true,
       recurCapacity: true,
+      ponctCapacity: true,
       semaineAb: true,
       themesMode: true,
       openOnHolidays: true,
@@ -28,7 +30,9 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
 
   // Les modes d'affichage (A/B, thème, jauge…) sont DÉRIVÉS de la matrice
   // service × demandeur, pas des colonnes du service (qui ne la reflètent pas).
-  const modes = deriveServiceModes(await getServiceDemandeurSettings(id));
+  // Les lignes (avec libellé) servent aussi au bandeau debug admin.
+  const demRows = await getServiceDemandeurSettingsLabeled(id);
+  const modes = deriveServiceModes(demRows);
 
   // Fallback legacy : si le service a ses propres périodes actives, n'afficher QUE
   // celles-là ; sinon retomber sur les périodes globales (serviceId null). Sans ce
@@ -124,6 +128,23 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     }),
   ]);
 
+  // Demandeurs autorisés par créneau (SlotDemandeur) + liste des demandeurs du service,
+  // pour la modale « configuration de créneau » du mode création de l'agenda.
+  const slotIds = [...slots.map((s) => s.id), ...uniqueSlots.map((s) => s.id)];
+  const slotDemRows = slotIds.length
+    ? await prisma.slotDemandeur.findMany({
+        where: { slotId: { in: slotIds } },
+        select: { slotId: true, demandeurId: true },
+      })
+    : [];
+  const slotDemandeurs: Record<string, number[]> = {};
+  for (const r of slotDemRows) {
+    const list = slotDemandeurs[r.slotId] ?? [];
+    list.push(r.demandeurId);
+    slotDemandeurs[r.slotId] = list;
+  }
+  const serviceDemandeurs = demRows.map((r) => ({ id: r.demandeurId, label: r.label }));
+
   const usersData = users.map((u) => ({
     id: u.id,
     label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
@@ -207,17 +228,22 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       : [];
 
   return (
-    <AgendaGrid
-      service={service}
-      periods={periodsData}
-      slots={slotsData}
-      uniqueSlots={uniqueSlotsData}
-      bookings={bookingsData}
-      users={usersData}
-      themes={themes}
-      modes={modes}
-      exercices={exercices}
-      showPrevious={service.showPreviousExercices}
-    />
+    <>
+      <AgendaGrid
+        service={service}
+        periods={periodsData}
+        slots={slotsData}
+        uniqueSlots={uniqueSlotsData}
+        bookings={bookingsData}
+        users={usersData}
+        themes={themes}
+        modes={modes}
+        exercices={exercices}
+        showPrevious={service.showPreviousExercices}
+        slotDemandeurs={slotDemandeurs}
+        serviceDemandeurs={serviceDemandeurs}
+      />
+      <AdminDemInfo rows={demRows} />
+    </>
   );
 }
