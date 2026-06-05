@@ -510,8 +510,18 @@ export function AgendaGrid({
     .split(",")
     .map((d) => d.trim())
     .filter(Boolean);
-  const startMin = toMinutes(service.morningStart, 9 * 60);
-  const endMin = toMinutes(service.afternoonEnd, 18 * 60);
+  // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
+  // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00 pour « fermé l'après-midi »)
+  // est ignorée — sinon afternoonEnd=00:00 ramenait la fin de grille à minuit et
+  // n'affichait plus aucune ligne. Repli matin/après-midi standard si tout est fermé.
+  const openRanges = (
+    [
+      [toMinutes(service.morningStart, 9 * 60), toMinutes(service.morningEnd, 12 * 60)],
+      [toMinutes(service.afternoonStart, 14 * 60), toMinutes(service.afternoonEnd, 18 * 60)],
+    ] as const
+  ).filter(([s, e]) => e > s);
+  const startMin = openRanges.length ? Math.min(...openRanges.map((r) => r[0])) : 9 * 60;
+  const endMin = openRanges.length ? Math.max(...openRanges.map((r) => r[1])) : 18 * 60;
   const baseFirst = Math.floor(startMin / 60);
   const baseLast = Math.ceil(endMin / 60);
 
@@ -1658,6 +1668,20 @@ export function AgendaGrid({
       );
     } catch {}
   }, [service.id, currentExerciceId, periodIdx, anchorMonday, weekAB]);
+
+  // Garde-fou : si la période sélectionnée/mémorisée est hors plage (ex. période
+  // supprimée, ou index restauré du sessionStorage devenu invalide), on retombe sur
+  // la période qui couvre la date du jour — sinon la première. Évite un agenda vide
+  // bloqué sur une période inexistante/hors saison.
+  useEffect(() => {
+    if (visiblePeriods.length === 0) return;
+    if (periodIdx >= 0 && periodIdx < visiblePeriods.length) return;
+    const today = ymd(new Date());
+    const todayIdx = visiblePeriods.findIndex(
+      (p) => p.dateStart && p.dateEnd && p.dateStart <= today && p.dateEnd >= today,
+    );
+    setPeriodIdx(todayIdx >= 0 ? todayIdx : 0);
+  }, [periodIdx, visiblePeriods]);
 
   // Le mode pointage n'a de sens qu'en semaine réelle : on le désactive si on
   // repasse en "modèle de période" (cohérent avec le legacy).

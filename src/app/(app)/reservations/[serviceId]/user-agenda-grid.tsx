@@ -1077,8 +1077,17 @@ export function UserAgendaGrid({
     .split(",")
     .map((d) => d.trim())
     .filter(Boolean);
-  const startMin = toMinutes(service.morningStart, 9 * 60);
-  const endMin = toMinutes(service.afternoonEnd, 18 * 60);
+  // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
+  // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00) est ignorée — sinon
+  // afternoonEnd=00:00 ramenait la fin de grille à minuit et masquait toute la grille.
+  const openRanges = (
+    [
+      [toMinutes(service.morningStart, 9 * 60), toMinutes(service.morningEnd, 12 * 60)],
+      [toMinutes(service.afternoonStart, 14 * 60), toMinutes(service.afternoonEnd, 18 * 60)],
+    ] as const
+  ).filter(([s, e]) => e > s);
+  const startMin = openRanges.length ? Math.min(...openRanges.map((r) => r[0])) : 9 * 60;
+  const endMin = openRanges.length ? Math.max(...openRanges.map((r) => r[1])) : 18 * 60;
   const baseFirst = Math.floor(startMin / 60);
   const baseLast = Math.ceil(endMin / 60);
 
