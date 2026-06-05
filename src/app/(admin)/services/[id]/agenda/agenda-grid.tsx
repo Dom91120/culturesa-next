@@ -484,6 +484,9 @@ export function AgendaGrid({
   } | null>(null);
   const hResizeDragRef = useRef<typeof hResizeDrag>(null);
   const [detail, setDetail] = useState<Detail>(null);
+  // Réservation en attente de confirmation de suppression (modale dédiée, port du
+  // legacy booking-delete-confirm-modal : récap + avertissement « irréversible »).
+  const [deleteTarget, setDeleteTarget] = useState<Booking | null>(null);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
   const [stackKey, setStackKey] = useState<{ slotId: string; dayKey: string } | null>(null);
@@ -1177,6 +1180,42 @@ export function AgendaGrid({
   function onDeleteEmptySlot(slotId: string) {
     if (!window.confirm("Supprimer ce créneau ?")) return;
     run(deleteSlotAction(service.id, slotId));
+  }
+
+  // Récapitulatif d'une réservation pour la modale de confirmation de suppression
+  // (nom + créneau · jour · période · date), port du legacy askDeleteBooking.
+  function bookingRecap(bk: Booking): { name: string; details: string; recurring: boolean } {
+    const recurring = !uniqueIdSet.has(bk.slotId);
+    const name = bk.structure || bk.demandeur || bk.name || "cette réservation";
+    const slot = recurring
+      ? slots.find((s) => s.id === bk.slotId)
+      : uniqueSlots.find((s) => s.id === bk.slotId);
+    const parts: string[] = [];
+    if (slot) {
+      const s = (slot.startTime || "").slice(0, 5);
+      const e = (slot.endTime || "").slice(0, 5);
+      parts.push(s && e ? `${s} – ${e}` : "Journée entière");
+    }
+    if (recurring) {
+      if (bk.dayKey) parts.push(DAY_NAMES[bk.dayKey] ?? bk.dayKey);
+      if (bk.periodId) {
+        const p = periods.find((pp) => pp.id === bk.periodId);
+        if (p?.label) parts.push(p.label);
+      }
+    } else {
+      const u = uniqueSlots.find((s) => s.id === bk.slotId);
+      if (u?.slotDate) parts.push(new Date(`${u.slotDate}T12:00:00`).toLocaleDateString("fr-FR"));
+    }
+    return { name, details: parts.join(" · "), recurring };
+  }
+
+  // Confirme la suppression (ferme la modale détail si ouverte).
+  function confirmDeleteBooking() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    setDetail(null);
+    run(deleteBookingAdminAction(id, service.id));
   }
 
   // Ouvre la modale de configuration d'un créneau (capacité + demandeurs autorisés),
@@ -3055,7 +3094,7 @@ export function AgendaGrid({
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                run(deleteBookingAdminAction(bk.id, service.id));
+                                setDeleteTarget(bk);
                               }}
                             >
                               ×
@@ -3135,9 +3174,24 @@ export function AgendaGrid({
             setDetail(null);
             router.refresh();
           }}
+          onRequestDelete={setDeleteTarget}
           run={run}
         />
       )}
+
+      {deleteTarget &&
+        (() => {
+          const recap = bookingRecap(deleteTarget);
+          return (
+            <BookingDeleteModal
+              name={recap.name}
+              details={recap.details}
+              recurring={recap.recurring}
+              onCancel={() => setDeleteTarget(null)}
+              onConfirm={confirmDeleteBooking}
+            />
+          );
+        })()}
 
       {createCtx && (
         <ModalOverlay onClose={() => setCreateCtx(null)}>
@@ -3423,6 +3477,63 @@ function ModalOverlay({ onClose, children }: { onClose: () => void; children: Re
   );
 }
 
+/**
+ * Modale de confirmation de suppression d'une réservation (port du legacy
+ * booking-delete-confirm-modal) : récap (nom + créneau · jour · période · date)
+ * et avertissement « action irréversible ».
+ */
+function BookingDeleteModal({
+  name,
+  details,
+  recurring,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  details: string;
+  recurring: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalOverlay onClose={onCancel}>
+      <div className="modal-title" style={{ color: "var(--danger)" }}>
+        🗑️ Supprimer la réservation
+      </div>
+      <p style={{ fontSize: ".85rem", lineHeight: 1.5, marginBottom: ".4rem" }}>
+        Vous êtes sur le point de supprimer la réservation
+        {recurring ? " récurrente" : ""} de <strong>{name}</strong>.
+      </p>
+      {details && (
+        <p style={{ fontSize: ".78rem", color: "var(--muted)", marginBottom: "1rem" }}>{details}</p>
+      )}
+      <p
+        style={{
+          fontSize: ".78rem",
+          color: "var(--danger)",
+          fontWeight: 600,
+          marginBottom: "1rem",
+        }}
+      >
+        ⚠️ Cette action est irréversible.
+      </p>
+      <div className="btn-row">
+        <button type="button" className="btn btn-ghost" onClick={onCancel}>
+          Annuler
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onConfirm}
+          style={{ background: "var(--danger)", border: "none", color: "var(--text)" }}
+        >
+          🗑️ Supprimer
+        </button>
+      </div>
+    </ModalOverlay>
+  );
+}
+
 // Accord pluriel des libellés de compteurs (cf. legacy _bdetUpdateLabels).
 function plural(n: number, singular: string, plural: string): string {
   return n > 1 ? plural : singular;
@@ -3443,6 +3554,7 @@ function BookingDetailModal({
   themes,
   onClose,
   onSaved,
+  onRequestDelete,
   run,
 }: {
   booking: Booking;
@@ -3451,6 +3563,7 @@ function BookingDetailModal({
   themes: string[];
   onClose: () => void;
   onSaved: () => void;
+  onRequestDelete: (b: Booking) => void;
   run: (p: Promise<unknown>) => void;
 }) {
   const [, startTransition] = useTransition();
@@ -3650,11 +3763,7 @@ function BookingDetailModal({
           type="button"
           className="btn btn-ghost"
           style={{ fontSize: ".72rem", color: "var(--danger)", marginLeft: "auto" }}
-          onClick={() => {
-            if (window.confirm("Supprimer cette réservation ?")) {
-              run(deleteBookingAdminAction(booking.id, serviceId));
-            }
-          }}
+          onClick={() => onRequestDelete(booking)}
         >
           🗑️ Supprimer
         </button>
