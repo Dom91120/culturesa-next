@@ -746,8 +746,41 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   );
 }
 
-/** Champ heure « HH:MM » avec boutons ▲▼ par pas de 15 min (port legacy). */
+/**
+ * Champ heure « HH:MM » avec boutons ▲▼ par pas de 15 min (port legacy).
+ * Clic-maintenu : 1er pas immédiat, puis répétition (90 ms) après un délai de 400 ms
+ * tant que le bouton reste enfoncé. La répétition lit la valeur COURANTE (valueRef)
+ * pour accumuler correctement à chaque tick.
+ */
 function TimeStepper({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stop() {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    timeoutRef.current = null;
+    intervalRef.current = null;
+  }
+
+  function startHold(delta: number) {
+    stop(); // garde-fou anti-répétition résiduelle
+    onChange(stepTime(valueRef.current, delta)); // 1er pas immédiat
+    timeoutRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(() => onChange(stepTime(valueRef.current, delta)), 90);
+    }, 400);
+  }
+
+  // Nettoyage à l'unmount (utilise uniquement des refs stables).
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
   return (
     <span className="time-step-wrap">
       <input
@@ -775,8 +808,14 @@ function TimeStepper({ value, onChange }: { value: string; onChange: (v: string)
           type="button"
           className="time-step-btn"
           tabIndex={-1}
-          onClick={() => onChange(stepTime(value, 15))}
           aria-label="Augmenter"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            startHold(15);
+          }}
+          onPointerUp={stop}
+          onPointerLeave={stop}
+          onPointerCancel={stop}
         >
           ▲
         </button>
@@ -784,8 +823,14 @@ function TimeStepper({ value, onChange }: { value: string; onChange: (v: string)
           type="button"
           className="time-step-btn"
           tabIndex={-1}
-          onClick={() => onChange(stepTime(value, -15))}
           aria-label="Diminuer"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            startHold(-15);
+          }}
+          onPointerUp={stop}
+          onPointerLeave={stop}
+          onPointerCancel={stop}
         >
           ▼
         </button>
