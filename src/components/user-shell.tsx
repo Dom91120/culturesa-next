@@ -26,6 +26,7 @@ export function UserShell({
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const match = pathname.match(/^\/reservations\/([^/]+)/);
@@ -84,8 +85,23 @@ export function UserShell({
         <div className="app-layout">
           <div
             id="service-sidebar-wrap"
-            style={{ width: "18%", minWidth: "fit-content", maxWidth: 300, flexShrink: 0 }}
+            className={collapsed ? "collapsed" : ""}
+            style={{
+              width: "18%",
+              minWidth: "fit-content",
+              maxWidth: 300,
+              flexShrink: 0,
+              position: "relative",
+            }}
           >
+            <button
+              type="button"
+              id="sidebar-toggle"
+              onClick={() => setCollapsed((c) => !c)}
+              title="Réduire / agrandir"
+            >
+              ☰
+            </button>
             {/* Marque dans la sidebar (comme le shell admin) : plus de bandeau-titre en haut. */}
             <div className="sidebar-header">
               <div
