@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/server/db";
-import type { Prisma } from "@prisma/client";
+import type { DayOfWeek, Prisma } from "@prisma/client";
 
 // =====================================================================================
 // Types
@@ -216,36 +216,25 @@ type SlotSnapshot = {
   startTime: string;
   endTime: string;
   capacity: number | null;
-  capLun: number | null;
-  capMar: number | null;
-  capMer: number | null;
-  capJeu: number | null;
-  capVen: number | null;
-  capSam: number | null;
-  capDim: number | null;
+  slotDay: DayOfWeek | null;
   weeks: string | null;
 };
 
-/** Capacité du jour ISO (1..7) pour un slot. */
+// Jour de la semaine (clé) pour un jour ISO 1..7.
+const ISO_KEY: Record<number, string> = {
+  1: "lun",
+  2: "mar",
+  3: "mer",
+  4: "jeu",
+  5: "ven",
+  6: "sam",
+  7: "dim",
+};
+
+/** Capacité du jour ISO (1..7) pour un slot mono-jour : non nulle uniquement le jour
+ *  du créneau (slotDay). */
 function capForDay(slot: SlotSnapshot, iso: number): number | null {
-  switch (iso) {
-    case 1:
-      return slot.capLun;
-    case 2:
-      return slot.capMar;
-    case 3:
-      return slot.capMer;
-    case 4:
-      return slot.capJeu;
-    case 5:
-      return slot.capVen;
-    case 6:
-      return slot.capSam;
-    case 7:
-      return slot.capDim;
-    default:
-      return null;
-  }
+  return slot.slotDay === ISO_KEY[iso] ? slot.capacity : null;
 }
 
 /**
@@ -348,13 +337,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
           startTime: s.startTime,
           endTime: s.endTime,
           capacity: s.capacity,
-          capLun: s.capLun,
-          capMar: s.capMar,
-          capMer: s.capMer,
-          capJeu: s.capJeu,
-          capVen: s.capVen,
-          capSam: s.capSam,
-          capDim: s.capDim,
+          slotDay: s.slotDay,
           weeks: s.weeks,
         })),
       );
@@ -437,13 +420,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
               endTime: s.endTime,
               slotDate: null,
               capacity: s.capacity,
-              capLun: s.capLun,
-              capMar: s.capMar,
-              capMer: s.capMer,
-              capJeu: s.capJeu,
-              capVen: s.capVen,
-              capSam: s.capSam,
-              capDim: s.capDim,
+              slotDay: s.slotDay,
               periodId: newPeriod.id,
               parentSlotId: null,
               weeks: s.weeks,

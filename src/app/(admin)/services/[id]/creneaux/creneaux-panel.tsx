@@ -33,16 +33,13 @@ export function CreneauxPanel({ serviceId, data }: Props) {
   const activeTab: "rec" | "uniq" = recurringMode ? tab : "uniq";
 
   // Service-level defaults (debounced persistence, like legacy scheduleDefaultsSave).
-  const [recurDuration, setRecurDuration] = useState(data.service.recurDuration);
-  const [ponctDuration, setPonctDuration] = useState(data.service.ponctDuration);
-  const [ponctCapacity, setPonctCapacity] = useState(data.service.ponctCapacity);
+  // Durée et capacité par défaut fusionnées : un seul jeu de valeurs partagé par
+  // les éditeurs récurrent et ponctuel.
+  const [duration, setDuration] = useState(data.service.duration);
+  const [capacity, setCapacity] = useState(data.service.capacity);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function scheduleDefaultsSave(next: {
-    recurDuration?: number;
-    ponctDuration?: number;
-    ponctCapacity?: number;
-  }) {
+  function scheduleDefaultsSave(next: { duration?: number; capacity?: number }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       void saveServiceSlotDefaultsAction(serviceId, next);
@@ -63,7 +60,8 @@ export function CreneauxPanel({ serviceId, data }: Props) {
         startTime: s.startTime,
         endTime: s.endTime,
         weeks: s.weeks,
-        cap: s.cap,
+        slotDay: s.slotDay,
+        capacity: s.capacity,
         demandeurIds: s.demandeurIds,
       })),
     );
@@ -129,17 +127,17 @@ export function CreneauxPanel({ serviceId, data }: Props) {
           <RecurringEditor
             serviceId={serviceId}
             data={data}
-            recurDuration={recurDuration}
-            ponctCapacity={ponctCapacity}
+            duration={duration}
+            capacity={capacity}
             abMode={abMode}
             onDurationStep={(dir) => {
-              const next = stepDuration(recurDuration, dir);
-              setRecurDuration(next);
-              scheduleDefaultsSave({ recurDuration: next });
+              const next = stepDuration(duration, dir);
+              setDuration(next);
+              scheduleDefaultsSave({ duration: next });
             }}
             onCapacityChange={(v) => {
-              setPonctCapacity(v);
-              scheduleDefaultsSave({ ponctCapacity: v });
+              setCapacity(v);
+              scheduleDefaultsSave({ capacity: v });
             }}
             saveRecurring={saveRecurring}
             setSlotsState={setSlotsState}
@@ -155,16 +153,16 @@ export function CreneauxPanel({ serviceId, data }: Props) {
           <UniqueEditor
             serviceId={serviceId}
             data={data}
-            ponctDuration={ponctDuration}
-            ponctCapacity={ponctCapacity}
+            duration={duration}
+            capacity={capacity}
             onDurationStep={(dir) => {
-              const next = stepDuration(ponctDuration, dir);
-              setPonctDuration(next);
-              scheduleDefaultsSave({ ponctDuration: next });
+              const next = stepDuration(duration, dir);
+              setDuration(next);
+              scheduleDefaultsSave({ duration: next });
             }}
             onCapacityChange={(v) => {
-              setPonctCapacity(v);
-              scheduleDefaultsSave({ ponctCapacity: v });
+              setCapacity(v);
+              scheduleDefaultsSave({ capacity: v });
             }}
             saveUnique={saveUnique}
             deleteSlots={deleteSlots}

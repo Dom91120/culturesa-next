@@ -31,6 +31,18 @@ export function SlotCreateForm({
         <input name="slotDate" type="date" className={inputClass} />
       </label>
       <label className="text-sm">
+        <span className="mb-1 block font-medium">Jour (si récurrent)</span>
+        <select name="slotDay" defaultValue="lun" className={inputClass}>
+          <option value="lun">Lundi</option>
+          <option value="mar">Mardi</option>
+          <option value="mer">Mercredi</option>
+          <option value="jeu">Jeudi</option>
+          <option value="ven">Vendredi</option>
+          <option value="sam">Samedi</option>
+          <option value="dim">Dimanche</option>
+        </select>
+      </label>
+      <label className="text-sm">
         <span className="mb-1 block font-medium">Début</span>
         <input name="startTime" type="time" defaultValue="09:00" required className={inputClass} />
       </label>

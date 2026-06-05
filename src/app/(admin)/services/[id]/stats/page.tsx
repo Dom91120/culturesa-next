@@ -98,9 +98,10 @@ export default async function StatsPage({ params }: { params: Promise<{ id: stri
   const bookings = await prisma.booking.findMany({
     where: { serviceId: id },
     select: {
-      dayKey: true,
       enfants: true,
       validated: true,
+      // Le jour est porté par le créneau : slotDay (récurrent) ou jour de la date (ponctuel).
+      slot: { select: { slotDay: true, slotDate: true } },
       user: { select: { demandeur: { select: { label: true } } } },
     },
   });
@@ -110,10 +111,12 @@ export default async function StatsPage({ params }: { params: Promise<{ id: stri
   const validated = bookings.filter((b) => b.validated).length;
   const pending = total - validated;
 
+  const ISO_KEY = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
   const byDay = new Map<string, number>();
   for (const b of bookings) {
-    if (!b.dayKey) continue;
-    byDay.set(b.dayKey, (byDay.get(b.dayKey) ?? 0) + 1);
+    const dk = b.slot.slotDay ?? (b.slot.slotDate ? ISO_KEY[b.slot.slotDate.getUTCDay()] : null);
+    if (!dk) continue;
+    byDay.set(dk, (byDay.get(dk) ?? 0) + 1);
   }
   const dayRows = DAY_ORDER.filter((d) => byDay.has(d)).map((d) => ({
     label: DAY_NAMES[d],

@@ -21,10 +21,8 @@ const recurSlotSchema = z.object({
   startTime: z.string().regex(TIME_RE),
   endTime: z.string().regex(TIME_RE),
   weeks: z.string(),
-  cap: z.record(
-    z.enum(["lun", "mar", "mer", "jeu", "ven", "sam", "dim"]),
-    z.number().int().nullable(),
-  ),
+  slotDay: z.enum(["lun", "mar", "mer", "jeu", "ven", "sam", "dim"]),
+  capacity: z.number().int().min(0),
   demandeurIds: z.array(z.number().int()),
 });
 
@@ -100,13 +98,12 @@ export async function setSlotDemandeursAction(
 
 export async function saveServiceSlotDefaultsAction(
   serviceId: string,
-  defaults: { recurDuration?: number; ponctDuration?: number; ponctCapacity?: number },
+  defaults: { duration?: number; capacity?: number },
 ) {
   await requireRole("gestionnaire");
   const schema = z.object({
-    recurDuration: z.number().int().positive().optional(),
-    ponctDuration: z.number().int().positive().optional(),
-    ponctCapacity: z.number().int().min(0).optional(),
+    duration: z.number().int().positive().optional(),
+    capacity: z.number().int().min(0).optional(),
   });
   const parsed = schema.safeParse(defaults);
   if (!parsed.success) return { ok: false as const, error: "Données invalides" };

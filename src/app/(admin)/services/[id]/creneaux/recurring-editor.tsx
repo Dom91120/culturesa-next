@@ -7,7 +7,6 @@ import { MirrorEditor } from "./mirror-editor";
 import {
   ALLDAY_DURATION,
   type CreneauxData,
-  DAY_CAP_FIELD,
   DAY_KEYS,
   DAY_LABELS,
   type DayKey,
@@ -27,8 +26,8 @@ import {
 type Props = {
   serviceId: string;
   data: CreneauxData;
-  recurDuration: number;
-  ponctCapacity: number;
+  duration: number;
+  capacity: number;
   abMode: boolean;
   onDurationStep: (dir: 1 | -1) => void;
   onCapacityChange: (v: number) => void;
@@ -44,11 +43,26 @@ function weekLabel(weeks: string): string {
   return list.length > 1 ? `Semaines ${list.join(" & ")}` : `Semaine ${list[0]}`;
 }
 
+// Modèle « un slot = un jour » : le buffer est une liste plate de créneaux mono-jour.
+// Pour conserver la grille (lignes = horaires, colonnes = jours), on regroupe à
+// l'affichage les slots partageant le même triplet (début, fin, semaines).
+type Row = {
+  key: string;
+  startTime: string;
+  endTime: string;
+  weeks: string;
+  cells: EditRecurSlot[]; // un slot par jour présent
+};
+
+function rowKey(s: { startTime: string; endTime: string; weeks: string }): string {
+  return `${s.startTime}|${s.endTime}|${s.weeks}`;
+}
+
 export function RecurringEditor({
   serviceId: _serviceId,
   data,
-  recurDuration,
-  ponctCapacity,
+  duration,
+  capacity,
   abMode,
   onDurationStep,
   onCapacityChange,
@@ -67,28 +81,25 @@ export function RecurringEditor({
   // Day filter for "Ajouter" (defaults: all active days checked).
   const [filterDays, setFilterDays] = useState<Set<DayKey>>(new Set(activeDays));
 
-  // Recurring slots for the selected period, mapped to the edit buffer.
+  // Recurring slots (mono-jour) for the selected period, as a flat edit buffer.
   const initialSlots = useMemo<EditRecurSlot[]>(() => {
     if (!period) return [];
     return data.slots
       .filter((s) => s.slotType === "recurring" && s.periodId === period.id && s.state === "actif")
+      .filter((s): s is typeof s & { slotDay: DayKey } =>
+        (DAY_KEYS as readonly string[]).includes(s.slotDay ?? ""),
+      )
       .sort((a, b) => a.startTime.localeCompare(b.startTime))
-      .map((s) => {
-        const cap: Partial<Record<DayKey, number | null>> = {};
-        for (const d of DAY_KEYS) {
-          const v = s[DAY_CAP_FIELD[d]] as number | null;
-          if (v != null) cap[d] = v;
-        }
-        return {
-          id: s.id,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          weeks: s.weeks ?? "A,B",
-          cap,
-          demandeurIds: [...s.demandeurIds],
-        };
-      });
-  }, [data.slots, period]);
+      .map((s) => ({
+        id: s.id,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        weeks: s.weeks ?? "A,B",
+        slotDay: s.slotDay,
+        capacity: s.capacity ?? capacity,
+        demandeurIds: [...s.demandeurIds],
+      }));
+  }, [data.slots, period, capacity]);
 
   const [slots, setSlots] = useState<EditRecurSlot[]>(initialSlots);
   const [bufferPeriodId, setBufferPeriodId] = useState<number | null>(period?.id ?? null);
@@ -114,64 +125,117 @@ export function RecurringEditor({
     slots.some((s) => !savedIds.has(s.id)) ||
     JSON.stringify(slots) !== JSON.stringify(initialSlots);
 
-  const totalPages = Math.max(1, Math.ceil(slots.length / SLOT_PAGE_SIZE));
+  // Regroupe le buffer plat en lignes (par début/fin/semaines).
+  const rows = useMemo<Row[]>(() => {
+    const map = new Map<string, EditRecurSlot[]>();
+    for (const s of slots) {
+      const key = rowKey(s);
+      const arr = map.get(key) ?? [];
+      arr.push(s);
+      map.set(key, arr);
+    }
+    return [...map.entries()]
+      .map(([key, cells]) => ({
+        key,
+        startTime: cells[0].startTime,
+        endTime: cells[0].endTime,
+        weeks: cells[0].weeks,
+        cells,
+      }))
+      .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.weeks.localeCompare(b.weeks));
+  }, [slots]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / SLOT_PAGE_SIZE));
   const pageClamped = Math.min(page, totalPages - 1);
-  const pageSlots = slots.slice(pageClamped * SLOT_PAGE_SIZE, (pageClamped + 1) * SLOT_PAGE_SIZE);
+  const pageRows = rows.slice(pageClamped * SLOT_PAGE_SIZE, (pageClamped + 1) * SLOT_PAGE_SIZE);
 
   function reserved(id: string): boolean {
     const sl = data.slots.find((s) => s.id === id);
     return sl ? sl.bookingCount > 0 : false;
   }
+  const rowChecked = (row: Row) =>
+    row.cells.length > 0 && row.cells.every((c) => selected.has(c.id));
+  const rowReserved = (row: Row) => row.cells.some((c) => reserved(c.id));
+  const cellOf = (row: Row, day: DayKey) => row.cells.find((c) => c.slotDay === day) ?? null;
 
-  function update(id: string, patch: Partial<EditRecurSlot>) {
-    setSlots((prev) =>
-      prev.map((s) => {
-        if (s.id !== id) return s;
-        const next = { ...s, ...patch };
-        // Dérive la fin depuis le début SAUF en « journée entière » (début vide,
-        // ou durée = 1 jour) : on ne touche alors pas aux heures.
-        if (patch.startTime && recurDuration < ALLDAY_DURATION) {
-          next.endTime = addMinutes(patch.startTime, recurDuration);
-        }
-        return next;
-      }),
+  // Patch des slots d'une ligne (par ids de cellules).
+  function patchCells(ids: string[], patch: Partial<EditRecurSlot>) {
+    setSlots((prev) => prev.map((s) => (ids.includes(s.id) ? { ...s, ...patch } : s)));
+  }
+
+  function setRowStart(row: Row, value: string) {
+    const start = value.replace("h", ":");
+    const endTime = duration < ALLDAY_DURATION && start ? addMinutes(start, duration) : "";
+    patchCells(
+      row.cells.map((c) => c.id),
+      { startTime: start, endTime },
     );
   }
 
-  // Passe une ligne en « journée entière » (efface début + fin, cf. legacy 🚫).
-  function setAllDay(id: string) {
-    update(id, { startTime: "", endTime: "" });
-  }
-
-  // Redonne des horaires à une ligne « journée entière » (cf. legacy ➕ _slotInitTimes).
-  function initTimes(id: string) {
-    const dur = recurDuration < ALLDAY_DURATION ? recurDuration : 60;
-    update(id, { startTime: "09:00", endTime: addMinutes("09:00", dur) });
-  }
-
-  function setCap(id: string, day: DayKey, value: number | null) {
-    setSlots((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, cap: { ...s.cap, [day]: value } } : s)),
+  // Passe une ligne en « journée entière » (efface début + fin).
+  function setAllDay(row: Row) {
+    patchCells(
+      row.cells.map((c) => c.id),
+      { startTime: "", endTime: "" },
     );
   }
 
-  function removeCap(id: string, day: DayKey) {
-    setSlots((prev) =>
-      prev.map((s) => {
-        if (s.id !== id) return s;
-        const cap = { ...s.cap };
-        delete cap[day];
-        return { ...s, cap };
-      }),
+  // Redonne des horaires à une ligne « journée entière ».
+  function initTimes(row: Row) {
+    const dur = duration < ALLDAY_DURATION ? duration : 60;
+    patchCells(
+      row.cells.map((c) => c.id),
+      { startTime: "09:00", endTime: addMinutes("09:00", dur) },
     );
+  }
+
+  function setWeeks(row: Row, weeks: string) {
+    patchCells(
+      row.cells.map((c) => c.id),
+      { weeks },
+    );
+  }
+
+  function setCellCap(slotId: string, value: number | null) {
+    setSlots((prev) => prev.map((s) => (s.id === slotId ? { ...s, capacity: value ?? 0 } : s)));
+  }
+
+  // Active un jour sur une ligne : crée un slot mono-jour reprenant horaires/semaines.
+  function addCell(row: Row, day: DayKey) {
+    const id = newClientSlotId();
+    setSlots((prev) => [
+      ...prev,
+      {
+        id,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        weeks: row.weeks,
+        slotDay: day,
+        capacity: capacity,
+        demandeurIds: [...(row.cells[0]?.demandeurIds ?? [])],
+      },
+    ]);
+    setSelected((prev) => new Set(prev).add(id));
+  }
+
+  // Retire un jour : supprime le slot mono-jour du buffer.
+  function removeCell(slotId: string) {
+    setSlots((prev) => prev.filter((s) => s.id !== slotId));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(slotId);
+      return next;
+    });
   }
 
   function addSlot() {
-    const cap: Partial<Record<DayKey, number | null>> = {};
-    for (const d of dayCols) if (filterDays.has(d)) cap[d] = ponctCapacity;
-    const id = newClientSlotId();
+    const days = dayCols.filter((d) => filterDays.has(d));
+    if (days.length === 0) {
+      setNotice("Cochez au moins un jour avant d'ajouter un créneau.");
+      return;
+    }
     // Durée = 1 jour → créneau « journée entière » : pas d'horaire (début/fin vides).
-    const allday = recurDuration >= ALLDAY_DURATION;
+    const allday = duration >= ALLDAY_DURATION;
     let start = "";
     setNotice(null);
     if (!allday) {
@@ -183,12 +247,10 @@ export function RecurringEditor({
       ];
       const startMin = nextSlotInRanges(
         slots.map((s) => ({ startTime: s.startTime, endTime: s.endTime })),
-        recurDuration,
+        duration,
         ranges,
       );
       if (startMin == null) {
-        // Plus de place dans les plages → créneau « journée entière » à ajuster
-        // manuellement (cf. legacy : toast + slot sans horaire).
         setNotice(
           "Plus de place dans les plages horaires — créneau « journée entière » ajouté, ajustez les horaires.",
         );
@@ -196,26 +258,28 @@ export function RecurringEditor({
         start = minToTime(startMin);
       }
     }
-    setSlots((prev) => [
-      ...prev,
-      {
-        id,
-        startTime: start,
-        endTime: start ? addMinutes(start, recurDuration) : "",
-        weeks: "A,B",
-        cap,
-        demandeurIds: [],
-      },
-    ]);
-    setSelected((prev) => new Set(prev).add(id));
-    setPage(Math.floor(slots.length / SLOT_PAGE_SIZE));
+    const endTime = start ? addMinutes(start, duration) : "";
+    const newCells: EditRecurSlot[] = days.map((day) => ({
+      id: newClientSlotId(),
+      startTime: start,
+      endTime,
+      weeks: "A,B",
+      slotDay: day,
+      capacity: capacity,
+      demandeurIds: [],
+    }));
+    setSlots((prev) => [...prev, ...newCells]);
+    setSelected((prev) => new Set([...prev, ...newCells.map((c) => c.id)]));
+    setPage(Math.floor(rows.length / SLOT_PAGE_SIZE));
   }
 
-  function toggle(id: string, on: boolean) {
+  function toggleRow(row: Row, on: boolean) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (on) next.add(id);
-      else next.delete(id);
+      for (const c of row.cells) {
+        if (on) next.add(c.id);
+        else next.delete(c.id);
+      }
       return next;
     });
   }
@@ -223,8 +287,8 @@ export function RecurringEditor({
   async function deleteSelected() {
     if (selected.size === 0) return;
     if ([...selected].some((id) => reserved(id))) return;
-    if (!window.confirm(`Supprimer ${selected.size} créneau(x) récurrent(s) ?`)) return;
     const ids = [...selected];
+    if (!window.confirm(`Supprimer ${ids.length} créneau(x) récurrent(s) ?`)) return;
     // Nouveaux créneaux (jamais enregistrés) : simple retrait du buffer.
     // Existants : suppression immédiate en base (+ miroirs/réservations), comme le legacy.
     const persisted = ids.filter((id) => savedIds.has(id));
@@ -265,7 +329,7 @@ export function RecurringEditor({
   }
 
   function applyCapToAll() {
-    const capVal = Math.max(1, ponctCapacity);
+    const capVal = Math.max(1, capacity);
     if (slots.length === 0) return;
     if (
       !window.confirm(
@@ -274,18 +338,13 @@ export function RecurringEditor({
     ) {
       return;
     }
-    setSlots((prev) =>
-      prev.map((s) => {
-        const cap: Partial<Record<DayKey, number | null>> = {};
-        for (const d of Object.keys(s.cap) as DayKey[]) cap[d] = capVal;
-        return { ...s, cap };
-      }),
-    );
+    setSlots((prev) => prev.map((s) => ({ ...s, capacity: capVal })));
   }
 
   const anyReservedSelected = [...selected].some((id) => reserved(id));
-  // Mirror sub-section visible when at least one recurring slot is selected.
+  // Mirror sub-section visible when at least one persisted recurring slot is selected.
   const selectedRecurForMirrors = [...selected].filter((id) => savedIds.has(id));
+  const demRow = demModal ? rows.find((r) => r.key === demModal) : null;
 
   return (
     <div>
@@ -306,7 +365,7 @@ export function RecurringEditor({
         >
           <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
             <span className="cap-tool-label">Durée</span>
-            <DurationStepper value={recurDuration} onStep={onDurationStep} />
+            <DurationStepper value={duration} onStep={onDurationStep} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
             <span className="cap-tool-label">Capacité</span>
@@ -314,7 +373,7 @@ export function RecurringEditor({
               type="number"
               min={1}
               max={999}
-              value={ponctCapacity}
+              value={capacity}
               className="cap-input"
               onChange={(e) =>
                 onCapacityChange(Math.max(1, Number.parseInt(e.target.value, 10) || 1))
@@ -408,26 +467,27 @@ export function RecurringEditor({
                   </tr>
                 </thead>
                 <tbody>
-                  {pageSlots.map((sl) => {
-                    const checked = selected.has(sl.id);
-                    const isReserved = reserved(sl.id);
+                  {pageRows.map((row) => {
+                    const checked = rowChecked(row);
+                    const isReserved = rowReserved(row);
                     const disTime = !checked || isReserved;
+                    const rowDemandeurs = row.cells[0]?.demandeurIds ?? [];
                     return (
-                      <tr key={sl.id}>
+                      <tr key={row.key}>
                         <td className="col-check">
                           <input
                             type="checkbox"
                             className="admin-cb"
                             checked={checked}
-                            onChange={(e) => toggle(sl.id, e.target.checked)}
+                            onChange={(e) => toggleRow(row, e.target.checked)}
                           />
                         </td>
                         {abMode &&
                           (checked ? (
                             <td style={{ textAlign: "center" }}>
                               <select
-                                value={sl.weeks}
-                                onChange={(e) => update(sl.id, { weeks: e.target.value })}
+                                value={row.weeks}
+                                onChange={(e) => setWeeks(row, e.target.value)}
                                 style={{ fontSize: ".72rem", padding: "1px 3px" }}
                               >
                                 <option value="A,B">Semaines A &amp; B</option>
@@ -437,10 +497,10 @@ export function RecurringEditor({
                             </td>
                           ) : (
                             <td style={{ textAlign: "center", fontSize: ".7rem", fontWeight: 700 }}>
-                              {weekLabel(sl.weeks)}
+                              {weekLabel(row.weeks)}
                             </td>
                           ))}
-                        {isAllDay(sl.startTime, sl.endTime) ? (
+                        {isAllDay(row.startTime, row.endTime) ? (
                           <td colSpan={2} style={{ textAlign: "center" }}>
                             <span
                               style={{
@@ -457,7 +517,7 @@ export function RecurringEditor({
                                 type="button"
                                 className="cell-add-btn"
                                 title="Définir une heure de début et de fin"
-                                onClick={() => initTimes(sl.id)}
+                                onClick={() => initTimes(row)}
                                 style={{
                                   marginLeft: ".4rem",
                                   border: "none",
@@ -477,11 +537,9 @@ export function RecurringEditor({
                               >
                                 <input
                                   type="text"
-                                  value={sl.startTime}
+                                  value={row.startTime}
                                   disabled={disTime}
-                                  onChange={(e) =>
-                                    update(sl.id, { startTime: e.target.value.replace("h", ":") })
-                                  }
+                                  onChange={(e) => setRowStart(row, e.target.value)}
                                   placeholder="09:30"
                                   style={{ width: 58, fontSize: ".78rem", textAlign: "center" }}
                                 />
@@ -490,7 +548,7 @@ export function RecurringEditor({
                                     type="button"
                                     className="cell-clear-btn"
                                     title="Passer en journée entière (sans horaire)"
-                                    onClick={() => setAllDay(sl.id)}
+                                    onClick={() => setAllDay(row)}
                                     style={{
                                       border: "none",
                                       background: "none",
@@ -505,7 +563,7 @@ export function RecurringEditor({
                             <td>
                               <input
                                 type="text"
-                                value={sl.endTime}
+                                value={row.endTime}
                                 readOnly
                                 style={{
                                   width: 58,
@@ -518,9 +576,9 @@ export function RecurringEditor({
                           </>
                         )}
                         {dayCols.map((d) => {
-                          const has = d in sl.cap && sl.cap[d] != null;
-                          const minC = 0;
-                          if (has) {
+                          const cell = cellOf(row, d);
+                          const cellReserved = cell ? reserved(cell.id) : false;
+                          if (cell) {
                             return (
                               <td key={d} style={{ textAlign: "center" }}>
                                 <span
@@ -528,25 +586,24 @@ export function RecurringEditor({
                                 >
                                   <input
                                     type="number"
-                                    min={minC}
+                                    min={0}
                                     max={99}
-                                    value={sl.cap[d] ?? 0}
+                                    value={cell.capacity}
                                     disabled={!checked}
                                     onChange={(e) =>
-                                      setCap(
-                                        sl.id,
-                                        d,
-                                        Math.max(minC, Number.parseInt(e.target.value, 10) || 0),
+                                      setCellCap(
+                                        cell.id,
+                                        Math.max(0, Number.parseInt(e.target.value, 10) || 0),
                                       )
                                     }
                                     style={{ width: 52, textAlign: "center", fontSize: ".78rem" }}
                                   />
-                                  {checked && !isReserved && (
+                                  {checked && !cellReserved && (
                                     <button
                                       type="button"
                                       className="cell-clear-btn"
                                       title="Retirer ce jour"
-                                      onClick={() => removeCap(sl.id, d)}
+                                      onClick={() => removeCell(cell.id)}
                                       style={{
                                         border: "none",
                                         background: "none",
@@ -567,7 +624,7 @@ export function RecurringEditor({
                                   type="button"
                                   className="cell-add-btn"
                                   title="Activer ce jour"
-                                  onClick={() => setCap(sl.id, d, ponctCapacity)}
+                                  onClick={() => addCell(row, d)}
                                   style={{ border: "none", background: "none", cursor: "pointer" }}
                                 >
                                   ➕
@@ -582,16 +639,16 @@ export function RecurringEditor({
                           <button
                             type="button"
                             className="btn btn-ghost"
-                            onClick={() => setDemModal(sl.id)}
+                            onClick={() => setDemModal(row.key)}
                             title={
-                              sl.demandeurIds.length
-                                ? `${sl.demandeurIds.length} demandeur(s) autorisé(s)`
+                              rowDemandeurs.length
+                                ? `${rowDemandeurs.length} demandeur(s) autorisé(s)`
                                 : "Aucune restriction"
                             }
                             style={{
                               padding: "1px 5px",
                               fontSize: ".78rem",
-                              ...(sl.demandeurIds.length
+                              ...(rowDemandeurs.length
                                 ? { borderColor: "var(--accent)", color: "var(--accent)" }
                                 : { color: "var(--muted)" }),
                             }}
@@ -602,7 +659,7 @@ export function RecurringEditor({
                       </tr>
                     );
                   })}
-                  {slots.length === 0 && (
+                  {rows.length === 0 && (
                     <tr>
                       <td
                         colSpan={3 + (abMode ? 1 : 0) + dayCols.length + 1}
@@ -731,20 +788,27 @@ export function RecurringEditor({
         />
       )}
 
-      {demModal && (
+      {demRow && (
         <DemandeursModal
           demandeurs={data.demandeurs}
-          selected={slots.find((s) => s.id === demModal)?.demandeurIds ?? []}
+          selected={demRow.cells[0]?.demandeurIds ?? []}
           saving={saving}
           onClose={() => setDemModal(null)}
           onSave={async (ids) => {
-            const id = demModal;
-            update(id, { demandeurIds: ids });
+            const cellIds = demRow.cells.map((c) => c.id);
+            patchCells(cellIds, { demandeurIds: ids });
             setDemModal(null);
-            if (savedIds.has(id)) {
-              const res = await setDemandeurs(id, ids);
-              if (!res.ok) setError(res.error ?? "Échec.");
-              else refresh();
+            // Propage en base pour les cellules déjà enregistrées.
+            const persisted = cellIds.filter((id) => savedIds.has(id));
+            if (persisted.length) {
+              for (const id of persisted) {
+                const res = await setDemandeurs(id, ids);
+                if (!res.ok) {
+                  setError(res.error ?? "Échec.");
+                  return;
+                }
+              }
+              refresh();
             }
           }}
         />

@@ -32,12 +32,13 @@ export default async function ServiceReservePage({
         startTime: true,
         endTime: true,
         capacity: true,
+        slotDay: true,
         demandeurs: { select: { demandeurId: true } },
       },
     }),
     prisma.booking.findMany({
       where: { serviceId, bookingType: "recurring" },
-      select: { id: true, slotId: true, periodId: true, dayKey: true, enfants: true, userId: true },
+      select: { id: true, slotId: true, periodId: true, enfants: true, userId: true },
     }),
     prisma.period.findMany({
       where: { OR: [{ serviceId: null }, { serviceId }], state: "actif" },
@@ -57,7 +58,13 @@ export default async function ServiceReservePage({
         s.demandeurs.length === 0 ||
         s.demandeurs.some((d) => d.demandeurId === (profile?.demandeurId ?? -1)),
     )
-    .map((s) => ({ id: s.id, startTime: s.startTime, endTime: s.endTime, capacity: s.capacity }));
+    .map((s) => ({
+      id: s.id,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      capacity: s.capacity,
+      slotDay: s.slotDay,
+    }));
 
   const days = service.activeDays
     .split(",")
@@ -95,7 +102,7 @@ export default async function ServiceReservePage({
         <RecurringBooking
           serviceId={service.id}
           days={days}
-          recurCapacity={service.recurCapacity}
+          defaultCapacity={service.capacity}
           slots={recurSlots}
           periods={periods}
           bookings={recurBookings}

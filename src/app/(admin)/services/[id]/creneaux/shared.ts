@@ -6,7 +6,6 @@ export {
   activeDayKeys,
   addMinutes,
   ALLDAY_DURATION,
-  DAY_CAP_FIELD,
   DAY_KEYS,
   DAY_LABELS,
   formatDuration,
@@ -25,13 +24,15 @@ export {
 
 export type SaveResult = { ok: true } | { ok: false; error?: string };
 
-// Editable recurring slot (per-period buffer).
+// Editable recurring slot (per-period buffer). Modèle « un slot = un jour » :
+// chaque créneau porte un seul `slotDay` et une seule `capacity`.
 export type EditRecurSlot = {
   id: string;
   startTime: string;
   endTime: string;
   weeks: string;
-  cap: Partial<Record<DayKey, number | null>>;
+  slotDay: DayKey;
+  capacity: number;
   demandeurIds: number[];
 };
 

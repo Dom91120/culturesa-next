@@ -6,8 +6,6 @@ import { BookingError, cancelUserBooking, createUniqueBooking } from "@/server/s
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
-
 function revalidate(serviceId: string) {
   revalidatePath(`/reservations/${serviceId}`);
 }
@@ -19,14 +17,12 @@ export async function reserveRecurringAction(
   serviceId: string,
   slotId: string,
   periodId: number,
-  dayKey: string,
   week = "",
   theme = "",
   enfants = 0,
   accompagnants = 0,
 ): Promise<Result> {
   const session = await requireUser();
-  if (!DAY_KEYS.includes(dayKey)) return { ok: false, error: "Jour invalide." };
   const wk = week === "A" || week === "B" ? week : "";
   try {
     await prisma.$transaction(
@@ -56,7 +52,7 @@ export async function reserveRecurringAction(
         ) {
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
         }
-        const capacity = slot.capacity ?? slot.service.recurCapacity;
+        const capacity = slot.capacity ?? slot.service.capacity;
         // Capacité selon le mode jauge du service (même règle que l'affichage) : jauge =
         // enfants + adultes ; hors jauge = 1 par réservation. Sinon les enfants du PROFIL
         // de l'usager « remplissent » à tort un créneau (faux « complet »).
@@ -68,7 +64,6 @@ export async function reserveRecurringAction(
           serviceId,
           slotId,
           periodId,
-          dayKey,
           bookingType: "recurring" as const,
         };
         let used: number;
@@ -101,7 +96,6 @@ export async function reserveRecurringAction(
             serviceId,
             slotId,
             periodId,
-            dayKey,
             week: wk,
             enfants: myEnfants,
             accompagnants: myAcc,
@@ -182,12 +176,10 @@ export async function cancelMyBookingAction(serviceId: string, bookingId: number
 export async function moveMyBookingAction(
   serviceId: string,
   bookingId: number,
-  target: { slotId: string; ponctuel: boolean; periodId?: number; dayKey?: string; week?: string },
+  target: { slotId: string; ponctuel: boolean; periodId?: number; week?: string },
 ): Promise<Result> {
   const session = await requireUser();
   const wk = target.week === "A" || target.week === "B" ? target.week : "";
-  const dayKey = target.ponctuel ? "" : (target.dayKey ?? "");
-  if (!target.ponctuel && !DAY_KEYS.includes(dayKey)) return { ok: false, error: "Jour invalide." };
   try {
     await prisma.$transaction(
       async (tx) => {
@@ -218,7 +210,7 @@ export async function moveMyBookingAction(
         ) {
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
         }
-        const capacity = slot.capacity ?? slot.service.recurCapacity;
+        const capacity = slot.capacity ?? slot.service.capacity;
         // Capacité selon le mode jauge (même règle que l'affichage et que la création) :
         // jauge = enfants + adultes ; hors jauge = 1 par réservation.
         const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
@@ -236,7 +228,6 @@ export async function moveMyBookingAction(
               serviceId,
               slotId: target.slotId,
               periodId: target.periodId ?? 0,
-              dayKey,
               bookingType: "recurring" as const,
               id: { not: bookingId },
             };
@@ -266,7 +257,6 @@ export async function moveMyBookingAction(
           data: {
             slotId: target.slotId,
             periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
-            dayKey,
             week: target.ponctuel ? "" : wk,
             validated,
             autoValidateFrom: new Date(),

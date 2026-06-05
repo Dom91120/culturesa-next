@@ -35,16 +35,16 @@ export type EditionRow = {
 export async function listEditionRows(serviceId: string): Promise<EditionRow[]> {
   const bookings = await prisma.booking.findMany({
     where: { serviceId },
-    orderBy: [{ periodId: "asc" }, { dayKey: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ periodId: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       bookingType: true,
-      dayKey: true,
       themeLabel: true,
       enfants: true,
       validated: true,
       pointage: true,
-      slot: { select: { startTime: true, endTime: true, slotDate: true } },
+      // Le jour est porté par le créneau (slotDay) ; date pour un ponctuel.
+      slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
       user: { select: { nom: true, prenom: true, demandeur: { select: { label: true } } } },
       // Pas de relation period sur Booking : on récupère le libellé séparément.
       periodId: true,
@@ -66,7 +66,7 @@ export async function listEditionRows(serviceId: string): Promise<EditionRow[]> 
         ? b.slot.slotDate
           ? dateFmt.format(b.slot.slotDate)
           : "—"
-        : (DAY_NAMES[b.dayKey] ?? b.dayKey),
+        : (DAY_NAMES[b.slot.slotDay ?? ""] ?? b.slot.slotDay ?? "—"),
     debut: b.slot.startTime,
     fin: b.slot.endTime,
     demandeur: b.user.demandeur?.label ?? "",

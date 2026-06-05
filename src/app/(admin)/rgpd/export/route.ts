@@ -33,7 +33,8 @@ export async function GET(req: Request) {
           bookingType: true,
           serviceId: true,
           slotId: true,
-          dayKey: true,
+          // Le jour est porté par le créneau (slotDay) ; date pour un ponctuel.
+          slot: { select: { slotDay: true, slotDate: true } },
           enfants: true,
           accompagnants: true,
           themeLabel: true,

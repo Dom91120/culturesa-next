@@ -20,7 +20,7 @@ type Service = {
   morningEnd: string;
   afternoonStart: string;
   afternoonEnd: string;
-  recurCapacity: number;
+  capacity: number;
   semaineAb: boolean;
   themesMode: "libre" | "liste";
   maxReservations: number;
@@ -734,13 +734,8 @@ type Slot = {
   startTime: string;
   endTime: string;
   capacity: number | null;
-  capLun: number | null;
-  capMar: number | null;
-  capMer: number | null;
-  capJeu: number | null;
-  capVen: number | null;
-  capSam: number | null;
-  capDim: number | null;
+  // Jour de la semaine du créneau récurrent (modèle « un slot = un jour »).
+  slotDay: string | null;
   periodId: number | null;
   weeks: string | null;
   // Renseigné uniquement pour les créneaux ponctuels projetés (slots virtuels).
@@ -770,25 +765,11 @@ function parseWeeks(weeks: string | null): ("A" | "B")[] {
   return set.size ? (Array.from(set) as ("A" | "B")[]) : ["A", "B"];
 }
 
+// Modèle « un slot = un jour » : la capacité d'un jour n'existe que si c'est LE jour
+// du créneau (slot.slotDay). Les slots ponctuels projetés portent leur slotDay = jour
+// de leur date, ce qui les fait passer ici aussi.
 function dayCap(slot: Slot, dayKey: string): number | null {
-  switch (dayKey) {
-    case "lun":
-      return slot.capLun;
-    case "mar":
-      return slot.capMar;
-    case "mer":
-      return slot.capMer;
-    case "jeu":
-      return slot.capJeu;
-    case "ven":
-      return slot.capVen;
-    case "sam":
-      return slot.capSam;
-    case "dim":
-      return slot.capDim;
-    default:
-      return null;
-  }
+  return slot.slotDay === dayKey ? slot.capacity : null;
 }
 type Pointage = "present" | "absent" | null;
 type Booking = {
@@ -989,7 +970,7 @@ export function UserAgendaGrid({
   periods,
   slots,
   uniqueSlots,
-  bookings,
+  bookings: bookingsRaw,
   themes,
   modes,
   exercices,
@@ -1003,7 +984,8 @@ export function UserAgendaGrid({
   periods: Period[];
   slots: Slot[];
   uniqueSlots: UniqueSlot[];
-  bookings: Booking[];
+  // Le serveur ne stocke plus dayKey : il est dérivé du slot (slotDay / date).
+  bookings: Omit<Booking, "dayKey">[];
   themes: string[];
   modes: ServiceModes;
   exercices: Exercice[];
@@ -1024,6 +1006,17 @@ export function UserAgendaGrid({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  // Le jour (dayKey) d'une réservation se déduit désormais de son créneau : slotDay
+  // pour un récurrent, jour de la date pour un ponctuel. (Le champ booking.dayKey a
+  // été supprimé en base avec le passage au modèle « un slot = un jour ».)
+  const bookings = useMemo<Booking[]>(() => {
+    const recurDay = new Map(slots.map((s) => [s.id, s.slotDay ?? ""]));
+    const uniqDay = new Map(uniqueSlots.map((s) => [s.id, dayKeyFromYmd(s.slotDate)]));
+    return bookingsRaw.map((b) => ({
+      ...b,
+      dayKey: recurDay.get(b.slotId) ?? uniqDay.get(b.slotId) ?? "",
+    }));
+  }, [bookingsRaw, slots, uniqueSlots]);
   // Mode debug (côté client, comme le legacy : localStorage rc_debug / body.debug-mode).
   const [debug, setDebug] = useState(false);
   useEffect(() => {
@@ -1415,19 +1408,12 @@ export function UserAgendaGrid({
         if (!u.slotDate || u.slotDate < mondayStr || u.slotDate > sunday) continue;
         const dk = dayKeyFromYmd(u.slotDate);
         if (!days.includes(dk)) continue;
-        const cap = u.capacity ?? service.recurCapacity;
         ponctuelSlots.push({
           id: u.id,
           startTime: u.startTime,
           endTime: u.endTime,
-          capacity: u.capacity,
-          capLun: dk === "lun" ? cap : null,
-          capMar: dk === "mar" ? cap : null,
-          capMer: dk === "mer" ? cap : null,
-          capJeu: dk === "jeu" ? cap : null,
-          capVen: dk === "ven" ? cap : null,
-          capSam: dk === "sam" ? cap : null,
-          capDim: dk === "dim" ? cap : null,
+          capacity: u.capacity ?? service.capacity,
+          slotDay: dk,
           // periodId aligné sur la période effective pour passer le filtre de période.
           periodId: effectivePeriodId,
           weeks: null,
@@ -1494,12 +1480,13 @@ export function UserAgendaGrid({
     for (const slot of allSlots) {
       if (effectivePeriodId != null && slot.periodId !== effectivePeriodId) continue;
       if (!slotMatchesWeek(slot)) continue;
-      for (const dayKey of days) {
-        // Capacité null OU 0 = pas de créneau ce jour-là → on ne l'affiche pas.
-        const c = dayCap(slot, dayKey);
-        if (c == null || c <= 0) continue;
-        candidates.set(`${dayKey}|${slot.id}`, { slotId: slot.id, dayKey });
-      }
+      // Modèle « un slot = un jour » : le créneau s'affiche sur SON jour (slotDay),
+      // avec repli sur service.capacity si la capacité n'est pas fixée. Capacité 0 = fermé.
+      const dayKey = slot.slotDay;
+      if (!dayKey || !days.includes(dayKey)) continue;
+      const c = slot.capacity ?? service.capacity;
+      if (c <= 0) continue;
+      candidates.set(`${dayKey}|${slot.id}`, { slotId: slot.id, dayKey });
     }
     // Union avec les cellules portant des réservations : aucune résa n'est perdue,
     // même sur un jour sans capacité configurée (donnée de seed incohérente possible).
@@ -1520,7 +1507,7 @@ export function UserAgendaGrid({
       const allday = !slot.startTime || !slot.endTime;
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
-      const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.recurCapacity;
+      const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
       // Places occupées (même règle que l'agenda admin) : en mode jauge = enfants +
       // adultes (accompagnants) ; hors jauge = 1 par réservation.
       const used =
@@ -1583,7 +1570,7 @@ export function UserAgendaGrid({
     effectivePeriodId,
     effectiveWeek,
     gridStartMin,
-    service.recurCapacity,
+    service.capacity,
     modes.gaugeRec,
     modes.gaugePonct,
   ]);
@@ -1981,7 +1968,6 @@ export function UserAgendaGrid({
             slotId: m.slotId,
             ponctuel: m.ponctuel,
             periodId: m.periodId,
-            dayKey: m.dayKey,
             week: m.week,
           });
           if (!res.ok) throw new Error(res.error ?? "Échec d'un déplacement.");
@@ -1993,7 +1979,6 @@ export function UserAgendaGrid({
                 service.id,
                 a.slotId,
                 a.periodId,
-                a.dayKey,
                 a.week,
                 a.theme,
                 a.enfants,

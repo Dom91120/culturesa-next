@@ -29,8 +29,7 @@ type Service = {
   morningEnd: string;
   afternoonStart: string;
   afternoonEnd: string;
-  recurCapacity: number;
-  ponctCapacity: number;
+  capacity: number;
   semaineAb: boolean;
   themesMode: "libre" | "liste";
   openOnHolidays: boolean;
@@ -135,13 +134,8 @@ type Slot = {
   startTime: string;
   endTime: string;
   capacity: number | null;
-  capLun: number | null;
-  capMar: number | null;
-  capMer: number | null;
-  capJeu: number | null;
-  capVen: number | null;
-  capSam: number | null;
-  capDim: number | null;
+  // Jour de la semaine du créneau récurrent (modèle « un slot = un jour »).
+  slotDay: string | null;
   periodId: number | null;
   weeks: string | null;
   // Renseigné uniquement pour les créneaux ponctuels projetés (slots virtuels).
@@ -171,25 +165,11 @@ function parseWeeks(weeks: string | null): ("A" | "B")[] {
   return set.size ? (Array.from(set) as ("A" | "B")[]) : ["A", "B"];
 }
 
+// Modèle « un slot = un jour » : la capacité d'un jour n'existe que si c'est LE jour
+// du créneau (slot.slotDay). Les slots ponctuels projetés portent leur slotDay = jour
+// de leur date, ce qui les fait passer ici aussi.
 function dayCap(slot: Slot, dayKey: string): number | null {
-  switch (dayKey) {
-    case "lun":
-      return slot.capLun;
-    case "mar":
-      return slot.capMar;
-    case "mer":
-      return slot.capMer;
-    case "jeu":
-      return slot.capJeu;
-    case "ven":
-      return slot.capVen;
-    case "sam":
-      return slot.capSam;
-    case "dim":
-      return slot.capDim;
-    default:
-      return null;
-  }
+  return slot.slotDay === dayKey ? slot.capacity : null;
 }
 type Pointage = "present" | "absent" | null;
 type Booking = {
@@ -355,7 +335,7 @@ export function AgendaGrid({
   periods,
   slots,
   uniqueSlots,
-  bookings,
+  bookings: bookingsRaw,
   users,
   themes,
   modes,
@@ -368,7 +348,8 @@ export function AgendaGrid({
   periods: Period[];
   slots: Slot[];
   uniqueSlots: UniqueSlot[];
-  bookings: Booking[];
+  // Le serveur ne stocke plus dayKey : il est dérivé du slot (slotDay / date).
+  bookings: Omit<Booking, "dayKey">[];
   users: UserOpt[];
   themes: string[];
   modes: ServiceModes;
@@ -380,6 +361,17 @@ export function AgendaGrid({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  // Le jour (dayKey) d'une réservation se déduit désormais de son créneau : slotDay
+  // pour un récurrent, jour de la date pour un ponctuel. (Le champ booking.dayKey a
+  // été supprimé en base avec le passage au modèle « un slot = un jour ».)
+  const bookings = useMemo<Booking[]>(() => {
+    const recurDay = new Map(slots.map((s) => [s.id, s.slotDay ?? ""]));
+    const uniqDay = new Map(uniqueSlots.map((s) => [s.id, dayKeyFromYmd(s.slotDate)]));
+    return bookingsRaw.map((b) => ({
+      ...b,
+      dayKey: recurDay.get(b.slotId) ?? uniqDay.get(b.slotId) ?? "",
+    }));
+  }, [bookingsRaw, slots, uniqueSlots]);
   // Exercice courant : par défaut le plus récent (dernier après tri par libellé).
   const [currentExerciceId, setCurrentExerciceId] = useState<number | null>(
     exercices.length ? exercices[exercices.length - 1].id : null,
@@ -404,35 +396,23 @@ export function AgendaGrid({
   // haut/bas = créneau de plusieurs quarts (validé au relâché). Cf. plus bas.
   const [creationMode, setCreationMode] = useState(false);
   // Capacité appliquée aux créneaux créés en mode création (champ remplaçant la
-  // légende). Initialisée à la capacité par défaut du service.
-  // Capacité par défaut éditable PAR MODE, AUTOSAUVEGARDÉE dans le service :
-  // recurCapacity en Modèle de période, ponctCapacity en Semaine réelle.
-  const [recurCapStr, setRecurCapStr] = useState(String(service.recurCapacity));
-  const [ponctCapStr, setPonctCapStr] = useState(String(service.ponctCapacity));
-  const isModelMode = mode === "model";
-  const capStr = isModelMode ? recurCapStr : ponctCapStr;
-  const createCap = Math.max(
-    1,
-    Number.parseInt(capStr, 10) || (isModelMode ? service.recurCapacity : service.ponctCapacity),
-  );
+  // légende). Capacité par défaut UNIQUE du service, autosauvegardée.
+  const [capStr, setCapStr] = useState(String(service.capacity));
+  const createCap = Math.max(1, Number.parseInt(capStr, 10) || service.capacity);
   const [capSaved, setCapSaved] = useState(false);
   const capSaveTimer = useRef<number | null>(null);
   const capFlashTimer = useRef<number | null>(null);
-  // Édition du champ Capacité : met à jour l'état du mode courant et autosauvegarde
-  // (débounce 500 ms) la capacité par défaut correspondante du service.
+  // Édition du champ Capacité : met à jour l'état et autosauvegarde (débounce 500 ms)
+  // la capacité par défaut du service.
   function onCapChange(v: string) {
-    const kind: "recur" | "ponct" = isModelMode ? "recur" : "ponct";
-    const fallback = isModelMode ? service.recurCapacity : service.ponctCapacity;
-    if (isModelMode) setRecurCapStr(v);
-    else setPonctCapStr(v);
+    setCapStr(v);
     setCapSaved(false);
     if (capSaveTimer.current) window.clearTimeout(capSaveTimer.current);
     capSaveTimer.current = window.setTimeout(() => {
-      const n = Math.max(1, Number.parseInt(v, 10) || fallback);
+      const n = Math.max(1, Number.parseInt(v, 10) || service.capacity);
       startTransition(async () => {
         const res = await setServiceDefaultCapacityAction({
           serviceId: service.id,
-          kind,
           value: n,
         });
         if (res?.ok) {
@@ -854,19 +834,12 @@ export function AgendaGrid({
         if (!u.slotDate || u.slotDate < mondayStr || u.slotDate > sunday) continue;
         const dk = dayKeyFromYmd(u.slotDate);
         if (!days.includes(dk)) continue;
-        const cap = u.capacity ?? service.recurCapacity;
         ponctuelSlots.push({
           id: u.id,
           startTime: u.startTime,
           endTime: u.endTime,
-          capacity: u.capacity,
-          capLun: dk === "lun" ? cap : null,
-          capMar: dk === "mar" ? cap : null,
-          capMer: dk === "mer" ? cap : null,
-          capJeu: dk === "jeu" ? cap : null,
-          capVen: dk === "ven" ? cap : null,
-          capSam: dk === "sam" ? cap : null,
-          capDim: dk === "dim" ? cap : null,
+          capacity: u.capacity ?? service.capacity,
+          slotDay: dk,
           // periodId aligné sur la période effective pour passer le filtre de période.
           periodId: effectivePeriodId,
           weeks: null,
@@ -919,12 +892,13 @@ export function AgendaGrid({
     for (const slot of allSlots) {
       if (effectivePeriodId != null && slot.periodId !== effectivePeriodId) continue;
       if (!slotMatchesWeek(slot)) continue;
-      for (const dayKey of days) {
-        // Capacité null OU 0 = pas de créneau ce jour-là → on ne l'affiche pas.
-        const c = dayCap(slot, dayKey);
-        if (c == null || c <= 0) continue;
-        candidates.set(`${dayKey}|${slot.id}`, { slotId: slot.id, dayKey });
-      }
+      // Modèle « un slot = un jour » : le créneau s'affiche sur SON jour (slotDay),
+      // avec repli sur service.capacity si la capacité n'est pas fixée. Capacité 0 = fermé.
+      const dayKey = slot.slotDay;
+      if (!dayKey || !days.includes(dayKey)) continue;
+      const c = slot.capacity ?? service.capacity;
+      if (c <= 0) continue;
+      candidates.set(`${dayKey}|${slot.id}`, { slotId: slot.id, dayKey });
     }
     // Union avec les cellules portant des réservations : aucune résa n'est perdue,
     // même sur un jour sans capacité configurée (donnée de seed incohérente possible).
@@ -945,7 +919,7 @@ export function AgendaGrid({
       const allday = !slot.startTime || !slot.endTime;
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
-      const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.recurCapacity;
+      const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
       // Jauge = enfants + adultes (accompagnants), comme la modale pile et le legacy
       // _renderCsmCapInfo.
       const used = list.reduce((sum, b) => sum + b.enfants + b.accompagnants, 0);
@@ -1004,7 +978,7 @@ export function AgendaGrid({
     effectivePeriodId,
     effectiveWeek,
     gridStartMin,
-    service.recurCapacity,
+    service.capacity,
   ]);
 
   function run(p: Promise<unknown>) {
@@ -1111,7 +1085,7 @@ export function AgendaGrid({
 
   // Au relâché : UN créneau par colonne couverte, couvrant [start, max+15] (clic
   // simple = 1 quart, 1 colonne). Récurrent en Modèle de période (période + jour +
-  // semaine A/B active), ponctuel daté en Semaine réelle. Capacité = recurCapacity.
+  // semaine A/B active), ponctuel daté en Semaine réelle. Capacité = service.capacity.
   function finalizeCreate(cd: NonNullable<typeof createDrag>) {
     const rawStart = Math.min(cd.startMin, cd.curMin);
     const rawEnd = Math.min(gridEndMin, Math.max(cd.startMin, cd.curMin) + 15);
@@ -1210,7 +1184,7 @@ export function AgendaGrid({
   function openCapModal(slotId: string) {
     const slot =
       slots.find((s) => s.id === slotId) ?? uniqueSlots.find((s) => s.id === slotId) ?? null;
-    setCapValue(String(slot?.capacity ?? service.recurCapacity));
+    setCapValue(String(slot?.capacity ?? service.capacity));
     setCapDemIds(slotDemandeurs[slotId] ?? []);
     setCapError(null);
     setCapModal({ slotId });

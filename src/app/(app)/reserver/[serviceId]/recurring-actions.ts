@@ -6,21 +6,17 @@ import { BookingError } from "@/server/services/bookings";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
-
 /**
- * Réserve un créneau RÉCURRENT pour l'usager (période + jour), avec contrôle de
- * jauge anti-surbooking (transaction sérialisable). La quantité d'enfants est
- * prise dans le profil de l'usager.
+ * Réserve un créneau RÉCURRENT pour l'usager (période), avec contrôle de jauge
+ * anti-surbooking (transaction sérialisable). Le jour est porté par le créneau
+ * (slotDay) ; la quantité d'enfants est prise dans le profil de l'usager.
  */
 export async function bookRecurringAction(
   serviceId: string,
   slotId: string,
   periodId: number,
-  dayKey: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const session = await requireUser();
-  if (!DAY_KEYS.includes(dayKey)) return { ok: false, error: "Jour invalide." };
 
   try {
     await prisma.$transaction(
@@ -51,9 +47,9 @@ export async function bookRecurringAction(
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
         }
 
-        const capacity = slot.capacity ?? slot.service.recurCapacity;
+        const capacity = slot.capacity ?? slot.service.capacity;
         const agg = await tx.booking.aggregate({
-          where: { serviceId, slotId, periodId, dayKey, bookingType: "recurring" },
+          where: { serviceId, slotId, periodId, bookingType: "recurring" },
           _sum: { enfants: true },
         });
         const used = agg._sum.enfants ?? 0;
@@ -66,7 +62,6 @@ export async function bookRecurringAction(
             serviceId,
             slotId,
             periodId,
-            dayKey,
             week: "",
             enfants: myEnfants,
             validated: false,

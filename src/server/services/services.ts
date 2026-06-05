@@ -12,9 +12,18 @@ export function getService(id: string) {
   return prisma.service.findUnique({ where: { id } });
 }
 
-/** Crée un service avec un id généré (svc_xxxxxxxx). */
-export function createService(label: string, position: number) {
-  const id = `svc_${crypto.randomUUID().slice(0, 8)}`;
+/**
+ * Crée un service avec un id séquentiel `svc_00N` (max existant + 1, sur 3 chiffres),
+ * aligné sur la convention du seed (svc_001, svc_002…). Les ids non numériques
+ * éventuels (anciens `svc_<hex>`) sont ignorés dans le calcul du max.
+ */
+export async function createService(label: string, position: number) {
+  const services = await prisma.service.findMany({ select: { id: true } });
+  const maxN = services.reduce((m, s) => {
+    const match = /^svc_(\d+)$/.exec(s.id);
+    return match ? Math.max(m, Number(match[1])) : m;
+  }, 0);
+  const id = `svc_${String(maxN + 1).padStart(3, "0")}`;
   return prisma.service.create({ data: { id, label, position } });
 }
 

@@ -1,4 +1,4 @@
-import type { CreneauxData, CreneauxSlot } from "@/server/services/slots";
+import type { CreneauxData } from "@/server/services/slots";
 
 export const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
 export type DayKey = (typeof DAY_KEYS)[number];
@@ -11,16 +11,6 @@ export const DAY_LABELS: Record<DayKey, string> = {
   ven: "Ven",
   sam: "Sam",
   dim: "Dim",
-};
-
-export const DAY_CAP_FIELD: Record<DayKey, keyof CreneauxSlot> = {
-  lun: "capLun",
-  mar: "capMar",
-  mer: "capMer",
-  jeu: "capJeu",
-  ven: "capVen",
-  sam: "capSam",
-  dim: "capDim",
 };
 
 export const SLOT_PAGE_SIZE = 8;

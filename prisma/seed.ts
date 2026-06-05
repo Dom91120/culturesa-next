@@ -141,12 +141,41 @@ async function main() {
   // Rattachés à la « Période 1 » de leur service (svc_001 → id 1, svc_002 → id 4).
   // Un créneau récurrent DOIT pointer une période : l'éditeur Créneaux filtre par
   // période, des slots à periodId null seraient invisibles.
+  // Modèle « un slot = un jour » : chaque créneau récurrent porte son slotDay.
   const slots = [
-    { id: "matin", serviceId: "svc_001", periodId: 1, startTime: "09:30", endTime: "11:00" },
-    { id: "aprem", serviceId: "svc_001", periodId: 1, startTime: "14:00", endTime: "15:30" },
-    { id: "matin2", serviceId: "svc_002", periodId: 4, startTime: "09:30", endTime: "11:00" },
-    { id: "aprem2", serviceId: "svc_002", periodId: 4, startTime: "14:00", endTime: "15:30" },
-  ];
+    {
+      id: "matin",
+      serviceId: "svc_001",
+      periodId: 1,
+      slotDay: "lun",
+      startTime: "09:30",
+      endTime: "11:00",
+    },
+    {
+      id: "aprem",
+      serviceId: "svc_001",
+      periodId: 1,
+      slotDay: "jeu",
+      startTime: "14:00",
+      endTime: "15:30",
+    },
+    {
+      id: "matin2",
+      serviceId: "svc_002",
+      periodId: 4,
+      slotDay: "lun",
+      startTime: "09:30",
+      endTime: "11:00",
+    },
+    {
+      id: "aprem2",
+      serviceId: "svc_002",
+      periodId: 4,
+      slotDay: "jeu",
+      startTime: "14:00",
+      endTime: "15:30",
+    },
+  ] as const;
   for (const sl of slots) {
     await prisma.slot.upsert({
       where: { id: sl.id },
@@ -197,8 +226,6 @@ async function main() {
     where: { id: { in: ["matin", "aprem"] } },
     data: { capacity: 15 },
   });
-  // Démo capacité par jour : Lundi matin plafonné à 6 (au lieu de 15).
-  await prisma.slot.update({ where: { id: "matin" }, data: { capLun: 6 } });
 
   const demoUsers = [
     { email: "huppert@demo.fr", prenom: "Isabelle", nom: "HUPPERT", demandeurId: 5 },
@@ -233,26 +260,12 @@ async function main() {
     },
   });
 
-  // Démo semaine A/B : HUPPERT lundi matin est en semaine A (les autres = toutes
-  // semaines). Le service svc_001 est activé en mode A/B plus bas.
+  // Démo semaine A/B : HUPPERT sur « matin » (lundi) est en semaine A (les autres =
+  // toutes semaines). Le jour est porté par le créneau (slotDay). svc_001 est en A/B.
   const demoBookings = [
-    {
-      user: "HUPPERT",
-      slotId: "matin",
-      dayKey: "lun",
-      enfants: 4,
-      theme: "La côte de bœuf",
-      week: "A",
-    },
-    { user: "ADJANI", slotId: "matin", dayKey: "mar", enfants: 9, theme: "Le chocolat", week: "" },
-    {
-      user: "HUPPERT",
-      slotId: "aprem",
-      dayKey: "jeu",
-      enfants: 6,
-      theme: "Atelier nature",
-      week: "",
-    },
+    { user: "HUPPERT", slotId: "matin", enfants: 4, theme: "La côte de bœuf", week: "A" },
+    { user: "ADJANI", slotId: "matin", enfants: 9, theme: "Le chocolat", week: "" },
+    { user: "HUPPERT", slotId: "aprem", enfants: 6, theme: "Atelier nature", week: "" },
   ];
   for (const b of demoBookings) {
     const userId = userIds[b.user];
@@ -263,7 +276,6 @@ async function main() {
           serviceId: "svc_001",
           slotId: b.slotId,
           periodId: 1,
-          dayKey: b.dayKey,
           week: b.week,
         },
       },
@@ -274,7 +286,6 @@ async function main() {
         serviceId: "svc_001",
         slotId: b.slotId,
         periodId: 1,
-        dayKey: b.dayKey,
         week: b.week,
         enfants: b.enfants,
         themeLabel: b.theme,

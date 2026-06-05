@@ -70,7 +70,7 @@ export async function getServiceWithAvailability(serviceId: string, userId: stri
   const mineSet = new Set(mine.map((b) => b.slotId));
 
   const availability: SlotAvailability[] = slots.map((s) => {
-    const capacity = s.capacity ?? service.ponctCapacity;
+    const capacity = s.capacity ?? service.capacity;
     const booked = countBySlot.get(s.id) ?? 0;
     return {
       id: s.id,
@@ -111,7 +111,7 @@ export async function createUniqueBooking(
           throw new BookingError("Ce créneau est passé.");
         }
 
-        const capacity = slot.capacity ?? slot.service.ponctCapacity;
+        const capacity = slot.capacity ?? slot.service.capacity;
         // Capacité selon le mode jauge du service (même règle que l'affichage et les
         // créneaux récurrents) : jauge = enfants + adultes ; hors jauge = 1 par réservation.
         const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
@@ -142,7 +142,6 @@ export async function createUniqueBooking(
             serviceId: slot.serviceId,
             slotId: slot.id,
             periodId: 0,
-            dayKey: "",
             week: "",
             enfants: input.enfants,
             accompagnants: input.accompagnants,
@@ -199,7 +198,6 @@ export type UserAgendaBooking = {
   id: number;
   slotId: string;
   periodId: number;
-  dayKey: string;
   week: string;
   enfants: number;
   accompagnants: number;
@@ -248,13 +246,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         startTime: true,
         endTime: true,
         capacity: true,
-        capLun: true,
-        capMar: true,
-        capMer: true,
-        capJeu: true,
-        capVen: true,
-        capSam: true,
-        capDim: true,
+        slotDay: true,
         periodId: true,
         weeks: true,
       },
@@ -276,7 +268,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         id: true,
         slotId: true,
         periodId: true,
-        dayKey: true,
         week: true,
         enfants: true,
         accompagnants: true,
@@ -346,8 +337,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       morningEnd: service.morningEnd,
       afternoonStart: service.afternoonStart,
       afternoonEnd: service.afternoonEnd,
-      recurCapacity: service.recurCapacity,
-      ponctCapacity: service.ponctCapacity,
+      capacity: service.capacity,
       semaineAb: service.semaineAb,
       themesMode: service.themesMode,
       maxReservations: service.maxReservations,
@@ -377,7 +367,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         id: b.id,
         slotId: b.slotId,
         periodId: b.periodId,
-        dayKey: b.dayKey,
         week: b.week,
         enfants: b.enfants,
         accompagnants: b.accompagnants,

@@ -103,12 +103,11 @@ export async function copyWeekSlotsAction(input: {
 // ─── Mode « Création de créneau » (agenda) ───────────────────────────────────
 
 /**
- * Mode création (agenda) : met à jour la CAPACITÉ PAR DÉFAUT du service — récurrente
- * (`recurCapacity`) ou ponctuelle (`ponctCapacity`). Autosave du champ « Capacité ».
+ * Mode création (agenda) : met à jour la CAPACITÉ PAR DÉFAUT du service (`capacity`).
+ * Autosave du champ « Capacité ».
  */
 export async function setServiceDefaultCapacityAction(input: {
   serviceId: string;
-  kind: "recur" | "ponct";
   value: number;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireRole("gestionnaire");
@@ -116,7 +115,7 @@ export async function setServiceDefaultCapacityAction(input: {
   if (!Number.isFinite(value)) return { ok: false, error: "Capacité invalide." };
   await prisma.service.update({
     where: { id: input.serviceId },
-    data: input.kind === "recur" ? { recurCapacity: value } : { ponctCapacity: value },
+    data: { capacity: value },
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return { ok: true };
@@ -286,11 +285,12 @@ export async function updateBookingDetailAction(input: {
   return { ok: true };
 }
 
-/** Déplace une réservation vers un autre jour / créneau (glisser-déposer). */
+/** Déplace une réservation vers un autre créneau (glisser-déposer). Le jour est porté
+ * par le créneau cible (slotDay) : changer de jour = changer de slotId. */
 export async function moveBookingAction(
   bookingId: number,
   serviceId: string,
-  dayKey: string,
+  _dayKey: string,
   slotId: string,
 ) {
   await requireRole("gestionnaire");
@@ -299,7 +299,7 @@ export async function moveBookingAction(
   await prisma.booking.update({
     where: { id: id.data },
     // auto_validate_from réinitialisé à NOW() sur un déplacement (cf. logique d'origine).
-    data: { dayKey, slotId, autoValidateFrom: new Date() },
+    data: { slotId, autoValidateFrom: new Date() },
   });
   revalidatePath(`/services/${serviceId}/agenda`);
 }
@@ -340,7 +340,6 @@ export async function createRecurringBookingAction(input: {
         serviceId: d.serviceId,
         slotId: d.slotId,
         periodId: d.periodId,
-        dayKey: d.dayKey,
         week: d.week,
         enfants: d.enfants,
         accompagnants: d.accompagnants,
@@ -402,7 +401,6 @@ export async function createUniqueBookingAction(input: {
         serviceId: d.serviceId,
         slotId: d.slotId,
         periodId: 0,
-        dayKey: "",
         week: "",
         enfants: d.enfants,
         accompagnants: d.accompagnants,

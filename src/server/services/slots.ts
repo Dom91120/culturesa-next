@@ -23,14 +23,8 @@ function toSlotData(data: SlotInput) {
     startTime: data.startTime,
     endTime: data.endTime,
     slotDate: data.slotType === "unique" ? (data.slotDate ?? null) : null,
+    slotDay: data.slotType === "recurring" ? (data.slotDay ?? null) : null,
     capacity: data.capacity ?? null,
-    capLun: data.capLun ?? null,
-    capMar: data.capMar ?? null,
-    capMer: data.capMer ?? null,
-    capJeu: data.capJeu ?? null,
-    capVen: data.capVen ?? null,
-    capSam: data.capSam ?? null,
-    capDim: data.capDim ?? null,
     periodId: data.periodId ?? null,
     state: data.state,
   };
@@ -53,20 +47,6 @@ export function deleteSlot(id: string) {
 
 const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
 type DayKey = (typeof DAY_KEYS)[number];
-
-// Prisma column per day key.
-const DAY_COL: Record<
-  DayKey,
-  "capLun" | "capMar" | "capMer" | "capJeu" | "capVen" | "capSam" | "capDim"
-> = {
-  lun: "capLun",
-  mar: "capMar",
-  mer: "capMer",
-  jeu: "capJeu",
-  ven: "capVen",
-  sam: "capSam",
-  dim: "capDim",
-};
 
 // ISO weekday (1=Mon..7=Sun) → day key.
 const ISO_DOW_KEY: Record<number, DayKey> = {
@@ -125,14 +105,8 @@ export type CreneauxSlot = {
   startTime: string;
   endTime: string;
   slotDate: string | null;
+  slotDay: string | null;
   capacity: number | null;
-  capLun: number | null;
-  capMar: number | null;
-  capMer: number | null;
-  capJeu: number | null;
-  capVen: number | null;
-  capSam: number | null;
-  capDim: number | null;
   periodId: number | null;
   parentSlotId: string | null;
   weeks: string | null;
@@ -147,9 +121,8 @@ export type CreneauxData = {
     activeDays: string;
     openOnHolidays: boolean;
     semaineAb: boolean;
-    recurDuration: number;
-    ponctDuration: number;
-    ponctCapacity: number;
+    duration: number;
+    capacity: number;
     // Plages horaires d'ouverture (matin / après-midi) — bornent le placement
     // automatique des créneaux récurrents (cf. legacy nextSlotStart).
     morningStart: string;
@@ -205,9 +178,8 @@ export async function getCreneauxData(serviceId: string): Promise<CreneauxData |
       activeDays: service.activeDays,
       openOnHolidays: service.openOnHolidays,
       semaineAb: service.semaineAb,
-      recurDuration: service.recurDuration,
-      ponctDuration: service.ponctDuration,
-      ponctCapacity: service.ponctCapacity,
+      duration: service.duration,
+      capacity: service.capacity,
       morningStart: service.morningStart,
       morningEnd: service.morningEnd,
       afternoonStart: service.afternoonStart,
@@ -229,14 +201,8 @@ export async function getCreneauxData(serviceId: string): Promise<CreneauxData |
       startTime: s.startTime,
       endTime: s.endTime,
       slotDate: s.slotDate ? toISO(s.slotDate) : null,
+      slotDay: s.slotDay,
       capacity: s.capacity,
-      capLun: s.capLun,
-      capMar: s.capMar,
-      capMer: s.capMer,
-      capJeu: s.capJeu,
-      capVen: s.capVen,
-      capSam: s.capSam,
-      capDim: s.capDim,
       periodId: s.periodId,
       parentSlotId: s.parentSlotId,
       weeks: s.weeks,
@@ -254,7 +220,8 @@ type RecurSlotInput = {
   startTime: string;
   endTime: string;
   weeks: string;
-  cap: Partial<Record<DayKey, number | null>>;
+  slotDay: DayKey;
+  capacity: number;
   demandeurIds: number[];
 };
 
@@ -262,6 +229,8 @@ type WantedMirror = { date: string; cap: number };
 
 // Compute the mirrors a recurring slot should have, given period range,
 // active days, holidays (excluded unless openOnHolidays) and A/B filter.
+// Modèle « un slot = un jour » : on ne génère des miroirs que pour les dates
+// tombant sur `slotDay`, chacun avec la capacité unique du créneau.
 function computeWantedMirrors(args: {
   startDate: string;
   endDate: string;
@@ -269,10 +238,13 @@ function computeWantedMirrors(args: {
   holidaySet: Set<string>;
   openOnHolidays: boolean;
   weeks: string[];
-  cap: Partial<Record<DayKey, number | null>>;
+  slotDay: DayKey;
+  capacity: number;
 }): Map<string, WantedMirror> {
-  const { startDate, endDate, activeDays, holidaySet, openOnHolidays, weeks, cap } = args;
+  const { startDate, endDate, activeDays, holidaySet, openOnHolidays, weeks, slotDay, capacity } =
+    args;
   const wanted = new Map<string, WantedMirror>();
+  if (!activeDays.includes(slotDay)) return wanted;
   let cur = fromISO(startDate);
   const end = fromISO(endDate);
   while (cur.getTime() <= end.getTime()) {
@@ -280,12 +252,10 @@ function computeWantedMirrors(args: {
     const dow = cur.getUTCDay() || 7; // 1=Mon..7=Sun
     const dayKey = ISO_DOW_KEY[dow];
     cur = new Date(cur.getTime() + 86400000);
-    if (!dayKey || !activeDays.includes(dayKey)) continue;
-    const capVal = cap[dayKey];
-    if (capVal == null) continue;
+    if (dayKey !== slotDay) continue;
     if (!openOnHolidays && holidaySet.has(dateStr)) continue;
     if (!weeks.includes(slotWeekTag(dateStr))) continue;
-    wanted.set(dateStr, { date: dateStr, cap: capVal });
+    wanted.set(dateStr, { date: dateStr, cap: capacity });
   }
   return wanted;
 }
@@ -334,9 +304,6 @@ export async function saveRecurringSlots(
       const slId = sl.id || newRecurId();
       keepIds.push(slId);
       const weeks = sl.weeks || "A,B";
-      const dayCapData = Object.fromEntries(
-        DAY_KEYS.map((d) => [DAY_COL[d], sl.cap[d] ?? null]),
-      ) as Record<(typeof DAY_COL)[DayKey], number | null>;
 
       // upsert (preserve bookings)
       await tx.slot.upsert({
@@ -346,7 +313,8 @@ export async function saveRecurringSlots(
           endTime: sl.endTime,
           weeks,
           state: "actif",
-          ...dayCapData,
+          slotDay: sl.slotDay,
+          capacity: sl.capacity,
         },
         create: {
           id: slId,
@@ -357,7 +325,8 @@ export async function saveRecurringSlots(
           periodId,
           weeks,
           state: "actif",
-          ...dayCapData,
+          slotDay: sl.slotDay,
+          capacity: sl.capacity,
         },
       });
 
@@ -379,7 +348,8 @@ export async function saveRecurringSlots(
         holidaySet,
         openOnHolidays: openHol,
         weeks: parseWeeks(weeks),
-        cap: sl.cap,
+        slotDay: sl.slotDay,
+        capacity: sl.capacity,
       });
       const existingMir = await tx.slot.findMany({
         where: { parentSlotId: slId },
@@ -540,10 +510,6 @@ export async function addRecurringSlot(
     .split(",")
     .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
   const weeks = input.weeks || "A,B";
-  const cap: Partial<Record<DayKey, number | null>> = { [input.dayKey]: input.capacity };
-  const dayCapData = Object.fromEntries(
-    DAY_KEYS.map((d) => [DAY_COL[d], cap[d] ?? null]),
-  ) as Record<(typeof DAY_COL)[DayKey], number | null>;
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId },
     select: { date: true },
@@ -565,11 +531,8 @@ export async function addRecurringSlot(
           periodId,
           weeks,
           state: "actif",
-          // Capacité globale ET par-jour : le serveur (réservation) et la modale lisent
-          // `slot.capacity ?? recurCapacity` ; sans le champ global, un créneau créé à 5
-          // retombait à recurCapacity (souvent 1). On garde les deux cohérents.
+          slotDay: input.dayKey,
           capacity: input.capacity,
-          ...dayCapData,
         },
       });
       const wanted = computeWantedMirrors({
@@ -579,7 +542,8 @@ export async function addRecurringSlot(
         holidaySet,
         openOnHolidays: service.openOnHolidays,
         weeks: parseWeeks(weeks),
-        cap,
+        slotDay: input.dayKey,
+        capacity: input.capacity,
       });
       for (const [, mv] of wanted) {
         await tx.slot.create({
@@ -638,9 +602,8 @@ export async function copyRecurringWeek(
   const slots = await prisma.slot.findMany({
     where: { serviceId, periodId, slotType: "recurring", state: "actif" },
   });
-  const capCols = ["capLun", "capMar", "capMer", "capJeu", "capVen", "capSam", "capDim"] as const;
   const sig = (s: (typeof slots)[number]) =>
-    [s.startTime, s.endTime, ...capCols.map((c) => s[c] ?? "")].join("|");
+    [s.startTime, s.endTime, s.slotDay ?? "", s.capacity ?? ""].join("|");
 
   // Signatures déjà présentes sur toWeek (anti-doublon).
   const existingOnTo = new Set(slots.filter((s) => parseWeeks(s.weeks).includes(toWeek)).map(sig));
@@ -670,18 +633,8 @@ export async function copyRecurringWeek(
   try {
     await prisma.$transaction(async (tx) => {
       for (const s of toCopy) {
-        const cap: Partial<Record<DayKey, number | null>> = {
-          lun: s.capLun,
-          mar: s.capMar,
-          mer: s.capMer,
-          jeu: s.capJeu,
-          ven: s.capVen,
-          sam: s.capSam,
-          dim: s.capDim,
-        };
-        const dayCapData = Object.fromEntries(
-          DAY_KEYS.map((d) => [DAY_COL[d], cap[d] ?? null]),
-        ) as Record<(typeof DAY_COL)[DayKey], number | null>;
+        // Un créneau récurrent sans slotDay (ne devrait pas exister) est ignoré.
+        if (!s.slotDay) continue;
         const newId = newRecurId();
         await tx.slot.create({
           data: {
@@ -693,8 +646,8 @@ export async function copyRecurringWeek(
             periodId,
             weeks: toWeek,
             state: "actif",
+            slotDay: s.slotDay,
             capacity: s.capacity,
-            ...dayCapData,
           },
         });
         const wanted = computeWantedMirrors({
@@ -704,7 +657,8 @@ export async function copyRecurringWeek(
           holidaySet,
           openOnHolidays: service.openOnHolidays,
           weeks: parseWeeks(toWeek),
-          cap,
+          slotDay: s.slotDay,
+          capacity: s.capacity ?? service.capacity,
         });
         for (const [, mv] of wanted) {
           await tx.slot.create({
@@ -781,7 +735,7 @@ export async function addUniqueSlot(
 export async function moveRecurringSlot(
   serviceId: string,
   slotId: string,
-  fromDayKey: DayKey,
+  _fromDayKey: DayKey,
   toDayKey: DayKey,
   startTime: string,
   endTime: string,
@@ -807,22 +761,7 @@ export async function moveRecurringSlot(
     return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
   }
 
-  const slotCaps: Record<DayKey, number | null> = {
-    lun: slot.capLun,
-    mar: slot.capMar,
-    mer: slot.capMer,
-    jeu: slot.capJeu,
-    ven: slot.capVen,
-    sam: slot.capSam,
-    dim: slot.capDim,
-  };
-  const capVal = slotCaps[fromDayKey] ?? slot.capacity ?? service.recurCapacity;
-  const newCap: Partial<Record<DayKey, number | null>> = { ...slotCaps };
-  newCap[toDayKey] = capVal;
-  if (fromDayKey !== toDayKey) newCap[fromDayKey] = null;
-  const dayCapData = Object.fromEntries(
-    DAY_KEYS.map((d) => [DAY_COL[d], newCap[d] ?? null]),
-  ) as Record<(typeof DAY_COL)[DayKey], number | null>;
+  const capVal = slot.capacity ?? service.capacity;
   const weeks = slot.weeks || "A,B";
   const activeDays = service.activeDays
     .split(",")
@@ -841,7 +780,7 @@ export async function moveRecurringSlot(
       }
       await tx.slot.update({
         where: { id: slotId },
-        data: { startTime, endTime, weeks, state: "actif", ...dayCapData },
+        data: { startTime, endTime, weeks, state: "actif", slotDay: toDayKey, capacity: capVal },
       });
       const wanted = computeWantedMirrors({
         startDate,
@@ -850,7 +789,8 @@ export async function moveRecurringSlot(
         holidaySet,
         openOnHolidays: service.openOnHolidays,
         weeks: parseWeeks(weeks),
-        cap: newCap,
+        slotDay: toDayKey,
+        capacity: capVal,
       });
       for (const [, mv] of wanted) {
         await tx.slot.create({

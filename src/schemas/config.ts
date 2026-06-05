@@ -21,10 +21,8 @@ export const serviceUpdateSchema = z.object({
     .array(dayEnum)
     .default([])
     .transform((d) => d.join(",")),
-  ponctDuration: z.coerce.number().int().min(1).default(60),
-  ponctCapacity: z.coerce.number().int().min(1).default(1),
-  recurDuration: z.coerce.number().int().min(1).default(60),
-  recurCapacity: z.coerce.number().int().min(1).default(1),
+  duration: z.coerce.number().int().min(1).default(60),
+  capacity: z.coerce.number().int().min(1).default(1),
   morningStart: z.string().regex(TIME, "Heure invalide"),
   morningEnd: z.string().regex(TIME, "Heure invalide"),
   afternoonStart: z.string().regex(TIME, "Heure invalide"),
@@ -64,20 +62,19 @@ export const slotSchema = z
     startTime: z.string().regex(TIME, "Heure invalide"),
     endTime: z.string().regex(TIME, "Heure invalide"),
     slotDate: z.coerce.date().optional().nullable(),
+    // Jour de la semaine pour un créneau récurrent (un slot = un jour).
+    slotDay: dayEnum.optional().nullable(),
     capacity: z.coerce.number().int().min(0).optional().nullable(),
-    capLun: z.coerce.number().int().min(0).optional().nullable(),
-    capMar: z.coerce.number().int().min(0).optional().nullable(),
-    capMer: z.coerce.number().int().min(0).optional().nullable(),
-    capJeu: z.coerce.number().int().min(0).optional().nullable(),
-    capVen: z.coerce.number().int().min(0).optional().nullable(),
-    capSam: z.coerce.number().int().min(0).optional().nullable(),
-    capDim: z.coerce.number().int().min(0).optional().nullable(),
     periodId: z.coerce.number().int().positive().optional().nullable(),
     state: z.enum(["actif", "desactive", "archive"]).default("actif"),
   })
   .refine((s) => s.slotType !== "unique" || s.slotDate != null, {
     message: "Une date est requise pour un créneau ponctuel",
     path: ["slotDate"],
+  })
+  .refine((s) => s.slotType !== "recurring" || s.slotDay != null, {
+    message: "Un jour est requis pour un créneau récurrent",
+    path: ["slotDay"],
   });
 export type SlotInput = z.infer<typeof slotSchema>;
 

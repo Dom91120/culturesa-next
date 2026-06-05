@@ -22,8 +22,8 @@ import {
 type Props = {
   serviceId: string;
   data: CreneauxData;
-  ponctDuration: number;
-  ponctCapacity: number;
+  duration: number;
+  capacity: number;
   onDurationStep: (dir: 1 | -1) => void;
   onCapacityChange: (v: number) => void;
   saveUnique: (slots: EditUniqueSlot[]) => Promise<SaveResult>;
@@ -35,8 +35,8 @@ type Props = {
 export function UniqueEditor({
   serviceId: _serviceId,
   data,
-  ponctDuration,
-  ponctCapacity,
+  duration,
+  capacity,
   onDurationStep,
   onCapacityChange,
   saveUnique,
@@ -58,10 +58,10 @@ export function UniqueEditor({
           slotDate: s.slotDate ?? "",
           startTime: s.startTime,
           endTime: s.endTime,
-          capacity: s.capacity ?? ponctCapacity,
+          capacity: s.capacity ?? capacity,
           demandeurIds: [...s.demandeurIds],
         })),
-    [data.slots, ponctCapacity],
+    [data.slots, capacity],
   );
 
   const [slots, setSlots] = useState<EditUniqueSlot[]>(initialSlots);
@@ -87,8 +87,8 @@ export function UniqueEditor({
         if (s.id !== id) return s;
         const next = { ...s, ...patch };
         // Pas de dérivation de la fin en « journée entière » (début vide / durée 1 jour).
-        if (patch.startTime && ponctDuration < ALLDAY_DURATION) {
-          next.endTime = addMinutes(patch.startTime, ponctDuration);
+        if (patch.startTime && duration < ALLDAY_DURATION) {
+          next.endTime = addMinutes(patch.startTime, duration);
         }
         return next;
       }),
@@ -121,7 +121,7 @@ export function UniqueEditor({
     };
   }, []);
   function stepStart(id: string, delta: number) {
-    if (ponctDuration >= ALLDAY_DURATION) return; // « journée entière » : pas d'heure
+    if (duration >= ALLDAY_DURATION) return; // « journée entière » : pas d'heure
     setSlots((prev) =>
       prev.map((s) => {
         if (s.id !== id) return s;
@@ -132,7 +132,7 @@ export function UniqueEditor({
         let total = m ? Number.parseInt(m[1], 10) * 60 + Number.parseInt(m[2], 10) : 9 * 60;
         total = (((total + delta) % 1440) + 1440) % 1440; // wrap [0..1439]
         const start = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-        return { ...s, startTime: start, endTime: addMinutes(start, ponctDuration) };
+        return { ...s, startTime: start, endTime: addMinutes(start, duration) };
       }),
     );
   }
@@ -152,7 +152,7 @@ export function UniqueEditor({
 
   // Redonne des horaires à une ligne « journée entière » (cf. legacy ➕).
   function initTimes(id: string) {
-    const dur = ponctDuration < ALLDAY_DURATION ? ponctDuration : 60;
+    const dur = duration < ALLDAY_DURATION ? duration : 60;
     update(id, { startTime: "09:00", endTime: addMinutes("09:00", dur) });
   }
 
@@ -168,7 +168,7 @@ export function UniqueEditor({
       [data.service.afternoonStart, data.service.afternoonEnd],
     ];
     // Durée = 1 jour → créneau ponctuel « journée entière » : sans horaire.
-    const allday = ponctDuration >= ALLDAY_DURATION;
+    const allday = duration >= ALLDAY_DURATION;
     let start = "";
     if (allday) {
       // Journée entière : on avance au jour ouvré suivant si une date existe déjà.
@@ -181,7 +181,7 @@ export function UniqueEditor({
           slots
             .filter((s) => s.slotDate === targetDate)
             .map((s) => ({ startTime: s.startTime, endTime: s.endTime })),
-          ponctDuration,
+          duration,
           ranges,
         );
       let m = freeStartOn();
@@ -201,8 +201,8 @@ export function UniqueEditor({
         id,
         slotDate: targetDate,
         startTime: start,
-        endTime: start ? addMinutes(start, ponctDuration) : "",
-        capacity: ponctCapacity,
+        endTime: start ? addMinutes(start, duration) : "",
+        capacity: capacity,
         demandeurIds: [],
       },
     ]);
@@ -280,7 +280,7 @@ export function UniqueEditor({
       >
         <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
           <span className="cap-tool-label">Durée</span>
-          <DurationStepper value={ponctDuration} onStep={onDurationStep} />
+          <DurationStepper value={duration} onStep={onDurationStep} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
           <span className="cap-tool-label">Capacité</span>
@@ -288,7 +288,7 @@ export function UniqueEditor({
             type="number"
             min={1}
             max={999}
-            value={ponctCapacity}
+            value={capacity}
             className="cap-input"
             onChange={(e) =>
               onCapacityChange(Math.max(1, Number.parseInt(e.target.value, 10) || 1))

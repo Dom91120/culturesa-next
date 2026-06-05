@@ -4,13 +4,18 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { bookRecurringAction, cancelRecurringAction } from "./recurring-actions";
 
-type Slot = { id: string; startTime: string; endTime: string; capacity: number | null };
+type Slot = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  capacity: number | null;
+  slotDay: string | null;
+};
 type Period = { id: number; label: string; color: string };
 type Booking = {
   id: number;
   slotId: string;
   periodId: number;
-  dayKey: string;
   enfants: number;
   userId: string;
 };
@@ -28,7 +33,7 @@ const DAY_NAMES: Record<string, string> = {
 export function RecurringBooking({
   serviceId,
   days,
-  recurCapacity,
+  defaultCapacity,
   slots,
   periods,
   bookings,
@@ -37,7 +42,7 @@ export function RecurringBooking({
 }: {
   serviceId: string;
   days: string[];
-  recurCapacity: number;
+  defaultCapacity: number;
   slots: Slot[];
   periods: Period[];
   bookings: Booking[];
@@ -51,11 +56,11 @@ export function RecurringBooking({
 
   const periodId = periods[periodIdx]?.id ?? null;
 
-  function book(slotId: string, dayKey: string) {
+  function book(slotId: string) {
     if (periodId == null) return;
     setError(null);
     startTransition(async () => {
-      const res = await bookRecurringAction(serviceId, slotId, periodId, dayKey);
+      const res = await bookRecurringAction(serviceId, slotId, periodId);
       if (!res.ok) setError(res.error ?? "Échec.");
       router.refresh();
     });
@@ -107,15 +112,24 @@ export function RecurringBooking({
           </thead>
           <tbody>
             {slots.map((slot) => {
-              const capacity = slot.capacity ?? recurCapacity;
+              const capacity = slot.capacity ?? defaultCapacity;
               return (
                 <tr key={slot.id}>
                   <td style={{ whiteSpace: "nowrap", fontWeight: 600 }}>
                     {slot.startTime}–{slot.endTime}
                   </td>
                   {days.map((d) => {
+                    // Modèle « un slot = un jour » : le créneau ne s'affiche que sur
+                    // sa colonne (slotDay) ; les autres jours restent vides.
+                    if (slot.slotDay !== d) {
+                      return (
+                        <td key={d} style={{ textAlign: "center", color: "var(--muted)" }}>
+                          —
+                        </td>
+                      );
+                    }
                     const cell = bookings.filter(
-                      (b) => b.slotId === slot.id && b.periodId === periodId && b.dayKey === d,
+                      (b) => b.slotId === slot.id && b.periodId === periodId,
                     );
                     const used = cell.reduce((s, b) => s + b.enfants, 0);
                     const mine = cell.find((b) => b.userId === userId);
@@ -153,7 +167,7 @@ export function RecurringBooking({
                             type="button"
                             className="btn btn-primary"
                             style={{ fontSize: ".66rem", padding: ".15rem .5rem" }}
-                            onClick={() => book(slot.id, d)}
+                            onClick={() => book(slot.id)}
                             disabled={pending}
                           >
                             Réserver

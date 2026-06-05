@@ -50,6 +50,17 @@ enum Pointage {
   absent
 }
 
+// Jour de la semaine d'un créneau récurrent (modèle « un slot = un jour »).
+enum DayOfWeek {
+  lun
+  mar
+  mer
+  jeu
+  ven
+  sam
+  dim
+}
+
 // ============================================================
 //  Authentification — Better Auth
 //  (remplace les anciennes tables sessions/email_confirmations/
@@ -159,10 +170,10 @@ model Service {
   position              Int        @default(0)
   createdAt             DateTime   @default(now()) @db.Timestamptz
 
-  ponctDuration         Int        @default(60)
-  ponctCapacity         Int        @default(1)
-  recurDuration         Int        @default(60)
-  recurCapacity         Int        @default(1)
+  // Durée (min) et capacité (places) par défaut des créneaux du service.
+  // Fusion des anciens champs ponct*/recur* (un seul jeu de valeurs par défaut).
+  duration              Int        @default(60)
+  capacity              Int        @default(1)
   morningStart          String     @default("09:00")
   morningEnd            String     @default("12:00")
   afternoonStart        String     @default("14:00")
@@ -211,14 +222,10 @@ model Slot {
   startTime    String      @default("09:00")
   endTime      String      @default("10:30")
   slotDate     DateTime?   @db.Date
+  // Jour de la semaine pour un créneau récurrent (un slot = un jour).
+  // null pour les créneaux `unique` : le jour se déduit de slotDate.
+  slotDay      DayOfWeek?
   capacity     Int?
-  capLun       Int?
-  capMar       Int?
-  capMer       Int?
-  capJeu       Int?
-  capVen       Int?
-  capSam       Int?
-  capDim       Int?
   periodId     Int?
   parentSlotId String?
   weeks        String?
@@ -388,7 +395,6 @@ model Booking {
   serviceId       String
   slotId          String
   periodId        Int         @default(0)
-  dayKey          String      @default("")
   week            String      @default("")
   parentBookingId Int?
   themeLabel      String      @default("")
@@ -405,7 +411,7 @@ model Booking {
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   slot    Slot    @relation(fields: [slotId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, serviceId, slotId, periodId, dayKey, week], name: "uq_recurring")
+  @@unique([userId, serviceId, slotId, periodId, week], name: "uq_recurring")
   @@index([userId])
   @@index([serviceId])
   @@index([periodId])
