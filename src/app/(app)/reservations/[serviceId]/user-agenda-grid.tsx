@@ -1,5 +1,6 @@
 "use client";
 
+import { gaugeUnits } from "@/lib/gauge";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -26,6 +27,7 @@ type Service = {
   maxReservations: number;
   maxReservationsPeriod: number;
   openOnHolidays: boolean;
+  gaugeAccompagnants: boolean;
 };
 type Period = {
   id: number;
@@ -39,6 +41,9 @@ type Exercice = { id: number; label: string };
 
 // Triangle ▲/▼ dessiné en SVG (legacy SPIN_BTN) : la boîte colle au glyphe (6×5px)
 // donc la zone cliquable correspond pile au triangle visible.
+// Clic-maintenu : 1er pas immédiat, puis répétition (90 ms) après un délai de 400 ms
+// tant que le bouton reste enfoncé. La répétition appelle TOUJOURS le `onClick` courant
+// (via une ref) → borne `remaining` et compteurs à jour à chaque tick.
 function GaugeSpin({
   dir,
   color,
@@ -48,6 +53,33 @@ function GaugeSpin({
   color: string;
   onClick: () => void;
 }) {
+  const onClickRef = useRef(onClick);
+  onClickRef.current = onClick;
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stop() {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    timeoutRef.current = null;
+    intervalRef.current = null;
+  }
+
+  function start() {
+    stop();
+    onClickRef.current(); // 1er pas immédiat
+    timeoutRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(() => onClickRef.current(), 90);
+    }, 400);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
   const path = dir === "up" ? "M3 0 L6 5 L0 5 Z" : "M0 0 L6 0 L3 5 Z";
   return (
     <button
@@ -56,8 +88,10 @@ function GaugeSpin({
       onMouseDown={(e) => {
         e.stopPropagation();
         e.preventDefault();
-        onClick();
+        start();
       }}
+      onMouseUp={stop}
+      onMouseLeave={stop}
       style={{
         background: "none",
         border: "none",
@@ -335,7 +369,7 @@ function MineBadge({
   onSetCount: (field: "enfants" | "accompagnants", value: number) => void;
   onSetTheme: (v: string) => void;
   onBodyClick: () => void;
-  // Infobulle au survol (legacy) : horaire + état + semaine.
+  // Infobulle au survol : horaire + état + participants + semaine.
   title?: string;
   // Glisser-déplacer : le badge devient draggable (brouillon / résa « en attente »).
   draggable?: boolean;
@@ -658,6 +692,13 @@ const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "
 // Format "7 avril" (jour + mois en toutes lettres) pour l'info-bulle « Journées
 // concernées » au survol d'un créneau récurrent (port legacy _scheduleTtShow).
 const tipDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" });
+
+// Ligne « N enfant(s) M adulte(s) » de l'info-bulle au survol (port legacy _badgeTitle).
+function participantsLabel(enfants: number, accompagnants: number): string {
+  return `${enfants} enfant${enfants > 1 ? "s" : ""} ${accompagnants} adulte${
+    accompagnants > 1 ? "s" : ""
+  }`;
+}
 
 // Calcul de Pâques (algorithme de Gauss/Butcher) — port exact du legacy _easterDate.
 function easterDate(year: number): Date {
@@ -1521,7 +1562,10 @@ export function UserAgendaGrid({
       // adultes (accompagnants) ; hors jauge = 1 par réservation.
       const used =
         modes.gaugeRec || modes.gaugePonct
-          ? list.reduce((sum, b) => sum + b.enfants + b.accompagnants, 0)
+          ? list.reduce(
+              (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
+              0,
+            )
           : list.length;
       // Un bloc vide (used=0) n'est jamais "complet".
       const full = used >= capacity && used > 0;
@@ -1580,6 +1624,7 @@ export function UserAgendaGrid({
     effectiveWeek,
     gridStartMin,
     service.capacity,
+    service.gaugeAccompagnants,
     modes.gaugeRec,
     modes.gaugePonct,
   ]);
@@ -1631,7 +1676,7 @@ export function UserAgendaGrid({
         `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`,
       );
     }
-    const titleStr = titleParts.filter(Boolean).join(" — ") || "Agenda";
+    const titleStr = titleParts.filter(Boolean).join(" — ") || "Réservations";
     const clone = grid.cloneNode(true) as HTMLElement;
     for (const n of clone.querySelectorAll(".agenda-empty-overlay")) n.remove();
     const win = window.open("", "_blank", "width=1100,height=800");
@@ -1775,7 +1820,14 @@ export function UserAgendaGrid({
     setPendingAdds((prev) =>
       prev.map((a) => {
         if (a.key !== key) return a;
-        if (delta > 0 && a.enfants + a.accompagnants >= remaining) return a;
+        // Le champ compte-t-il dans la jauge ? (accompagnants : seulement si activé)
+        const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
+        if (
+          delta > 0 &&
+          fieldCounts &&
+          gaugeUnits(a.enfants, a.accompagnants, service.gaugeAccompagnants) >= remaining
+        )
+          return a;
         const next = Math.max(1, a[field] + delta);
         return { ...a, [field]: next };
       }),
@@ -1793,8 +1845,13 @@ export function UserAgendaGrid({
     setPendingAdds((prev) =>
       prev.map((a) => {
         if (a.key !== key) return a;
-        const other = field === "enfants" ? a.accompagnants : a.enfants;
-        const next = Math.max(1, Math.min(value || 1, Math.max(1, remaining - other)));
+        const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
+        // Unités jauge déjà prises par l'AUTRE champ (les accompagnants ne comptent
+        // que si activé). Si le champ courant ne compte pas → pas de plafond jauge.
+        const otherUnits =
+          field === "enfants" ? (service.gaugeAccompagnants ? a.accompagnants : 0) : a.enfants;
+        const cap = fieldCounts ? Math.max(1, remaining - otherUnits) : Number.MAX_SAFE_INTEGER;
+        const next = Math.max(1, Math.min(value || 1, cap));
         return { ...a, [field]: next };
       }),
     );
@@ -1899,7 +1956,13 @@ export function UserAgendaGrid({
   ) {
     setCommitError(null);
     const cur = myCounts(bk);
-    if (delta > 0 && cur.enfants + cur.accompagnants >= remaining) return;
+    const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
+    if (
+      delta > 0 &&
+      fieldCounts &&
+      gaugeUnits(cur.enfants, cur.accompagnants, service.gaugeAccompagnants) >= remaining
+    )
+      return;
     setPendingUpdates((prev) => ({
       ...prev,
       [bk.id]: { ...cur, [field]: Math.max(1, cur[field] + delta) },
@@ -1915,8 +1978,11 @@ export function UserAgendaGrid({
   ) {
     setCommitError(null);
     const cur = myCounts(bk);
-    const other = field === "enfants" ? cur.accompagnants : cur.enfants;
-    const next = Math.max(1, Math.min(value || 1, Math.max(1, remaining - other)));
+    const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
+    const otherUnits =
+      field === "enfants" ? (service.gaugeAccompagnants ? cur.accompagnants : 0) : cur.enfants;
+    const cap = fieldCounts ? Math.max(1, remaining - otherUnits) : Number.MAX_SAFE_INTEGER;
+    const next = Math.max(1, Math.min(value || 1, cap));
     setPendingUpdates((prev) => ({ ...prev, [bk.id]: { ...cur, [field]: next } }));
   }
   function setMyTheme(bk: Booking, v: string) {
@@ -2209,9 +2275,13 @@ export function UserAgendaGrid({
               // (enfants + adultes en jauge ; 1 réservation hors jauge).
               const remaining = Math.max(
                 0,
-                b.capacity - b.used + (gaugeOn ? cur.enfants + cur.accompagnants : 1),
+                b.capacity -
+                  b.used +
+                  (gaugeOn
+                    ? gaugeUnits(cur.enfants, cur.accompagnants, service.gaugeAccompagnants)
+                    : 1),
               );
-              // Infobulle (legacy) : horaire + état + semaine.
+              // Infobulle (legacy) : horaire + état + participants + semaine.
               const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
               const tipState = markedRemoval
                 ? "🗑️ À supprimer"
@@ -2233,7 +2303,14 @@ export function UserAgendaGrid({
                   theme={cur.theme}
                   remaining={remaining}
                   stateLabel={stateLabel}
-                  title={isRecurringModel ? undefined : `${tipTime}\n${tipState}${tipWeek}`}
+                  title={
+                    isRecurringModel
+                      ? undefined
+                      : `${tipTime}\n${tipState}\n${participantsLabel(
+                          cur.enfants,
+                          cur.accompagnants,
+                        )}${tipWeek}`
+                  }
                   closeIcon={markedRemoval ? "↺" : "×"}
                   onClose={() => togglePendingRemoval(mb)}
                   onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
@@ -2267,7 +2344,7 @@ export function UserAgendaGrid({
               const remaining = Math.max(0, b.capacity - b.used);
               const removeDraft = () =>
                 setPendingAdds((prev) => prev.filter((a) => a.key !== add.key));
-              // Infobulle (legacy) : horaire + état brouillon + semaine.
+              // Infobulle (legacy) : horaire + état brouillon + participants + semaine.
               const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
               const tipWeek =
                 abMode && (add.week === "A" || add.week === "B") ? `\nSemaine ${add.week}` : "";
@@ -2287,7 +2364,10 @@ export function UserAgendaGrid({
                   title={
                     isRecurringModel
                       ? undefined
-                      : `${tipTime}\n📝 Brouillon — à enregistrer${tipWeek}`
+                      : `${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
+                          add.enfants,
+                          add.accompagnants,
+                        )}${tipWeek}`
                   }
                   closeIcon="×"
                   onClose={removeDraft}
@@ -2431,7 +2511,7 @@ export function UserAgendaGrid({
       >
         <div className="panel-title" style={{ marginBottom: 0 }}>
           <span className="dot" />
-          Agenda
+          Réservations
           {exercices.length > 0 && (
             <span className="exercice-nav-inline">
               <span className="ex-nav-label">{exLabel}</span>
@@ -2982,9 +3062,9 @@ export function UserAgendaGrid({
             // Pastille : libellé de période (récurrent) ou date (ponctuel), cf. legacy.
             const pillLabel = isPonctuel ? ponctDate : (period?.label ?? "");
             const dayLabel = DAY_NAMES[stackKey.dayKey] ?? stackKey.dayKey;
-            // Jauge = somme enfants + adultes / capacité (legacy _renderCsmCapInfo).
+            // Jauge = somme enfants (+ accompagnants si comptés) / capacité.
             const gaugeSum = stackBlock.bookings.reduce(
-              (s, bk) => s + bk.enfants + bk.accompagnants,
+              (s, bk) => s + gaugeUnits(bk.enfants, bk.accompagnants, service.gaugeAccompagnants),
               0,
             );
             const gaugeTotal = stackBlock.capacity;

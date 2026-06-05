@@ -23,6 +23,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       themesMode: true,
       openOnHolidays: true,
       showPreviousExercices: true,
+      gaugeAccompagnants: true,
     },
   });
   if (!service) notFound();
@@ -107,6 +108,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
           select: {
             nom: true,
             prenom: true,
+            tel: true,
+            email: true,
             demandeur: { select: { label: true } },
             structure: { select: { label: true } },
           },
@@ -153,6 +156,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     validated: b.validated,
     pointage: b.pointage,
     name: `${b.user.nom} ${b.user.prenom}`.trim() || "—",
+    tel: b.user.tel ?? "",
+    email: b.user.email ?? "",
     demandeur: b.user.demandeur?.label ?? "",
     structure: b.user.structure?.label ?? "",
   }));

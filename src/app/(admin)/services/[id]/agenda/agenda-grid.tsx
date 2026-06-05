@@ -1,5 +1,6 @@
 "use client";
 
+import { gaugeUnits } from "@/lib/gauge";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -33,6 +34,7 @@ type Service = {
   semaineAb: boolean;
   themesMode: "libre" | "liste";
   openOnHolidays: boolean;
+  gaugeAccompagnants: boolean;
 };
 type Period = {
   id: number;
@@ -184,6 +186,8 @@ type Booking = {
   validated: boolean;
   pointage: Pointage;
   name: string;
+  tel: string;
+  email: string;
   demandeur: string;
   structure: string;
 };
@@ -198,6 +202,22 @@ const DAY_NAMES: Record<string, string> = {
   sam: "Samedi",
   dim: "Dimanche",
 };
+
+// Info-bulle d'une réservation au survol — format du legacy _badgeTitle :
+//   Tel : <tel>      (si renseigné)
+//   <email>
+//   <N enfants M adulte(s)>
+function badgeTitle(bk: Booking): string {
+  const lines: string[] = [];
+  if (bk.tel.trim()) lines.push(`Tel : ${bk.tel.trim()}`);
+  lines.push(bk.email);
+  lines.push(
+    `${bk.enfants} enfant${bk.enfants > 1 ? "s" : ""} ${bk.accompagnants} adulte${
+      bk.accompagnants > 1 ? "s" : ""
+    }`,
+  );
+  return lines.join("\n");
+}
 
 const ROW_H = 56;
 
@@ -933,9 +953,12 @@ export function AgendaGrid({
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
       const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
-      // Jauge = enfants + adultes (accompagnants), comme la modale pile et le legacy
-      // _renderCsmCapInfo.
-      const used = list.reduce((sum, b) => sum + b.enfants + b.accompagnants, 0);
+      // Jauge = enfants (+ accompagnants si le service les compte), comme la modale
+      // pile et le legacy _renderCsmCapInfo.
+      const used = list.reduce(
+        (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
+        0,
+      );
       // Un bloc vide (used=0) n'est jamais "complet".
       const full = used >= capacity && used > 0;
       // biome-ignore lint/suspicious/noAssignInExpressions: init-or-push concis sur la map par jour
@@ -992,6 +1015,7 @@ export function AgendaGrid({
     effectiveWeek,
     gridStartMin,
     service.capacity,
+    service.gaugeAccompagnants,
   ]);
 
   function run(p: Promise<unknown>) {
@@ -2036,6 +2060,7 @@ export function AgendaGrid({
                   <div
                     className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}`}
                     style={{ ...badgeStyle(bk.validated), position: "relative" }}
+                    title={badgeTitle(bk)}
                   >
                     {/* La pastille P/A doit aussi apparaître sur les badges
                         de la pile (cf. legacy), pas seulement dans la modale. */}
@@ -2091,7 +2116,7 @@ export function AgendaGrid({
                     // créneau) tienne compte de l'ombre, plutôt que de centrer la seule boîte.
                     marginBottom: 6,
                   }}
-                  title={`${bk.demandeur} — ${bk.name}`}
+                  title={badgeTitle(bk)}
                   onDragStart={
                     locked
                       ? undefined
@@ -2942,9 +2967,9 @@ export function AgendaGrid({
             // Pastille : libellé de période (récurrent) ou date (ponctuel), cf. legacy.
             const pillLabel = isPonctuel ? ponctDate : (period?.label ?? "");
             const dayLabel = DAY_NAMES[stackKey.dayKey] ?? stackKey.dayKey;
-            // Jauge = somme enfants + adultes / capacité (legacy _renderCsmCapInfo).
+            // Jauge = somme enfants (+ accompagnants si comptés) / capacité.
             const gaugeSum = stackBlock.bookings.reduce(
-              (s, bk) => s + bk.enfants + bk.accompagnants,
+              (s, bk) => s + gaugeUnits(bk.enfants, bk.accompagnants, service.gaugeAccompagnants),
               0,
             );
             const gaugeTotal = stackBlock.capacity;
@@ -3074,7 +3099,7 @@ export function AgendaGrid({
                             position: "relative",
                             opacity: draggingId === bk.id ? 0.4 : 1,
                           }}
-                          title={`${bk.demandeur} — ${bk.name}`}
+                          title={badgeTitle(bk)}
                           onDragStart={
                             bk.pointage != null
                               ? undefined
