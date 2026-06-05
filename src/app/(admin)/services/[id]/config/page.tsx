@@ -32,6 +32,7 @@ export default async function ConfigPage({ params }: { params: Promise<{ id: str
         initialRows={initialRows}
         initialThemeMode={themesData.mode}
         initialThemes={themesData.themes}
+        initialGaugeAccompagnants={service.gaugeAccompagnants}
       />
     </div>
   );

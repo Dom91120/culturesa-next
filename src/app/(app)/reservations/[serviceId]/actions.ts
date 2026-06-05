@@ -1,5 +1,6 @@
 "use server";
 
+import { gaugeUnits } from "@/lib/gauge";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { BookingError, cancelUserBooking, createUniqueBooking } from "@/server/services/bookings";
@@ -69,12 +70,13 @@ export async function reserveRecurringAction(
         let used: number;
         let mine: number;
         if (gaugeOn) {
+          const countAcc = slot.service.gaugeAccompagnants;
           const agg = await tx.booking.aggregate({
             where: occWhere,
             _sum: { enfants: true, accompagnants: true },
           });
-          used = (agg._sum.enfants ?? 0) + (agg._sum.accompagnants ?? 0);
-          mine = myEnfants + myAcc;
+          used = gaugeUnits(agg._sum.enfants ?? 0, agg._sum.accompagnants ?? 0, countAcc);
+          mine = gaugeUnits(myEnfants, myAcc, countAcc);
         } else {
           used = await tx.booking.count({ where: occWhere });
           mine = 1;
@@ -234,12 +236,13 @@ export async function moveMyBookingAction(
         let used: number;
         let mine: number;
         if (gaugeOn) {
+          const countAcc = slot.service.gaugeAccompagnants;
           const agg = await tx.booking.aggregate({
             where: occWhere,
             _sum: { enfants: true, accompagnants: true },
           });
-          used = (agg._sum.enfants ?? 0) + (agg._sum.accompagnants ?? 0);
-          mine = booking.enfants + booking.accompagnants;
+          used = gaugeUnits(agg._sum.enfants ?? 0, agg._sum.accompagnants ?? 0, countAcc);
+          mine = gaugeUnits(booking.enfants, booking.accompagnants, countAcc);
         } else {
           used = await tx.booking.count({ where: occWhere });
           mine = 1;

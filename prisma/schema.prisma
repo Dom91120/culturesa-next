@@ -184,6 +184,9 @@ model Service {
   showPreviousExercices Boolean    @default(false)
   semaineAb             Boolean    @default(false)
   themesMode            ThemesMode @default(libre)
+  // Jauge : compter (ou non) les accompagnants dans les places consommées.
+  // true par défaut = comportement historique (enfants + accompagnants).
+  gaugeAccompagnants    Boolean    @default(true)
 
   // Délai d'auto-validation en minutes signées (cf. PLAN.md §4).
   //   0 = jamais ; négatif = N jours OUVRÉS avant la séance ;

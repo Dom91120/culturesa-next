@@ -1,4 +1,5 @@
 import { toDateInput } from "@/lib/format";
+import { gaugeUnits } from "@/lib/gauge";
 import type { BookingCreateInput } from "@/schemas/booking";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -121,12 +122,13 @@ export async function createUniqueBooking(
         let used: number;
         let mine: number;
         if (gaugeOn) {
+          const countAcc = slot.service.gaugeAccompagnants;
           const agg = await tx.booking.aggregate({
             where: { slotId: slot.id },
             _sum: { enfants: true, accompagnants: true },
           });
-          used = (agg._sum.enfants ?? 0) + (agg._sum.accompagnants ?? 0);
-          mine = input.enfants + input.accompagnants;
+          used = gaugeUnits(agg._sum.enfants ?? 0, agg._sum.accompagnants ?? 0, countAcc);
+          mine = gaugeUnits(input.enfants, input.accompagnants, countAcc);
         } else {
           used = await tx.booking.count({ where: { slotId: slot.id } });
           mine = 1;
@@ -344,6 +346,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       maxReservationsPeriod: service.maxReservationsPeriod,
       openOnHolidays: service.openOnHolidays,
       showPreviousExercices: service.showPreviousExercices,
+      gaugeAccompagnants: service.gaugeAccompagnants,
     },
     periods: periods.map((p) => ({
       id: p.id,

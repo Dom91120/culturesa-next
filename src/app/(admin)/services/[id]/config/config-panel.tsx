@@ -10,6 +10,7 @@ import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
+import { setGaugeAccompagnantsAction } from "./actions";
 
 // ── Primitives UI ───────────────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ type Props = {
   initialRows: DemandeurSettingRow[];
   initialThemeMode: ThemeMode;
   initialThemes: string[];
+  initialGaugeAccompagnants: boolean;
 };
 
 /** Reprojette l'état (globaux + par-demandeur) vers la matrice service × demandeur. */
@@ -190,8 +192,20 @@ export function ConfigPanel({
   initialRows,
   initialThemeMode,
   initialThemes,
+  initialGaugeAccompagnants,
 }: Props) {
   const counter = useRef(0);
+
+  // Réglage service-global « prise en compte des accompagnants dans la jauge ».
+  // Persistance immédiate (dédiée, indépendante de la matrice demandeurs).
+  const [gaugeAccompagnants, setGaugeAccompagnants] = useState(initialGaugeAccompagnants);
+  const [, startGaugeAcc] = useTransition();
+  function toggleGaugeAccompagnants(v: boolean) {
+    setGaugeAccompagnants(v);
+    startGaugeAcc(async () => {
+      await setGaugeAccompagnantsAction(serviceId, v);
+    });
+  }
 
   // Réglages globaux dérivés de la matrice initiale (cohérence inter-lignes).
   const [semaineAb, setSemaineAb] = useState(() =>
@@ -356,9 +370,23 @@ export function ConfigPanel({
           <GlobalRow
             label="Jauge — créneaux ponctuels"
             desc="Affiche une jauge de places sur les créneaux ponctuels."
-            last
           >
             <Switch on={jaugePonct} onChange={setJaugePonct} />
+          </GlobalRow>
+          <GlobalRow
+            label="Jauge — prise en compte des accompagnants"
+            desc={
+              jaugeRec || jaugePonct
+                ? "Prendre en compte les accompagnants dans le calcul de la jauge."
+                : "Sans effet : aucune jauge active pour ce service."
+            }
+            last
+          >
+            <Switch
+              on={gaugeAccompagnants}
+              disabled={!(jaugeRec || jaugePonct)}
+              onChange={toggleGaugeAccompagnants}
+            />
           </GlobalRow>
         </section>
 
