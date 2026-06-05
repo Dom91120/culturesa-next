@@ -257,7 +257,7 @@ function toMinutes(t: string, fallback: number): number {
 function badgeStyle(validated: boolean): React.CSSProperties {
   return validated
     ? {
-        background: "#c8e8d4",
+        background: "#c8e8b8",
         borderColor: "var(--accent)",
         color: "var(--badge-text, #1a1f2e)",
       }
@@ -1850,13 +1850,13 @@ export function AgendaGrid({
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          // Ponctuel autonome (non miroir) → vert distinctif, valeurs
-          // exactes du legacy (.agenda-block.is-uniq : --slot-uniq-color =
-          // var(--accent), fond = color-mix 25 % accent / transparent).
+          // Ponctuel autonome (non miroir) → couleur distinctive pilotée par
+          // --slot-uniq-color (cf. .agenda-block.is-uniq) : fond = color-mix 25 %,
+          // bordure = couleur pleine.
           ...(uniqueIdSet.has(b.slotId)
             ? {
-                background: "color-mix(in srgb, var(--accent) 25%, transparent)",
-                borderColor: "var(--accent)",
+                background: "color-mix(in srgb, var(--slot-uniq-color) 25%, transparent)",
+                borderColor: "var(--slot-uniq-color)",
               }
             : {}),
           // Mode création : créneau vide déplaçable (curseur move) ; bloc en cours

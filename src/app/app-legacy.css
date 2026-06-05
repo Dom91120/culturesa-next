@@ -28,8 +28,8 @@
      doit rester celui calculé pour fond clair). */
   --badge-text: #1a1f2e;
   /* Couleur des créneaux ponctuels (agenda-block.is-uniq, csm-slot-block.is-uniq,
-     légende), alignée sur l'accent. */
-  --slot-uniq-color: var(--accent);
+     légende) : bleu #9999ff (fond = color-mix 25%, bordure = couleur pleine). */
+  --slot-uniq-color: #9999bb;
   /* Fond de la sidebar en mode sombre. En mode clair, redéfini dans html.light
      (cf. plus bas) à une teinte différente. */
   --sidebar-bg: #121520;
@@ -1140,7 +1140,7 @@ textarea {
   color: #0f1117;
 }
 .slot-btn.my-booking {
-  background: #c8e8d4;
+  background: #c8e8b8;
   border-color: var(--accent);
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.28);
   color: var(--badge-text);
@@ -3343,7 +3343,7 @@ textarea.theme-pending:focus::placeholder {
   padding: 3px 6px 3px 5px;
 }
 .user-agenda-mine-badge.is-validated {
-  background: #c8e8d4;
+  background: #c8e8b8;
   border: none;
 }
 .user-agenda-mine-badge.is-pending {
