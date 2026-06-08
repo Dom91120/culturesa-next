@@ -980,6 +980,7 @@ export function UserAgendaGrid({
   openOnSchoolHolidays,
   schoolHolidays,
   userInfo,
+  autoRefreshSeconds,
 }: {
   service: Service;
   periods: Period[];
@@ -1004,6 +1005,8 @@ export function UserAgendaGrid({
     enfants: number;
     accompagnants: number;
   };
+  // Intervalle d'auto-rafraîchissement de la disponibilité, en secondes (0 = désactivé).
+  autoRefreshSeconds: number;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -1996,6 +1999,30 @@ export function UserAgendaGrid({
     pendingRemovals.length +
     Object.keys(pendingUpdates).length +
     Object.keys(pendingMoves).length;
+
+  // Rafraîchissement automatique de la disponibilité : intervalle configurable
+  // (Administration > Configuration ; 0 = désactivé) + au retour sur l'onglet
+  // (visibilitychange). SUSPENDU tant qu'un brouillon est en cours (ajouts/retraits/
+  // maj/déplacements) ou pendant l'enregistrement, pour ne jamais écraser les
+  // sélections de l'usager. En pause quand l'onglet est masqué.
+  const canAutoRefreshRef = useRef(pendingCount === 0 && !committing);
+  useEffect(() => {
+    canAutoRefreshRef.current = pendingCount === 0 && !committing;
+  }, [pendingCount, committing]);
+  useEffect(() => {
+    if (!autoRefreshSeconds || autoRefreshSeconds <= 0) return;
+    const refreshIfIdle = () => {
+      if (document.visibilityState === "visible" && canAutoRefreshRef.current) {
+        startTransition(() => router.refresh());
+      }
+    };
+    const id = window.setInterval(refreshIfIdle, autoRefreshSeconds * 1000);
+    document.addEventListener("visibilitychange", refreshIfIdle);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refreshIfIdle);
+    };
+  }, [router, autoRefreshSeconds]);
 
   // « Enregistrer → » : valide le brouillon (crée les ajouts, annule les retraits).
   function commitPending() {

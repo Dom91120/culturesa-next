@@ -368,6 +368,7 @@ export function AgendaGrid({
   showPrevious,
   slotDemandeurs,
   serviceDemandeurs,
+  autoRefreshSeconds,
 }: {
   service: Service;
   periods: Period[];
@@ -383,6 +384,8 @@ export function AgendaGrid({
   // Demandeurs autorisés par créneau (slotId → ids) et liste des demandeurs du service.
   slotDemandeurs: Record<string, number[]>;
   serviceDemandeurs: { id: number; label: string }[];
+  // Intervalle d'auto-rafraîchissement de l'agenda, en secondes (0 = désactivé).
+  autoRefreshSeconds: number;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -1093,6 +1096,89 @@ export function AgendaGrid({
       router.refresh();
     });
   }
+
+  // Auto-rafraîchissement de l'agenda : intervalle configurable (Administration >
+  // Configuration ; 0 = désactivé) + au retour sur l'onglet. SUSPENDU pendant une
+  // interaction (glisser-créer/déplacer/redimensionner, drag d'une réservation) ou
+  // quand une modale/menu est ouvert, pour ne jamais interrompre un geste ni faire
+  // « sauter » l'écran sous une modale. En pause quand l'onglet est masqué.
+  const autoRefreshBusy =
+    createDrag !== null ||
+    moveDrag !== null ||
+    resizeDrag !== null ||
+    hResizeDrag !== null ||
+    allDayDrag !== null ||
+    draggingId !== null ||
+    detail !== null ||
+    deleteTarget !== null ||
+    stackKey !== null ||
+    createCtx !== null ||
+    capModal !== null ||
+    createDemModal ||
+    copyConfirm !== null ||
+    slotDeleteTarget !== null ||
+    ctxMenu !== null;
+  const autoRefreshBusyRef = useRef(autoRefreshBusy);
+  useEffect(() => {
+    autoRefreshBusyRef.current = autoRefreshBusy;
+  }, [autoRefreshBusy]);
+  useEffect(() => {
+    if (!autoRefreshSeconds || autoRefreshSeconds <= 0) return;
+    const refreshIfIdle = () => {
+      if (document.visibilityState === "visible" && !autoRefreshBusyRef.current) {
+        startTransition(() => router.refresh());
+      }
+    };
+    const id = window.setInterval(refreshIfIdle, autoRefreshSeconds * 1000);
+    document.addEventListener("visibilitychange", refreshIfIdle);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refreshIfIdle);
+    };
+  }, [router, autoRefreshSeconds]);
+
+  // Toast léger (réutilise les classes .toast du legacy). Affiché ~4 s puis retiré,
+  // centré horizontalement sur la zone .app-main (et non le viewport), bas de page.
+  const [toast, setToast] = useState<{ id: number; content: React.ReactNode } | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastCenterX, setToastCenterX] = useState<number | null>(null);
+  const toastIdRef = useRef(0);
+  function showWarnToast(content: React.ReactNode) {
+    toastIdRef.current += 1;
+    setToast({ id: toastIdRef.current, content });
+  }
+  // Avertissement « réservation récurrente » (Semaine réelle + mode validation).
+  function warnRecurringValidation() {
+    showWarnToast(
+      <>
+        Pour valider/dévalider une réservation récurrente, veuillez passer en mode{" "}
+        <strong>Modèle de période</strong>
+      </>,
+    );
+  }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: relancé à chaque nouveau toast via son id
+  useEffect(() => {
+    if (!toast) return;
+    const measure = () => {
+      const main = document.querySelector(".app-main");
+      if (main) {
+        const r = main.getBoundingClientRect();
+        setToastCenterX(r.left + r.width / 2);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    setToastVisible(false);
+    const raf = requestAnimationFrame(() => setToastVisible(true));
+    const hide = window.setTimeout(() => setToastVisible(false), 4000);
+    const clear = window.setTimeout(() => setToast(null), 4300);
+    return () => {
+      window.removeEventListener("resize", measure);
+      cancelAnimationFrame(raf);
+      window.clearTimeout(hide);
+      window.clearTimeout(clear);
+    };
+  }, [toast?.id]);
 
   // "Mode validation" / "Mode pointage" / "Création de créneau" : mutuellement exclusifs.
   function toggleValidation(on: boolean) {
@@ -2414,6 +2500,11 @@ export function AgendaGrid({
                     // En semaine réelle sur un récurrent : consultation seule (pas d'action
                     // rapide), la modale s'ouvre en lecture seule.
                     e.stopPropagation();
+                    // Semaine réelle + mode validation : un récurrent ne se valide pas ici.
+                    if (realWeekRecurring && validation) {
+                      warnRecurringValidation();
+                      return;
+                    }
                     if (!realWeekRecurring && onBlockQuickAction(bk)) return;
                     setDetail({ booking: bk });
                   }}
@@ -2990,7 +3081,8 @@ export function AgendaGrid({
                 // Jours couverts par le glisser-créer « journée entière » (clic =
                 // 1 jour ; glisser horizontal = plusieurs) → aperçu du créneau à créer.
                 const inAllDayDrag =
-                  allDayDrag != null && daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
+                  allDayDrag != null &&
+                  daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
                 // Couleur de l'aperçu : jaune = récurrent (Modèle), vert = ponctuel (Semaine réelle).
                 const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
                 return (
@@ -3534,6 +3626,11 @@ export function AgendaGrid({
                           onClick={() => {
                             // Récurrent en semaine réelle : pas d'action rapide → la modale
                             // détail s'ouvre en consultation (lecture seule).
+                            // Mode validation : un récurrent ne se valide pas ici.
+                            if (stackReadOnly && validation) {
+                              warnRecurringValidation();
+                              return;
+                            }
                             if (!stackReadOnly && onBlockQuickAction(bk)) return;
                             // On garde la pile ouverte : la modale détail s'empile
                             // par-dessus, et sa fermeture y ramène.
@@ -4280,6 +4377,22 @@ export function AgendaGrid({
 
       {/* Info-bulle flottante unique (texte data-tip / « Journées concernées »). */}
       <AgendaTooltip tip={tip} tipRef={tipRef} />
+
+      {/* Toast d'avertissement (au-dessus des modales), centré sur .app-main, bas de page.
+          La classe .toast positionne en bas + translateX(-50%) ; on ne surcharge que `left`. */}
+      {toast &&
+        createPortal(
+          <output
+            className={`toast toast--warn${toastVisible ? " show" : ""}`}
+            style={{
+              zIndex: 10010,
+              ...(toastCenterX != null ? { left: `${toastCenterX}px` } : {}),
+            }}
+          >
+            {toast.content}
+          </output>,
+          document.body,
+        )}
     </div>
   );
 }

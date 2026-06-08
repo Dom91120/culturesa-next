@@ -1,5 +1,6 @@
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { toDateInput } from "@/lib/format";
+import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { deriveServiceModes } from "@/server/services/service-modes";
@@ -227,6 +228,11 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         ).map((t) => t.label)
       : [];
 
+  // Intervalle d'auto-rafraîchissement de l'agenda (Administration > Configuration). Défaut 60 s.
+  const refreshCfg = await getConfigMany(["agenda.autoRefreshSeconds"]);
+  const rawAgendaRefresh = Number.parseInt(refreshCfg["agenda.autoRefreshSeconds"], 10);
+  const autoRefreshSeconds = Number.isFinite(rawAgendaRefresh) ? rawAgendaRefresh : 60;
+
   return (
     <>
       <AgendaGrid
@@ -242,6 +248,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         showPrevious={service.showPreviousExercices}
         slotDemandeurs={slotDemandeurs}
         serviceDemandeurs={serviceDemandeurs}
+        autoRefreshSeconds={autoRefreshSeconds}
       />
       <AdminDemInfo rows={demRows} />
     </>

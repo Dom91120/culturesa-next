@@ -1,15 +1,62 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { refreshSchoolHolidaysAction, setSchoolZoneAction } from "./actions";
+import {
+  refreshSchoolHolidaysAction,
+  setAgendaRefreshAction,
+  setReservationsRefreshAction,
+  setSchoolZoneAction,
+} from "./actions";
 
-type Props = { zone: string; holidayCount: number };
+type Props = {
+  zone: string;
+  holidayCount: number;
+  refreshSeconds: number;
+  agendaRefreshSeconds: number;
+};
 
-export function ConfigurationPanel({ zone: initialZone, holidayCount }: Props) {
+// Choix proposés pour l'auto-rafraîchissement de la page Réservations (en secondes).
+const REFRESH_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: "Désactivé" },
+  { value: 15, label: "15 secondes" },
+  { value: 30, label: "30 secondes" },
+  { value: 60, label: "1 minute" },
+  { value: 120, label: "2 minutes" },
+  { value: 300, label: "5 minutes" },
+];
+
+export function ConfigurationPanel({
+  zone: initialZone,
+  holidayCount,
+  refreshSeconds: initialRefresh,
+  agendaRefreshSeconds: initialAgendaRefresh,
+}: Props) {
   const [zone, setZone] = useState(initialZone === "B" || initialZone === "C" ? initialZone : "A");
   const [count, setCount] = useState(holidayCount);
+  const [refreshSeconds, setRefreshSeconds] = useState(initialRefresh);
+  const [refreshSaved, setRefreshSaved] = useState(false);
+  const [agendaRefresh, setAgendaRefresh] = useState(initialAgendaRefresh);
+  const [agendaRefreshSaved, setAgendaRefreshSaved] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  function onRefreshChange(value: number) {
+    setRefreshSeconds(value);
+    setRefreshSaved(false);
+    startTransition(async () => {
+      const res = await setReservationsRefreshAction(value);
+      if (res?.ok) setRefreshSaved(true);
+    });
+  }
+
+  function onAgendaRefreshChange(value: number) {
+    setAgendaRefresh(value);
+    setAgendaRefreshSaved(false);
+    startTransition(async () => {
+      const res = await setAgendaRefreshAction(value);
+      if (res?.ok) setAgendaRefreshSaved(true);
+    });
+  }
 
   // Mode debug : strictement côté client (localStorage + classe body), comme l'ancien.
   const [debug, setDebug] = useState(false);
@@ -96,6 +143,80 @@ export function ConfigurationPanel({ zone: initialZone, holidayCount }: Props) {
         </button>
         <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
           {info ?? `${count} période(s) en base`}
+        </span>
+      </label>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: ".5rem",
+          fontSize: ".85rem",
+          flexWrap: "wrap",
+          marginTop: ".75rem",
+        }}
+      >
+        Réservations — rafraîchissement automatique
+        <select
+          value={refreshSeconds}
+          onChange={(e) => onRefreshChange(Number(e.target.value))}
+          disabled={pending}
+          style={{
+            fontSize: ".85rem",
+            padding: ".2rem .4rem",
+            borderRadius: "var(--rad-sm)",
+            border: "1px solid var(--border)",
+            background: "var(--surface2)",
+            color: "var(--text)",
+          }}
+        >
+          {REFRESH_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+          {refreshSaved
+            ? "Enregistré ✓"
+            : "Fréquence de mise à jour de la disponibilité côté usager."}
+        </span>
+      </label>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: ".5rem",
+          fontSize: ".85rem",
+          flexWrap: "wrap",
+          marginTop: ".75rem",
+        }}
+      >
+        Agenda — rafraîchissement automatique
+        <select
+          value={agendaRefresh}
+          onChange={(e) => onAgendaRefreshChange(Number(e.target.value))}
+          disabled={pending}
+          style={{
+            fontSize: ".85rem",
+            padding: ".2rem .4rem",
+            borderRadius: "var(--rad-sm)",
+            border: "1px solid var(--border)",
+            background: "var(--surface2)",
+            color: "var(--text)",
+          }}
+        >
+          {REFRESH_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+          {agendaRefreshSaved
+            ? "Enregistré ✓"
+            : "Fréquence de mise à jour de l'agenda côté gestionnaire."}
         </span>
       </label>
 

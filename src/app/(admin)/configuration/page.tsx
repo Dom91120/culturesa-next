@@ -10,13 +10,28 @@ const LINKS = [
 ];
 
 export default async function ConfigurationPage() {
-  const cfg = await getConfigMany(["school.zone"]);
+  const cfg = await getConfigMany([
+    "school.zone",
+    "reservations.autoRefreshSeconds",
+    "agenda.autoRefreshSeconds",
+  ]);
   const zone = cfg["school.zone"] || "A";
   const holidayCount = await countSchoolHolidays(zone);
+  const parseSeconds = (v: string, fallback: number) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const refreshSeconds = parseSeconds(cfg["reservations.autoRefreshSeconds"], 60);
+  const agendaRefreshSeconds = parseSeconds(cfg["agenda.autoRefreshSeconds"], 60);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <ConfigurationPanel zone={zone} holidayCount={holidayCount} />
+      <ConfigurationPanel
+        zone={zone}
+        holidayCount={holidayCount}
+        refreshSeconds={refreshSeconds}
+        agendaRefreshSeconds={agendaRefreshSeconds}
+      />
 
       <div className="panel">
         <div className="panel-title">

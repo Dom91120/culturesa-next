@@ -9,6 +9,34 @@ import { z } from "zod";
 
 const zoneSchema = z.enum(["A", "B", "C"]);
 
+const refreshSecondsSchema = z.coerce.number().int().min(0).max(3600);
+
+/**
+ * Enregistre l'intervalle d'auto-rafraîchissement de la page Réservations
+ * (clé app_config `reservations.autoRefreshSeconds`). 0 = désactivé.
+ */
+export async function setReservationsRefreshAction(seconds: number): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = refreshSecondsSchema.safeParse(seconds);
+  if (!parsed.success) return { ok: false, error: "Valeur invalide." };
+  await setConfig("reservations.autoRefreshSeconds", String(parsed.data));
+  revalidatePath("/configuration");
+  return { ok: true };
+}
+
+/**
+ * Enregistre l'intervalle d'auto-rafraîchissement de l'agenda admin
+ * (clé app_config `agenda.autoRefreshSeconds`). 0 = désactivé.
+ */
+export async function setAgendaRefreshAction(seconds: number): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = refreshSecondsSchema.safeParse(seconds);
+  if (!parsed.success) return { ok: false, error: "Valeur invalide." };
+  await setConfig("agenda.autoRefreshSeconds", String(parsed.data));
+  revalidatePath("/configuration");
+  return { ok: true };
+}
+
 /** Enregistre la zone de vacances scolaires (clé app_config `school.zone`). */
 export async function setSchoolZoneAction(zone: string): Promise<ActionState> {
   await requireRole("administrateur");
