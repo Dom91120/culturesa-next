@@ -14,10 +14,12 @@ export default async function ReservationsServicePage({
   const data = await getUserServiceAgenda(serviceId, session.user.id);
   if (!data) notFound();
 
-  // Intervalle d'auto-rafraîchissement (Administration > Configuration). Défaut 60 s.
-  const cfg = await getConfigMany(["reservations.autoRefreshSeconds"]);
+  // Réglages lus côté serveur (Administration > Configuration).
+  const cfg = await getConfigMany(["reservations.autoRefreshSeconds", "debug.mode"]);
   const raw = Number.parseInt(cfg["reservations.autoRefreshSeconds"], 10);
   const autoRefreshSeconds = Number.isFinite(raw) ? raw : 60;
+  // Mode debug : source de vérité serveur (lue à chaque requête) → pas d'état client « collé ».
+  const debugMode = cfg["debug.mode"] === "1";
 
   return (
     <UserAgendaGrid
@@ -35,6 +37,7 @@ export default async function ReservationsServicePage({
       schoolHolidays={data.schoolHolidays}
       userInfo={data.user}
       autoRefreshSeconds={autoRefreshSeconds}
+      debugMode={debugMode}
     />
   );
 }

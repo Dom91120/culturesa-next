@@ -56,6 +56,23 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   secret: process.env.BETTER_AUTH_SECRET,
 
+  // Origines de confiance (anti-CSRF). Better Auth fait toujours confiance à
+  // `baseURL` ; on AJOUTE ici :
+  //   - en prod : la liste explicite de `TRUSTED_ORIGINS` (séparée par des virgules),
+  //     ex. « http://192.168.1.102:3000 » pour un accès LAN derrière `npm run start` ;
+  //   - en dev : l'origine de la requête est reflétée (confort de test multi-appareils).
+  trustedOrigins: (request?: Request) => {
+    const list = (process.env.TRUSTED_ORIGINS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (process.env.NODE_ENV === "development") {
+      const origin = request?.headers.get("origin");
+      if (origin && !list.includes(origin)) list.push(origin);
+    }
+    return list;
+  },
+
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,

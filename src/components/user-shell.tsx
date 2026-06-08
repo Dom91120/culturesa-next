@@ -27,10 +27,22 @@ export function UserShell({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Menu « sandwich » des services en mode smartphone (replié par défaut).
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const match = pathname.match(/^\/reservations\/([^/]+)/);
   const activeServiceId = match ? match[1] : null;
+  // Libellé affiché sur le bouton sandwich : service actif, ou « Mon compte ».
+  const activeServiceLabel =
+    services.find((s) => s.id === activeServiceId)?.label ??
+    (pathname === "/mon-compte" ? "Mon compte" : "Activités");
+
+  // Referme le menu sandwich après navigation (changement d'URL).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on veut refermer à chaque changement de page.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -85,7 +97,7 @@ export function UserShell({
         <div className="app-layout">
           <div
             id="service-sidebar-wrap"
-            className={collapsed ? "collapsed" : ""}
+            className={`${collapsed ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
             style={{
               width: "18%",
               minWidth: "fit-content",
@@ -101,6 +113,23 @@ export function UserShell({
               title="Réduire / agrandir"
             >
               ☰
+            </button>
+            {/* Bouton « sandwich » visible uniquement en mode smartphone (CSS) :
+                déplie/replie la liste des services affichée sur plusieurs lignes. */}
+            <button
+              type="button"
+              id="mobile-services-toggle"
+              aria-expanded={mobileNavOpen}
+              aria-controls="service-sidebar"
+              onClick={() => setMobileNavOpen((o) => !o)}
+            >
+              <span className="mst-burger" aria-hidden="true">
+                ☰
+              </span>
+              <span className="mst-label">{activeServiceLabel}</span>
+              <span className="mst-caret" aria-hidden="true">
+                ▾
+              </span>
             </button>
             {/* Marque dans la sidebar (comme le shell admin) : plus de bandeau-titre en haut. */}
             <div className="sidebar-header">

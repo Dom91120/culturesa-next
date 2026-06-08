@@ -984,6 +984,7 @@ export function UserAgendaGrid({
   schoolHolidays,
   userInfo,
   autoRefreshSeconds,
+  debugMode,
 }: {
   service: Service;
   periods: Period[];
@@ -1010,6 +1011,8 @@ export function UserAgendaGrid({
   };
   // Intervalle d'auto-rafraîchissement de la disponibilité, en secondes (0 = désactivé).
   autoRefreshSeconds: number;
+  // Mode debug (app_config `debug.mode`, lu côté serveur) : affiche le bandeau dem-info.
+  debugMode: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -1024,15 +1027,9 @@ export function UserAgendaGrid({
       dayKey: recurDay.get(b.slotId) ?? uniqDay.get(b.slotId) ?? "",
     }));
   }, [bookingsRaw, slots, uniqueSlots]);
-  // Mode debug (côté client, comme le legacy : localStorage rc_debug / body.debug-mode).
-  const [debug, setDebug] = useState(false);
-  useEffect(() => {
-    setDebug(
-      typeof document !== "undefined" &&
-        (document.body.classList.contains("debug-mode") ||
-          localStorage.getItem("rc_debug") === "1"),
-    );
-  }, []);
+  // Mode debug : SOURCE DE VÉRITÉ SERVEUR (app_config `debug.mode`, passée en prop et
+  // lue à chaque requête). Plus aucun état client « collé » (localStorage / body class).
+  const debug = debugMode;
   // Exercice courant : par défaut le plus récent (dernier après tri par libellé).
   const [currentExerciceId, setCurrentExerciceId] = useState<number | null>(
     exercices.length ? exercices[exercices.length - 1].id : null,
@@ -1051,8 +1048,9 @@ export function UserAgendaGrid({
   const [rwPeriodId, setRwPeriodId] = useState<number | null>(null);
   const [weekAB, setWeekAB] = useState<"A" | "B">("A");
   // « Masquer les horaires sans créneau » : compacte les heures qui ne portent AUCUN
-  // créneau (et non « sans réservation »). Coché par défaut = vue compactée (legacy).
-  const [hideNoSlot, setHideNoSlot] = useState(true);
+  // créneau. Préférence utilisateur (coché par défaut). Sur mobile, toujours forcée à
+  // true (case masquée) — voir la valeur effective `hideNoSlot` dérivée plus bas.
+  const [hideNoSlotPref, setHideNoSlotPref] = useState(true);
   const [validation, setValidation] = useState(false);
   const [pointageMode, setPointageMode] = useState(false);
   const [detail, setDetail] = useState<Detail>(null);
@@ -1101,6 +1099,9 @@ export function UserAgendaGrid({
   const mobileDay = days.length ? (days[Math.min(mobileDayIdx, days.length - 1)] ?? null) : null;
   // Liste de jours réellement rendue : un seul jour sur mobile, toute la semaine sinon.
   const displayDays = isMobile && mobileDay ? [mobileDay] : days;
+  // Compactage « sans créneau » : valeur effective. Sur mobile, toujours désactivé (la
+  // case est masquée et n'est donc pas modifiable) → on affiche toute la plage horaire.
+  const hideNoSlot = isMobile ? false : hideNoSlotPref;
 
   // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
   // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00) est ignorée — sinon
@@ -1249,6 +1250,41 @@ export function UserAgendaGrid({
     }
     setAnchorMonday(newAnchor);
   }
+
+  // ── Navigation jour (mobile) ────────────────────────────────────────────────
+  // Modèle de période (récurrent) : CYCLIQUE sur les jours de la semaine type.
+  // Semaine réelle (ponctuel) : NON cyclique, à travers TOUTE la période (change de
+  // semaine en franchissant les bords), bornée par les dates de la période.
+  // Renvoie la cible { monday, idx } ou null si le déplacement est bloqué (bord de période).
+  function mobileDayTarget(dir: 1 | -1): { monday: string | null; idx: number } | null {
+    if (!days.length) return null;
+    const idx = Math.min(mobileDayIdx, days.length - 1);
+    if (mode === "model") {
+      if (days.length <= 1) return null;
+      return { monday: anchorMonday, idx: (idx + dir + days.length) % days.length };
+    }
+    if (!mondayStr) return null;
+    let tIdx = idx + dir;
+    let tMon = mondayStr;
+    if (tIdx < 0) {
+      tMon = ymd(addDays(mondayStr, -7));
+      tIdx = days.length - 1;
+    } else if (tIdx > days.length - 1) {
+      tMon = ymd(addDays(mondayStr, 7));
+      tIdx = 0;
+    }
+    const tDate = ymd(addDays(tMon, DAY_OFFSET[days[tIdx]] ?? 0));
+    if (coveringPeriod?.dateStart && tDate < coveringPeriod.dateStart) return null;
+    if (coveringPeriod?.dateEnd && tDate > coveringPeriod.dateEnd) return null;
+    return { monday: tMon, idx: tIdx };
+  }
+  function mobileGoDay(dir: 1 | -1) {
+    const t = mobileDayTarget(dir);
+    if (!t) return;
+    if (mode === "realweek" && t.monday && t.monday !== mondayStr) setAnchorMonday(t.monday);
+    setMobileDayIdx(t.idx);
+  }
+
   // Libellé daté de chaque jour de la semaine réelle, par dayKey.
   const weekDateByDay: Record<string, string> = {};
   if (mondayStr) {
@@ -1353,7 +1389,9 @@ export function UserAgendaGrid({
       if (effectivePeriodId != null && s.periodId !== effectivePeriodId) continue;
       if (abMode && effectiveWeek != null && !parseWeeks(s.weeks).includes(effectiveWeek)) continue;
       const dk = s.slotDay;
-      if (!dk || !days.includes(dk) || isDayDisabled(dk)) continue;
+      // `displayDays` = jours réellement rendus (toute la semaine sur desktop, un
+      // seul jour sur mobile) → sur mobile, on masque les heures vides DU jour affiché.
+      if (!dk || !displayDays.includes(dk) || isDayDisabled(dk)) continue;
       if ((s.capacity ?? service.capacity) <= 0) continue;
       addHours(toMinutes(s.startTime, gridStartMin), toMinutes(s.endTime, gridStartMin + 60));
     }
@@ -1364,7 +1402,7 @@ export function UserAgendaGrid({
         if (u.parentSlotId) continue;
         if (!u.slotDate || u.slotDate < mondayStr || u.slotDate > sunday) continue;
         const dk = dayKeyFromYmd(u.slotDate);
-        if (!days.includes(dk) || isDayDisabled(dk)) continue;
+        if (!displayDays.includes(dk) || isDayDisabled(dk)) continue;
         if ((u.capacity ?? service.capacity) <= 0) continue;
         addHours(toMinutes(u.startTime, gridStartMin), toMinutes(u.endTime, gridStartMin + 60));
       }
@@ -2016,6 +2054,13 @@ export function UserAgendaGrid({
     pendingRemovals.length +
     Object.keys(pendingUpdates).length +
     Object.keys(pendingMoves).length;
+  // Le brouillon ne contient QUE des suppressions (aucun ajout / modif / déplacement)
+  // → le bouton d'enregistrement devient « Supprimer → ».
+  const onlyRemovals =
+    pendingRemovals.length > 0 &&
+    pendingAdds.length === 0 &&
+    Object.keys(pendingUpdates).length === 0 &&
+    Object.keys(pendingMoves).length === 0;
 
   // Rafraîchissement automatique de la disponibilité : intervalle configurable
   // (Administration > Configuration ; 0 = désactivé) + au retour sur l'onglet
@@ -2259,7 +2304,7 @@ export function UserAgendaGrid({
                 : noWidgets
                   ? mb.validated
                     ? "Validé"
-                    : "En attente"
+                    : "En attente de validation"
                   : "";
               // Place dispo pour CE booking = libre + sa propre occupation déjà comptée
               // (enfants + adultes en jauge ; 1 réservation hors jauge).
@@ -2346,7 +2391,7 @@ export function UserAgendaGrid({
                   accompagnants={add.accompagnants}
                   theme={add.theme}
                   remaining={remaining}
-                  stateLabel={noWidgets ? "En attente" : ""}
+                  stateLabel={noWidgets ? "En attente de validation" : ""}
                   title={`${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
                     add.enfants,
                     add.accompagnants,
@@ -2454,12 +2499,13 @@ export function UserAgendaGrid({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: ".75rem",
+          gap: isMobile ? 0 : ".75rem",
           flexWrap: "wrap",
-          margin: "2rem 0 .75rem",
+          // Sur mobile, pas de marge autour de la ligne de titre (ni dessus ni dessous).
+          margin: isMobile ? "0" : "2rem 0 .75rem",
         }}
       >
-        <div className="panel-title" style={{ marginBottom: 0 }}>
+        <div className="panel-title res-title" style={{ marginBottom: 0 }}>
           <span className="dot" />
           Réservations
           {exercices.length > 0 && (
@@ -2499,42 +2545,69 @@ export function UserAgendaGrid({
               left: "50%",
               top: "50%",
               transform: "translate(-50%, -50%)",
+              // Neutralise la marge asymétrique de .periode-nav qui décalerait le
+              // centrage vertical (sinon la nav n'est pas au même niveau que le titre).
+              margin: 0,
             }}
           >
-            <button
-              type="button"
-              className="ex-arrow"
-              disabled={!canWeekPrev}
-              onClick={() => canWeekPrev && shiftWeek(-1)}
-            >
-              ◀
-            </button>
-            <span className="ex-nav-label">
-              {mondayStr
-                ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
-                : "…"}
-            </span>
-            <button
-              type="button"
-              className="ex-arrow"
-              disabled={!canWeekNext}
-              onClick={() => canWeekNext && shiftWeek(1)}
-            >
-              ▶
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ padding: ".05rem .45rem", fontSize: ".64rem", marginLeft: ".4rem" }}
-              onClick={() => {
-                // Retour à la semaine courante : on relâche le verrou pour
-                // re-dériver la période qui couvre aujourd'hui.
-                setRwPeriodId(null);
-                setAnchorMonday(ymd(mondayOf(new Date())));
+            {/* Groupe ◀ label ▶ : shrink-wrappé et positionné (relative) → « Aujourd'hui »
+                s'ancre en left:100% de CE groupe (juste après ▶), sans compter dans le
+                centrage. Vrai sur desktop comme sur mobile, quelle que soit la largeur. */}
+            <span
+              className="pn-main"
+              style={{
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: ".5rem",
               }}
             >
-              Aujourd&apos;hui
-            </button>
+              <button
+                type="button"
+                className="ex-arrow"
+                disabled={!canWeekPrev}
+                onClick={() => canWeekPrev && shiftWeek(-1)}
+              >
+                ◀
+              </button>
+              <span className="ex-nav-label">
+                {mondayStr
+                  ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
+                  : "…"}
+              </span>
+              <button
+                type="button"
+                className="ex-arrow"
+                disabled={!canWeekNext}
+                onClick={() => canWeekNext && shiftWeek(1)}
+              >
+                ▶
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost pn-today"
+                // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
+                // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
+                style={{
+                  padding: ".05rem .45rem",
+                  fontSize: ".64rem",
+                  position: "absolute",
+                  left: "100%",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  marginLeft: ".4rem",
+                  whiteSpace: "nowrap",
+                }}
+                onClick={() => {
+                  // Retour à la semaine courante : on relâche le verrou pour
+                  // re-dériver la période qui couvre aujourd'hui.
+                  setRwPeriodId(null);
+                  setAnchorMonday(ymd(mondayOf(new Date())));
+                }}
+              >
+                Aujourd&apos;hui
+              </button>
+            </span>
           </div>
         )}
         {/* Sélecteurs empilés (cf. legacy .agenda-mode-toggles-wrap, colonne,
@@ -2543,14 +2616,21 @@ export function UserAgendaGrid({
         {/* Agenda usager : la vue (Modèle / Semaine réelle) est verrouillée sur le
             type du demandeur, donc pas de bascule manuelle — on ne garde que le
             sélecteur Semaine A/B (mode modèle) / l'indicateur de semaine. */}
-        {/* Aligné à gauche (après le titre) : marginRight auto absorbe l'espace à droite. */}
-        <div className="agenda-mode-toggles-wrap" style={{ marginRight: "auto" }}>
+        {/* Desktop : aligné à gauche (marginRight auto). Mobile : aligné à droite
+            (marginLeft auto) et boutons un peu plus gros. */}
+        <div
+          className="agenda-mode-toggles-wrap"
+          style={isMobile ? { marginLeft: "auto" } : { marginRight: "auto" }}
+        >
           {abMode && mode === "model" && (
             <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
               <button
                 type="button"
                 className={`agenda-mode-btn${weekAB === "A" ? " active" : ""}`}
-                style={{ fontSize: ".71rem", padding: ".21rem .65rem" }}
+                style={{
+                  fontSize: isMobile ? ".7rem" : ".71rem",
+                  padding: isMobile ? ".26rem .55rem" : ".21rem .65rem",
+                }}
                 onClick={() => setWeekAB("A")}
               >
                 Semaine A
@@ -2558,7 +2638,10 @@ export function UserAgendaGrid({
               <button
                 type="button"
                 className={`agenda-mode-btn${weekAB === "B" ? " active" : ""}`}
-                style={{ fontSize: ".71rem", padding: ".21rem .65rem" }}
+                style={{
+                  fontSize: isMobile ? ".7rem" : ".71rem",
+                  padding: isMobile ? ".26rem .55rem" : ".21rem .65rem",
+                }}
                 onClick={() => setWeekAB("B")}
               >
                 Semaine B
@@ -2575,7 +2658,8 @@ export function UserAgendaGrid({
           justifyContent: "space-between",
           gap: ".75rem",
           flexWrap: "wrap",
-          marginBottom: ".75rem",
+          // Conteneur des onglets de période : marge basse réduite sur smartphone.
+          marginBottom: isMobile ? "0.5rem" : ".75rem",
         }}
       >
         <div className="period-tabs" id="agenda-period-tabs">
@@ -2611,7 +2695,15 @@ export function UserAgendaGrid({
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+        {/* Options (case « sans créneau » + impression) : masquées sur mobile. */}
+        <div
+          style={{
+            display: isMobile ? "none" : "flex",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
           <div
             className="planning-options-row"
             style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
@@ -2620,8 +2712,8 @@ export function UserAgendaGrid({
               Masquer les horaires sans créneau
               <input
                 type="checkbox"
-                checked={hideNoSlot}
-                onChange={(e) => setHideNoSlot(e.target.checked)}
+                checked={hideNoSlotPref}
+                onChange={(e) => setHideNoSlotPref(e.target.checked)}
               />
             </label>
           </div>
@@ -2698,13 +2790,14 @@ export function UserAgendaGrid({
         </div>
       </div>
 
-      {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour. */}
+      {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour.
+          Cyclique en Modèle de période ; à travers toute la période en Semaine réelle. */}
       {isMobile && mobileDay && (
         <div className="mobile-day-nav">
           <button
             type="button"
-            onClick={() => setMobileDayIdx((i) => Math.max(0, Math.min(i, days.length - 1) - 1))}
-            disabled={Math.min(mobileDayIdx, days.length - 1) <= 0}
+            onClick={() => mobileGoDay(-1)}
+            disabled={!mobileDayTarget(-1)}
             aria-label="Jour précédent"
           >
             ◀
@@ -2715,10 +2808,8 @@ export function UserAgendaGrid({
           </span>
           <button
             type="button"
-            onClick={() =>
-              setMobileDayIdx((i) => Math.min(days.length - 1, Math.min(i, days.length - 1) + 1))
-            }
-            disabled={Math.min(mobileDayIdx, days.length - 1) >= days.length - 1}
+            onClick={() => mobileGoDay(1)}
+            disabled={!mobileDayTarget(1)}
             aria-label="Jour suivant"
           >
             ▶
@@ -2860,46 +2951,41 @@ export function UserAgendaGrid({
         </div>
       </div>
 
-      {/* Sous le tableau : astuce à gauche, légende complète à droite (reprise du
-          legacy #agenda-legend-realweek). La légende n'a de sens qu'en « Semaine
-          réelle » (pointage P/A + créneaux ponctuels datés). */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        {/* flex:1 + minWidth:0 → l'astuce absorbe le rétrécissement en passant à la
-            ligne au lieu de déborder ; la légende garde sa place (flexShrink:0). */}
-        <p
-          style={{
-            fontSize: ".7rem",
-            color: "var(--muted)",
-            margin: 0,
-            flex: "1 1 0%",
-            minWidth: 0,
-          }}
-        >
-          {/* « Astuce » en couleur de texte principale (en évidence, comme l'agenda admin),
-              « : » et la suite gardent la couleur courante (gris). */}
-          <span style={{ color: "var(--text)" }}>Astuce</span>
-          {" : "}
-          cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un autre
-          créneau pour le déplacer.
-        </p>
-      </div>
+      {/* Sous le tableau : info « max. réservations ». */}
+      <p style={{ fontSize: ".8rem", color: "var(--muted)", margin: 0 }}>
+        ℹ️{" "}
+        {modes.recurringMode ? (
+          <>
+            Vous pouvez réserver{" "}
+            <strong>
+              {service.maxReservationsPeriod} créneau
+              {service.maxReservationsPeriod > 1 ? "x" : ""} par période
+            </strong>{" "}
+            et{" "}
+            <strong>
+              {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
+            </strong>
+            .
+          </>
+        ) : (
+          <>
+            Vous pouvez réserver{" "}
+            <strong>
+              {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
+            </strong>
+            .
+          </>
+        )}
+      </p>
 
-      {/* Compteur du brouillon, sur sa PROPRE ligne sous l'astuce : nombre de
-          réservations/annulations en attente, ou « Aucune modification en attente ». */}
+      {/* Compteur du brouillon, sur sa propre ligne juste en dessous.
+          Marge supérieure plus large sur mobile (0.75rem) que sur desktop (0.2rem). */}
       <p
         style={{
           fontSize: ".75rem",
           // Modifications en attente → couleur warning ; sinon muté.
           color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
-          margin: 0,
+          margin: isMobile ? "0.75rem 0 0" : "0.2rem 0 0",
           textAlign: "right",
         }}
       >
@@ -2938,32 +3024,6 @@ export function UserAgendaGrid({
           flexWrap: "wrap",
         }}
       >
-        {/* Ligne d'information « max. réservations » (déplacée ici depuis sous le tableau). */}
-        <span style={{ fontSize: ".8rem", color: "var(--muted)", marginRight: "auto" }}>
-          ℹ️{" "}
-          {modes.recurringMode ? (
-            <>
-              Vous pouvez réserver{" "}
-              <strong>
-                {service.maxReservationsPeriod} créneau
-                {service.maxReservationsPeriod > 1 ? "x" : ""} par période
-              </strong>{" "}
-              et{" "}
-              <strong>
-                {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
-              </strong>
-              .
-            </>
-          ) : (
-            <>
-              Vous pouvez réserver{" "}
-              <strong>
-                {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
-              </strong>
-              .
-            </>
-          )}
-        </span>
         <button
           type="button"
           className="btn btn-ghost"
@@ -2978,7 +3038,7 @@ export function UserAgendaGrid({
           onClick={() => setRecapOpen(true)}
           disabled={pendingCount === 0}
         >
-          Enregistrer →
+          {onlyRemovals ? "Supprimer →" : "Enregistrer →"}
         </button>
       </div>
 

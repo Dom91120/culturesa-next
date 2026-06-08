@@ -390,6 +390,11 @@ header {
   overflow-y: auto;
   background: var(--surface);
 }
+/* Bouton « sandwich » des services : présent dans le DOM mais masqué hors mobile
+   (affiché uniquement dans la media query smartphone ci-dessous). */
+#mobile-services-toggle {
+  display: none;
+}
 main {
   width: 100%;
   background: var(--surface1);
@@ -1636,6 +1641,8 @@ textarea.theme-pending:focus::placeholder {
   color: var(--text);
   min-width: 5rem;
   text-align: center;
+  /* Reste toujours sur une seule ligne (pas de retour à la ligne du « 12 juin → 18 juin »). */
+  white-space: nowrap;
 }
 .periode-nav .ex-arrow {
   background: var(--surface2);
@@ -3610,23 +3617,41 @@ textarea.theme-pending:focus::placeholder {
 }
 
 /* ── Réservations : version smartphone (vue « un jour à la fois ») ──────────── */
+/* Barre de navigation jour (smartphone) déguisée en rangée d'en-tête du tableau :
+   flèches carrées 44px en fond gris (comme les coins), libellé central encadré sur
+   fond gris, collée au tableau (pas de marge basse, coins hauts droits). */
 .mobile-day-nav {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  gap: .5rem;
-  margin-bottom: .55rem;
+  gap: 0;
+  margin-bottom: 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
 }
 .mobile-day-nav button {
   flex-shrink: 0;
   width: 44px;
-  height: 38px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  /* Hauteur auto + align-items:stretch → la barre prend la hauteur de la flèche,
+     calée sur le coin de l'entête desktop (.agenda-corner : padding .3rem / police
+     1rem) qui pilote la hauteur de la rangée d'entête. */
+  height: auto;
+  padding: .3rem 0;
+  border: none;
+  border-radius: 0;
   background: var(--surface2);
   color: var(--text);
   font-size: 1rem;
+  line-height: 1.2;
   cursor: pointer;
+}
+.mobile-day-nav button:first-child {
+  border-right: 1px solid var(--border);
+}
+.mobile-day-nav button:last-child {
+  border-left: 1px solid var(--border);
 }
 .mobile-day-nav button:disabled {
   opacity: .4;
@@ -3634,9 +3659,16 @@ textarea.theme-pending:focus::placeholder {
 }
 .mobile-day-label {
   flex: 1;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  /* Même boîte que .agenda-header-cell (padding .3rem .4rem / police .75rem) →
+     la fausse entête a la même hauteur que l'entête desktop. */
+  padding: .3rem .4rem;
   font-weight: 700;
-  font-size: .95rem;
+  font-size: .75rem;
+  line-height: 1.2;
   text-transform: capitalize;
 }
 
@@ -3655,7 +3687,9 @@ textarea.theme-pending:focus::placeholder {
     border-right: none;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
-    padding: .45rem .5rem;
+    padding: .1rem .5rem;
+    /* Pas de fond sur mobile (couvre aussi la surcharge html.light, plus spécifique). */
+    background: none !important;
   }
   #sidebar-toggle {
     display: none !important;
@@ -3664,13 +3698,50 @@ textarea.theme-pending:focus::placeholder {
   #service-sidebar-wrap > .sidebar-label {
     display: none !important;
   }
-  #service-sidebar {
+  /* Bouton sandwich : visible, pleine largeur, affiche le service actif. */
+  #mobile-services-toggle {
     display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .5rem .7rem;
+    font-size: .95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #mobile-services-toggle .mst-burger {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+  #mobile-services-toggle .mst-label {
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #mobile-services-toggle .mst-caret {
+    font-size: .7rem;
+    color: var(--muted);
+    transition: transform .15s ease;
+  }
+  #service-sidebar-wrap.mobile-open #mobile-services-toggle .mst-caret {
+    transform: rotate(180deg);
+  }
+  /* Liste des services : repliée par défaut, dépliée sur plusieurs lignes (wrap). */
+  #service-sidebar {
+    display: none;
+  }
+  #service-sidebar-wrap.mobile-open #service-sidebar {
+    display: flex;
+    flex-wrap: wrap;
     gap: .4rem;
     padding: 0;
+    margin-top: .5rem;
   }
   #service-sidebar button,
   #service-sidebar .sidebar-compte-btn {
@@ -3678,16 +3749,88 @@ textarea.theme-pending:focus::placeholder {
     flex: 0 0 auto;
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: .35rem .65rem;
+    padding: .12rem .7rem;
     margin-top: 0 !important;
+  }
+  /* « Mon compte » sur sa propre ligne, pleine largeur, sous les services. */
+  #service-sidebar .sidebar-compte-btn {
+    flex-basis: 100%;
   }
   .app-main {
     height: auto;
     overflow: visible;
-    padding: .6rem .7rem 2rem;
+    /* Padding latéral réduit pour élargir la zone de contenu au doigt. */
+    padding: .6rem .25rem 2rem;
+    /* .app-layout est en colonne avec align-items:flex-start → .app-main se
+       calerait à gauche : on le recentre dans la largeur du viewport. */
+    align-self: center;
+    width: 100%;
   }
-  /* Agenda : un peu plus compact en texte pour gagner de la place au doigt. */
+  /* Agenda : un peu plus compact en texte pour gagner de la place au doigt.
+     Coins hauts droits : la barre mobile-day-nav (rangée d'en-tête) se pose dessus. */
   .agenda-grid {
     font-size: .8rem;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  /* En vue un seul jour, les en-têtes de colonne (jours) sont redondants avec le
+     libellé de mobile-day-nav → on les masque. ATTENTION : pas de `display:none`,
+     qui retirerait les cellules de la grille et décalerait toutes les suivantes
+     (badges/horaires). On collapse la rangée à une hauteur nulle tout en gardant
+     les cellules dans le flux → les colonnes restent alignées.
+     EXCEPTION : le coin « Journée entière » (.agenda-allday-corner) reste visible
+     (il appartient à la rangée all-day, pas à la rangée des noms de jours). */
+  .agenda-header-cell:not(.agenda-allday-corner) {
+    visibility: hidden;
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    font-size: 0;
+  }
+  /* Onglets de période sur smartphone (compact) : marge haute seule, pas de marge basse. */
+  #agenda-period-tabs {
+    margin-top: .5rem;
+    margin-bottom: 0;
+  }
+  #agenda-period-tabs .period-btn {
+    padding: .28rem .55rem;
+    font-size: .72rem;
+  }
+  /* Titre « Réservations » sur smartphone (compact). */
+  .res-title {
+    font-size: 1.05rem;
+  }
+  /* Navigation période/semaine (◀ label ▶ + « Aujourd'hui ») agrandie au doigt.
+     Le bouton « Aujourd'hui » porte des styles inline → !important pour les battre. */
+  .periode-nav .ex-nav-label {
+    font-size: .82rem;
+    min-width: 6rem;
+  }
+  .periode-nav .ex-arrow {
+    font-size: .82rem;
+    padding: .18rem .5rem;
+  }
+  /* La nav semaine est centrée en absolu par-dessus la ligne du titre : on la
+     remet dans le flux et en pleine largeur → elle wrappe sur SA propre ligne,
+     sous le titre. (Styles inline position/left/top/transform → !important.) */
+  .periode-nav {
+    /* relative (et non static) → sert de contexte de positionnement au bouton
+       « Aujourd'hui » placé en absolu, tout en restant dans le flux (sous le titre). */
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    flex-basis: 100%;
+    width: 100%;
+    justify-content: center;
+    margin: 0 !important;
+  }
+  /* « Aujourd'hui » : on NE touche plus à sa position. Son style inline (absolute,
+     left:100%) l'ancre désormais juste à droite du groupe .pn-main (et non du bord
+     de l'écran) → il suit le ▶ sans compter dans le centrage. On ne réduit que sa taille. */
+  .periode-nav .pn-today {
+    font-size: .7rem !important;
+    padding: .22rem .55rem !important;
   }
 }

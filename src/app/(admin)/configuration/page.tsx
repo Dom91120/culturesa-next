@@ -14,6 +14,7 @@ export default async function ConfigurationPage() {
     "school.zone",
     "reservations.autoRefreshSeconds",
     "agenda.autoRefreshSeconds",
+    "debug.mode",
   ]);
   const zone = cfg["school.zone"] || "A";
   const holidayCount = await countSchoolHolidays(zone);
@@ -23,6 +24,7 @@ export default async function ConfigurationPage() {
   };
   const refreshSeconds = parseSeconds(cfg["reservations.autoRefreshSeconds"], 60);
   const agendaRefreshSeconds = parseSeconds(cfg["agenda.autoRefreshSeconds"], 60);
+  const debugMode = cfg["debug.mode"] === "1";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -31,6 +33,7 @@ export default async function ConfigurationPage() {
         holidayCount={holidayCount}
         refreshSeconds={refreshSeconds}
         agendaRefreshSeconds={agendaRefreshSeconds}
+        debugMode={debugMode}
       />
 
       <div className="panel">

@@ -12,6 +12,18 @@ const zoneSchema = z.enum(["A", "B", "C"]);
 const refreshSecondsSchema = z.coerce.number().int().min(0).max(3600);
 
 /**
+ * Enregistre l'état du « Mode debug » (clé app_config `debug.mode`). Source de vérité
+ * SERVEUR : les écrans (ex. Réservations) la lisent côté serveur → pas d'état client
+ * « collé ».
+ */
+export async function setDebugModeAction(on: boolean): Promise<ActionState> {
+  await requireRole("administrateur");
+  await setConfig("debug.mode", on ? "1" : "0");
+  revalidatePath("/configuration");
+  return { ok: true };
+}
+
+/**
  * Enregistre l'intervalle d'auto-rafraîchissement de la page Réservations
  * (clé app_config `reservations.autoRefreshSeconds`). 0 = désactivé.
  */

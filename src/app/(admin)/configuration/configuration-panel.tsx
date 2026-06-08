@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   refreshSchoolHolidaysAction,
   setAgendaRefreshAction,
+  setDebugModeAction,
   setReservationsRefreshAction,
   setSchoolZoneAction,
 } from "./actions";
@@ -13,6 +14,7 @@ type Props = {
   holidayCount: number;
   refreshSeconds: number;
   agendaRefreshSeconds: number;
+  debugMode: boolean;
 };
 
 // Choix proposés pour l'auto-rafraîchissement de la page Réservations (en secondes).
@@ -30,6 +32,7 @@ export function ConfigurationPanel({
   holidayCount,
   refreshSeconds: initialRefresh,
   agendaRefreshSeconds: initialAgendaRefresh,
+  debugMode: initialDebug,
 }: Props) {
   const [zone, setZone] = useState(initialZone === "B" || initialZone === "C" ? initialZone : "A");
   const [count, setCount] = useState(holidayCount);
@@ -58,13 +61,14 @@ export function ConfigurationPanel({
     });
   }
 
-  // Mode debug : strictement côté client (localStorage + classe body), comme l'ancien.
-  const [debug, setDebug] = useState(false);
+  // Mode debug : source de vérité SERVEUR (app_config `debug.mode`, lu côté serveur).
+  // On garde en plus localStorage + classe body pour le style debug legacy côté client.
+  const [debug, setDebug] = useState(initialDebug);
   useEffect(() => {
-    const on = localStorage.getItem("rc_debug") === "1";
-    setDebug(on);
-    document.body.classList.toggle("debug-mode", on);
-  }, []);
+    // Synchronise le client (localStorage/body) sur la valeur serveur au chargement.
+    localStorage.setItem("rc_debug", initialDebug ? "1" : "0");
+    document.body.classList.toggle("debug-mode", initialDebug);
+  }, [initialDebug]);
 
   function onZoneChange(z: string) {
     setZone(z);
@@ -89,8 +93,12 @@ export function ConfigurationPanel({
 
   function onDebugChange(on: boolean) {
     setDebug(on);
+    // Client (style debug legacy) + serveur (source de vérité lue par les écrans).
     localStorage.setItem("rc_debug", on ? "1" : "0");
     document.body.classList.toggle("debug-mode", on);
+    startTransition(async () => {
+      await setDebugModeAction(on);
+    });
   }
 
   return (
