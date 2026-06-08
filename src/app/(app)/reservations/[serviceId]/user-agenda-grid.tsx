@@ -1085,6 +1085,23 @@ export function UserAgendaGrid({
     .split(",")
     .map((d) => d.trim())
     .filter(Boolean);
+
+  // ── Mobile : vue « un jour à la fois » ──────────────────────────────────────
+  // Sur smartphone, la grille hebdo (5-7 colonnes) est illisible : on n'affiche
+  // qu'UN jour, avec une navigation ◀ jour ▶. La logique par jour est inchangée.
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileDayIdx, setMobileDayIdx] = useState(0);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const mobileDay = days.length ? (days[Math.min(mobileDayIdx, days.length - 1)] ?? null) : null;
+  // Liste de jours réellement rendue : un seul jour sur mobile, toute la semaine sinon.
+  const displayDays = isMobile && mobileDay ? [mobileDay] : days;
+
   // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
   // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00) est ignorée — sinon
   // afternoonEnd=00:00 ramenait la fin de grille à minuit et masquait toute la grille.
@@ -2681,10 +2698,38 @@ export function UserAgendaGrid({
         </div>
       </div>
 
+      {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour. */}
+      {isMobile && mobileDay && (
+        <div className="mobile-day-nav">
+          <button
+            type="button"
+            onClick={() => setMobileDayIdx((i) => Math.max(0, Math.min(i, days.length - 1) - 1))}
+            disabled={Math.min(mobileDayIdx, days.length - 1) <= 0}
+            aria-label="Jour précédent"
+          >
+            ◀
+          </button>
+          <span className="mobile-day-label">
+            {DAY_NAMES[mobileDay] ?? mobileDay}
+            {mode === "realweek" && weekDateByDay[mobileDay] ? ` ${weekDateByDay[mobileDay]}` : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              setMobileDayIdx((i) => Math.min(days.length - 1, Math.min(i, days.length - 1) + 1))
+            }
+            disabled={Math.min(mobileDayIdx, days.length - 1) >= days.length - 1}
+            aria-label="Jour suivant"
+          >
+            ▶
+          </button>
+        </div>
+      )}
+
       <div className="planning-wrap" id="agenda-print-grid">
         <div
           className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
-          style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `44px repeat(${displayDays.length}, minmax(0, 1fr))` }}
         >
           {/* Mode A/B : grosse lettre A/B de la semaine active dans le coin haut-gauche
               (cf. legacy cornerAB) — Semaine réelle = parité de la semaine affichée,
@@ -2695,7 +2740,7 @@ export function UserAgendaGrid({
           >
             {abMode && effectiveWeek ? effectiveWeek : "🕘"}
           </div>
-          {days.map((d) => (
+          {displayDays.map((d) => (
             <div key={d} className={`agenda-header-cell${outOfPeriodCls(d)}`}>
               {DAY_NAMES[d] ?? d}
               {mode === "realweek" && weekDateByDay[d] && (
@@ -2709,12 +2754,12 @@ export function UserAgendaGrid({
               bloc all-day. Côté usager, on affiche TOUS les créneaux (réservés ou
               vides réservables) : le compactage « sans créneau » ne masque que des
               heures vides, pas les créneaux. */}
-          {days.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
+          {displayDays.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
             <>
               <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
                 Journée entière
               </div>
-              {days.map((d) => (
+              {displayDays.map((d) => (
                 <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
                   {dayBlocks(d)
                     .filter((b) => b.isAllDay)
@@ -2750,7 +2795,7 @@ export function UserAgendaGrid({
             })()}
           </div>
 
-          {days.map((d) => (
+          {displayDays.map((d) => (
             // biome-ignore lint/a11y/useKeyWithClickEvents: grille agenda (clic = créer)
             <div
               key={d}

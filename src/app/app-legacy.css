@@ -3608,3 +3608,86 @@ textarea.theme-pending:focus::placeholder {
   max-width: 100%;
   height: auto;
 }
+
+/* ── Réservations : version smartphone (vue « un jour à la fois ») ──────────── */
+.mobile-day-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .55rem;
+}
+.mobile-day-nav button {
+  flex-shrink: 0;
+  width: 44px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.mobile-day-nav button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+.mobile-day-label {
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+  font-size: .95rem;
+  text-transform: capitalize;
+}
+
+@media (max-width: 640px) {
+  /* Cadre : sidebar empilée en haut (barre horizontale de services), contenu pleine largeur. */
+  .app-layout {
+    flex-direction: column;
+    height: auto;
+  }
+  #service-sidebar-wrap {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    position: static !important;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding: .45rem .5rem;
+  }
+  #sidebar-toggle {
+    display: none !important;
+  }
+  .sidebar-header,
+  #service-sidebar-wrap > .sidebar-label {
+    display: none !important;
+  }
+  #service-sidebar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: .4rem;
+    padding: 0;
+  }
+  #service-sidebar button,
+  #service-sidebar .sidebar-compte-btn {
+    width: auto !important;
+    flex: 0 0 auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .35rem .65rem;
+    margin-top: 0 !important;
+  }
+  .app-main {
+    height: auto;
+    overflow: visible;
+    padding: .6rem .7rem 2rem;
+  }
+  /* Agenda : un peu plus compact en texte pour gagner de la place au doigt. */
+  .agenda-grid {
+    font-size: .8rem;
+  }
+}
