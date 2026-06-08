@@ -76,9 +76,11 @@ function isoWeek(dateStr: string): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-// Week tag for a date: even ISO week = A, odd = B (legacy slot_week_tag).
+// Tag A/B d'une date — CONVENTION UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B
+// (identique à realWeekParity des grilles agenda admin/usager). Toute la chaîne A/B
+// (slots, miroirs, réservations, affichage) doit utiliser cette même convention.
 export function slotWeekTag(dateStr: string): "A" | "B" {
-  return isoWeek(dateStr) % 2 === 0 ? "A" : "B";
+  return isoWeek(dateStr) % 2 === 1 ? "A" : "B";
 }
 
 function parseWeeks(weeks: string | null | undefined): string[] {

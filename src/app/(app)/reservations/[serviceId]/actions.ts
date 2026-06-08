@@ -3,6 +3,10 @@
 import { gaugeUnits } from "@/lib/gauge";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
+import {
+  type BookingConfirmationParams,
+  sendBookingConfirmationMail,
+} from "@/server/services/booking-mail";
 import { BookingError, cancelUserBooking, createUniqueBooking } from "@/server/services/bookings";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -25,6 +29,8 @@ export async function reserveRecurringAction(
 ): Promise<Result> {
   const session = await requireUser();
   const wk = week === "A" || week === "B" ? week : "";
+  // Données pour l'e-mail de confirmation, capturées dans la transaction (envoi après commit).
+  let mailParams: BookingConfirmationParams | null = null;
   try {
     await prisma.$transaction(
       async (tx) => {
@@ -106,6 +112,22 @@ export async function reserveRecurringAction(
             autoValidateFrom: new Date(),
           },
         });
+        mailParams = {
+          userId: session.user.id,
+          serviceId,
+          serviceLabel: slot.service.label,
+          validated,
+          slot: {
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            slotDate: null,
+            slotDay: slot.slotDay,
+          },
+          periodId,
+          enfants: myEnfants,
+          accompagnants: myAcc,
+          theme,
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -119,6 +141,8 @@ export async function reserveRecurringAction(
     }
     throw e;
   }
+  // Confirmation à l'usager (best-effort, après commit).
+  if (mailParams) await sendBookingConfirmationMail(mailParams);
   revalidate(serviceId);
   return { ok: true };
 }
@@ -143,20 +167,45 @@ export async function reservePonctuelAction(
       })
     : null;
   const validated = !(setting?.validation ?? false);
+  const myEnfants = enfants > 0 ? enfants : (user?.enfants ?? 0);
+  const myAcc = accompagnants > 0 ? accompagnants : 0;
   try {
     await createUniqueBooking(
       session.user.id,
-      {
-        slotId,
-        enfants: enfants > 0 ? enfants : (user?.enfants ?? 0),
-        accompagnants: accompagnants > 0 ? accompagnants : 0,
-        themeLabel: theme,
-      },
+      { slotId, enfants: myEnfants, accompagnants: myAcc, themeLabel: theme },
       validated,
     );
   } catch (e) {
     if (e instanceof BookingError) return { ok: false, error: e.message };
     throw e;
+  }
+  // Confirmation à l'usager (best-effort, après création).
+  const slot = await prisma.slot.findUnique({
+    where: { id: slotId },
+    select: {
+      startTime: true,
+      endTime: true,
+      slotDate: true,
+      slotDay: true,
+      service: { select: { label: true } },
+    },
+  });
+  if (slot) {
+    await sendBookingConfirmationMail({
+      userId: session.user.id,
+      serviceId,
+      serviceLabel: slot.service.label,
+      validated,
+      slot: {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        slotDate: slot.slotDate,
+        slotDay: slot.slotDay,
+      },
+      enfants: myEnfants,
+      accompagnants: myAcc,
+      theme,
+    });
   }
   revalidate(serviceId);
   return { ok: true };

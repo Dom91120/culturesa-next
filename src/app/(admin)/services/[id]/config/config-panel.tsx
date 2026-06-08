@@ -394,7 +394,7 @@ export function ConfigPanel({
         <section style={SUB_PANEL}>
           <div className="panel-title" style={{ justifyContent: "space-between" }}>
             <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
-              <span className="dot" style={{ background: "var(--accent)" }} />
+              <span className="dot" style={{ background: "var(--warn)" }} />
               Demandeurs
             </span>
             <button

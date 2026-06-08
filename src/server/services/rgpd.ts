@@ -1,6 +1,13 @@
+import { wrapEmailHtml } from "@/lib/email-theme";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMail } from "@/server/mailer";
+import {
+  getMailTemplate,
+  htmlToText,
+  renderHtmlTemplate,
+  renderSubjectTemplate,
+} from "@/server/services/mail-templates";
 
 export type AnonymizeReason = "self_service" | "admin" | "retention";
 
@@ -315,10 +322,20 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
     // Envoi best-effort : un échec SMTP ne doit pas annuler le marquage.
     const name = `${u.prenom} ${u.nom}`.trim() || u.email;
     try {
+      const vars = {
+        salutation: `Bonjour ${name},`,
+        prenom: u.prenom?.trim() ?? "",
+        annees: `${years} an(s)`,
+        delai: `${GRACE_DAYS} jours`,
+      };
+      const tpl = await getMailTemplate("account_deletion_notice");
+      const inner = renderHtmlTemplate(tpl.html, vars);
+      const subject = renderSubjectTemplate(tpl.subject, vars);
       await sendMail({
         to: u.email,
-        subject: "Préavis de suppression de votre compte — CultuRésa",
-        html: `<p>Bonjour ${name},</p><p>Votre compte CultuRésa est inactif depuis plus de ${years} an(s). Conformément à notre politique de conservation des données (RGPD), il sera anonymisé de façon irréversible si vous ne vous reconnectez pas dans un délai de ${GRACE_DAYS} jours.</p><p>Pour conserver votre compte, il vous suffit de vous reconnecter avant l'échéance.</p><p>L'équipe CultuRésa</p>`,
+        subject,
+        html: wrapEmailHtml(inner, { preheader: subject }),
+        text: htmlToText(inner),
       });
     } catch {
       // SMTP indisponible : on ignore, le marquage du préavis reste valide.

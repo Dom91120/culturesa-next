@@ -1,15 +1,19 @@
 "use client";
 
+import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import { gaugeUnits } from "@/lib/gauge";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
+  copyBookingAction,
   copyWeekSlotsAction,
   createRecurringBookingAction,
   createRecurringSlotAction,
   createUniqueBookingAction,
   createUniqueSlotAction,
+  cutBookingAction,
   deleteBookingAdminAction,
   deleteSlotAction,
   moveBookingAction,
@@ -39,6 +43,7 @@ type Service = {
 type Period = {
   id: number;
   label: string;
+  etiquette: string;
   color: string;
   dateStart: string;
   dateEnd: string;
@@ -191,7 +196,7 @@ type Booking = {
   demandeur: string;
   structure: string;
 };
-type UserOpt = { id: string; label: string };
+type UserOpt = { id: string; label: string; demandeur?: string; structure?: string };
 
 const DAY_NAMES: Record<string, string> = {
   lun: "Lundi",
@@ -262,7 +267,7 @@ function badgeStyle(validated: boolean): React.CSSProperties {
         color: "var(--badge-text, #1a1f2e)",
       }
     : {
-        background: "#f3dfbb",
+        background: "#ffe6a7",
         borderColor: "rgba(232, 164, 90, .45)",
         color: "var(--badge-text, #1a1f2e)",
       };
@@ -458,6 +463,12 @@ export function AgendaGrid({
     curDay: string;
   } | null>(null);
   const createDragRef = useRef<typeof createDrag>(null);
+  // Glisser-créer un créneau « JOURNÉE ENTIÈRE » (mode création, bande dédiée) :
+  // sélection horizontale uniquement (startDay → curDay), aucune dimension verticale
+  // (le glisser haut/bas n'a pas d'effet). Un créneau sans horaire par jour couvert au
+  // relâché. Miroir dans allDayDragRef pour les écouteurs window.
+  const [allDayDrag, setAllDayDrag] = useState<{ startDay: string; curDay: string } | null>(null);
+  const allDayDragRef = useRef<typeof allDayDrag>(null);
   // Glisser-DÉPLACER un créneau vide (mode création) : id du créneau, type, jour
   // d'origine, durée (préservée), top des colonnes, et position courante (quart +
   // jour sous le curseur). Miroir dans moveDragRef pour les écouteurs window.
@@ -513,18 +524,62 @@ export function AgendaGrid({
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [createCtx, setCreateCtx] = useState<CreateCtx>(null);
   const [cUser, setCUser] = useState("");
+  // Filtres « Type de demandeur » et « Structure » (modale legacy) : restreignent la liste des usagers.
+  const [cDemType, setCDemType] = useState("");
+  const [cStructure, setCStructure] = useState("");
   const [cEnfants, setCEnfants] = useState("0");
   const [cAccompagnants, setCAccompagnants] = useState("0");
   const [cTheme, setCTheme] = useState("");
   const [cError, setCError] = useState<string | null>(null);
   // Modale « configuration de créneau » (mode création) : capacité + demandeurs autorisés.
   const [capModal, setCapModal] = useState<{ slotId: string } | null>(null);
+  // Confirmation de copie des créneaux A↔B (modale dédiée au lieu de window.confirm).
+  const [copyConfirm, setCopyConfirm] = useState<{ from: "A" | "B"; to: "A" | "B" } | null>(null);
+  // Confirmation de suppression d'un créneau vide (modale dédiée au lieu de window.confirm).
+  const [slotDeleteTarget, setSlotDeleteTarget] = useState<string | null>(null);
+  // Presse-papier « copier / couper une réservation » : la source en attente de collage.
+  const [copiedBooking, setCopiedBooking] = useState<{
+    id: number;
+    name: string;
+    mode: "copy" | "cut";
+  } | null>(null);
+  // Menu contextuel (clic droit) : copier une réservation, ou coller sur un créneau.
+  const [ctxMenu, setCtxMenu] = useState<
+    | { x: number; y: number; kind: "booking"; booking: Booking }
+    | { x: number; y: number; kind: "cell"; block: Block }
+    | null
+  >(null);
+  // Ferme le menu contextuel au prochain clic / Échap / défilement.
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCtxMenu(null);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [ctxMenu]);
   const [capValue, setCapValue] = useState("0");
   const [capDemIds, setCapDemIds] = useState<number[]>([]);
   const [capError, setCapError] = useState<string | null>(null);
   const [capSaving, startCapSave] = useTransition();
   // Distingue un clic (ouvre la modale) d'un glisser-déplacer terminé (ne l'ouvre pas).
   const justMovedRef = useRef(false);
+  // Info-bulle flottante unique (texte data-tip / « Journées concernées »), factorisée
+  // dans un hook partagé. Masquée quand le menu contextuel est ouvert.
+  const { tip, tipRef, onAgendaTip, clearTip } = useAgendaTooltip({
+    getDates: (slotId, dayKey) => concernedDatesForBlock(slotId, dayKey),
+    getMeta: (slotId, dayKey) => recMetaForBlock(slotId, dayKey),
+    suppressed: () => ctxMenu !== null,
+  });
 
   const days = service.activeDays
     .split(",")
@@ -699,9 +754,17 @@ export function AgendaGrid({
     }
     return !service.openOnHolidays && isFrenchHoliday(dayYmd);
   };
-  // Classe de grisage (hachures + opacité), portée du legacy _outOfPeriodCls.
-  const outOfPeriodCls = (dayKey: string): string =>
-    isDayDisabled(dayKey) ? " is-out-of-period" : "";
+  // Jour férié (service fermé les fériés), en semaine réelle.
+  const isHolidayDay = (dayKey: string): boolean => {
+    if (mode !== "realweek" || !mondayStr || service.openOnHolidays) return false;
+    return isFrenchHoliday(ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)));
+  };
+  // Classe de grisage : jour férié → hachis de la pause méridienne (is-holiday) ;
+  // hors période → hachis dédié (is-out-of-period).
+  const outOfPeriodCls = (dayKey: string): string => {
+    if (!isDayDisabled(dayKey)) return "";
+    return isHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
+  };
 
   // ── Semaines A/B ── (dérivé de la matrice demandeurs, pas de la colonne service)
   const abMode = modes.abMode;
@@ -1018,6 +1081,11 @@ export function AgendaGrid({
     service.gaugeAccompagnants,
   ]);
 
+  // Blocs affichés pour un jour : AUCUN sur un jour fermé (hors période active ou
+  // férié) — sinon les créneaux/réservations de la période couvrante débordent sur
+  // un jour appartenant à une autre période (semaine à cheval) ou sur un férié.
+  const dayBlocks = (d: string): Block[] => (isDayDisabled(d) ? [] : (blocksByDay[d] ?? []));
+
   function run(p: Promise<unknown>) {
     setDetail(null);
     startTransition(async () => {
@@ -1056,17 +1124,23 @@ export function AgendaGrid({
     if (effectivePeriodId == null || effectivePeriodId <= 0) return;
     const from = effectiveWeek;
     const to: "A" | "B" = from === "A" ? "B" : "A";
-    if (!window.confirm(`Copier les créneaux de la semaine ${from} vers la semaine ${to} ?`)) {
+    setCopyConfirm({ from, to });
+  }
+
+  function confirmCopyWeek() {
+    if (!copyConfirm || effectivePeriodId == null || effectivePeriodId <= 0) {
+      setCopyConfirm(null);
       return;
     }
     run(
       copyWeekSlotsAction({
         serviceId: service.id,
         periodId: effectivePeriodId,
-        fromWeek: from,
-        toWeek: to,
+        fromWeek: copyConfirm.from,
+        toWeek: copyConfirm.to,
       }),
     );
+    setCopyConfirm(null);
   }
 
   // ── Mode « Création de créneau » : géométrie + création ─────────────────────
@@ -1210,10 +1284,142 @@ export function AgendaGrid({
     };
   }, [createDrag !== null]);
 
-  // Supprime un créneau existant sans réservation (× en mode création, confirmation).
+  // ── Mode création : créneau « journée entière » (bande dédiée) ───────────────
+  // mousedown sur une cellule de la bande « Journée entière » : démarre un glisser-
+  // créer purement horizontal (aucune dimension verticale), sur zone vide seulement.
+  function onAllDayCreateMouseDown(e: React.MouseEvent, dayKey: string) {
+    if (!creationMode || isDayDisabled(dayKey)) return;
+    if ((e.target as HTMLElement).closest(".agenda-block")) return;
+    if (mode === "model" && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
+    if (mode === "realweek" && !mondayStr) return;
+    e.preventDefault();
+    const dd = { startDay: dayKey, curDay: dayKey };
+    allDayDragRef.current = dd;
+    setAllDayDrag(dd);
+  }
+
+  // Au relâché : UN créneau SANS horaire (journée entière) par jour couvert (clic
+  // simple = 1 jour ; glisser horizontal = plusieurs). Récurrent en Modèle, ponctuel
+  // daté en Semaine réelle. startTime/endTime vides → bloc « journée entière ».
+  function finalizeAllDayCreate(dd: NonNullable<typeof allDayDrag>) {
+    const targets = daysSpan(dd.startDay, dd.curDay);
+    if (!targets.length) return;
+    if (mode === "model") {
+      if (effectivePeriodId == null || effectivePeriodId <= 0) return;
+      const weeks = abMode && effectiveWeek ? effectiveWeek : "A,B";
+      run(
+        Promise.all(
+          targets.map((dayKey) =>
+            createRecurringSlotAction({
+              serviceId: service.id,
+              periodId: effectivePeriodId,
+              dayKey,
+              startTime: "",
+              endTime: "",
+              weeks,
+              capacity: createCap,
+              demandeurIds: createDemIds,
+            }),
+          ),
+        ),
+      );
+    } else {
+      if (!mondayStr) return;
+      run(
+        Promise.all(
+          targets.map((dayKey) =>
+            createUniqueSlotAction({
+              serviceId: service.id,
+              slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
+              startTime: "",
+              endTime: "",
+              capacity: createCap,
+              demandeurIds: createDemIds,
+            }),
+          ),
+        ),
+      );
+    }
+  }
+
+  // Écouteurs window pendant le glisser-créer « journée entière » : seul le jour sous
+  // le curseur compte (la cellule porte data-allday-daykey) ; le déplacement vertical
+  // est ignoré. Validation au relâché.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lit allDayDragRef (stable) ; (dé)branché sur l'activité du drag
+  useEffect(() => {
+    if (!allDayDrag) return;
+    const onMove = (e: MouseEvent) => {
+      const dd = allDayDragRef.current;
+      if (!dd) return;
+      const cell = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest<HTMLElement>("[data-allday-daykey]");
+      const dk = cell?.dataset.alldayDaykey;
+      const curDay = dk && days.includes(dk) ? dk : dd.curDay;
+      if (curDay !== dd.curDay) {
+        const next = { ...dd, curDay };
+        allDayDragRef.current = next;
+        setAllDayDrag(next);
+      }
+    };
+    const onUp = () => {
+      const dd = allDayDragRef.current;
+      allDayDragRef.current = null;
+      setAllDayDrag(null);
+      if (dd) finalizeAllDayCreate(dd);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [allDayDrag !== null]);
+
+  // Supprime un créneau existant sans réservation (× en mode création) : ouvre une
+  // modale de confirmation dédiée.
   function onDeleteEmptySlot(slotId: string) {
-    if (!window.confirm("Supprimer ce créneau ?")) return;
-    run(deleteSlotAction(service.id, slotId));
+    // En semaine réelle, un créneau récurrent n'est pas supprimable (cf. vue Modèle).
+    if (isRealweekRecurringSlot(slotId)) return;
+    setSlotDeleteTarget(slotId);
+  }
+
+  function confirmDeleteSlot() {
+    if (!slotDeleteTarget) return;
+    run(deleteSlotAction(service.id, slotDeleteTarget));
+    setSlotDeleteTarget(null);
+  }
+
+  // Le créneau `b` peut-il recevoir un collage ? (= mêmes règles que cellCreatable :
+  // non complet, période active pour un récurrent, et NON récurrent en semaine réelle.)
+  function isCellPasteable(b: Block): boolean {
+    if (creationMode) return false;
+    const isPonctuel = uniqueIdSet.has(b.slotId);
+    if (mode === "realweek" && !isPonctuel) return false;
+    const gauge = isPonctuel ? modes.gaugePonct : modes.gaugeRec;
+    const used = gauge ? b.used : b.bookings.length;
+    if (used >= b.capacity) return false;
+    return isPonctuel || (effectivePeriodId != null && effectivePeriodId > 0);
+  }
+
+  // Colle la réservation copiée sur le créneau cible `b` (récurrent ou ponctuel).
+  // La cible est forcément « collable » (cf. cellCreatable au point d'appel) : non
+  // complète, et non récurrente en semaine réelle (verrou de consultation).
+  function pasteBookingOnto(b: Block) {
+    if (!copiedBooking) return;
+    const target = uniqueIdSet.has(b.slotId)
+      ? ({ kind: "unique", slotId: b.slotId } as const)
+      : ({
+          kind: "recurring",
+          periodId: effectivePeriodId ?? 0,
+          dayKey: b.dayKey,
+          slotId: b.slotId,
+          week: effectiveWeek ?? "",
+        } as const);
+    const action = copiedBooking.mode === "cut" ? cutBookingAction : copyBookingAction;
+    run(action({ serviceId: service.id, sourceBookingId: copiedBooking.id, target }));
+    // Couper = à usage unique (la source est déplacée) → on vide le presse-papier.
+    if (copiedBooking.mode === "cut") setCopiedBooking(null);
   }
 
   // Récapitulatif d'une réservation pour la modale de confirmation de suppression
@@ -1243,13 +1449,14 @@ export function AgendaGrid({
     return { name, details: parts.join(" · "), recurring };
   }
 
-  // Confirme la suppression (ferme la modale détail si ouverte).
-  function confirmDeleteBooking() {
+  // Confirme la suppression (ferme la modale détail si ouverte). `motif` (optionnel)
+  // est saisi par le gestionnaire et joint au mail de notification envoyé à l'usager.
+  function confirmDeleteBooking(motif: string) {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
     setDeleteTarget(null);
     setDetail(null);
-    run(deleteBookingAdminAction(id, service.id));
+    run(deleteBookingAdminAction(id, service.id, motif));
   }
 
   // Ouvre la modale de configuration d'un créneau (capacité + demandeurs autorisés),
@@ -1290,9 +1497,15 @@ export function AgendaGrid({
   // ── Mode création : glisser-DÉPLACER un créneau vide ────────────────────────
   // Démarre sur le corps d'un bloc vide (× et badges gérés à part). Le créneau suit
   // le curseur (haut du bloc = quart sous le curseur), durée préservée.
+  // Créneau récurrent affiché en SEMAINE RÉELLE : non éditable (config, redimension,
+  // déplacement, suppression interdits) — toute édition se fait en vue « Modèle de période ».
+  const isRealweekRecurringSlot = (slotId: string) =>
+    mode === "realweek" && !uniqueIdSet.has(slotId);
+
   function onMoveSlotMouseDown(e: React.MouseEvent, b: Block) {
     justMovedRef.current = false; // nouvelle interaction : on repart d'un « pas déplacé »
     if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
+    if (isRealweekRecurringSlot(b.slotId)) return;
     if (isDayDisabled(b.dayKey)) return;
     if ((e.target as HTMLElement).closest("button")) return; // ne pas gêner la croix ×
     e.stopPropagation(); // n'amorce pas un glisser-CRÉER sur la colonne
@@ -1398,7 +1611,7 @@ export function AgendaGrid({
   // quart sous le curseur (durée minimale d'un quart). Validé au relâché.
   function onResizeSlotMouseDown(e: React.MouseEvent, b: Block, edge: "top" | "bottom") {
     if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
-    if (isDayDisabled(b.dayKey)) return;
+    if (isDayDisabled(b.dayKey) || isRealweekRecurringSlot(b.slotId)) return;
     justMovedRef.current = true; // redimensionnement → le clic résiduel n'ouvre pas la modale
     e.stopPropagation(); // n'amorce ni un glisser-déplacer ni un glisser-créer
     e.preventDefault();
@@ -1496,7 +1709,7 @@ export function AgendaGrid({
   // créneau par jour couvert (même plage horaire que la source). Validé au relâché.
   function onResizeSlotMouseDownH(e: React.MouseEvent, b: Block, edge: "left" | "right") {
     if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
-    if (isDayDisabled(b.dayKey)) return;
+    if (isDayDisabled(b.dayKey) || isRealweekRecurringSlot(b.slotId)) return;
     justMovedRef.current = true; // extension latérale → le clic résiduel n'ouvre pas la modale
     e.stopPropagation(); // n'amorce ni déplacer, ni créer, ni redimensionner vertical
     e.preventDefault();
@@ -1726,6 +1939,8 @@ export function AgendaGrid({
 
   function openCreate(dayKey: string, slotId: string, ponctuel = false, slotDate?: string) {
     setCUser("");
+    setCDemType("");
+    setCStructure("");
     setCEnfants("0");
     setCAccompagnants("0");
     setCTheme("");
@@ -1808,7 +2023,58 @@ export function AgendaGrid({
   // horaire et par la bande « Journée entière » (port du legacy
   // _renderAgendaAdminBlock(b, isAlldayBlock)). En all-day : pas de positionnement
   // absolu (le CSS .agenda-block.is-allday gère position/​taille dans la cellule).
+  // ── Info-bulle « Journées concernées » au survol d'un créneau récurrent (vue
+  // Modèle de période), alignée sur le côté Réservation : liste les dates concrètes
+  // (créneaux miroirs datés), rendue en portail et suivant la souris.
+  const concernedDatesForBlock = (slotId: string, dayKey: string): string[] =>
+    uniqueSlots
+      .filter(
+        (u) => u.parentSlotId === slotId && u.slotDate && dayKeyFromYmd(u.slotDate) === dayKey,
+      )
+      .map((u) => u.slotDate)
+      .filter((d) => {
+        if (!abMode || effectiveWeek == null) return true;
+        // Convention UNIQUE de l'app : semaine ISO impaire = A (cf. realWeekParity /
+        // slotWeekTag). effectiveWeek (Modèle = weekAB, Semaine réelle = realWeekParity)
+        // est dans cette même convention → comparaison directe, le jour en cours est inclus.
+        const parity: "A" | "B" = isoWeek(new Date(`${d}T00:00:00`)) % 2 === 1 ? "A" : "B";
+        return parity === effectiveWeek;
+      })
+      .sort();
+
+  // Métadonnées affichées dans l'info-bulle « Journées concernées » d'un créneau
+  // récurrent : capacité (celle du bloc affiché, repli sur slot/​service) et
+  // demandeurs autorisés. demandeurs = undefined si le service n'a pas de demandeurs
+  // (ligne masquée) ; tableau vide = aucune restriction (« Ouvert à tous »).
+  const recMetaForBlock = (
+    slotId: string,
+    dayKey: string,
+  ): { capacity?: number | null; demandeurs?: string[] } => {
+    const block = blocksByDay[dayKey]?.find((bl) => bl.slotId === slotId);
+    const capacity =
+      block?.capacity ?? slots.find((s) => s.id === slotId)?.capacity ?? service.capacity;
+    if (!serviceDemandeurs.length) return { capacity };
+    const ids = slotDemandeurs[slotId] ?? [];
+    const demandeurs = serviceDemandeurs.filter((d) => ids.includes(d.id)).map((d) => d.label);
+    return { capacity, demandeurs };
+  };
+
   const renderBlock = (b: Block, allday: boolean) => {
+    // Info-bulle de survol du créneau (capacité + demandeurs autorisés, et pour les
+    // Créneau COMPLET (mode-aware) → pas de création possible. Jauge = enfants[+adultes] ;
+    // sinon = nombre de réservations (1/résa).
+    const isPonctuelCell = uniqueIdSet.has(b.slotId);
+    // Créneau récurrent en semaine réelle : non éditable (ni déplacement, ni
+    // redimension, ni config, ni suppression) — cf. vue Modèle de période.
+    const realWeekRecurring = mode === "realweek" && !isPonctuelCell;
+    const gaugeForCell = isPonctuelCell ? modes.gaugePonct : modes.gaugeRec;
+    const cellFull = (gaugeForCell ? b.used : b.bookings.length) >= b.capacity;
+    // Le créneau est cliquable pour créer une réservation (hors mode création).
+    const cellCreatable =
+      !creationMode &&
+      !cellFull &&
+      !realWeekRecurring &&
+      (isPonctuelCell || (effectivePeriodId != null && effectivePeriodId > 0));
     const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
     // Couleur du compteur de places (barre de jauge ET texte X/Y) selon le
     // remplissage, 3 paliers (mêmes seuils que la jauge de la modale pile) :
@@ -1839,6 +2105,11 @@ export function AgendaGrid({
       // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
       <div
         key={`${b.dayKey}|${b.slotId}`}
+        // data-* pour l'info-bulle déléguée (capacité + demandeurs, et dates pour un
+        // récurrent). Active sur tous les créneaux, y compris « journée entière ».
+        data-slot-tip=""
+        data-slotid={b.slotId}
+        data-daykey={b.dayKey}
         // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
         // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
         // et leurs miroirs (cf. légende Récurrent/Ponctuel).
@@ -1860,13 +2131,26 @@ export function AgendaGrid({
               }
             : {}),
           // Mode création : créneau vide déplaçable (curseur move) ; bloc en cours
-          // de déplacement estompé.
-          ...(creationMode && b.bookings.length === 0 && !allday ? { cursor: "move" } : {}),
+          // de déplacement estompé. Hors création : pointer si on peut y créer une résa.
+          ...(creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring
+            ? { cursor: "move" }
+            : cellCreatable
+              ? { cursor: "pointer" }
+              : {}),
           ...(moveDrag?.slotId === b.slotId || resizeDrag?.slotId === b.slotId
             ? { opacity: 0.35 }
             : {}),
         }}
         onMouseDown={(e) => onMoveSlotMouseDown(e, b)}
+        // Clic droit sur la zone vide d'un créneau → menu « Coller » (si presse-papier actif).
+        // Pas de menu en mode création ni sur un récurrent en semaine réelle (consultation).
+        onContextMenu={(e) => {
+          if (creationMode || realWeekRecurring) return;
+          e.preventDefault();
+          clearTip(); // ferme l'info-bulle
+          if (!copiedBooking) return;
+          setCtxMenu({ x: e.clientX, y: e.clientY, kind: "cell", block: b });
+        }}
         onClick={(e) => {
           // Clic sur la zone vide du créneau → nouvelle réservation.
           e.stopPropagation();
@@ -1877,19 +2161,30 @@ export function AgendaGrid({
               justMovedRef.current = false;
               return;
             }
+            // En semaine réelle, un créneau récurrent n'est pas configurable (cf. vue Modèle).
+            if (realWeekRecurring) return;
             openCapModal(b.slotId);
             return;
           }
+          // Pas de création si le créneau est COMPLET (plus de place restante)
+          // ou verrouillé (récurrent en semaine réelle) — cf. cellCreatable.
+          if (!cellCreatable) return;
           // Créneau ponctuel : ouvre la création d'une réservation ponctuelle.
-          if (uniqueIdSet.has(b.slotId)) {
+          if (isPonctuelCell) {
             const u = uniqueSlots.find((s) => s.id === b.slotId);
             openCreate(b.dayKey, b.slotId, true, u?.slotDate);
             return;
           }
-          if (effectivePeriodId != null && effectivePeriodId > 0) openCreate(b.dayKey, b.slotId);
+          openCreate(b.dayKey, b.slotId);
         }}
         onDragOver={(e) => {
-          if (draggingId != null && !uniqueIdSet.has(b.slotId)) e.preventDefault();
+          if (draggingId == null) return;
+          const dragged = bookings.find((bk) => bk.id === draggingId);
+          if (!dragged) return;
+          // Cible valide = MÊME type que la source (récurrent↔récurrent ou
+          // ponctuel↔ponctuel) et pas un récurrent en semaine réelle (consultation).
+          if (uniqueIdSet.has(dragged.slotId) === isPonctuelCell && !realWeekRecurring)
+            e.preventDefault();
         }}
         onDrop={(e) => {
           // Le créneau est la cible de drop : déplace la résa glissée ici.
@@ -1897,18 +2192,22 @@ export function AgendaGrid({
           e.stopPropagation();
           if (draggingId == null) return;
           const id = draggingId;
+          const dragged = bookings.find((bk) => bk.id === id);
           setDraggingId(null);
-          if (uniqueIdSet.has(b.slotId)) return;
+          if (!dragged) return;
+          // Refus : changement de type (récurrent↔ponctuel) ou récurrent en semaine réelle.
+          if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell || realWeekRecurring) return;
           run(moveBookingAction(id, service.id, b.dayKey, b.slotId));
         }}
       >
         {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
           vide. Curseur ns-resize au survol ; le mousedown amorce le glisser-étirer
-          (stopPropagation → n'amorce ni déplacer ni créer). */}
-        {creationMode && b.bookings.length === 0 && !allday && (
+          (stopPropagation → n'amorce ni déplacer ni créer). En semaine réelle, les
+          créneaux récurrents ne sont pas redimensionnables (pas de poignées). */}
+        {creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring && (
           <>
             <div
-              title="Étirer le créneau"
+              data-tip="Étirer le créneau"
               onMouseDown={(e) => onResizeSlotMouseDown(e, b, "top")}
               style={{
                 position: "absolute",
@@ -1921,7 +2220,7 @@ export function AgendaGrid({
               }}
             />
             <div
-              title="Étirer le créneau"
+              data-tip="Étirer le créneau"
               onMouseDown={(e) => onResizeSlotMouseDown(e, b, "bottom")}
               style={{
                 position: "absolute",
@@ -1937,7 +2236,7 @@ export function AgendaGrid({
               créneau par jour couvert). Bande centrale (top/bottom 7px) pour laisser
               les coins aux poignées verticales. */}
             <div
-              title="Étendre aux jours voisins"
+              data-tip="Étendre aux jours voisins"
               onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "left")}
               style={{
                 position: "absolute",
@@ -1950,7 +2249,7 @@ export function AgendaGrid({
               }}
             />
             <div
-              title="Étendre aux jours voisins"
+              data-tip="Étendre aux jours voisins"
               onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "right")}
               style={{
                 position: "absolute",
@@ -1971,38 +2270,15 @@ export function AgendaGrid({
           className="agenda-block-chips"
           style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", gap: 2 }}
         >
-          {b.bookings.length === 0 && (
-            // Créneau vide : repère discret (horaire + « + »), bloc cliquable
-            // (le clic sur le bloc ouvre la création — cf. onClick parent).
-            <div
-              className="agenda-block-empty"
-              aria-hidden="true"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                color: "var(--muted)",
-                fontSize: ".62rem",
-                fontWeight: 600,
-                opacity: 0.7,
-              }}
-            >
-              <span className="agenda-block-empty-time">
-                {slots.find((s) => s.id === b.slotId)?.startTime ??
-                  uniqueSlots.find((s) => s.id === b.slotId)?.startTime ??
-                  ""}
-              </span>
-              <span className="agenda-block-empty-plus" style={{ fontSize: ".8rem" }}>
-                +
-              </span>
-            </div>
-          )}
-          {/* Mode création : croix de suppression sur les créneaux vides (confirmation). */}
-          {creationMode && b.bookings.length === 0 && (
+          {/* Mode création : croix de suppression sur les créneaux vides (confirmation).
+              Même style que la croix des badges colorés (planning-name-tag-close).
+              En SEMAINE RÉELLE, les créneaux récurrents ne sont pas supprimables (pas de croix) :
+              leur suppression se fait en vue « Modèle de période ». */}
+          {creationMode && b.bookings.length === 0 && !realWeekRecurring && (
             <button
               type="button"
-              title="Supprimer ce créneau"
+              className="planning-name-tag-close"
+              data-tip="Supprimer ce créneau"
               onMouseDown={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
@@ -2010,19 +2286,6 @@ export function AgendaGrid({
               onClick={(e) => {
                 e.stopPropagation();
                 onDeleteEmptySlot(b.slotId);
-              }}
-              style={{
-                position: "absolute",
-                top: 1,
-                right: 3,
-                border: "none",
-                background: "transparent",
-                color: "var(--danger)",
-                cursor: "pointer",
-                fontSize: ".9rem",
-                lineHeight: 1,
-                padding: 0,
-                zIndex: 4,
               }}
             >
               ×
@@ -2034,7 +2297,7 @@ export function AgendaGrid({
             // biome-ignore lint/a11y/useKeyWithClickEvents: pile (clic = liste des réservations)
             <div
               className="planning-stack-wrap"
-              title={`${b.bookings.length} réservations — cliquer pour voir la liste`}
+              data-tip={`${b.bookings.length} réservations — cliquer pour voir la liste`}
               style={{
                 // La pile a une hauteur de mise en page d'un seul badge (44px), mais
                 // l'empilement déborde dessous : badge le plus profond décalé de +8px
@@ -2060,7 +2323,7 @@ export function AgendaGrid({
                   <div
                     className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}`}
                     style={{ ...badgeStyle(bk.validated), position: "relative" }}
-                    title={badgeTitle(bk)}
+                    data-tip={badgeTitle(bk)}
                   >
                     {/* La pastille P/A doit aussi apparaître sur les badges
                         de la pile (cf. legacy), pas seulement dans la modale. */}
@@ -2104,36 +2367,77 @@ export function AgendaGrid({
                 <div
                   key={bk.id}
                   className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${locked ? " is-locked" : ""}`}
-                  draggable={!locked}
+                  // Récurrent en semaine réelle (consultation) → non déplaçable.
+                  draggable={!locked && !realWeekRecurring}
                   style={{
                     ...badgeStyle(bk.validated),
                     position: "relative",
-                    opacity: draggingId === bk.id ? 0.4 : 1,
-                    cursor: quickActive ? "pointer" : locked ? "default" : "grab",
+                    opacity:
+                      draggingId === bk.id ||
+                      (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
+                        ? 0.4
+                        : 1,
+                    cursor:
+                      quickActive && !realWeekRecurring
+                        ? "pointer"
+                        : locked || realWeekRecurring
+                          ? "default"
+                          : "grab",
                     // L'ombre portée (box-shadow 2px 2px 4px) déborde sous le badge sans
                     // occuper de hauteur en flux : on réserve l'extent de l'ombre (offset 2
                     // + blur 4 = 6px) afin que le centrage vertical (justify-content du
                     // créneau) tienne compte de l'ombre, plutôt que de centrer la seule boîte.
                     marginBottom: 6,
                   }}
-                  title={badgeTitle(bk)}
+                  data-tip={badgeTitle(bk)}
+                  // Clic droit → menu « Copier » (pas en mode création ni sur un
+                  // récurrent en semaine réelle).
+                  onContextMenu={(e) => {
+                    if (creationMode || realWeekRecurring) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearTip();
+                    setCtxMenu({ x: e.clientX, y: e.clientY, kind: "booking", booking: bk });
+                  }}
                   onDragStart={
-                    locked
+                    locked || realWeekRecurring
                       ? undefined
                       : (e) => {
                           e.stopPropagation();
                           setDraggingId(bk.id);
                         }
                   }
-                  onDragEnd={locked ? undefined : () => setDraggingId(null)}
+                  onDragEnd={locked || realWeekRecurring ? undefined : () => setDraggingId(null)}
                   onClick={(e) => {
                     // Le badge porte les actions sur la réservation (cf. legacy).
                     // Validation/pointage ON = clic rapide ; sinon = modale d'édition.
+                    // En semaine réelle sur un récurrent : consultation seule (pas d'action
+                    // rapide), la modale s'ouvre en lecture seule.
                     e.stopPropagation();
-                    if (onBlockQuickAction(bk)) return;
+                    if (!realWeekRecurring && onBlockQuickAction(bk)) return;
                     setDetail({ booking: bk });
                   }}
                 >
+                  {/* Croix de suppression (survol) — masquée si la résa est pointée
+                      (verrouillée) ou en semaine réelle sur un récurrent (consultation). */}
+                  {!locked && !realWeekRecurring && (
+                    <button
+                      type="button"
+                      className="planning-name-tag-close"
+                      data-tip="Supprimer"
+                      style={{ border: "none", padding: 0 }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(bk);
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
                   <PointagePill pointage={bk.pointage} />
                   {primaryLabel && (
                     <span style={{ fontSize: ".62rem", fontWeight: 700 }}>{primaryLabel}</span>
@@ -2183,7 +2487,8 @@ export function AgendaGrid({
   };
 
   return (
-    <div id="tab-content-agenda">
+    // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
+    <div id="tab-content-agenda" onMouseMove={onAgendaTip} onMouseLeave={clearTip}>
       <div
         style={{
           display: "flex",
@@ -2263,9 +2568,7 @@ export function AgendaGrid({
             </button>
           </div>
         )}
-        {/* Sélecteurs sur une même ligne (alignés à droite) : Modèle/Semaine réelle,
-            puis À DROITE le toggle Semaine A/B en mode modèle, ou l'indicateur de
-            semaine en semaine réelle. */}
+        {/* Sélecteurs alignés à droite : Modèle/Semaine réelle, puis le toggle Semaine A/B. */}
         <div className="agenda-mode-toggles-wrap">
           <div className="agenda-mode-toggle" role="tablist" aria-label="Mode d&apos;affichage">
             {/* « Modèle de période » n'a de sens qu'avec au moins un demandeur récurrent ;
@@ -2287,25 +2590,38 @@ export function AgendaGrid({
               Semaine réelle
             </button>
           </div>
-          {abMode && mode === "model" && (
-            // « Semaine » en libellé devant le toggle A / B (boutons réduits à A et B).
-            <div style={{ display: "flex", alignItems: "center", gap: ".3rem" }}>
+          {abMode && (mode === "model" || realWeekParity) && (
+            // « Semaine » + toggle A / B. En Modèle : choix libre (weekAB). En Semaine
+            // réelle : seule la parité de la semaine affichée est montrée (lecture seule).
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: ".3rem",
+                minWidth: 100,
+              }}
+            >
               <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>Semaine</span>
               <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
-                <button
-                  type="button"
-                  className={`agenda-mode-btn${weekAB === "A" ? " active" : ""}`}
-                  onClick={() => setWeekAB("A")}
-                >
-                  A
-                </button>
-                <button
-                  type="button"
-                  className={`agenda-mode-btn${weekAB === "B" ? " active" : ""}`}
-                  onClick={() => setWeekAB("B")}
-                >
-                  B
-                </button>
+                {(["A", "B"] as const).map((w) => {
+                  const isRealweek = mode !== "model";
+                  // En Semaine réelle, on n'affiche QUE la parité de la semaine courante.
+                  if (isRealweek && realWeekParity !== w) return null;
+                  const activeWeek = isRealweek ? realWeekParity : weekAB;
+                  return (
+                    <button
+                      key={w}
+                      type="button"
+                      className={`agenda-mode-btn${activeWeek === w ? " active" : ""}`}
+                      onClick={() => {
+                        if (!isRealweek) setWeekAB(w);
+                      }}
+                    >
+                      {w}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2345,7 +2661,7 @@ export function AgendaGrid({
                 }}
               >
                 <span className="period-badge" />
-                {p.label}
+                {[p.etiquette, p.label].filter(Boolean).join(" · ")}
               </button>
             );
           })}
@@ -2355,11 +2671,10 @@ export function AgendaGrid({
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-          {/* En mode création, les cases (Masquer horaires / Mode validation / pointage)
-              laissent place au champ « Capacité » appliqué aux créneaux créés. */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B) ; sinon les cases. */}
           {creationMode ? (
-            <div style={{ display: "flex", alignItems: "center", gap: ".45rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
               <label
                 htmlFor="create-cap"
                 style={{
@@ -2372,57 +2687,90 @@ export function AgendaGrid({
               >
                 Capacité
               </label>
-              <input
-                id="create-cap"
-                type="number"
-                min={1}
-                title="Capacité par défaut"
-                value={capStr}
-                onChange={(e) => onCapChange(e.target.value)}
-                style={{
-                  width: 46,
-                  fontSize: ".72rem",
-                  padding: ".12rem .3rem",
-                  background: "var(--surface2)",
-                  color: "var(--text)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--rad-sm)",
-                }}
-              />
-              <span
-                style={{
-                  fontSize: ".7rem",
-                  color: "var(--accent)",
-                  opacity: capSaved ? 1 : 0,
-                  transition: "opacity .2s",
-                }}
-              >
-                ✓
+              <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                <input
+                  id="create-cap"
+                  type="number"
+                  min={1}
+                  data-tip="Capacité par défaut"
+                  value={capStr}
+                  onChange={(e) => onCapChange(e.target.value)}
+                  style={{
+                    width: 46,
+                    fontSize: ".72rem",
+                    padding: ".12rem .3rem",
+                    background: "var(--surface2)",
+                    color: "var(--text)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--rad-sm)",
+                  }}
+                />
+                {/* Flash « ✓ » de sauvegarde : en absolu (hors flux) → ne réserve aucun
+                    espace quand il est masqué. */}
+                <span
+                  style={{
+                    position: "absolute",
+                    left: "100%",
+                    marginLeft: 0.5,
+                    fontSize: ".7rem",
+                    color: "var(--accent)",
+                    opacity: capSaved ? 1 : 0,
+                    transition: "opacity .2s",
+                    pointerEvents: "none",
+                  }}
+                >
+                  ✓
+                </span>
               </span>
               {/* 👥 : demandeurs autorisés par défaut des créneaux créés (modale). */}
               <button
                 type="button"
                 onClick={() => setCreateDemModal(true)}
-                title="Demandeurs autorisés par défaut"
+                data-tip="Demandeurs autorisés par défaut"
+                aria-label="Demandeurs autorisés par défaut"
                 style={{
                   background: createDemIds.length ? "var(--accent-dim)" : "none",
                   border: `1px solid ${createDemIds.length ? "var(--accent)" : "var(--border)"}`,
                   borderRadius: "var(--rad-sm)",
-                  // Même hauteur que le bouton « Mode création » (padding .28rem + icône 15px).
-                  padding: ".28rem .38rem",
+                  // Dimensions identiques à la boîte du bouton « Mode création »
+                  // (icône 15px + padding .28rem/.38rem + bordure 1px). L'emoji 👥 étant
+                  // plus large/haut qu'un SVG 15px, on fixe la boîte et on centre.
+                  boxSizing: "border-box",
+                  height: "calc(0.56rem + 17px)",
+                  width: "calc(0.76rem + 17px)",
+                  padding: 0,
                   cursor: "pointer",
                   color: createDemIds.length ? "var(--accent)" : "var(--muted)",
                   fontSize: 15,
                   lineHeight: 1,
+                  position: "relative",
                   display: "flex",
                   alignItems: "center",
-                  gap: ".15rem",
-                  marginLeft: ".4rem",
+                  justifyContent: "center",
                 }}
               >
-                👥
+                👥{/* Compteur en pastille superposée (coin haut-droit) → bouton carré. */}
                 {createDemIds.length > 0 && (
-                  <span style={{ fontSize: ".6rem", fontWeight: 700 }}>{createDemIds.length}</span>
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: -5,
+                      right: -5,
+                      minWidth: 13,
+                      height: 13,
+                      padding: "0 3px",
+                      boxSizing: "border-box",
+                      borderRadius: 999,
+                      background: "var(--accent)",
+                      color: "var(--accent-contrast, #fff)",
+                      fontSize: ".55rem",
+                      fontWeight: 700,
+                      lineHeight: "13px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {createDemIds.length}
+                  </span>
                 )}
               </button>
               {/* Copie des créneaux d'une semaine A/B vers l'autre (Modèle + A/B). */}
@@ -2435,12 +2783,14 @@ export function AgendaGrid({
                     type="button"
                     className="btn btn-ghost"
                     onClick={copyWeek}
-                    title={`Copier les créneaux de la semaine ${effectiveWeek} vers la semaine ${effectiveWeek === "A" ? "B" : "A"}`}
+                    data-tip={`Copier les créneaux de la semaine ${effectiveWeek} vers la semaine ${effectiveWeek === "A" ? "B" : "A"}`}
                     style={{
-                      fontSize: ".68rem",
-                      height: 25.55,
-                      padding: "0 .5rem",
-                      marginLeft: ".4rem",
+                      fontSize: ".6rem",
+                      // Même hauteur que le bouton « Mode création » (icône 15px + padding
+                      // .28rem + bordure 1px).
+                      height: "calc(0.56rem + 17px)",
+                      boxSizing: "border-box",
+                      padding: "0 .35rem",
                       display: "inline-flex",
                       alignItems: "center",
                       lineHeight: 1,
@@ -2492,7 +2842,8 @@ export function AgendaGrid({
                 <button
                   type="button"
                   onClick={() => printAgenda(true)}
-                  title="Imprimer en noir & blanc"
+                  data-tip="Imprimer en noir & blanc"
+                  aria-label="Imprimer en noir & blanc"
                   style={{
                     background: "none",
                     border: "1px solid var(--border)",
@@ -2517,7 +2868,6 @@ export function AgendaGrid({
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <title>Imprimer N&amp;B</title>
                     <polyline points="6 9 6 2 18 2 18 9" />
                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                     <rect x="6" y="14" width="12" height="8" />
@@ -2526,7 +2876,8 @@ export function AgendaGrid({
                 <button
                   type="button"
                   onClick={() => printAgenda(false)}
-                  title="Imprimer en couleur"
+                  data-tip="Imprimer en couleur"
+                  aria-label="Imprimer en couleur"
                   style={{
                     background: "none",
                     border: "1px solid var(--border)",
@@ -2551,7 +2902,6 @@ export function AgendaGrid({
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <title>Imprimer couleur</title>
                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                     <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" />
                     <rect x="6" y="14" width="12" height="8" rx="1" />
@@ -2562,7 +2912,8 @@ export function AgendaGrid({
             <button
               type="button"
               onClick={() => toggleCreationMode(!creationMode)}
-              title="Mode création"
+              data-tip="Mode création"
+              aria-label="Mode création"
               aria-pressed={creationMode}
               style={{
                 background: creationMode ? "var(--danger)" : "none",
@@ -2588,7 +2939,6 @@ export function AgendaGrid({
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <title>Mode création</title>
                 <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                 <path d="m15 5 4 4" />
               </svg>
@@ -2606,7 +2956,7 @@ export function AgendaGrid({
               dans le coin haut-gauche (cf. legacy cornerAB). Sinon, l'horloge. */}
           <div
             className="agenda-header-cell agenda-corner"
-            title={
+            data-tip={
               abMode && mode === "realweek" && realWeekParity
                 ? `Semaine ${realWeekParity}`
                 : "Horaires"
@@ -2625,21 +2975,71 @@ export function AgendaGrid({
 
           {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
               grille horaire (port du legacy alldayRow). Masquée s'il n'y a aucun
-              bloc all-day — en hideEmpty, on ne compte que ceux qui ont une résa. */}
-          {days.some((d) =>
-            (blocksByDay[d] ?? []).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
-          ) && (
+              bloc all-day — en hideEmpty, on ne compte que ceux qui ont une résa.
+              En mode création, la ligne reste toujours affichée (même vide) pour
+              rester visible/gérable. */}
+          {(creationMode ||
+            days.some((d) =>
+              dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
+            )) && (
             <>
-              <div className="agenda-header-cell agenda-allday-corner" title="Journée entière">
+              <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
                 Journée entière
               </div>
-              {days.map((d) => (
-                <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
-                  {(blocksByDay[d] ?? [])
-                    .filter((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0))
-                    .map((b) => renderBlock(b, true))}
-                </div>
-              ))}
+              {days.map((d) => {
+                // Jours couverts par le glisser-créer « journée entière » (clic =
+                // 1 jour ; glisser horizontal = plusieurs) → aperçu du créneau à créer.
+                const inAllDayDrag =
+                  allDayDrag != null && daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
+                // Couleur de l'aperçu : jaune = récurrent (Modèle), vert = ponctuel (Semaine réelle).
+                const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
+                return (
+                  <div
+                    key={`ad-${d}`}
+                    // data-allday-daykey : repère la cellule sous le curseur pendant le
+                    // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
+                    data-allday-daykey={d}
+                    className={`agenda-allday-cell${outOfPeriodCls(d)}`}
+                    style={{
+                      cursor: isDayDisabled(d)
+                        ? "not-allowed"
+                        : creationMode
+                          ? "pointer"
+                          : "default",
+                    }}
+                    // Mode création : amorce le glisser-créer « journée entière » (horizontal).
+                    onMouseDown={(e) => onAllDayCreateMouseDown(e, d)}
+                  >
+                    {dayBlocks(d)
+                      .filter((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0))
+                      .map((b) => renderBlock(b, true))}
+                    {/* Aperçu du créneau « journée entière » qui va être créé (clic ou
+                        glisser horizontal), à la façon de l'aperçu de création horaire. */}
+                    {inAllDayDrag && (
+                      <div
+                        className="agenda-create-preview"
+                        style={{
+                          position: "absolute",
+                          inset: 2,
+                          background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
+                          border: `1px dashed ${drawColor}`,
+                          borderRadius: 6,
+                          pointerEvents: "none",
+                          zIndex: 3,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: ".62rem",
+                          fontWeight: 700,
+                          color: drawColor,
+                        }}
+                      >
+                        Journée entière
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </>
           )}
 
@@ -2670,7 +3070,6 @@ export function AgendaGrid({
           </div>
 
           {days.map((d) => (
-            // biome-ignore lint/a11y/useKeyWithClickEvents: grille agenda (clic = créer)
             <div
               key={d}
               data-daykey={d}
@@ -2679,18 +3078,13 @@ export function AgendaGrid({
               // sur la colonne ET tout son contenu (blocs/badges) via pointer-events.
               style={{
                 height: totalH,
-                cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "cell",
+                cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "default",
                 pointerEvents: isDayDisabled(d) ? "none" : undefined,
               }}
               // Mode création : on amorce le glisser-créer (les écouteurs window gèrent
-              // la suite + le relâché). Hors mode création, clic = créer une réservation.
+              // la suite + le relâché). Hors mode création, la création se fait UNIQUEMENT
+              // en cliquant sur un créneau (le bloc) — pas dans le vide de la colonne.
               onMouseDown={(e) => onCreateMouseDown(e, d)}
-              onClick={(e) => {
-                if (isDayDisabled(d) || creationMode) return;
-                const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
-                if (slot && effectivePeriodId != null && effectivePeriodId > 0)
-                  openCreate(d, slot.id);
-              }}
               onDragOver={(e) => {
                 if (isDayDisabled(d)) return;
                 if (draggingId != null) e.preventDefault();
@@ -2702,7 +3096,9 @@ export function AgendaGrid({
                 const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
                 const id = draggingId;
                 setDraggingId(null);
-                if (slot) run(moveBookingAction(id, service.id, d, slot.id));
+                // Cible récurrente en semaine réelle (consultation) → déplacement refusé.
+                if (slot && !isRealweekRecurringSlot(slot.id))
+                  run(moveBookingAction(id, service.id, d, slot.id));
               }}
             >
               {/* Lignes de grille sur les quarts VISIBLES (compactage pause) :
@@ -2727,7 +3123,7 @@ export function AgendaGrid({
                     <div className="agenda-lunch-band" style={{ top: ltop, height: lh }} />
                   ) : null;
                 })()}
-              {(blocksByDay[d] ?? [])
+              {dayBlocks(d)
                 // Grille horaire : uniquement les créneaux datés (les « journée
                 // entière » sont rendus dans la bande dédiée en haut). hideEmpty
                 // masque les créneaux vides pour ne pas écraser la grille (cf. legacy).
@@ -2953,6 +3349,9 @@ export function AgendaGrid({
             // horaire (csm-time-col + bloc créneau coloré csm-slot-block) contenant la
             // liste des badges (cell-stack-list), puis bandeau capacité.
             const isPonctuel = uniqueIdSet.has(stackKey.slotId);
+            // Récurrent en semaine réelle → consultation seule (pas d'édition rapide,
+            // ni suppression ; clic = modale détail en lecture seule).
+            const stackReadOnly = mode === "realweek" && !isPonctuel;
             const uSlot = uniqueSlots.find((s) => s.id === stackKey.slotId);
             const ponctDate =
               isPonctuel && uSlot?.slotDate
@@ -3043,23 +3442,33 @@ export function AgendaGrid({
                   <div
                     style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}
                   >
-                    <label className="planning-option" style={{ margin: 0 }}>
-                      Mode validation{" "}
-                      <input
-                        type="checkbox"
-                        checked={validation}
-                        onChange={(e) => toggleValidation(e.target.checked)}
-                      />
-                    </label>
-                    {mode === "realweek" && (
-                      <label className="planning-option" style={{ margin: 0 }}>
-                        Mode pointage{" "}
-                        <input
-                          type="checkbox"
-                          checked={pointageMode}
-                          onChange={(e) => togglePointageMode(e.target.checked)}
-                        />
-                      </label>
+                    {stackReadOnly ? (
+                      <span
+                        style={{ fontSize: ".7rem", color: "var(--muted)", fontStyle: "italic" }}
+                      >
+                        Consultation — édition en vue « Modèle de période »
+                      </span>
+                    ) : (
+                      <>
+                        <label className="planning-option" style={{ margin: 0 }}>
+                          Mode validation{" "}
+                          <input
+                            type="checkbox"
+                            checked={validation}
+                            onChange={(e) => toggleValidation(e.target.checked)}
+                          />
+                        </label>
+                        {mode === "realweek" && (
+                          <label className="planning-option" style={{ margin: 0 }}>
+                            Mode pointage{" "}
+                            <input
+                              type="checkbox"
+                              checked={pointageMode}
+                              onChange={(e) => togglePointageMode(e.target.checked)}
+                            />
+                          </label>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -3091,17 +3500,22 @@ export function AgendaGrid({
                         <div
                           key={bk.id}
                           className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${bk.pointage != null ? " is-locked" : ""}`}
-                          // Glisser-déplacer depuis la pile : sauf si pointée (verrouillée).
-                          draggable={bk.pointage == null}
+                          // Glisser-déplacer depuis la pile : sauf si pointée (verrouillée)
+                          // ou en consultation (récurrent en semaine réelle).
+                          draggable={bk.pointage == null && !stackReadOnly}
                           style={{
                             ...badgeStyle(bk.validated),
-                            cursor: bk.pointage == null ? "grab" : "default",
+                            cursor: bk.pointage == null && !stackReadOnly ? "grab" : "default",
                             position: "relative",
-                            opacity: draggingId === bk.id ? 0.4 : 1,
+                            opacity:
+                              draggingId === bk.id ||
+                              (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
+                                ? 0.4
+                                : 1,
                           }}
-                          title={badgeTitle(bk)}
+                          data-tip={badgeTitle(bk)}
                           onDragStart={
-                            bk.pointage != null
+                            bk.pointage != null || stackReadOnly
                               ? undefined
                               : (e) => {
                                   // On amorce le drag, PUIS on ferme la pile au tick suivant
@@ -3112,34 +3526,45 @@ export function AgendaGrid({
                                   setTimeout(() => setStackKey(null), 0);
                                 }
                           }
-                          onDragEnd={bk.pointage != null ? undefined : () => setDraggingId(null)}
+                          onDragEnd={
+                            bk.pointage != null || stackReadOnly
+                              ? undefined
+                              : () => setDraggingId(null)
+                          }
                           onClick={() => {
-                            if (onBlockQuickAction(bk)) return;
+                            // Récurrent en semaine réelle : pas d'action rapide → la modale
+                            // détail s'ouvre en consultation (lecture seule).
+                            if (!stackReadOnly && onBlockQuickAction(bk)) return;
                             // On garde la pile ouverte : la modale détail s'empile
                             // par-dessus, et sa fermeture y ramène.
                             setDetail({ booking: bk });
                           }}
+                          // Clic droit → menu « Copier » (pas en mode création ni en consultation).
+                          onContextMenu={(e) => {
+                            if (creationMode || stackReadOnly) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            clearTip();
+                            setCtxMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              kind: "booking",
+                              booking: bk,
+                            });
+                          }}
                         >
                           <PointagePill pointage={bk.pointage} />
-                          {/* Réservation pointée → verrouillée : pas de suppression
-                              rapide (cf. legacy isLockedBadge, croix masquée). */}
-                          {bk.pointage == null && (
+                          {/* Croix masquée si pointée (verrouillée) ou en consultation
+                              (récurrent en semaine réelle). */}
+                          {bk.pointage == null && !stackReadOnly && (
                             <button
                               type="button"
                               className="planning-name-tag-close"
-                              title="Supprimer"
-                              style={{
-                                position: "absolute",
-                                top: 1,
-                                right: 3,
-                                border: "none",
-                                background: "transparent",
-                                color: "inherit",
-                                cursor: "pointer",
-                                fontSize: ".8rem",
-                                lineHeight: 1,
-                                padding: 0,
-                                opacity: 0.6,
+                              data-tip="Supprimer"
+                              style={{ border: "none", padding: 0 }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3212,21 +3637,67 @@ export function AgendaGrid({
 
       {/* Modale détail : rendue APRÈS la pile pour s'empiler par-dessus.
           Sa fermeture laisse stackKey intact → retour à la pile. */}
-      {detail && (
-        <BookingDetailModal
-          booking={detail.booking}
-          serviceId={service.id}
-          themesMode={service.themesMode}
-          themes={themes}
-          onClose={() => setDetail(null)}
-          onSaved={() => {
-            setDetail(null);
-            router.refresh();
-          }}
-          onRequestDelete={setDeleteTarget}
-          run={run}
-        />
-      )}
+      {detail &&
+        (() => {
+          // Période + jour/heure de la réservation, pour le titre de la modale.
+          const bk = detail.booking;
+          const recurSlot = slots.find((s) => s.id === bk.slotId);
+          const uniqSlot = uniqueSlots.find((s) => s.id === bk.slotId);
+          const period =
+            (recurSlot
+              ? periods.find((p) => p.id === recurSlot.periodId)
+              : uniqSlot?.slotDate
+                ? periods.find(
+                    (p) =>
+                      p.dateStart &&
+                      p.dateEnd &&
+                      p.dateStart <= uniqSlot.slotDate &&
+                      p.dateEnd >= uniqSlot.slotDate,
+                  )
+                : undefined) ?? null;
+          const periodTag = period
+            ? [period.etiquette, period.label].filter(Boolean).join(" · ")
+            : "";
+          const slot = recurSlot ?? uniqSlot ?? null;
+          const dayLabel = uniqSlot?.slotDate
+            ? new Date(`${uniqSlot.slotDate}T00:00:00`).toLocaleDateString("fr-FR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })
+            : (DAY_NAMES[bk.dayKey] ?? bk.dayKey);
+          const dayHour = dayLabel + (slot ? ` · ${slot.startTime}–${slot.endTime}` : "");
+          // Occurrences (récurrent uniquement) = créneaux miroirs datés du slot.
+          const occurrenceDates = recurSlot
+            ? uniqueSlots
+                .filter((u) => u.parentSlotId === bk.slotId)
+                .map((u) => u.slotDate)
+                .sort()
+            : [];
+          // Récurrent affiché en semaine réelle → consultation seule (lecture seule).
+          const readOnly = mode === "realweek" && !!recurSlot;
+          return (
+            <BookingDetailModal
+              booking={bk}
+              serviceId={service.id}
+              themesMode={service.themesMode}
+              themes={themes}
+              periodTag={periodTag}
+              periodColor={period?.color ?? ""}
+              dayHour={dayHour}
+              occurrenceDates={occurrenceDates}
+              slotStart={slot?.startTime ?? ""}
+              slotEnd={slot?.endTime ?? ""}
+              readOnly={readOnly}
+              onClose={() => setDetail(null)}
+              onSaved={() => {
+                setDetail(null);
+                router.refresh();
+              }}
+              run={run}
+            />
+          );
+        })()}
 
       {deleteTarget &&
         (() => {
@@ -3236,84 +3707,254 @@ export function AgendaGrid({
               name={recap.name}
               details={recap.details}
               recurring={recap.recurring}
+              validated={deleteTarget.validated}
               onCancel={() => setDeleteTarget(null)}
               onConfirm={confirmDeleteBooking}
             />
           );
         })()}
 
-      {createCtx && (
-        <ModalOverlay onClose={() => setCreateCtx(null)}>
-          <div className="modal-title">
-            Nouvelle réservation —{" "}
-            {createCtx.ponctuel
-              ? createCtx.slotDate
-                ? new Date(`${createCtx.slotDate}T00:00:00`).toLocaleDateString("fr-FR", {
+      {createCtx &&
+        (() => {
+          // Liste des usagers filtrée par « Type de demandeur » puis « Structure »
+          // (cascade, port legacy onPcmDemandeurChange / onPcmStructureChange).
+          const usersByType = cDemType ? users.filter((u) => u.demandeur === cDemType) : users;
+          const structureOptions = [
+            ...new Set(usersByType.map((u) => u.structure).filter(Boolean)),
+          ].sort() as string[];
+          const createUsers = cStructure
+            ? usersByType.filter((u) => u.structure === cStructure)
+            : usersByType;
+          const nCEnf = Number(cEnfants) || 0;
+          const nCAcc = Number(cAccompagnants) || 0;
+          // Période du créneau : récurrent → periodId du slot ; ponctuel → période
+          // couvrant la date. Affichée (étiquette · libellé) dans le titre, avant le jour.
+          const recurSlot = slots.find((s) => s.id === createCtx.slotId);
+          const sd = createCtx.slotDate;
+          const createPeriod =
+            (recurSlot
+              ? periods.find((p) => p.id === recurSlot.periodId)
+              : sd
+                ? periods.find(
+                    (p) => p.dateStart && p.dateEnd && p.dateStart <= sd && p.dateEnd >= sd,
+                  )
+                : undefined) ?? null;
+          const periodTag = createPeriod
+            ? [createPeriod.etiquette, createPeriod.label].filter(Boolean).join(" · ")
+            : "";
+          const dayHour =
+            (createCtx.ponctuel
+              ? sd
+                ? new Date(`${sd}T00:00:00`).toLocaleDateString("fr-FR", {
                     weekday: "long",
                     day: "numeric",
                     month: "long",
                   })
                 : "créneau ponctuel"
-              : (DAY_NAMES[createCtx.dayKey] ?? createCtx.dayKey)}
-            {createSlot ? ` · ${createSlot.startTime}–${createSlot.endTime}` : ""}
-          </div>
-          <div className="form-grid">
-            <div className="field full">
-              <label htmlFor="ag-user">Usager</label>
-              <select id="ag-user" value={cUser} onChange={(e) => setCUser(e.target.value)}>
-                <option value="">— choisir —</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="ag-enfants">Enfants</label>
-              <input
-                id="ag-enfants"
-                type="number"
-                min={0}
-                value={cEnfants}
-                onChange={(e) => setCEnfants(e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="ag-adultes">Adultes</label>
-              <input
-                id="ag-adultes"
-                type="number"
-                min={0}
-                value={cAccompagnants}
-                onChange={(e) => setCAccompagnants(e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="ag-theme">Thème</label>
-              <input
-                id="ag-theme"
-                value={cTheme}
-                onChange={(e) => setCTheme(e.target.value)}
-                placeholder="(optionnel)"
-              />
-            </div>
-          </div>
-          {cError && (
-            <p className="field-error" style={{ display: "block" }}>
-              {cError}
-            </p>
-          )}
-          <div className="btn-row">
-            <button type="button" className="btn btn-ghost" onClick={() => setCreateCtx(null)}>
-              Annuler
-            </button>
-            <button type="button" className="btn btn-primary" onClick={submitCreate}>
-              Créer
-            </button>
-          </div>
-        </ModalOverlay>
-      )}
+              : (DAY_NAMES[createCtx.dayKey] ?? createCtx.dayKey)) +
+            (createSlot ? ` · ${createSlot.startTime}–${createSlot.endTime}` : "");
+          return (
+            <ModalOverlay onClose={() => setCreateCtx(null)}>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setCreateCtx(null)}
+                aria-label="Fermer"
+              >
+                ×
+              </button>
+              <div
+                className="modal-title"
+                style={{ display: "flex", alignItems: "center", gap: ".5rem", flexWrap: "wrap" }}
+              >
+                <span>➕ Nouvelle réservation :</span>
+                {createPeriod && periodTag && (
+                  <span
+                    className="period-btn active"
+                    style={{
+                      cursor: "default",
+                      padding: ".12rem .5rem",
+                      fontSize: ".64rem",
+                      gap: ".3rem",
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    <span
+                      className="period-badge"
+                      style={{ display: "block", background: createPeriod.color }}
+                    />
+                    {periodTag}
+                  </span>
+                )}
+                <span
+                  style={{
+                    fontSize: ".8rem",
+                    fontWeight: 500,
+                    color: "var(--muted)",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {dayHour}
+                </span>
+              </div>
+              <div className="form-grid">
+                {serviceDemandeurs.length > 0 && (
+                  <div className="field full">
+                    <label htmlFor="pcm-demandeur-select">Type de demandeur</label>
+                    <select
+                      id="pcm-demandeur-select"
+                      value={cDemType}
+                      onChange={(e) => {
+                        setCDemType(e.target.value);
+                        setCStructure("");
+                        setCUser("");
+                      }}
+                    >
+                      <option value="">Tous les demandeurs</option>
+                      {serviceDemandeurs.map((d) => (
+                        <option key={d.id} value={d.label}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {structureOptions.length > 0 && (
+                  <div className="field full">
+                    <label htmlFor="pcm-structure-select">Structure</label>
+                    <select
+                      id="pcm-structure-select"
+                      value={cStructure}
+                      onChange={(e) => {
+                        setCStructure(e.target.value);
+                        setCUser("");
+                      }}
+                    >
+                      <option value="">Toutes les structures</option>
+                      {structureOptions.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="field full">
+                  <label htmlFor="pcm-user-select">Demandeur</label>
+                  <select
+                    id="pcm-user-select"
+                    value={cUser}
+                    onChange={(e) => setCUser(e.target.value)}
+                  >
+                    <option value="">— choisir —</option>
+                    {createUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field full">
+                  <span
+                    style={{
+                      fontSize: ".65rem",
+                      fontWeight: 600,
+                      letterSpacing: ".1em",
+                      textTransform: "uppercase",
+                      color: "var(--muted)",
+                    }}
+                  >
+                    Participants
+                  </span>
+                  <div className="pcm-counters">
+                    <label className="pcm-counter" htmlFor="pcm-enfants">
+                      <span className="pcm-counter-icon" aria-hidden="true">
+                        👶
+                      </span>
+                      <input
+                        id="pcm-enfants"
+                        type="number"
+                        min={0}
+                        max={99}
+                        value={cEnfants}
+                        onChange={(e) => setCEnfants(e.target.value)}
+                      />
+                      <span className="pcm-counter-name">{plural(nCEnf, "Enfant", "Enfants")}</span>
+                    </label>
+                    <label className="pcm-counter" htmlFor="pcm-accompagnants">
+                      <span className="pcm-counter-icon" aria-hidden="true">
+                        🧑‍🦰
+                      </span>
+                      <input
+                        id="pcm-accompagnants"
+                        type="number"
+                        min={0}
+                        max={99}
+                        value={cAccompagnants}
+                        onChange={(e) => setCAccompagnants(e.target.value)}
+                      />
+                      <span className="pcm-counter-name">{plural(nCAcc, "Adulte", "Adultes")}</span>
+                    </label>
+                  </div>
+                </div>
+                {modes.themeMode && (
+                  <div className="field full">
+                    <label htmlFor="pcm-theme">
+                      Thème{" "}
+                      <span style={{ color: "var(--muted)", fontSize: ".7rem", fontWeight: 400 }}>
+                        (optionnel)
+                      </span>
+                    </label>
+                    {service.themesMode === "liste" ? (
+                      <select
+                        id="pcm-theme"
+                        value={cTheme}
+                        onChange={(e) => setCTheme(e.target.value)}
+                      >
+                        <option value="">— aucun —</option>
+                        {themes.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id="pcm-theme"
+                        value={cTheme}
+                        onChange={(e) => setCTheme(e.target.value)}
+                        placeholder="Thème de la visite…"
+                      />
+                    )}
+                  </div>
+                )}
+                {!createCtx.ponctuel && createSlot && (
+                  <OccurrencesField
+                    dates={uniqueSlots
+                      .filter((u) => u.parentSlotId === createCtx.slotId)
+                      .map((u) => u.slotDate)
+                      .sort()}
+                    startTime={createSlot.startTime}
+                    endTime={createSlot.endTime}
+                  />
+                )}
+              </div>
+              {cError && (
+                <p className="field-error" style={{ display: "block" }}>
+                  {cError}
+                </p>
+              )}
+              <div className="btn-row">
+                <button type="button" className="btn btn-ghost" onClick={() => setCreateCtx(null)}>
+                  Annuler
+                </button>
+                <button type="button" className="btn btn-primary" onClick={submitCreate}>
+                  Réserver
+                </button>
+              </div>
+            </ModalOverlay>
+          );
+        })()}
 
       {/* Mode création : modale de choix des demandeurs autorisés PAR DÉFAUT (créneaux créés). */}
       {createDemModal && (
@@ -3495,6 +4136,150 @@ export function AgendaGrid({
             </ModalOverlay>
           );
         })()}
+
+      {/* Confirmation de suppression d'un créneau (mode création). */}
+      {slotDeleteTarget &&
+        (() => {
+          const slot =
+            slots.find((s) => s.id === slotDeleteTarget) ??
+            uniqueSlots.find((s) => s.id === slotDeleteTarget) ??
+            null;
+          const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
+          return (
+            <ModalOverlay onClose={() => setSlotDeleteTarget(null)}>
+              <div className="modal-title" style={{ color: "var(--danger)" }}>
+                🗑️ Supprimer le créneau
+              </div>
+              <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+                Vous êtes sur le point de supprimer ce créneau
+                {timePart ? (
+                  <>
+                    {" "}
+                    <strong>{timePart}</strong>
+                  </>
+                ) : null}
+                .
+              </p>
+              <p
+                style={{
+                  fontSize: ".78rem",
+                  color: "var(--danger)",
+                  fontWeight: 600,
+                  margin: "0 0 1rem",
+                }}
+              >
+                ⚠️ Cette action est irréversible.
+              </p>
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setSlotDeleteTarget(null)}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={confirmDeleteSlot}
+                  style={{ background: "var(--danger)", border: "none", color: "var(--text)" }}
+                >
+                  🗑️ Supprimer
+                </button>
+              </div>
+            </ModalOverlay>
+          );
+        })()}
+
+      {/* Confirmation de copie des créneaux d'une semaine A/B vers l'autre. */}
+      {copyConfirm && (
+        <ModalOverlay onClose={() => setCopyConfirm(null)}>
+          <div className="modal-title" style={{ color: "var(--warn)" }}>
+            Copier les créneaux · Semaine {copyConfirm.from} → {copyConfirm.to}
+          </div>
+          <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 1rem" }}>
+            Les créneaux récurrents de la <strong>semaine {copyConfirm.from}</strong> qui n'existent
+            pas encore en <strong>semaine {copyConfirm.to}</strong> y seront recréés (capacité et
+            demandeurs autorisés inclus). Les créneaux déjà présents en semaine {copyConfirm.to} ne
+            sont pas dupliqués.
+          </p>
+          <div className="btn-row">
+            <button type="button" className="btn btn-ghost" onClick={() => setCopyConfirm(null)}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={confirmCopyWeek}
+              style={{ background: "var(--warn)", border: "none", color: "var(--text)" }}
+            >
+              Valider
+            </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* Menu contextuel (clic droit) : Copier une réservation / Coller sur un créneau. */}
+      {ctxMenu &&
+        createPortal(
+          <div className="badge-ctx-menu" style={{ top: ctxMenu.y, left: ctxMenu.x }}>
+            {ctxMenu.kind === "booking" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCopiedBooking({
+                      id: ctxMenu.booking.id,
+                      name: ctxMenu.booking.name,
+                      mode: "cut",
+                    });
+                    setCtxMenu(null);
+                  }}
+                >
+                  ✂️ Couper
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCopiedBooking({
+                      id: ctxMenu.booking.id,
+                      name: ctxMenu.booking.name,
+                      mode: "copy",
+                    });
+                    setCtxMenu(null);
+                  }}
+                >
+                  📋 Copier
+                </button>
+                <button
+                  type="button"
+                  className="ctx-danger"
+                  onClick={() => {
+                    setDeleteTarget(ctxMenu.booking);
+                    setCtxMenu(null);
+                  }}
+                >
+                  🗑️ Supprimer
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={!copiedBooking || !isCellPasteable(ctxMenu.block)}
+                onClick={() => {
+                  pasteBookingOnto(ctxMenu.block);
+                  setCtxMenu(null);
+                }}
+              >
+                📌 Coller ici
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
+
+      {/* Info-bulle flottante unique (texte data-tip / « Journées concernées »). */}
+      <AgendaTooltip tip={tip} tipRef={tipRef} />
     </div>
   );
 }
@@ -3535,15 +4320,19 @@ function BookingDeleteModal({
   name,
   details,
   recurring,
+  validated,
   onCancel,
   onConfirm,
 }: {
   name: string;
   details: string;
   recurring: boolean;
+  // Réservation déjà validée → le mail parlera de « supprimée » ; sinon « non validée ».
+  validated: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (motif: string) => void;
 }) {
+  const [motif, setMotif] = useState("");
   return (
     <ModalOverlay onClose={onCancel}>
       <div className="modal-title" style={{ color: "var(--danger)" }}>
@@ -3556,6 +4345,34 @@ function BookingDeleteModal({
       {details && (
         <p style={{ fontSize: ".78rem", color: "var(--muted)", marginBottom: "1rem" }}>{details}</p>
       )}
+      {/* Motif (facultatif) : joint au mail de notification envoyé à l'usager. */}
+      <label
+        htmlFor="booking-delete-motif"
+        style={{ display: "block", fontSize: ".78rem", fontWeight: 600, marginBottom: ".25rem" }}
+      >
+        Motif (facultatif)
+      </label>
+      <textarea
+        id="booking-delete-motif"
+        value={motif}
+        onChange={(e) => setMotif(e.target.value)}
+        rows={3}
+        maxLength={1000}
+        placeholder="Précisez le motif communiqué à l'usager…"
+        style={{
+          width: "100%",
+          resize: "vertical",
+          fontSize: ".8rem",
+          padding: ".4rem .5rem",
+          marginBottom: ".5rem",
+          boxSizing: "border-box",
+        }}
+      />
+      <p style={{ fontSize: ".74rem", color: "var(--muted)", marginBottom: "1rem" }}>
+        ✉️ Un e-mail informera l'usager que sa réservation{" "}
+        {validated ? "a été supprimée" : "n'a pas été validée"}
+        {motif.trim() ? ", avec le motif saisi" : ""}.
+      </p>
       <p
         style={{
           fontSize: ".78rem",
@@ -3573,7 +4390,7 @@ function BookingDeleteModal({
         <button
           type="button"
           className="btn btn-primary"
-          onClick={onConfirm}
+          onClick={() => onConfirm(motif.trim())}
           style={{ background: "var(--danger)", border: "none", color: "var(--text)" }}
         >
           🗑️ Supprimer
@@ -3586,6 +4403,80 @@ function BookingDeleteModal({
 // Accord pluriel des libellés de compteurs (cf. legacy _bdetUpdateLabels).
 function plural(n: number, singular: string, plural: string): string {
   return n > 1 ? plural : singular;
+}
+
+// Heure « 9h » / « 9h30 » (port legacy _fmtHourFr : pas de zéro initial, « h » au lieu de « : »).
+function fmtHourFr(t: string): string {
+  const [h, m] = t.split(":");
+  const hh = String(Number(h));
+  return m && m !== "00" ? `${hh}h${m}` : `${hh}h`;
+}
+
+// Plage horaire « de 9h à 10h » ou « journée entière » (port legacy _fmtSlotHoursFr).
+function fmtSlotHoursFr(start?: string, end?: string): string {
+  if (!start || !end) return "journée entière";
+  return `de ${fmtHourFr(start)} à ${fmtHourFr(end)}`;
+}
+
+// Date longue française à partir d'un « YYYY-MM-DD ».
+function fmtDateLongFr(ymd: string): string {
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+/**
+ * Champ « Créneaux concernés » des modales récurrentes (port legacy
+ * pcm/bdet-occurrences-field) : dates concrètes en grille 3 colonnes, chacune
+ * suivie de la plage horaire du créneau. Côté next, les occurrences d'un récurrent
+ * sont ses créneaux miroirs (slots datés `parentSlotId`), cf. MEMORY.
+ */
+function OccurrencesField({
+  dates,
+  startTime,
+  endTime,
+}: {
+  dates: string[];
+  startTime?: string;
+  endTime?: string;
+}) {
+  if (!dates.length) return null;
+  const times = fmtSlotHoursFr(startTime, endTime);
+  return (
+    <div className="field full">
+      <span
+        style={{
+          fontSize: ".65rem",
+          fontWeight: 600,
+          letterSpacing: ".1em",
+          textTransform: "uppercase",
+          color: "var(--muted)",
+        }}
+      >
+        Créneaux concernés
+      </span>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: ".15rem .75rem",
+          fontSize: ".65rem",
+          color: "var(--muted)",
+          lineHeight: 1.4,
+          maxHeight: 200,
+          overflowY: "auto",
+        }}
+      >
+        {dates.map((d) => (
+          <div key={d}>
+            • {fmtDateLongFr(d)} {times}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -3601,18 +4492,30 @@ function BookingDetailModal({
   serviceId,
   themesMode,
   themes,
+  periodTag,
+  periodColor,
+  dayHour,
+  occurrenceDates,
+  slotStart,
+  slotEnd,
+  readOnly,
   onClose,
   onSaved,
-  onRequestDelete,
   run,
 }: {
   booking: Booking;
   serviceId: string;
   themesMode: "libre" | "liste";
   themes: string[];
+  periodTag: string;
+  periodColor: string;
+  dayHour: string;
+  occurrenceDates: string[];
+  slotStart: string;
+  slotEnd: string;
+  readOnly: boolean;
   onClose: () => void;
   onSaved: () => void;
-  onRequestDelete: (b: Booking) => void;
   run: (p: Promise<unknown>) => void;
 }) {
   const [, startTransition] = useTransition();
@@ -3671,45 +4574,115 @@ function BookingDetailModal({
       <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">
         ×
       </button>
-      <div className="modal-title">📋 Réservation : {booking.name}</div>
-
-      {locked && (
-        <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".2rem 0 .6rem" }}>
-          Réservation pointée — édition verrouillée.
-        </p>
-      )}
-
-      <div className="field full">
-        <label htmlFor="bdet-demandeur">Demandeur</label>
-        <div className="bdet-readonly" id="bdet-demandeur">
-          {booking.demandeur || "—"}
-        </div>
+      <div
+        className="modal-title"
+        style={{ display: "flex", alignItems: "center", gap: ".5rem", flexWrap: "wrap" }}
+      >
+        <span>📋 Réservation :</span>
+        {periodTag && (
+          <span
+            className="period-btn active"
+            style={{
+              cursor: "default",
+              padding: ".12rem .5rem",
+              fontSize: ".64rem",
+              gap: ".3rem",
+              textTransform: "capitalize",
+            }}
+          >
+            <span className="period-badge" style={{ display: "block", background: periodColor }} />
+            {periodTag}
+          </span>
+        )}
+        <span
+          style={{
+            fontSize: ".8rem",
+            fontWeight: 500,
+            color: "var(--muted)",
+            textTransform: "capitalize",
+          }}
+        >
+          {dayHour}
+        </span>
       </div>
 
+      {readOnly ? (
+        <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".2rem 0 .6rem" }}>
+          Consultation — réservation récurrente (édition en vue « Modèle de période »).
+        </p>
+      ) : (
+        locked && (
+          <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".2rem 0 .6rem" }}>
+            Réservation pointée — édition verrouillée.
+          </p>
+        )
+      )}
+
       <div className="form-grid">
-        <div className="field">
-          <label htmlFor="bdet-enfants">👶 {plural(nEnf, "Enfant", "Enfants")}</label>
-          <input
-            id="bdet-enfants"
-            type="number"
-            min={0}
-            max={99}
-            value={enfants}
-            disabled={locked}
-            onChange={(e) => setEnfants(e.target.value)}
-          />
+        <div className="field full">
+          <label htmlFor="bdet-demandeur-type">Type de demandeur</label>
+          <div className="bdet-readonly" id="bdet-demandeur-type">
+            {booking.demandeur || "—"}
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="bdet-accompagnants">🧑‍🦰 {plural(nAcc, "Adulte", "Adultes")}</label>
-          <input
-            id="bdet-accompagnants"
-            type="number"
-            min={0}
-            max={99}
-            value={accompagnants}
-            disabled={locked}
-            onChange={(e) => setAccompagnants(e.target.value)}
-          />
+        {booking.structure && (
+          <div className="field full">
+            <label htmlFor="bdet-structure">Structure</label>
+            <div className="bdet-readonly" id="bdet-structure">
+              {booking.structure}
+            </div>
+          </div>
+        )}
+        <div className="field full">
+          <label htmlFor="bdet-demandeur">Demandeur</label>
+          <div className="bdet-readonly" id="bdet-demandeur">
+            {booking.name || "—"}
+          </div>
+        </div>
+        <div className="field full">
+          <span
+            style={{
+              fontSize: ".65rem",
+              fontWeight: 600,
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+              color: "var(--muted)",
+            }}
+          >
+            Participants
+          </span>
+          <div className="pcm-counters">
+            <label className="pcm-counter" htmlFor="bdet-enfants">
+              <span className="pcm-counter-icon" aria-hidden="true">
+                👶
+              </span>
+              <input
+                id="bdet-enfants"
+                type="number"
+                min={0}
+                max={99}
+                value={enfants}
+                disabled={locked || readOnly}
+                onChange={(e) => setEnfants(e.target.value)}
+              />
+              <span className="pcm-counter-name">{plural(nEnf, "Enfant", "Enfants")}</span>
+            </label>
+            <label className="pcm-counter" htmlFor="bdet-accompagnants">
+              <span className="pcm-counter-icon" aria-hidden="true">
+                🧑‍🦰
+              </span>
+              <input
+                id="bdet-accompagnants"
+                type="number"
+                min={0}
+                max={99}
+                value={accompagnants}
+                disabled={locked || readOnly}
+                onChange={(e) => setAccompagnants(e.target.value)}
+              />
+              <span className="pcm-counter-name">{plural(nAcc, "Adulte", "Adultes")}</span>
+            </label>
+          </div>
         </div>
         {showTheme && (
           <div className="field full">
@@ -3718,7 +4691,7 @@ function BookingDetailModal({
               <select
                 id="bdet-theme"
                 value={theme}
-                disabled={locked}
+                disabled={locked || readOnly}
                 onChange={(e) => setTheme(e.target.value)}
               >
                 <option value="">— aucun —</option>
@@ -3732,13 +4705,14 @@ function BookingDetailModal({
               <input
                 id="bdet-theme"
                 value={theme}
-                disabled={locked}
+                disabled={locked || readOnly}
                 onChange={(e) => setTheme(e.target.value)}
                 placeholder="(optionnel)"
               />
             )}
           </div>
         )}
+        <OccurrencesField dates={occurrenceDates} startTime={slotStart} endTime={slotEnd} />
       </div>
 
       {error && (
@@ -3747,76 +4721,74 @@ function BookingDetailModal({
         </p>
       )}
 
-      <div className="btn-row">
-        {dirty && !locked && (
-          <button type="button" className="btn btn-ghost" onClick={reset}>
-            Annuler
+      {!readOnly && (
+        <div className="btn-row">
+          {dirty && !locked && (
+            <button type="button" className="btn btn-ghost" onClick={reset}>
+              Annuler
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!dirty || locked || saving}
+            onClick={save}
+          >
+            💾 Enregistrer
           </button>
-        )}
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!dirty || locked || saving}
-          onClick={save}
-        >
-          💾 Enregistrer
-        </button>
-      </div>
+        </div>
+      )}
 
-      {/* Actions secondaires (reprennent l'ancien menu contextuel). */}
-      <div
-        className="btn-row"
-        style={{
-          marginTop: ".75rem",
-          paddingTop: ".6rem",
-          borderTop: "1px solid var(--border)",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{ fontSize: ".72rem" }}
-          disabled={locked}
-          onClick={() => run(setBookingValidatedAction(booking.id, serviceId, !booking.validated))}
+      {/* Actions secondaires — masquées en consultation (lecture seule). */}
+      {!readOnly && (
+        <div
+          className="btn-row"
+          style={{
+            marginTop: ".75rem",
+            paddingTop: ".6rem",
+            borderTop: "1px solid var(--border)",
+            flexWrap: "wrap",
+          }}
         >
-          {booking.validated ? "↩ Dévalider" : "✓ Valider"}
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{ fontSize: ".72rem" }}
-          onClick={() => run(setBookingPointageAction(booking.id, serviceId, "present"))}
-        >
-          ✅ Présent
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{ fontSize: ".72rem" }}
-          onClick={() => run(setBookingPointageAction(booking.id, serviceId, "absent"))}
-        >
-          ❌ Absent
-        </button>
-        {booking.pointage && (
           <button
             type="button"
             className="btn btn-ghost"
             style={{ fontSize: ".72rem" }}
-            onClick={() => run(setBookingPointageAction(booking.id, serviceId, null))}
+            disabled={locked}
+            onClick={() =>
+              run(setBookingValidatedAction(booking.id, serviceId, !booking.validated))
+            }
           >
-            ⚪ Effacer le pointage
+            {booking.validated ? "↩ Dévalider" : "✓ Valider"}
           </button>
-        )}
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{ fontSize: ".72rem", color: "var(--danger)", marginLeft: "auto" }}
-          onClick={() => onRequestDelete(booking)}
-        >
-          🗑️ Supprimer
-        </button>
-      </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: ".72rem" }}
+            onClick={() => run(setBookingPointageAction(booking.id, serviceId, "present"))}
+          >
+            ✅ Présent
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: ".72rem" }}
+            onClick={() => run(setBookingPointageAction(booking.id, serviceId, "absent"))}
+          >
+            ❌ Absent
+          </button>
+          {booking.pointage && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: ".72rem" }}
+              onClick={() => run(setBookingPointageAction(booking.id, serviceId, null))}
+            >
+              ⚪ Effacer le pointage
+            </button>
+          )}
+        </div>
+      )}
     </ModalOverlay>
   );
 }

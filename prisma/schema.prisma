@@ -446,3 +446,20 @@ model AppConfig {
 
   @@map("app_config")
 }
+
+// File d'attente des e-mails en échec (envoi best-effort) : conservés pour pouvoir
+// les renvoyer depuis Administration > Messagerie. Pas de FK (destinataire libre).
+model FailedMail {
+  id          Int      @id @default(autoincrement())
+  toAddr      String   @map("to_addr")
+  subject     String   @default("")
+  html        String   @default("")
+  text        String   @default("")
+  error       String   @default("")
+  attempts    Int      @default(1) @db.SmallInt
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  lastTriedAt DateTime @default(now()) @db.Timestamptz @map("last_tried_at")
+
+  @@index([createdAt])
+  @@map("failed_mails")
+}

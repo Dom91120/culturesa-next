@@ -132,6 +132,17 @@ export function UserShell({
                   Aucune activité disponible.
                 </p>
               )}
+
+              {/* « Mon compte » en dernière position de la sidebar (comme le shell admin). */}
+              <button
+                type="button"
+                className={`sidebar-compte-btn${pathname === "/mon-compte" ? " active" : ""}`}
+                style={{ marginTop: ".6rem" }}
+                onClick={() => router.push("/mon-compte")}
+              >
+                <span className="sb-icon">👤</span>
+                <span className="sb-label">Mon compte</span>
+              </button>
             </div>
           </div>
 

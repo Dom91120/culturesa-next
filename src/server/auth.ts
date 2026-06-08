@@ -1,6 +1,13 @@
+import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import { PASSWORD_POLICY_MESSAGE, isPasswordValid } from "@/lib/password";
 import { prisma } from "@/server/db";
 import { sendMail } from "@/server/mailer";
+import {
+  getMailTemplate,
+  htmlToText,
+  renderHtmlTemplate,
+  renderSubjectTemplate,
+} from "@/server/services/mail-templates";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";
@@ -9,6 +16,33 @@ import { nextCookies } from "better-auth/next-js";
 // Endpoints Better Auth qui définissent/changent un mot de passe : on y impose la
 // politique de complexité (Better Auth ne valide nativement que la longueur min).
 const PASSWORD_ENDPOINTS = new Set(["/sign-up/email", "/reset-password", "/change-password"]);
+
+/**
+ * Envoie un e-mail de compte/sécurité (vérification d'adresse, réinitialisation de
+ * mot de passe) à partir du gabarit éditable (onglet Échanges), habillé du thème.
+ */
+async function sendAccountMail(
+  userId: string,
+  email: string,
+  kind: "email_verification" | "password_reset",
+  url: string,
+  buttonLabel: string,
+) {
+  const prenom =
+    (
+      await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } })
+    )?.prenom?.trim() ?? "";
+  const vars = { salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom, url };
+  const tpl = await getMailTemplate(kind);
+  const inner = renderHtmlTemplate(tpl.html, vars, { bouton: emailButton(url, buttonLabel) });
+  const subject = renderSubjectTemplate(tpl.subject, vars);
+  await sendMail({
+    to: email,
+    subject,
+    html: wrapEmailHtml(inner, { preheader: subject }),
+    text: htmlToText(inner),
+  });
+}
 
 /**
  * Configuration Better Auth.
@@ -27,11 +61,13 @@ export const auth = betterAuth({
     requireEmailVerification: true,
     minPasswordLength: 12,
     sendResetPassword: async ({ user, url }) => {
-      await sendMail({
-        to: user.email,
-        subject: "Réinitialisation de votre mot de passe — CultuRésa",
-        html: `<p>Bonjour,</p><p>Pour réinitialiser votre mot de passe, cliquez sur ce lien (valable 1h) :</p><p><a href="${url}">${url}</a></p>`,
-      });
+      await sendAccountMail(
+        user.id,
+        user.email,
+        "password_reset",
+        url,
+        "Réinitialiser mon mot de passe",
+      );
     },
   },
 
@@ -39,11 +75,13 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await sendMail({
-        to: user.email,
-        subject: "Confirmez votre adresse e-mail — CultuRésa",
-        html: `<p>Bienvenue sur CultuRésa !</p><p>Confirmez votre adresse e-mail en cliquant ici :</p><p><a href="${url}">${url}</a></p>`,
-      });
+      await sendAccountMail(
+        user.id,
+        user.email,
+        "email_verification",
+        url,
+        "Confirmer mon adresse e-mail",
+      );
     },
   },
 

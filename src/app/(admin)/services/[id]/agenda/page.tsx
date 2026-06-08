@@ -40,6 +40,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   const periodSelect = {
     id: true,
     label: true,
+    etiquette: true,
     color: true,
     dateStart: true,
     dateEnd: true,
@@ -119,7 +120,13 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     prisma.user.findMany({
       where: { role: "utilisateur" },
       orderBy: [{ nom: "asc" }, { prenom: "asc" }],
-      select: { id: true, nom: true, prenom: true, demandeur: { select: { label: true } } },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        demandeur: { select: { label: true } },
+        structure: { select: { label: true } },
+      },
     }),
   ]);
 
@@ -143,6 +150,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   const usersData = users.map((u) => ({
     id: u.id,
     label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
+    demandeur: u.demandeur?.label ?? "",
+    structure: u.structure?.label ?? "",
   }));
 
   const bookingsData = bookings.map((b) => ({
@@ -184,6 +193,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   const periodsData = periods.map((p) => ({
     id: p.id,
     label: p.label,
+    etiquette: p.etiquette ?? "",
     color: p.color,
     dateStart: toDateInput(p.dateStart),
     dateEnd: toDateInput(p.dateEnd),

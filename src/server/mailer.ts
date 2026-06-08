@@ -1,5 +1,22 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getConfigMany } from "@/server/config";
+import { prisma } from "@/server/db";
 import nodemailer from "nodemailer";
+
+// Logo embarqué en pièce jointe inline (CID) dans chaque e-mail — déposé sous
+// public/email-logo.png. Lu une seule fois et mis en cache (null si absent).
+let logoCache: Buffer | null | undefined;
+function getLogoBuffer(): Buffer | null {
+  if (logoCache !== undefined) return logoCache;
+  try {
+    const p = join(process.cwd(), "public", "email-logo.png");
+    logoCache = existsSync(p) ? readFileSync(p) : null;
+  } catch {
+    logoCache = null;
+  }
+  return logoCache;
+}
 
 // Transport SMTP (Nodemailer) — remplace PHPMailer.
 //
@@ -89,5 +106,43 @@ export async function sendMail(opts: {
     auth: s.username ? { user: s.username, pass: s.password } : undefined,
   });
 
-  return transport.sendMail({ from: formatFrom(s), ...opts });
+  const logo = getLogoBuffer();
+  const attachments = logo
+    ? [{ filename: "logo.png", content: logo, cid: "culturesa-logo" }]
+    : undefined;
+  return transport.sendMail({ from: formatFrom(s), attachments, ...opts });
+}
+
+/**
+ * Envoie un e-mail en mode « best-effort » : en cas d'échec, l'e-mail est enregistré
+ * dans la file `failed_mails` pour pouvoir être renvoyé depuis Administration >
+ * Messagerie. Ne lève jamais — renvoie l'état d'envoi à l'appelant.
+ */
+export async function sendMailOrQueue(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<{ ok: boolean; queued: boolean; error?: string }> {
+  try {
+    await sendMail(opts);
+    return { ok: true, queued: false };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    try {
+      await prisma.failedMail.create({
+        data: {
+          toAddr: opts.to,
+          subject: opts.subject,
+          html: opts.html,
+          text: opts.text ?? "",
+          error,
+        },
+      });
+      return { ok: false, queued: true, error };
+    } catch (e2) {
+      console.error("[sendMailOrQueue] impossible d'enregistrer l'e-mail en échec:", e2);
+      return { ok: false, queued: false, error };
+    }
+  }
 }

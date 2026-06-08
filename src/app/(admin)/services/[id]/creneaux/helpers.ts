@@ -109,9 +109,11 @@ function isoWeek(dateStr: string): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
+// Convention unique de l'app : semaine ISO IMPAIRE = A, paire = B (cf. realWeekParity
+// des grilles agenda et slotWeekTag serveur).
 export function slotWeekTag(dateStr: string | null): "A" | "B" {
   if (!dateStr) return "A";
-  return isoWeek(dateStr) % 2 === 0 ? "A" : "B";
+  return isoWeek(dateStr) % 2 === 1 ? "A" : "B";
 }
 
 export function parseWeeks(weeks: string | null | undefined): string[] {

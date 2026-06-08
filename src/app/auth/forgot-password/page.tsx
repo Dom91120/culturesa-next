@@ -22,7 +22,16 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="panel" style={{ textAlign: "center", padding: "2rem 1.5rem" }}>
+      <div
+        className="panel"
+        style={{
+          textAlign: "center",
+          padding: "2rem 1.5rem",
+          width: "60%",
+          maxWidth: "100%",
+          margin: "0 auto",
+        }}
+      >
         <div style={{ fontSize: "2.5rem", marginBottom: ".75rem" }}>📧</div>
         <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".5rem" }}>
           <span className="dot" />
@@ -51,7 +60,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <>
+    <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
       <div className="panel">
         <div className="panel-title">
           <span className="dot" />
@@ -88,6 +97,6 @@ export default function ForgotPasswordPage() {
           ← Retour à la connexion
         </Link>
       </div>
-    </>
+    </div>
   );
 }

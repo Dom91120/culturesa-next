@@ -1,5 +1,6 @@
 "use client";
 
+import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import { gaugeUnits } from "@/lib/gauge";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
@@ -39,17 +40,16 @@ type Period = {
 };
 type Exercice = { id: number; label: string };
 
-// Triangle ▲/▼ dessiné en SVG (legacy SPIN_BTN) : la boîte colle au glyphe (6×5px)
-// donc la zone cliquable correspond pile au triangle visible.
+// Bouton − / + d'un compteur de jauge (sans cercle, remplace les anciennes flèches ▲▼).
 // Clic-maintenu : 1er pas immédiat, puis répétition (90 ms) après un délai de 400 ms
 // tant que le bouton reste enfoncé. La répétition appelle TOUJOURS le `onClick` courant
 // (via une ref) → borne `remaining` et compteurs à jour à chaque tick.
-function GaugeSpin({
-  dir,
+function StepBtn({
+  sign,
   color,
   onClick,
 }: {
-  dir: "up" | "down";
+  sign: "+" | "−";
   color: string;
   onClick: () => void;
 }) {
@@ -80,11 +80,10 @@ function GaugeSpin({
     };
   }, []);
 
-  const path = dir === "up" ? "M3 0 L6 5 L0 5 Z" : "M0 0 L6 0 L3 5 Z";
   return (
     <button
       type="button"
-      className="gauge-spin-btn"
+      aria-label={sign === "+" ? "Augmenter" : "Diminuer"}
       onMouseDown={(e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -93,30 +92,24 @@ function GaugeSpin({
       onMouseUp={stop}
       onMouseLeave={stop}
       style={{
-        background: "none",
+        width: 14,
+        height: 16,
         border: "none",
-        padding: 0,
-        margin: 0,
-        cursor: "pointer",
+        background: "transparent",
         color,
-        display: "block",
-        width: 6,
-        height: 5,
-        lineHeight: 0,
-        fontSize: 0,
-        transform: `translateY(${dir === "up" ? "-1" : "1"}px)`,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        // Glyphe collé vers le nombre : « Diminuer » (−) à droite, « Augmenter » (+) à gauche.
+        justifyContent: sign === "−" ? "end" : "start",
+        fontSize: ".95rem",
+        fontWeight: 700,
+        lineHeight: 1,
+        padding: 0,
+        flexShrink: 0,
       }}
     >
-      <svg
-        width="6"
-        height="5"
-        viewBox="0 0 6 5"
-        fill="currentColor"
-        style={{ display: "block" }}
-        aria-hidden="true"
-      >
-        <path d={path} />
-      </svg>
+      {sign}
     </button>
   );
 }
@@ -138,7 +131,7 @@ function ThemeField({
   themes: string[];
   onChange: (v: string) => void;
 }) {
-  const themeColor = validated ? "var(--accent)" : "rgb(232,164,90)";
+  const themeColor = validated ? "#3e7e2f" : "#b2a478";
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -226,7 +219,13 @@ function ThemeField({
           }}
         >
           <span
-            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              flex: 1,
+              fontWeight: 700,
+            }}
           >
             {value || "— Thème —"}
           </span>
@@ -303,7 +302,12 @@ function ThemeField({
       placeholder="Saisissez un thème"
       value={value}
       rows={1}
-      style={{ color: themeColor, WebkitTextFillColor: themeColor, fontSize: ".62rem" }}
+      style={{
+        color: themeColor,
+        WebkitTextFillColor: themeColor,
+        fontSize: ".62rem",
+        fontWeight: 700,
+      }}
       onMouseDown={(e) => e.stopPropagation()}
       // Sans ça, le clic remonte au corps du badge (onBodyClick = action rapide) et
       // empêche d'éditer le thème. stopPropagation → le clic ne fait que focus le champ.
@@ -377,12 +381,13 @@ function MineBadge({
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
 }) {
-  // Couleur legacy : vert si validé, orange sinon (jamais « inherit »).
-  const gColor = validated ? "var(--accent)" : "rgb(232,164,90)";
+  // Couleur du texte/éléments : vert foncé si validé (lisible sur le fond vert clair
+  // du badge), orange sinon (jamais « inherit »).
+  const gColor = validated ? "#3e7e2f" : "#b2a478";
   const stateColor = markedRemoval ? "var(--danger)" : gColor;
   const hasWidgets = gaugeOn || themeMode;
   const editable = gaugeOn && !markedRemoval;
-  const icon = validated ? "✅" : "⏳";
+  const icon = validated ? "✔" : "⏳";
   const themeField =
     themeMode && !markedRemoval ? (
       <ThemeField
@@ -399,7 +404,7 @@ function MineBadge({
       className={`user-agenda-mine-badge${hasWidgets ? " has-widgets" : ""} ${
         validated ? "is-validated" : "is-pending"
       }`}
-      title={title}
+      data-tip={title}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -417,8 +422,8 @@ function MineBadge({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        // Jauge : interligne resserré (gap 1) pour réduire la hauteur du badge.
-        gap: editable ? 1 : 2,
+        // Jauge : interligne du badge (entre compteurs / thème / état).
+        gap: editable ? 3 : 2,
         textAlign: "center",
         opacity: dragging ? 0.4 : markedRemoval ? 0.55 : 1,
       }}
@@ -435,7 +440,8 @@ function MineBadge({
       <button
         type="button"
         className="slot-btn-close"
-        title={markedRemoval ? "Rétablir" : "Supprimer"}
+        data-tip={markedRemoval ? "Rétablir" : "Supprimer"}
+        aria-label={markedRemoval ? "Rétablir" : "Supprimer"}
         onMouseDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
@@ -453,14 +459,15 @@ function MineBadge({
       </button>
       {editable ? (
         // Graphique jauge (legacy _createGaugeBadge) : deux colonnes Enfants | icône |
-        // Adultes ; champ nombre centré entre une paire de triangles fantôme (équilibrage)
-        // et une paire visible (▲▼), + libellé en dessous.
+        // Adultes ; chaque compteur = bouton rond − à gauche, nombre, bouton rond + à
+        // droite (clic-maintenu), + libellé en dessous.
         <div
           className="gauge-badge"
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            gap: 0,
             width: "100%",
             cursor: "default",
             paddingTop: 0,
@@ -472,8 +479,9 @@ function MineBadge({
             style={{
               display: "flex",
               flexDirection: "column",
-              alignItems: "flex-start",
-              width: "calc((100% - .85rem) / 2)",
+              alignItems: "center",
+              width: "45%",
+              flexShrink: 0,
             }}
           >
             <div
@@ -481,23 +489,10 @@ function MineBadge({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: "100%",
+                gap: 0,
               }}
             >
-              <div
-                aria-hidden="true"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  visibility: "hidden",
-                  flexShrink: 0,
-                  width: "55%",
-                }}
-              >
-                <GaugeSpin dir="up" color={gColor} onClick={() => {}} />
-                <GaugeSpin dir="down" color={gColor} onClick={() => {}} />
-              </div>
+              <StepBtn sign="−" color={gColor} onClick={() => onBump("enfants", -1)} />
               <input
                 type="number"
                 min={1}
@@ -507,9 +502,11 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  width: "20%",
+                  width: "1.4rem",
+                  height: "16px",
+                  boxSizing: "border-box",
                   textAlign: "center",
-                  fontSize: ".75rem",
+                  fontSize: ".85rem",
                   background: "transparent",
                   border: "none",
                   color: gColor,
@@ -518,34 +515,27 @@ function MineBadge({
                   flexShrink: 0,
                 }}
               />
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  flexShrink: 0,
-                  width: "25%",
-                }}
-              >
-                <GaugeSpin dir="up" color={gColor} onClick={() => onBump("enfants", 1)} />
-                <GaugeSpin dir="down" color={gColor} onClick={() => onBump("enfants", -1)} />
-              </div>
+              <StepBtn sign="+" color={gColor} onClick={() => onBump("enfants", 1)} />
             </div>
             <span
               className="gauge-txt"
-              style={{
-                color: gColor,
-                paddingLeft: "30%",
-                boxSizing: "border-box",
-                fontSize: ".62rem",
-                lineHeight: 1,
-              }}
+              style={{ color: gColor, fontSize: ".62rem", lineHeight: 1, fontWeight: 700 }}
             >
               {enfants > 1 ? "Enfants" : "Enfant"}
             </span>
           </div>
           {/* Icône d'état */}
-          <span className="slot-icon" style={{ alignSelf: "flex-start" }}>
+          <span
+            className="slot-icon"
+            style={{
+              width: "10%",
+              flexShrink: 0,
+              display: "flex",
+              justifyContent: "center",
+              alignSelf: "flex-start",
+              ...(validated ? { fontSize: "1.1rem" } : {}),
+            }}
+          >
             {icon}
           </span>
           {/* Colonne Adultes */}
@@ -553,8 +543,9 @@ function MineBadge({
             style={{
               display: "flex",
               flexDirection: "column",
-              alignItems: "flex-start",
-              width: "calc((100% - .85rem) / 2)",
+              alignItems: "center",
+              width: "45%",
+              flexShrink: 0,
             }}
           >
             <div
@@ -562,23 +553,10 @@ function MineBadge({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: "100%",
+                gap: 0,
               }}
             >
-              <div
-                aria-hidden="true"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  visibility: "hidden",
-                  flexShrink: 0,
-                  width: "25%",
-                }}
-              >
-                <GaugeSpin dir="up" color={gColor} onClick={() => {}} />
-                <GaugeSpin dir="down" color={gColor} onClick={() => {}} />
-              </div>
+              <StepBtn sign="−" color={gColor} onClick={() => onBump("accompagnants", -1)} />
               <input
                 type="number"
                 min={1}
@@ -588,9 +566,11 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  width: "20%",
+                  width: "1.4rem",
+                  height: "16px",
+                  boxSizing: "border-box",
                   textAlign: "center",
-                  fontSize: ".75rem",
+                  fontSize: ".85rem",
                   background: "transparent",
                   border: "none",
                   color: gColor,
@@ -599,28 +579,11 @@ function MineBadge({
                   flexShrink: 0,
                 }}
               />
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  flexShrink: 0,
-                  width: "55%",
-                }}
-              >
-                <GaugeSpin dir="up" color={gColor} onClick={() => onBump("accompagnants", 1)} />
-                <GaugeSpin dir="down" color={gColor} onClick={() => onBump("accompagnants", -1)} />
-              </div>
+              <StepBtn sign="+" color={gColor} onClick={() => onBump("accompagnants", 1)} />
             </div>
             <span
               className="gauge-txt"
-              style={{
-                color: gColor,
-                paddingRight: "30%",
-                boxSizing: "border-box",
-                fontSize: ".62rem",
-                lineHeight: 1,
-              }}
+              style={{ color: gColor, fontSize: ".62rem", lineHeight: 1, fontWeight: 700 }}
             >
               {accompagnants > 1 ? "Adultes" : "Adulte"}
             </span>
@@ -689,9 +652,6 @@ function addDays(iso: string, n: number): Date {
   return x;
 }
 const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
-// Format "7 avril" (jour + mois en toutes lettres) pour l'info-bulle « Journées
-// concernées » au survol d'un créneau récurrent (port legacy _scheduleTtShow).
-const tipDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" });
 
 // Ligne « N enfant(s) M adulte(s) » de l'info-bulle au survol (port legacy _badgeTitle).
 function participantsLabel(enfants: number, accompagnants: number): string {
@@ -1106,13 +1066,12 @@ export function UserAgendaGrid({
   const [recapOpen, setRecapOpen] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
-  // ── Info-bulle « Journées concernées » au survol d'un créneau récurrent (vue
-  // Modèle de période) : liste les dates concrètes que la résa couvrira. Rendue en
-  // portail, suit la souris (pointer-events:none → ne gêne pas clic/glisser). Port
-  // legacy _scheduleTtShow / _predictedDatesForCurrentUser.
-  const [tipDates, setTipDates] = useState<string[] | null>(null);
-  const tipRef = useRef<HTMLDivElement>(null);
-  const tipPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // Info-bulle flottante unique (texte data-tip / « Journées concernées »), factorisée
+  // dans un hook partagé. Suspendue pendant la saisie d'un thème.
+  const { tip, tipRef, onAgendaTip, clearTip } = useAgendaTooltip({
+    getDates: (slotId, dayKey) => concernedDatesForBlock(slotId, dayKey),
+    suppressed: () => isThemeBeingEdited(),
+  });
 
   const days = service.activeDays
     .split(",")
@@ -1290,9 +1249,17 @@ export function UserAgendaGrid({
     // Vacances scolaires : fermé pour un demandeur fermé pendant les vacances.
     return !openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
   };
-  // Classe de grisage (hachures + opacité), portée du legacy _outOfPeriodCls.
-  const outOfPeriodCls = (dayKey: string): string =>
-    isDayDisabled(dayKey) ? " is-out-of-period" : "";
+  // Jour férié français (service fermé les fériés), en semaine réelle.
+  const isHolidayDay = (dayKey: string): boolean => {
+    if (mode !== "realweek" || !mondayStr || service.openOnHolidays) return false;
+    return isFrenchHoliday(ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)));
+  };
+  // Classe de grisage : jour férié → hachis de la pause méridienne (is-holiday) ;
+  // hors période / vacances scolaires → hachis dédié (is-out-of-period).
+  const outOfPeriodCls = (dayKey: string): string => {
+    if (!isDayDisabled(dayKey)) return "";
+    return isHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
+  };
 
   // ── Semaines A/B ── (dérivé de la matrice demandeurs, pas de la colonne service)
   const abMode = modes.abMode;
@@ -1628,6 +1595,12 @@ export function UserAgendaGrid({
     modes.gaugeRec,
     modes.gaugePonct,
   ]);
+
+  // Blocs affichés pour un jour : AUCUN sur un jour fermé (hors période active,
+  // vacances scolaires ou férié) — sinon les créneaux/réservations de la période
+  // couvrante débordent sur un jour appartenant à une autre période (semaine à
+  // cheval), un jour de vacances, ou un férié.
+  const dayBlocks = (d: string): Block[] => (isDayDisabled(d) ? [] : (blocksByDay[d] ?? []));
 
   function run(p: Promise<unknown>) {
     setDetail(null);
@@ -2104,10 +2077,9 @@ export function UserAgendaGrid({
       .map((u) => u.slotDate as string)
       .filter((d) => {
         if (!abMode || effectiveWeek == null) return true;
-        // Convention serveur (slots.ts slotWeekTag, source des miroirs) : semaine ISO
-        // PAIRE = A, IMPAIRE = B. (À ne pas confondre avec realWeekParity de la grille,
-        // qui suit la convention inverse — sans incidence ici, vue Modèle uniquement.)
-        const parity: "A" | "B" = isoWeek(new Date(`${d}T00:00:00`)) % 2 === 0 ? "A" : "B";
+        // Convention UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B (cf.
+        // realWeekParity / slotWeekTag). effectiveWeek est dans cette même convention.
+        const parity: "A" | "B" = isoWeek(new Date(`${d}T00:00:00`)) % 2 === 1 ? "A" : "B";
         return parity === effectiveWeek;
       })
       .sort();
@@ -2126,38 +2098,6 @@ export function UserAgendaGrid({
       ae.closest(".user-agenda-mine-badge")
     );
   };
-  // Positionne l'info-bulle près du curseur, en la rabattant si elle déborde (legacy
-  // _scheduleTtMove). Manipulation directe du DOM → pas de re-render au déplacement.
-  const positionTip = () => {
-    const el = tipRef.current;
-    if (!el) return;
-    const offset = 12;
-    const r = el.getBoundingClientRect();
-    let x = tipPos.current.x + offset;
-    let y = tipPos.current.y + offset;
-    if (x + r.width > window.innerWidth) x = window.innerWidth - r.width - 4;
-    if (y + r.height > window.innerHeight) y = window.innerHeight - r.height - 4;
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-  };
-  const showTip = (e: React.MouseEvent, slotId: string, dayKey: string) => {
-    if (isThemeBeingEdited()) return;
-    const dates = concernedDatesForBlock(slotId, dayKey);
-    if (!dates.length) return;
-    tipPos.current = { x: e.clientX, y: e.clientY };
-    setTipDates(dates);
-  };
-  const moveTip = (e: React.MouseEvent) => {
-    if (!tipDates) return;
-    tipPos.current = { x: e.clientX, y: e.clientY };
-    positionTip();
-  };
-  const hideTip = () => setTipDates(null);
-  // Repositionne après affichage (la taille de l'info-bulle dépend du nombre de dates).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: positionTip lit tipPos (ref)
-  useEffect(() => {
-    if (tipDates) positionTip();
-  }, [tipDates]);
 
   const renderBlock = (b: Block, allday: boolean) => {
     // Info-bulle « Journées concernées » : créneaux RÉCURRENTS en vue Modèle de période
@@ -2181,6 +2121,10 @@ export function UserAgendaGrid({
       // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
       <div
         key={`${b.dayKey}|${b.slotId}`}
+        // data-* pour l'info-bulle déléguée « Journées concernées » (créneau récurrent).
+        data-slot-tip={isRecurringModel ? "" : undefined}
+        data-slotid={b.slotId}
+        data-daykey={b.dayKey}
         // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
         // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
         // et leurs miroirs (cf. légende Récurrent/Ponctuel).
@@ -2234,9 +2178,6 @@ export function UserAgendaGrid({
           e.stopPropagation();
           dropOnBlock(b);
         }}
-        onMouseEnter={isRecurringModel ? (e) => showTip(e, b.slotId, b.dayKey) : undefined}
-        onMouseMove={isRecurringModel ? moveTip : undefined}
-        onMouseLeave={isRecurringModel ? hideTip : undefined}
       >
         {/* Badges centrés via le parent .agenda-block (justify-content:center).
           Le chips ne grandit pas pour que le centrage opère ; la jauge est
@@ -2303,14 +2244,10 @@ export function UserAgendaGrid({
                   theme={cur.theme}
                   remaining={remaining}
                   stateLabel={stateLabel}
-                  title={
-                    isRecurringModel
-                      ? undefined
-                      : `${tipTime}\n${tipState}\n${participantsLabel(
-                          cur.enfants,
-                          cur.accompagnants,
-                        )}${tipWeek}`
-                  }
+                  title={`${tipTime}\n${tipState}\n${participantsLabel(
+                    cur.enfants,
+                    cur.accompagnants,
+                  )}${tipWeek}`}
                   closeIcon={markedRemoval ? "↺" : "×"}
                   onClose={() => togglePendingRemoval(mb)}
                   onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
@@ -2361,14 +2298,10 @@ export function UserAgendaGrid({
                   theme={add.theme}
                   remaining={remaining}
                   stateLabel={isPonctuelCell ? "En attente" : ""}
-                  title={
-                    isRecurringModel
-                      ? undefined
-                      : `${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
-                          add.enfants,
-                          add.accompagnants,
-                        )}${tipWeek}`
-                  }
+                  title={`${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
+                    add.enfants,
+                    add.accompagnants,
+                  )}${tipWeek}`}
                   closeIcon="×"
                   onClose={removeDraft}
                   onBump={(f, d) => bumpAddCount(add.key, f, d, remaining)}
@@ -2460,42 +2393,10 @@ export function UserAgendaGrid({
   };
 
   return (
-    <div id="tab-content-agenda">
-      {/* Info-bulle « Journées concernées » (survol créneau récurrent, Modèle de période). */}
-      {tipDates &&
-        createPortal(
-          <div
-            ref={tipRef}
-            // Pas de className "schedule-tooltip" : la classe legacy (app-legacy.css)
-            // est `display:none` tant qu'on n'ajoute pas `is-visible` → l'info-bulle
-            // resterait invisible. On la stylise donc entièrement en inline.
-            style={{
-              display: "block",
-              position: "fixed",
-              top: 0,
-              left: 0,
-              zIndex: 10001,
-              pointerEvents: "none",
-              background: "var(--surface1, #1f2430)",
-              color: "var(--text, #e8e8e8)",
-              border: "1px solid var(--border, rgba(255,255,255,.15))",
-              borderRadius: 6,
-              padding: "6px 8px",
-              fontSize: ".62rem",
-              lineHeight: 1.1,
-              boxShadow: "0 6px 18px rgba(0,0,0,.35)",
-              maxWidth: 520,
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>Journées concernées :</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0 12px" }}>
-              {tipDates.map((d) => (
-                <div key={d}>• {tipDateFmt.format(new Date(`${d}T12:00:00`))}</div>
-              ))}
-            </div>
-          </div>,
-          document.body,
-        )}
+    // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
+    <div id="tab-content-agenda" onMouseMove={onAgendaTip} onMouseLeave={clearTip}>
+      {/* Info-bulle flottante unique (texte data-tip / « Journées concernées »). */}
+      <AgendaTooltip tip={tip} tipRef={tipRef} />
       <div
         style={{
           // position:relative → la nav semaine peut être centrée en absolu sur toute
@@ -2515,7 +2416,8 @@ export function UserAgendaGrid({
           {exercices.length > 0 && (
             <span className="exercice-nav-inline">
               <span className="ex-nav-label">{exLabel}</span>
-              <span className="ex-nav-arrows">
+              {/* Flèches de navigation d'exercice masquées côté Réservations (usager). */}
+              <span className="ex-nav-arrows" style={{ display: "none" }}>
                 <button
                   type="button"
                   className="ex-arrow"
@@ -2592,12 +2494,14 @@ export function UserAgendaGrid({
         {/* Agenda usager : la vue (Modèle / Semaine réelle) est verrouillée sur le
             type du demandeur, donc pas de bascule manuelle — on ne garde que le
             sélecteur Semaine A/B (mode modèle) / l'indicateur de semaine. */}
-        <div className="agenda-mode-toggles-wrap">
+        {/* Aligné à gauche (après le titre) : marginRight auto absorbe l'espace à droite. */}
+        <div className="agenda-mode-toggles-wrap" style={{ marginRight: "auto" }}>
           {abMode && mode === "model" && (
             <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
               <button
                 type="button"
                 className={`agenda-mode-btn${weekAB === "A" ? " active" : ""}`}
+                style={{ fontSize: ".71rem", padding: ".21rem .65rem" }}
                 onClick={() => setWeekAB("A")}
               >
                 Semaine A
@@ -2605,6 +2509,7 @@ export function UserAgendaGrid({
               <button
                 type="button"
                 className={`agenda-mode-btn${weekAB === "B" ? " active" : ""}`}
+                style={{ fontSize: ".71rem", padding: ".21rem .65rem" }}
                 onClick={() => setWeekAB("B")}
               >
                 Semaine B
@@ -2675,7 +2580,8 @@ export function UserAgendaGrid({
             <button
               type="button"
               onClick={() => printAgenda(true)}
-              title="Imprimer en noir & blanc"
+              data-tip="Imprimer en noir & blanc"
+              aria-label="Imprimer en noir & blanc"
               style={{
                 background: "none",
                 border: "1px solid var(--border)",
@@ -2700,7 +2606,6 @@ export function UserAgendaGrid({
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <title>Imprimer N&amp;B</title>
                 <polyline points="6 9 6 2 18 2 18 9" />
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                 <rect x="6" y="14" width="12" height="8" />
@@ -2709,7 +2614,8 @@ export function UserAgendaGrid({
             <button
               type="button"
               onClick={() => printAgenda(false)}
-              title="Imprimer en couleur"
+              data-tip="Imprimer en couleur"
+              aria-label="Imprimer en couleur"
               style={{
                 background: "none",
                 border: "1px solid var(--border)",
@@ -2734,7 +2640,6 @@ export function UserAgendaGrid({
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <title>Imprimer couleur</title>
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                 <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" />
                 <rect x="6" y="14" width="12" height="8" rx="1" />
@@ -2753,7 +2658,7 @@ export function UserAgendaGrid({
               dans le coin haut-gauche (cf. legacy cornerAB). Sinon, l'horloge. */}
           <div
             className="agenda-header-cell agenda-corner"
-            title={
+            data-tip={
               abMode && mode === "realweek" && realWeekParity
                 ? `Semaine ${realWeekParity}`
                 : "Horaires"
@@ -2774,15 +2679,15 @@ export function UserAgendaGrid({
               grille horaire (port du legacy alldayRow). Masquée s'il n'y a aucun
               bloc all-day — en hideEmpty, on ne compte que ceux qui ont une résa. */}
           {days.some((d) =>
-            (blocksByDay[d] ?? []).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
+            dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
           ) && (
             <>
-              <div className="agenda-header-cell agenda-allday-corner" title="Journée entière">
+              <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
                 Journée entière
               </div>
               {days.map((d) => (
                 <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
-                  {(blocksByDay[d] ?? [])
+                  {dayBlocks(d)
                     .filter((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0))
                     .map((b) => renderBlock(b, true))}
                 </div>
@@ -2869,7 +2774,7 @@ export function UserAgendaGrid({
                     <div className="agenda-lunch-band" style={{ top: ltop, height: lh }} />
                   ) : null;
                 })()}
-              {(blocksByDay[d] ?? [])
+              {dayBlocks(d)
                 // Grille horaire : uniquement les créneaux datés (les « journée
                 // entière » sont rendus dans la bande dédiée en haut). hideEmpty
                 // masque les créneaux vides pour ne pas écraser la grille (cf. legacy).
@@ -3165,7 +3070,7 @@ export function UserAgendaGrid({
                             cursor: "pointer",
                             position: "relative",
                           }}
-                          title={`${bk.demandeur} — ${bk.name}`}
+                          data-tip={`${bk.demandeur} — ${bk.name}`}
                           onClick={() => {
                             onBlockQuickAction(bk);
                           }}
@@ -3177,7 +3082,8 @@ export function UserAgendaGrid({
                             <button
                               type="button"
                               className="planning-name-tag-close"
-                              title="Supprimer"
+                              data-tip="Supprimer"
+                              aria-label="Supprimer"
                               style={{
                                 position: "absolute",
                                 top: 1,

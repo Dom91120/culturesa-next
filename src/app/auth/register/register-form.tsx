@@ -109,7 +109,7 @@ export function RegisterForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} style={{ width: "80%", maxWidth: "100%", margin: "0 auto" }}>
       <div className="mode-toggle">
         Déjà inscrit ?{" "}
         <Link

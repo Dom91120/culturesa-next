@@ -3,6 +3,7 @@ import { gaugeUnits } from "@/lib/gauge";
 import type { BookingCreateInput } from "@/schemas/booking";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
+import { getSession } from "@/server/guards";
 import { Prisma } from "@prisma/client";
 import { getServiceDemandeurSettings } from "./demandeur-settings";
 import { deriveServiceModes } from "./service-modes";
@@ -16,9 +17,25 @@ function startOfToday() {
   return d;
 }
 
-/** Services réservables (avec un aperçu du nombre de créneaux à venir). */
-export function listBookableServices() {
+/**
+ * Services réservables PAR L'USAGER courant (avec un aperçu du nombre de créneaux à
+ * venir). Un usager ne voit que les services configurés pour SON type de demandeur
+ * (présence d'une ligne ServiceDemandeurSettings). Un compte sans demandeur (ex.
+ * administrateur) voit tous les services.
+ */
+export async function listBookableServices() {
+  const session = await getSession();
+  const userId = session?.user?.id;
+  let demandeurId: number | null = null;
+  if (userId) {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { demandeurId: true },
+    });
+    demandeurId = u?.demandeurId ?? null;
+  }
   return prisma.service.findMany({
+    where: demandeurId != null ? { demandeurSettings: { some: { demandeurId } } } : undefined,
     orderBy: [{ position: "asc" }, { label: "asc" }],
     include: {
       _count: {
@@ -229,6 +246,16 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       accompagnants: true,
     },
   });
+
+  // Accès direct : un usager ne peut ouvrir un service que s'il accepte SON type de
+  // demandeur (cf. listBookableServices). Compte sans demandeur (ex. admin) : autorisé.
+  if (user?.demandeurId != null) {
+    const accepts = await prisma.serviceDemandeurSettings.findFirst({
+      where: { serviceId, demandeurId: user.demandeurId },
+      select: { serviceId: true },
+    });
+    if (!accepts) return null;
+  }
 
   const periodSelect = {
     id: true,

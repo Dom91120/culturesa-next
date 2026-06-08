@@ -19,19 +19,66 @@ async function main() {
     await prisma.demandeur.upsert({ where: { id: d.id }, update: {}, create: d });
   }
 
-  // ── Niveaux scolaires ──
+  // ── Niveaux scolaires (référentiel legacy) ──
   const niveaux = [
-    { id: 1, label: "Petit", demandeurId: 1, position: 0 },
-    { id: 2, label: "Moyen", demandeurId: 1, position: 1 },
-    { id: 3, label: "Grand", demandeurId: 1, position: 2 },
-    { id: 4, label: "CP", demandeurId: 2, position: 3 },
-    { id: 5, label: "CE1", demandeurId: 2, position: 4 },
-    { id: 6, label: "CE2", demandeurId: 2, position: 5 },
-    { id: 7, label: "CM1", demandeurId: 2, position: 6 },
-    { id: 8, label: "CM2", demandeurId: 2, position: 7 },
+    { id: 1, label: "Petit", demandeurId: 1, position: 1 },
+    { id: 2, label: "Moyen", demandeurId: 1, position: 2 },
+    { id: 3, label: "Grand", demandeurId: 1, position: 3 },
+    { id: 4, label: "Petit - Moyen", demandeurId: 1, position: 4 },
+    { id: 5, label: "Moyen - Grand", demandeurId: 1, position: 5 },
+    { id: 6, label: "CP", demandeurId: 2, position: 1 },
+    { id: 7, label: "CE1", demandeurId: 2, position: 2 },
+    { id: 8, label: "CE2", demandeurId: 2, position: 3 },
+    { id: 9, label: "CM1", demandeurId: 2, position: 4 },
+    { id: 10, label: "CM2", demandeurId: 2, position: 5 },
+    { id: 11, label: "CP - CE1", demandeurId: 2, position: 6 },
+    { id: 12, label: "CE1 - CE2", demandeurId: 2, position: 7 },
+    { id: 13, label: "CE2 - CM1", demandeurId: 2, position: 8 },
+    { id: 14, label: "CM1 - CM2", demandeurId: 2, position: 9 },
   ];
   for (const n of niveaux) {
-    await prisma.niveau.upsert({ where: { id: n.id }, update: {}, create: n });
+    await prisma.niveau.upsert({
+      where: { id: n.id },
+      update: { label: n.label, demandeurId: n.demandeurId, position: n.position },
+      create: n,
+    });
+  }
+
+  // ── Structures / établissements (référentiel legacy, rattachés à un demandeur) ──
+  const structures = [
+    { id: 1, demandeurId: 1, label: "École maternelle des Sablons" },
+    { id: 2, demandeurId: 1, label: "École maternelle du Parc" },
+    { id: 3, demandeurId: 1, label: "École maternelle Langevin-Wallon" },
+    { id: 4, demandeurId: 1, label: "École maternelle Joliot-Curie" },
+    { id: 5, demandeurId: 1, label: "École maternelle Jean Jaurès" },
+    { id: 6, demandeurId: 1, label: "École maternelle Gay Lussac" },
+    { id: 7, demandeurId: 1, label: "École maternelle Arc-en-Ciel" },
+    { id: 8, demandeurId: 2, label: "École élémentaire Les Sablons" },
+    { id: 9, demandeurId: 2, label: "École élémentaire Joliot-Curie" },
+    { id: 10, demandeurId: 2, label: "École élémentaire Langevin-Wallon" },
+    { id: 11, demandeurId: 2, label: "École élémentaire Gambetta" },
+    { id: 12, demandeurId: 2, label: "École élémentaire Marcel Doret" },
+    { id: 13, demandeurId: 2, label: "École élémentaire Jules Verne" },
+    { id: 14, demandeurId: 3, label: "Accueil de loisirs maternel Jean Jaurès" },
+    { id: 15, demandeurId: 3, label: "Accueil de loisirs maternel Joliot- Curie" },
+    { id: 16, demandeurId: 3, label: "Accueil de loisirs maternel Langevin-Wallon" },
+    { id: 17, demandeurId: 3, label: "Accueil de loisirs maternel Arc-en-Ciel" },
+    { id: 18, demandeurId: 3, label: "Accueil de loisirs maternel Gay Lussac" },
+    { id: 19, demandeurId: 3, label: "Accueil de loisirs maternel Les Sablons" },
+    { id: 20, demandeurId: 3, label: "Accueil de loisirs maternel du Parc" },
+    { id: 21, demandeurId: 4, label: "Accueil de loisirs élémentaire Gambetta" },
+    { id: 22, demandeurId: 4, label: "Accueil de loisirs élémentaire Joliot-Curie" },
+    { id: 23, demandeurId: 4, label: "Accueil de loisirs élémentaire Jules Verne" },
+    { id: 24, demandeurId: 4, label: "Accueil de loisirs élémentaire Les Sablons" },
+    { id: 25, demandeurId: 4, label: "Accueil de loisirs élémentaire Langevin-Wallon" },
+    { id: 26, demandeurId: 4, label: "Accueil de loisirs élémentaire Marcel Doret" },
+  ];
+  for (const s of structures) {
+    await prisma.structure.upsert({
+      where: { id: s.id },
+      update: { label: s.label, demandeurId: s.demandeurId },
+      create: s,
+    });
   }
 
   // ── Vacances scolaires (zone C — à ajuster selon l'académie) ──
@@ -422,7 +469,7 @@ async function main() {
  * pg_get_serial_sequence résout le nom réel de la séquence (robuste au renommage).
  */
 async function resyncSequences() {
-  const tables = ["demandeurs", "niveaux", "school_holidays", "periods"];
+  const tables = ["demandeurs", "niveaux", "structures", "school_holidays", "periods"];
   for (const table of tables) {
     await prisma.$executeRawUnsafe(
       `SELECT setval(

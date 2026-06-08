@@ -1,7 +1,17 @@
 "use server";
 
+import { wrapEmailHtml } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
+import { sendMailOrQueue } from "@/server/mailer";
+import { resolvePeriodLabel, sendBookingConfirmationMail } from "@/server/services/booking-mail";
+import { isMailEnabled } from "@/server/services/mail-prefs";
+import {
+  getMailTemplate,
+  htmlToText,
+  renderHtmlTemplate,
+  renderSubjectTemplate,
+} from "@/server/services/mail-templates";
 import {
   addRecurringSlot,
   addUniqueSlot,
@@ -237,12 +247,104 @@ export async function deleteSlotAction(
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
-export async function deleteBookingAdminAction(bookingId: number, serviceId: string) {
+const DAY_LABELS: Record<string, string> = {
+  lun: "Lundi",
+  mar: "Mardi",
+  mer: "Mercredi",
+  jeu: "Jeudi",
+  ven: "Vendredi",
+  sam: "Samedi",
+  dim: "Dimanche",
+};
+
+/** Libellé « créneau » lisible pour le mail : date+heure (ponctuel) ou jour+heure (récurrent). */
+function slotMailLabel(slot: {
+  startTime: string;
+  endTime: string;
+  slotDate: Date | null;
+  slotDay: string | null;
+}): string {
+  const s = (slot.startTime || "").slice(0, 5);
+  const e = (slot.endTime || "").slice(0, 5);
+  const time = s && e ? `${s} – ${e}` : "Journée entière";
+  if (slot.slotDate) {
+    // slotDate stocké à minuit UTC → on formate en UTC pour éviter tout décalage de jour.
+    const d = slot.slotDate.toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+    return `${d} · ${time}`;
+  }
+  const day = slot.slotDay ? (DAY_LABELS[slot.slotDay] ?? slot.slotDay) : "";
+  return [day, time].filter(Boolean).join(" · ");
+}
+
+/**
+ * Supprime une réservation depuis l'agenda + notifie l'usager par e-mail.
+ * Le mail informe que la réservation « a été supprimée » (si elle était validée) ou
+ * « n'a pas été validée » (sinon) ; le `motif` saisi par le gestionnaire y est ajouté.
+ * L'envoi est best-effort : un échec d'e-mail ne fait pas échouer la suppression.
+ */
+export async function deleteBookingAdminAction(
+  bookingId: number,
+  serviceId: string,
+  motif?: string,
+) {
   await requireRole("gestionnaire");
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
+  // Infos nécessaires au mail, lues AVANT la suppression.
+  const booking = await prisma.booking.findUnique({
+    where: { id: id.data },
+    select: {
+      validated: true,
+      periodId: true,
+      user: { select: { email: true, prenom: true } },
+      service: { select: { label: true } },
+      slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
+    },
+  });
   await prisma.booking.delete({ where: { id: id.data } });
   revalidatePath(`/services/${serviceId}/agenda`);
+
+  // Notification usager (best-effort) : n'interrompt pas le flux en cas d'échec.
+  const email = booking?.user?.email?.trim();
+  if (booking && email?.includes("@")) {
+    const wasValidated = booking.validated;
+    // Préférence « Échanges » : ce type d'e-mail est-il activé ?
+    if (!(await isMailEnabled(wasValidated ? "booking_cancelled" : "booking_refused"))) return;
+    const serviceLabel = booking.service?.label ?? "";
+    const slotLabel = booking.slot ? slotMailLabel(booking.slot) : "";
+    // Période : par id (récurrent) ou par date couverte (ponctuel).
+    const periodLabel = await resolvePeriodLabel({
+      serviceId,
+      periodId: booking.periodId,
+      slotDate: booking.slot?.slotDate ?? null,
+    });
+    const prenom = booking.user?.prenom?.trim() ?? "";
+    const vars: Record<string, string> = {
+      salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
+      prenom,
+      service: serviceLabel,
+      creneau: slotLabel,
+      periode: periodLabel,
+      motif: (motif ?? "").trim().slice(0, 1000),
+    };
+    const tpl = await getMailTemplate(wasValidated ? "booking_cancelled" : "booking_refused");
+    const inner = renderHtmlTemplate(tpl.html, vars);
+    const subject = renderSubjectTemplate(tpl.subject, vars);
+    // Best-effort : en cas d'échec, l'e-mail est mis en file (renvoyable depuis
+    // Administration > Messagerie). N'interrompt jamais la suppression.
+    await sendMailOrQueue({
+      to: email,
+      subject,
+      html: wrapEmailHtml(inner, { preheader: subject }),
+      text: htmlToText(inner),
+    });
+  }
 }
 
 const detailSchema = z.object({
@@ -355,6 +457,34 @@ export async function createRecurringBookingAction(input: {
     throw e;
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
+  // Confirmation à l'usager (best-effort) : réservation créée par un gestionnaire = validée.
+  const slot = await prisma.slot.findUnique({
+    where: { id: d.slotId },
+    select: {
+      startTime: true,
+      endTime: true,
+      slotDay: true,
+      service: { select: { label: true } },
+    },
+  });
+  if (slot) {
+    await sendBookingConfirmationMail({
+      userId: d.userId,
+      serviceId: d.serviceId,
+      serviceLabel: slot.service.label,
+      validated: true,
+      slot: {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        slotDate: null,
+        slotDay: slot.slotDay,
+      },
+      periodId: d.periodId,
+      enfants: d.enfants,
+      accompagnants: d.accompagnants,
+      theme: d.theme,
+    });
+  }
   return { ok: true };
 }
 
@@ -388,7 +518,15 @@ export async function createUniqueBookingAction(input: {
   const d = parsed.data;
   const slot = await prisma.slot.findUnique({
     where: { id: d.slotId },
-    select: { slotType: true, serviceId: true },
+    select: {
+      slotType: true,
+      serviceId: true,
+      startTime: true,
+      endTime: true,
+      slotDate: true,
+      slotDay: true,
+      service: { select: { label: true } },
+    },
   });
   if (!slot || slot.slotType !== "unique" || slot.serviceId !== d.serviceId) {
     return { ok: false, error: "Créneau introuvable." };
@@ -416,5 +554,112 @@ export async function createUniqueBookingAction(input: {
     throw e;
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
+  // Confirmation à l'usager (best-effort) : réservation créée par un gestionnaire = validée.
+  await sendBookingConfirmationMail({
+    userId: d.userId,
+    serviceId: d.serviceId,
+    serviceLabel: slot.service.label,
+    validated: true,
+    slot: {
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      slotDate: slot.slotDate,
+      slotDay: slot.slotDay,
+    },
+    enfants: d.enfants,
+    accompagnants: d.accompagnants,
+    theme: d.theme,
+  });
+  return { ok: true };
+}
+
+const copyTargetSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("recurring"),
+    periodId: z.coerce.number().int().positive(),
+    dayKey: z.string().min(1),
+    slotId: z.string().min(1),
+    week: z.enum(["", "A", "B"]).default(""),
+  }),
+  z.object({
+    kind: z.literal("unique"),
+    slotId: z.string().min(1),
+  }),
+]);
+
+/**
+ * Copie une réservation existante vers un autre créneau : lit l'usager + les
+ * compteurs + le thème de la source, puis recrée une réservation sur la cible
+ * (récurrente ou ponctuelle) via les actions de création. La source est conservée
+ * (copier, pas couper). Le contrôle d'unicité (P2002) renvoie une erreur lisible.
+ */
+export async function copyBookingAction(input: {
+  serviceId: string;
+  sourceBookingId: number;
+  target:
+    | { kind: "recurring"; periodId: number; dayKey: string; slotId: string; week: "" | "A" | "B" }
+    | { kind: "unique"; slotId: string };
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  const id = idSchema.safeParse(input.sourceBookingId);
+  if (!id.success) return { ok: false, error: "Données invalides." };
+  const target = copyTargetSchema.safeParse(input.target);
+  if (!target.success) return { ok: false, error: "Cible invalide." };
+  const src = await prisma.booking.findUnique({
+    where: { id: id.data },
+    select: {
+      userId: true,
+      enfants: true,
+      accompagnants: true,
+      themeLabel: true,
+      serviceId: true,
+    },
+  });
+  if (!src || src.serviceId !== input.serviceId) {
+    return { ok: false, error: "Réservation introuvable." };
+  }
+  if (target.data.kind === "recurring") {
+    return createRecurringBookingAction({
+      serviceId: input.serviceId,
+      slotId: target.data.slotId,
+      periodId: target.data.periodId,
+      dayKey: target.data.dayKey,
+      userId: src.userId,
+      enfants: src.enfants,
+      accompagnants: src.accompagnants,
+      theme: src.themeLabel ?? "",
+      week: target.data.week,
+    });
+  }
+  return createUniqueBookingAction({
+    serviceId: input.serviceId,
+    slotId: target.data.slotId,
+    userId: src.userId,
+    enfants: src.enfants,
+    accompagnants: src.accompagnants,
+    theme: src.themeLabel ?? "",
+  });
+}
+
+/**
+ * Coupe une réservation vers un autre créneau : recrée la réservation sur la cible
+ * (comme copier), puis supprime la source si la création a réussi. Si la création
+ * échoue (ex. doublon), la source est conservée et l'erreur est renvoyée.
+ */
+export async function cutBookingAction(input: {
+  serviceId: string;
+  sourceBookingId: number;
+  target:
+    | { kind: "recurring"; periodId: number; dayKey: string; slotId: string; week: "" | "A" | "B" }
+    | { kind: "unique"; slotId: string };
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireRole("gestionnaire");
+  const res = await copyBookingAction(input);
+  if (!res.ok) return res;
+  const id = idSchema.safeParse(input.sourceBookingId);
+  if (id.success) {
+    await prisma.booking.delete({ where: { id: id.data } }).catch(() => {});
+  }
+  revalidatePath(`/services/${input.serviceId}/agenda`);
   return { ok: true };
 }

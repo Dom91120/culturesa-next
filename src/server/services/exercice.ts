@@ -275,8 +275,9 @@ async function generateMirrorSlots(
     if (activeDays.includes(iso) && !holidaySet.has(dateStr)) {
       let weekOk = true;
       if (src.weeks === "A" || src.weeks === "B") {
-        const isEven = isoWeek(cursor) % 2 === 0;
-        weekOk = src.weeks === "A" ? isEven : !isEven;
+        // Convention unique de l'app : semaine ISO IMPAIRE = A (cf. slotWeekTag).
+        const isOdd = isoWeek(cursor) % 2 === 1;
+        weekOk = src.weeks === "A" ? isOdd : !isOdd;
       }
       const cap = capForDay(src, iso);
       if (weekOk && cap !== null) {
