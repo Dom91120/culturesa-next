@@ -601,6 +601,9 @@ function MineBadge({
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
+            // Même couleur de texte que le mode jauge (vert si validé, orange sinon ;
+            // rouge si retrait en attente), pour que la coche s'harmonise avec le reste.
+            color: stateColor,
           }}
         >
           {icon}
@@ -884,7 +887,7 @@ type Block = {
   dayKey: string;
   bookings: Booking[];
   // Minutes brutes du créneau : top/height (px) sont dérivés AU RENDU via mapMinToY
-  // (qui dépend du compactage pause/hideEmpty, recalculé hors useMemo).
+  // (qui dépend du compactage pause/hideNoSlot, recalculé hors useMemo).
   startMin: number;
   endMin: number;
   leftPct: number;
@@ -1047,7 +1050,9 @@ export function UserAgendaGrid({
   // voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
   const [rwPeriodId, setRwPeriodId] = useState<number | null>(null);
   const [weekAB, setWeekAB] = useState<"A" | "B">("A");
-  const [hideEmpty, setHideEmpty] = useState(false);
+  // « Masquer les horaires sans créneau » : compacte les heures qui ne portent AUCUN
+  // créneau (et non « sans réservation »). Coché par défaut = vue compactée (legacy).
+  const [hideNoSlot, setHideNoSlot] = useState(true);
   const [validation, setValidation] = useState(false);
   const [pointageMode, setPointageMode] = useState(false);
   const [detail, setDetail] = useState<Detail>(null);
@@ -1140,42 +1145,42 @@ export function UserAgendaGrid({
   // En semaine réelle sans période couvrante, -1 ne matche rien → aucun bloc.
   const effectivePeriodId = mode === "realweek" ? (coveringPeriod?.id ?? -1) : selectedPeriodId;
 
-  // Dates (YYYY-MM-DD) des créneaux ponctuels (datés) ayant au moins une réservation
-  // (port legacy _agendaBookedSlotDates). Trié croissant.
-  const bookedSlotDates = uniqueSlots
-    .filter((s) => s.slotDate && bookings.some((b) => b.slotId === s.id))
+  // Dates (YYYY-MM-DD) des créneaux ponctuels AUTONOMES (datés) réservables — sert au
+  // mode « Masquer les horaires sans créneau » pour sauter aux semaines portant au moins
+  // un créneau et (dés)activer ◀/▶. Trié croissant.
+  const uniqSlotDates = uniqueSlots
+    .filter((s) => !s.parentSlotId && s.slotDate && (s.capacity ?? service.capacity) > 0)
     .map((s) => s.slotDate as string)
     .sort();
-  // Parités A/B couvertes par les réservations RÉCURRENTES (periodId > 0) de chaque
-  // période. Une résa sans semaine ("") vaut pour A ET B. Ces résas se répètent chaque
-  // semaine de la période → une semaine est « non vide » seulement si sa parité figure
-  // ici. (Hors mode A/B, on enregistre "A"/"B"/"" sans distinction — voir weekHasBooking.)
-  const recurAbByPeriod = new Map<number, Set<"A" | "B" | "">>();
-  for (const b of bookings) {
-    if (b.periodId <= 0) continue;
-    const set = recurAbByPeriod.get(b.periodId) ?? new Set<"A" | "B" | "">();
-    set.add((b.week === "A" || b.week === "B" ? b.week : "") as "A" | "B" | "");
-    recurAbByPeriod.set(b.periodId, set);
+  // Parités A/B couvertes par les créneaux RÉCURRENTS de chaque période (un créneau
+  // « A,B » couvre les deux). Les récurrents se répètent chaque semaine de la période →
+  // une semaine porte un créneau si sa parité y figure (ou hors mode A/B).
+  const recurSlotAbByPeriod = new Map<number, Set<"A" | "B">>();
+  for (const s of slots) {
+    if (s.periodId == null || s.periodId <= 0) continue;
+    if ((s.capacity ?? service.capacity) <= 0) continue;
+    const set = recurSlotAbByPeriod.get(s.periodId) ?? new Set<"A" | "B">();
+    for (const w of parseWeeks(s.weeks)) set.add(w);
+    recurSlotAbByPeriod.set(s.periodId, set);
   }
 
-  // Une semaine (lundi → dimanche) contient-elle une réservation visible ?
-  // - ponctuel daté réservé dans la semaine, OU
-  // - réservation récurrente de la période couvrant la semaine, dont la parité A/B
-  //   est compatible avec celle de la semaine (en mode A/B). "" = vaut pour A et B.
-  const weekHasBooking = (monday: string): boolean => {
+  // Une semaine (lundi → dimanche) contient-elle au moins un créneau visible ?
+  // - créneau ponctuel daté dans la semaine, OU
+  // - créneau récurrent de la période couvrant la semaine, de parité A/B compatible.
+  const weekHasSlot = (monday: string): boolean => {
     const sunday = ymd(addDays(monday, 6));
-    if (bookedSlotDates.some((d) => d >= monday && d <= sunday)) return true;
+    if (uniqSlotDates.some((d) => d >= monday && d <= sunday)) return true;
     const p = periodCoveringDate(monday) ?? periodCoveringDate(ymd(addDays(monday, 3)));
     if (p == null) return false;
-    const ab = recurAbByPeriod.get(p.id);
+    const ab = recurSlotAbByPeriod.get(p.id);
     if (!ab || ab.size === 0) return false;
-    if (!modes.abMode) return true; // pas de distinction A/B → toute résa récurrente compte
+    if (!modes.abMode) return true; // pas de distinction A/B → tout récurrent compte
     const parity: "A" | "B" = isoWeek(new Date(`${monday}T00:00:00`)) % 2 === 1 ? "A" : "B";
-    return ab.has("") || ab.has(parity);
+    return ab.has(parity);
   };
-  // Existe-t-il une semaine non vide au-delà de `monday` dans la direction donnée,
-  // sans sortir de la période active ? (pour activer/désactiver ◀/▶ en hideEmpty)
-  const hasBookedWeekBeyond = (monday: string, dir: 1 | -1): boolean => {
+  // Existe-t-il une semaine AVEC créneau au-delà de `monday` dans la direction donnée,
+  // sans sortir de la période active ? (pour activer/désactiver ◀/▶ en hideNoSlot)
+  const hasSlotWeekBeyond = (monday: string, dir: 1 | -1): boolean => {
     const startB = coveringPeriod?.dateStart;
     const endB = coveringPeriod?.dateEnd;
     let cur = ymd(addDays(monday, dir * 7));
@@ -1183,7 +1188,7 @@ export function UserAgendaGrid({
       const sunday = ymd(addDays(cur, 6));
       if (endB && cur > endB) break;
       if (startB && sunday < startB) break;
-      if (weekHasBooking(cur)) return true;
+      if (weekHasSlot(cur)) return true;
       cur = ymd(addDays(cur, dir * 7));
     }
     return false;
@@ -1191,32 +1196,32 @@ export function UserAgendaGrid({
 
   // Bornes de navigation hebdo : on reste dans la période sélectionnée (celle qui
   // couvre la semaine courante) et on ne navigue pas au-delà de ses dates.
-  // En mode hideEmpty, on désactive aussi ◀/▶ s'il n'existe plus aucune semaine
-  // AVEC réservation dans la direction (cf. legacy renderAgendaWeekly).
+  // En mode hideNoSlot, on désactive aussi ◀/▶ s'il n'existe plus aucune semaine
+  // AVEC créneau dans la direction (port legacy).
   const canWeekPrev = mondayStr
     ? (coveringPeriod?.dateStart
         ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
         : true) &&
-      (!hideEmpty || hasBookedWeekBeyond(mondayStr, -1))
+      (!hideNoSlot || hasSlotWeekBeyond(mondayStr, -1))
     : false;
   const canWeekNext = mondayStr
     ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
-      (!hideEmpty || hasBookedWeekBeyond(mondayStr, 1))
+      (!hideNoSlot || hasSlotWeekBeyond(mondayStr, 1))
     : false;
 
-  // Navigation hebdo (◀/▶) : en mode hideEmpty, on saute aux semaines AYANT au moins
-  // une réservation (ponctuelle OU récurrente — port legacy shiftAgendaWeek), bornée
-  // à la période active.
+  // Navigation hebdo (◀/▶) : en mode hideNoSlot, on saute aux semaines AYANT au moins
+  // un créneau (ponctuel OU récurrent — port legacy shiftUserAgendaWeek), bornée à la
+  // période active.
   function shiftWeek(deltaWeeks: number) {
     if (!mondayStr) return;
     let newAnchor = ymd(addDays(mondayStr, deltaWeeks * 7));
-    if (hideEmpty && deltaWeeks !== 0) {
+    if (hideNoSlot && deltaWeeks !== 0) {
       const step = deltaWeeks > 0 ? 7 : -7;
       const MAX_ITER = 260;
       let iter = 0;
       while (iter++ < MAX_ITER) {
-        if (weekHasBooking(newAnchor)) break;
-        if (!hasBookedWeekBeyond(newAnchor, deltaWeeks > 0 ? 1 : -1)) break;
+        if (weekHasSlot(newAnchor)) break;
+        if (!hasSlotWeekBeyond(newAnchor, deltaWeeks > 0 ? 1 : -1)) break;
         newAnchor = ymd(addDays(newAnchor, step));
       }
     }
@@ -1279,8 +1284,8 @@ export function UserAgendaGrid({
     : null;
 
   // La plage horaire affichée reste fixe (matin → après-midi). « Masquer les
-  // horaires sans réservation » ne resserre pas la plage : il COMPACTE les quarts
-  // d'heure non occupés (cf. legacy renderAgendaWeekly), géré plus bas via `quarters`.
+  // horaires sans créneau » ne resserre pas la plage : il COMPACTE les quarts
+  // d'heure sans créneau (cf. legacy renderAgendaWeekly), géré plus bas via `quarters`.
   const firstHour = baseFirst;
   const lastHour = baseLast;
 
@@ -1312,45 +1317,40 @@ export function UserAgendaGrid({
     lunchEnd <= gridEndMin;
   const lunchSkipFrom = hasLunch && lunchEnd - lunchStart > 30 ? lunchStart + 30 : null;
 
-  // ── « Masquer les horaires sans réservation » (compactage, port legacy) ─────
-  // On ne resserre pas la plage : on construit l'ensemble des quarts d'heure
-  // OCCUPÉS (granularité HEURE : dès qu'un créneau avec ≥1 réservation visible
+  // ── « Masquer les horaires sans créneau » (compactage, port legacy) ─────────
+  // On ne resserre pas la plage : on construit l'ensemble des quarts d'heure portant
+  // un CRÉNEAU (granularité HEURE : dès qu'un créneau — réservé OU vide réservable —
   // touche une heure, ses 4 quarts sont conservés pour garder le repère "heure").
-  // Les quarts non occupés sont ensuite sautés dans `quarters`.
+  // Les quarts sans créneau sont ensuite sautés dans `quarters`.
   const occupiedQ = new Set<number>();
-  if (hideEmpty) {
+  if (hideNoSlot) {
     const occupiedHours = new Set<number>();
-    // Ids des créneaux récurrents ayant une réservation visible (période + semaine A/B).
-    const recBookedSlotIds = new Set<string>();
-    // Ids des créneaux ponctuels (datés) ayant une réservation dans la semaine affichée.
-    const uniqBookedSlotIds = new Set<string>();
-    const uniqSunday = sundayStr ?? mondayStr;
-    for (const b of bookings) {
-      if (uniqueIdSet.has(b.slotId)) {
-        if (mode !== "realweek" || !mondayStr) continue;
-        const u = uniqueSlots.find((s) => s.id === b.slotId);
-        if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
-          continue;
-        uniqBookedSlotIds.add(b.slotId);
-        continue;
-      }
-      if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
-      if (effectiveWeek != null && b.week !== effectiveWeek && b.week !== "") continue;
-      recBookedSlotIds.add(b.slotId);
-    }
     const addHours = (sMin: number, eMin: number) => {
       const s = Math.max(sMin, gridStartMin);
       const e = Math.min(eMin, gridEndMin);
       if (e <= s) return;
       for (let m = Math.floor(s / 60) * 60; m < e; m += 60) occupiedHours.add(m);
     };
+    // Créneaux RÉCURRENTS visibles : période active, semaine A/B, jour ouvert, capacité.
     for (const s of slots) {
-      if (!recBookedSlotIds.has(s.id)) continue;
+      if (effectivePeriodId != null && s.periodId !== effectivePeriodId) continue;
+      if (abMode && effectiveWeek != null && !parseWeeks(s.weeks).includes(effectiveWeek)) continue;
+      const dk = s.slotDay;
+      if (!dk || !days.includes(dk) || isDayDisabled(dk)) continue;
+      if ((s.capacity ?? service.capacity) <= 0) continue;
       addHours(toMinutes(s.startTime, gridStartMin), toMinutes(s.endTime, gridStartMin + 60));
     }
-    for (const u of uniqueSlots) {
-      if (!uniqBookedSlotIds.has(u.id)) continue;
-      addHours(toMinutes(u.startTime, gridStartMin), toMinutes(u.endTime, gridStartMin + 60));
+    // Créneaux PONCTUELS autonomes datés dans la semaine affichée (Semaine réelle).
+    if (mode === "realweek" && mondayStr) {
+      const sunday = sundayStr ?? mondayStr;
+      for (const u of uniqueSlots) {
+        if (u.parentSlotId) continue;
+        if (!u.slotDate || u.slotDate < mondayStr || u.slotDate > sunday) continue;
+        const dk = dayKeyFromYmd(u.slotDate);
+        if (!days.includes(dk) || isDayDisabled(dk)) continue;
+        if ((u.capacity ?? service.capacity) <= 0) continue;
+        addHours(toMinutes(u.startTime, gridStartMin), toMinutes(u.endTime, gridStartMin + 60));
+      }
     }
     // Étend chaque heure occupée à ses 4 quarts (dans [gridStartMin, gridEndMin]).
     for (const h of occupiedHours) {
@@ -1361,10 +1361,10 @@ export function UserAgendaGrid({
   }
 
   // Liste ordonnée des quarts d'heure visibles (minutes) : pause méridienne compactée
-  // et, si hideEmpty, quarts non occupés sautés.
+  // et, si hideNoSlot, quarts sans créneau sautés.
   const quarters: number[] = [];
   for (let m = gridStartMin; m < gridEndMin; m += 15) {
-    if (hideEmpty && !occupiedQ.has(m)) continue;
+    if (hideNoSlot && !occupiedQ.has(m)) continue;
     if (lunchSkipFrom !== null && m >= lunchSkipFrom && m < lunchEnd) continue;
     quarters.push(m);
   }
@@ -2221,6 +2221,8 @@ export function UserAgendaGrid({
             // L'usager n'a qu'UN demandeur : sa jauge est active dès que gaugeRec OU
             // gaugePonct l'est (peu importe le type du créneau cliqué).
             const gaugeOn = modes.gaugeRec || modes.gaugePonct;
+            // Badge sans thème NI jauge : on affiche toujours l'état (Validé / En attente).
+            const noWidgets = !modes.themeMode && !gaugeOn;
             const myBk = b.bookings.find((x) => x.mine);
             // Brouillon : ma résa marquée pour annulation, ou créneau libre coché.
             const markedRemoval = myBk
@@ -2232,13 +2234,16 @@ export function UserAgendaGrid({
             if (myBk) {
               const mb = myBk;
               const cur = myCounts(mb);
+              // Sans thème ni jauge → on affiche l'état (Validé / En attente). Avec un
+              // thème OU une jauge, l'état est porté par l'icône ✔/⏳ → pas de libellé
+              // (sauf « À supprimer » pour un retrait en attente).
               const stateLabel = markedRemoval
                 ? "À supprimer"
-                : mb.validated
-                  ? "Validé"
-                  : isPonctuelCell
-                    ? "En attente"
-                    : "";
+                : noWidgets
+                  ? mb.validated
+                    ? "Validé"
+                    : "En attente"
+                  : "";
               // Place dispo pour CE booking = libre + sa propre occupation déjà comptée
               // (enfants + adultes en jauge ; 1 réservation hors jauge).
               const remaining = Math.max(
@@ -2324,7 +2329,7 @@ export function UserAgendaGrid({
                   accompagnants={add.accompagnants}
                   theme={add.theme}
                   remaining={remaining}
-                  stateLabel={isPonctuelCell ? "En attente" : ""}
+                  stateLabel={noWidgets ? "En attente" : ""}
                   title={`${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
                     add.enfants,
                     add.accompagnants,
@@ -2595,11 +2600,11 @@ export function UserAgendaGrid({
             style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
           >
             <label className="planning-option">
-              Masquer les horaires sans réservation
+              Masquer les horaires sans créneau
               <input
                 type="checkbox"
-                checked={hideEmpty}
-                onChange={(e) => setHideEmpty(e.target.checked)}
+                checked={hideNoSlot}
+                onChange={(e) => setHideNoSlot(e.target.checked)}
               />
             </label>
           </div>
@@ -2681,17 +2686,14 @@ export function UserAgendaGrid({
           className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
           style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}
         >
-          {/* En semaine réelle + mode A/B : grosse lettre A/B de la semaine courante
-              dans le coin haut-gauche (cf. legacy cornerAB). Sinon, l'horloge. */}
+          {/* Mode A/B : grosse lettre A/B de la semaine active dans le coin haut-gauche
+              (cf. legacy cornerAB) — Semaine réelle = parité de la semaine affichée,
+              Modèle de période = semaine A/B sélectionnée. Sinon, l'horloge. */}
           <div
             className="agenda-header-cell agenda-corner"
-            data-tip={
-              abMode && mode === "realweek" && realWeekParity
-                ? `Semaine ${realWeekParity}`
-                : "Horaires"
-            }
+            data-tip={abMode && effectiveWeek ? `Semaine ${effectiveWeek}` : "Horaires"}
           >
-            {abMode && mode === "realweek" && realWeekParity ? realWeekParity : "🕘"}
+            {abMode && effectiveWeek ? effectiveWeek : "🕘"}
           </div>
           {days.map((d) => (
             <div key={d} className={`agenda-header-cell${outOfPeriodCls(d)}`}>
@@ -2704,10 +2706,10 @@ export function UserAgendaGrid({
 
           {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
               grille horaire (port du legacy alldayRow). Masquée s'il n'y a aucun
-              bloc all-day — en hideEmpty, on ne compte que ceux qui ont une résa. */}
-          {days.some((d) =>
-            dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
-          ) && (
+              bloc all-day. Côté usager, on affiche TOUS les créneaux (réservés ou
+              vides réservables) : le compactage « sans créneau » ne masque que des
+              heures vides, pas les créneaux. */}
+          {days.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
             <>
               <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
                 Journée entière
@@ -2715,7 +2717,7 @@ export function UserAgendaGrid({
               {days.map((d) => (
                 <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
                   {dayBlocks(d)
-                    .filter((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0))
+                    .filter((b) => b.isAllDay)
                     .map((b) => renderBlock(b, true))}
                 </div>
               ))}
@@ -2802,10 +2804,11 @@ export function UserAgendaGrid({
                   ) : null;
                 })()}
               {dayBlocks(d)
-                // Grille horaire : uniquement les créneaux datés (les « journée
-                // entière » sont rendus dans la bande dédiée en haut). hideEmpty
-                // masque les créneaux vides pour ne pas écraser la grille (cf. legacy).
-                .filter((b) => !b.isAllDay && (!hideEmpty || b.bookings.length > 0))
+                // Grille horaire : uniquement les créneaux horaires (les « journée
+                // entière » sont rendus dans la bande dédiée en haut). On affiche TOUS
+                // les créneaux (réservés ou vides réservables) ; « Masquer les horaires
+                // sans créneau » ne compacte que des heures, pas des créneaux.
+                .filter((b) => !b.isAllDay)
                 .map((b) => renderBlock(b, false))}
             </div>
           ))}
@@ -2822,7 +2825,6 @@ export function UserAgendaGrid({
           justifyContent: "space-between",
           gap: "1rem",
           flexWrap: "wrap",
-          marginTop: ".6rem",
         }}
       >
         {/* flex:1 + minWidth:0 → l'astuce absorbe le rétrécissement en passant à la
@@ -2836,45 +2838,49 @@ export function UserAgendaGrid({
             minWidth: 0,
           }}
         >
-          Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers
-          un autre créneau pour le déplacer.
-        </p>
-        {/* Compteur du brouillon (déplacé ici depuis la barre d'actions) : nombre de
-            réservations/annulations en attente, ou « Aucune modification en attente ». */}
-        <p
-          style={{
-            fontSize: ".75rem",
-            // Modifications en attente → couleur warning ; sinon muté.
-            color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
-            margin: 0,
-            flexShrink: 0,
-            textAlign: "right",
-          }}
-        >
-          {pendingCount > 0
-            ? [
-                pendingAdds.length > 0
-                  ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
-                  : "",
-                pendingRemovals.length > 0
-                  ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
-                  : "",
-                Object.keys(pendingUpdates).length > 0
-                  ? `${Object.keys(pendingUpdates).length} élément${
-                      Object.keys(pendingUpdates).length > 1 ? "s" : ""
-                    } à modifier`
-                  : "",
-                Object.keys(pendingMoves).length > 0
-                  ? `${Object.keys(pendingMoves).length} élément${
-                      Object.keys(pendingMoves).length > 1 ? "s" : ""
-                    } à déplacer`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : "Aucune modification en attente"}
+          {/* « Astuce » en couleur de texte principale (en évidence, comme l'agenda admin),
+              « : » et la suite gardent la couleur courante (gris). */}
+          <span style={{ color: "var(--text)" }}>Astuce</span>
+          {" : "}
+          cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un autre
+          créneau pour le déplacer.
         </p>
       </div>
+
+      {/* Compteur du brouillon, sur sa PROPRE ligne sous l'astuce : nombre de
+          réservations/annulations en attente, ou « Aucune modification en attente ». */}
+      <p
+        style={{
+          fontSize: ".75rem",
+          // Modifications en attente → couleur warning ; sinon muté.
+          color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
+          margin: 0,
+          textAlign: "right",
+        }}
+      >
+        {pendingCount > 0
+          ? [
+              pendingAdds.length > 0
+                ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
+                : "",
+              pendingRemovals.length > 0
+                ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
+                : "",
+              Object.keys(pendingUpdates).length > 0
+                ? `${Object.keys(pendingUpdates).length} élément${
+                    Object.keys(pendingUpdates).length > 1 ? "s" : ""
+                  } à modifier`
+                : "",
+              Object.keys(pendingMoves).length > 0
+                ? `${Object.keys(pendingMoves).length} élément${
+                    Object.keys(pendingMoves).length > 1 ? "s" : ""
+                  } à déplacer`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : "Aucune modification en attente"}
+      </p>
 
       {/* Barre d'actions du brouillon (legacy « Annuler » / « Enregistrer → ») :
           toujours affichée, boutons désactivés s'il n'y a aucune modification. */}
@@ -2884,7 +2890,6 @@ export function UserAgendaGrid({
           alignItems: "center",
           justifyContent: "flex-end",
           gap: ".6rem",
-          marginTop: ".6rem",
           flexWrap: "wrap",
         }}
       >

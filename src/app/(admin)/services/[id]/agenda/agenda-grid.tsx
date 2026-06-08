@@ -3043,17 +3043,14 @@ export function AgendaGrid({
           className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
           style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}
         >
-          {/* En semaine réelle + mode A/B : grosse lettre A/B de la semaine courante
-              dans le coin haut-gauche (cf. legacy cornerAB). Sinon, l'horloge. */}
+          {/* Mode A/B : grosse lettre A/B de la semaine active dans le coin haut-gauche
+              (cf. legacy cornerAB) — Semaine réelle = parité de la semaine affichée,
+              Modèle de période = semaine A/B sélectionnée. Sinon, l'horloge. */}
           <div
             className="agenda-header-cell agenda-corner"
-            data-tip={
-              abMode && mode === "realweek" && realWeekParity
-                ? `Semaine ${realWeekParity}`
-                : "Horaires"
-            }
+            data-tip={abMode && effectiveWeek ? `Semaine ${effectiveWeek}` : "Horaires"}
           >
-            {abMode && mode === "realweek" && realWeekParity ? realWeekParity : "🕘"}
+            {abMode && effectiveWeek ? effectiveWeek : "🕘"}
           </div>
           {days.map((d) => (
             <div key={d} className={`agenda-header-cell${outOfPeriodCls(d)}`}>
@@ -3385,7 +3382,6 @@ export function AgendaGrid({
           justifyContent: "space-between",
           gap: "1rem",
           flexWrap: "wrap",
-          marginTop: ".6rem",
         }}
       >
         {/* flex:1 + minWidth:0 → l'astuce absorbe le rétrécissement en passant à la
