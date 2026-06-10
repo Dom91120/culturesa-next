@@ -4,6 +4,7 @@ import type { ActionState } from "@/lib/action-state";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { requestAccountDeletion } from "@/server/services/account-deletion";
+import { RgpdError } from "@/server/services/rgpd";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -45,6 +46,11 @@ export async function updateProfileAction(
  */
 export async function requestAccountDeletionAction(): Promise<ActionState> {
   const session = await requireUser();
-  await requestAccountDeletion(session.user.id);
+  try {
+    await requestAccountDeletion(session.user.id);
+  } catch (e) {
+    if (e instanceof RgpdError) return { ok: false, error: e.message };
+    throw e;
+  }
   return { ok: true };
 }

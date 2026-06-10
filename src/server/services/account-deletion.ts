@@ -8,7 +8,7 @@ import {
   renderHtmlTemplate,
   renderSubjectTemplate,
 } from "@/server/services/mail-templates";
-import { anonymizeUser } from "@/server/services/rgpd";
+import { RgpdError, anonymizeUser, assertNotLastActiveAdmin } from "@/server/services/rgpd";
 
 // ════════════════════════════════════════════════════════════
 //  Suppression de compte en self-service (RGPD art. 17).
@@ -80,6 +80,9 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
   const email = user?.email?.trim();
   if (!user || user.anonymizedAt || !email?.includes("@")) return;
 
+  // Le dernier administrateur actif ne peut pas demander sa propre suppression.
+  await assertNotLastActiveAdmin(prisma, userId);
+
   const url = `${appUrl()}/auth/supprimer-compte?token=${encodeURIComponent(makeToken(userId))}`;
   const prenom = user.prenom?.trim() ?? "";
   const vars = { salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom, url };
@@ -97,7 +100,9 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
   });
 }
 
-export type ConfirmDeletionResult = { ok: true } | { ok: false; reason: "invalid" | "expired" };
+export type ConfirmDeletionResult =
+  | { ok: true }
+  | { ok: false; reason: "invalid" | "expired" | "last_admin" };
 
 /**
  * Confirme la suppression à partir du token signé : anonymise le compte encodé
@@ -109,6 +114,11 @@ export async function confirmAccountDeletion(
   const userId = readToken(token);
   if (!userId) return { ok: false, reason: "invalid" };
   // anonymizeUser est idempotent : si déjà anonymisé, c'est un no-op → on confirme.
-  await anonymizeUser(userId, "self_service");
+  try {
+    await anonymizeUser(userId, "self_service");
+  } catch (e) {
+    if (e instanceof RgpdError) return { ok: false, reason: "last_admin" };
+    throw e;
+  }
   return { ok: true };
 }

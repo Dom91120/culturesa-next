@@ -8,6 +8,7 @@ type Status = "idle" | "done" | "error";
 
 export function ConfirmDelete({ token }: { token: string | null }) {
   const [status, setStatus] = useState<Status>("idle");
+  const [reason, setReason] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   if (!token) {
@@ -29,6 +30,7 @@ export function ConfirmDelete({ token }: { token: string | null }) {
     startTransition(async () => {
       const res = await confirmAccountDeletionAction(token as string);
       setStatus(res.ok ? "done" : "error");
+      if (!res.ok) setReason(res.reason);
     });
   }
 
@@ -49,6 +51,21 @@ export function ConfirmDelete({ token }: { token: string | null }) {
         >
           Retour à l'accueil
         </Link>
+      </div>
+    );
+  }
+
+  if (status === "error" && reason === "last_admin") {
+    return (
+      <div className="panel">
+        <div className="panel-title">
+          <span className="dot" style={{ background: "#e5484d" }} />
+          Suppression impossible
+        </div>
+        <p style={{ fontSize: ".9rem" }}>
+          Vous êtes le dernier administrateur actif : votre compte ne peut pas être supprimé tant
+          qu'un autre administrateur n'a pas été désigné.
+        </p>
       </div>
     );
   }

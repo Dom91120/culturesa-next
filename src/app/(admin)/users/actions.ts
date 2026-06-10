@@ -4,7 +4,7 @@ import type { ActionState } from "@/lib/action-state";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
-import { anonymizeUser } from "@/server/services/rgpd";
+import { RgpdError, anonymizeUser } from "@/server/services/rgpd";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -164,7 +164,8 @@ export async function anonymizeUserAction(id: string): Promise<ActionState> {
   if (!parsed.success) return { ok: false, error: "Compte introuvable" };
   try {
     await anonymizeUser(parsed.data, "admin");
-  } catch {
+  } catch (e) {
+    if (e instanceof RgpdError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de l'anonymisation." };
   }
   revalidatePath("/users");

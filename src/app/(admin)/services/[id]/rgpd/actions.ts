@@ -2,7 +2,7 @@
 
 import type { ActionState } from "@/lib/action-state";
 import { requireServiceManager } from "@/server/guards";
-import { anonymizeUser } from "@/server/services/rgpd";
+import { RgpdError, anonymizeUser } from "@/server/services/rgpd";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -19,7 +19,12 @@ export async function anonymizeServiceUserAction(
   await requireServiceManager(serviceId);
   if (!userId) return { ok: false, error: "Usager cible manquant." };
 
-  await anonymizeUser(userId, "admin");
+  try {
+    await anonymizeUser(userId, "admin");
+  } catch (e) {
+    if (e instanceof RgpdError) return { ok: false, error: e.message };
+    throw e;
+  }
   revalidatePath(`/services/${serviceId}/rgpd`);
   return { ok: true };
 }

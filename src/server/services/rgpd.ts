@@ -8,6 +8,7 @@ import {
   renderHtmlTemplate,
   renderSubjectTemplate,
 } from "@/server/services/mail-templates";
+import type { Prisma } from "@prisma/client";
 
 export type AnonymizeReason = "self_service" | "admin" | "retention";
 
@@ -17,6 +18,32 @@ export const GRACE_DAYS = 30;
 export const DEFAULT_RETENTION_YEARS = 2;
 /** Clé app_config de la durée de rétention RGPD. */
 const RETENTION_YEARS_KEY = "rgpd.retentionYears";
+
+/** Erreur métier RGPD (message destiné à l'usager / l'admin). */
+export class RgpdError extends Error {}
+
+/**
+ * Garde-fou « dernier administrateur actif » (port legacy `rgpd_has_other_active_admin`) :
+ * lève `RgpdError` si `userId` est le SEUL administrateur non anonymisé restant. Empêche
+ * d'anonymiser/supprimer le dernier admin, ce qui verrouillerait tout accès admin.
+ * No-op si l'usager n'est pas administrateur (ou déjà anonymisé / introuvable).
+ */
+export async function assertNotLastActiveAdmin(
+  db: Prisma.TransactionClient,
+  userId: string,
+): Promise<void> {
+  const u = await db.user.findUnique({
+    where: { id: userId },
+    select: { role: true, anonymizedAt: true },
+  });
+  if (!u || u.anonymizedAt || u.role !== "administrateur") return;
+  const others = await db.user.count({
+    where: { role: "administrateur", anonymizedAt: null, id: { not: userId } },
+  });
+  if (others === 0) {
+    throw new RgpdError("Action impossible : c'est le dernier administrateur actif du système.");
+  }
+}
 
 /**
  * Anonymisation RGPD d'un compte (≠ suppression).
@@ -37,6 +64,9 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
       select: { id: true, anonymizedAt: true },
     });
     if (!user || user.anonymizedAt) return; // introuvable ou déjà anonymisé → no-op
+
+    // Garde-fou : ne jamais anonymiser le dernier administrateur actif.
+    await assertNotLastActiveAdmin(tx, userId);
 
     const now = new Date();
 
