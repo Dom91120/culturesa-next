@@ -165,11 +165,16 @@ export function holidaysInRange(start: string, end: string): { date: string; lab
 // =====================================================================================
 
 /**
- * Construit le libellé d'un exercice à partir des années min/max des dates :
- * « Y » si une seule année, sinon « Y1-Y2 ».
+ * Libellé d'exercice « ANNÉE SCOLAIRE » (Y-Y+1) à partir d'une date de début YYYY-MM-DD :
+ * Y = année si mois ≥ août, sinon année-1. Convention UNIQUE avec la création/édition
+ * manuelle (periods.ts schoolStartYear / exerciceLabelForYear) — évite que la bascule
+ * crée des exercices labellisés différemment (incohérence corrigée 2026-06).
  */
-function exerciceLabel(startYear: number, endYear: number): string {
-  return startYear === endYear ? String(startYear) : `${startYear}-${endYear}`;
+function schoolYearLabel(startYmd: string): string {
+  const y = Number.parseInt(startYmd.slice(0, 4), 10);
+  const m = Number.parseInt(startYmd.slice(5, 7), 10);
+  const ssy = m >= 8 ? y : y - 1;
+  return `${ssy}-${ssy + 1}`;
 }
 
 /**
@@ -363,18 +368,14 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
     }
 
     // 5. label du nouvel exercice (dates décalées +1 an)
-    const shiftedStartYears = actives
+    // Nouvel exercice = ANNÉE SCOLAIRE des périodes décalées (+1 an), même convention que
+    // la création/édition manuelle (periods.ts) → un exercice unique par année scolaire.
+    const shiftedStarts = actives
       .map((p) => shiftDateOneYear(fmtDateUtc(p.dateStart)))
       .filter((d): d is string => d !== null)
-      .map((d) => Number.parseInt(d.slice(0, 4), 10));
-    const shiftedEndYears = actives
-      .map((p) => shiftDateOneYear(fmtDateUtc(p.dateEnd)))
-      .filter((d): d is string => d !== null)
-      .map((d) => Number.parseInt(d.slice(0, 4), 10));
-    const years = [...shiftedStartYears, ...shiftedEndYears];
-    const startYear = years.length > 0 ? Math.min(...years) : new Date().getUTCFullYear() + 1;
-    const endYear = years.length > 0 ? Math.max(...years) : startYear;
-    const exId = await ensureExerciceTx(tx, exerciceLabel(startYear, endYear));
+      .sort();
+    const refStart = shiftedStarts[0] ?? `${new Date().getUTCFullYear() + 1}-09-01`;
+    const exId = await ensureExerciceTx(tx, schoolYearLabel(refStart));
 
     // 6. recopie des périodes
     const activeDays = parseActiveDays(service.activeDays);
@@ -613,19 +614,18 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
   if (starts.length > 0) {
     const startYmd = starts[0];
     const endYmd = ends.length > 0 ? ends[ends.length - 1] : startYmd;
-    const sy = Number.parseInt(startYmd.slice(0, 4), 10);
-    const ey = Number.parseInt(endYmd.slice(0, 4), 10);
-    currentName = exerciceLabel(sy, ey);
+    currentName = schoolYearLabel(startYmd);
     currentRange = { start: startYmd, end: endYmd };
   }
 
   let nextName: string;
   if (currentRange) {
-    const sy = Number.parseInt(currentRange.start.slice(0, 4), 10) + 1;
-    const ey = Number.parseInt(currentRange.end.slice(0, 4), 10) + 1;
-    nextName = exerciceLabel(sy, ey);
+    // Exercice suivant = année scolaire de la date de début décalée d'un an.
+    const nextStart = shiftDateOneYear(currentRange.start) ?? currentRange.start;
+    nextName = schoolYearLabel(nextStart);
   } else {
-    nextName = String(new Date().getUTCFullYear() + 1);
+    const ssy = new Date().getUTCFullYear() + 1;
+    nextName = `${ssy}-${ssy + 1}`;
   }
 
   const undo = await undoCycleInfo(serviceId);
