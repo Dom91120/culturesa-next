@@ -588,22 +588,21 @@ export async function addRecurringSlot(
         slotDay: input.dayKey,
         capacity: input.capacity,
       });
-      for (const [, mv] of wanted) {
-        await tx.slot.create({
-          data: {
-            id: mirrorId(slId, mv.date),
-            serviceId,
-            slotType: "unique",
-            startTime: input.startTime,
-            endTime: input.endTime,
-            slotDate: fromISO(mv.date),
-            capacity: mv.cap,
-            periodId,
-            parentSlotId: slId,
-            state: "actif",
-          },
-        });
-      }
+      // Un seul createMany : un INSERT par miroir risquait le timeout de transaction
+      // Prisma (5 s par défaut) sur une période annuelle.
+      const mirrorRows = [...wanted.values()].map((mv) => ({
+        id: mirrorId(slId, mv.date),
+        serviceId,
+        slotType: "unique" as const,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        slotDate: fromISO(mv.date),
+        capacity: mv.cap,
+        periodId,
+        parentSlotId: slId,
+        state: "actif" as const,
+      }));
+      if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
     });
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
@@ -674,60 +673,62 @@ export async function copyRecurringWeek(
 
   let created = 0;
   try {
-    await prisma.$transaction(async (tx) => {
-      for (const s of toCopy) {
-        // Un créneau récurrent sans slotDay (ne devrait pas exister) est ignoré.
-        if (!s.slotDay) continue;
-        const newId = newRecurId();
-        await tx.slot.create({
-          data: {
-            id: newId,
-            serviceId,
-            slotType: "recurring",
-            startTime: s.startTime,
-            endTime: s.endTime,
-            periodId,
-            weeks: toWeek,
-            state: "actif",
-            slotDay: s.slotDay,
-            capacity: s.capacity,
-          },
-        });
-        const wanted = computeWantedMirrors({
-          startDate,
-          endDate,
-          activeDays,
-          holidaySet,
-          openOnHolidays: service.openOnHolidays,
-          weeks: parseWeeks(toWeek),
-          slotDay: s.slotDay,
-          capacity: s.capacity ?? service.capacity,
-        });
-        for (const [, mv] of wanted) {
+    await prisma.$transaction(
+      async (tx) => {
+        for (const s of toCopy) {
+          // Un créneau récurrent sans slotDay (ne devrait pas exister) est ignoré.
+          if (!s.slotDay) continue;
+          const newId = newRecurId();
           await tx.slot.create({
             data: {
-              id: mirrorId(newId, mv.date),
+              id: newId,
               serviceId,
-              slotType: "unique",
+              slotType: "recurring",
               startTime: s.startTime,
               endTime: s.endTime,
-              slotDate: fromISO(mv.date),
-              capacity: mv.cap,
               periodId,
-              parentSlotId: newId,
+              weeks: toWeek,
               state: "actif",
+              slotDay: s.slotDay,
+              capacity: s.capacity,
             },
           });
-        }
-        const ids = demBySlot.get(s.id);
-        if (ids?.length) {
-          await tx.slotDemandeur.createMany({
-            data: ids.map((demandeurId) => ({ slotId: newId, demandeurId })),
+          const wanted = computeWantedMirrors({
+            startDate,
+            endDate,
+            activeDays,
+            holidaySet,
+            openOnHolidays: service.openOnHolidays,
+            weeks: parseWeeks(toWeek),
+            slotDay: s.slotDay,
+            capacity: s.capacity ?? service.capacity,
           });
+          // Un seul createMany par créneau copié (cf. addRecurringSlot : anti-timeout).
+          const mirrorRows = [...wanted.values()].map((mv) => ({
+            id: mirrorId(newId, mv.date),
+            serviceId,
+            slotType: "unique" as const,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            slotDate: fromISO(mv.date),
+            capacity: mv.cap,
+            periodId,
+            parentSlotId: newId,
+            state: "actif" as const,
+          }));
+          if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
+          const ids = demBySlot.get(s.id);
+          if (ids?.length) {
+            await tx.slotDemandeur.createMany({
+              data: ids.map((demandeurId) => ({ slotId: newId, demandeurId })),
+            });
+          }
+          created++;
         }
-        created++;
-      }
-    });
+        // Timeout élargi : la copie A↔B traite N créneaux × leurs miroirs en un lot.
+      },
+      { timeout: 60_000, maxWait: 10_000 },
+    );
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
   }
@@ -835,22 +836,20 @@ export async function moveRecurringSlot(
         slotDay: toDayKey,
         capacity: capVal,
       });
-      for (const [, mv] of wanted) {
-        await tx.slot.create({
-          data: {
-            id: mirrorId(slotId, mv.date),
-            serviceId,
-            slotType: "unique",
-            startTime,
-            endTime,
-            slotDate: fromISO(mv.date),
-            capacity: mv.cap,
-            periodId: period.id,
-            parentSlotId: slotId,
-            state: "actif",
-          },
-        });
-      }
+      // Un seul createMany (cf. addRecurringSlot : anti-timeout).
+      const mirrorRows = [...wanted.values()].map((mv) => ({
+        id: mirrorId(slotId, mv.date),
+        serviceId,
+        slotType: "unique" as const,
+        startTime,
+        endTime,
+        slotDate: fromISO(mv.date),
+        capacity: mv.cap,
+        periodId: period.id,
+        parentSlotId: slotId,
+        state: "actif" as const,
+      }));
+      if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
     });
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Erreur" };

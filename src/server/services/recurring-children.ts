@@ -126,52 +126,62 @@ export async function syncRecurringChildren(
     if (d >= cutoff) createIds.push(m.id);
   }
 
-  const existing = new Set(
-    (
-      await tx.booking.findMany({
-        where: { parentBookingId: parent.id },
-        select: { slotId: true },
-      })
-    ).map((b) => b.slotId),
-  );
-
+  // Batch (anti-timeout) : l'ancien upsert PAR occurrence faisait N allers-retours SQL
+  // dans la transaction. Même sémantique en 3 requêtes : les lignes existantes au sens
+  // de l'unicité uq_recurring (enfants de CE parent OU ponctuelle autonome du même
+  // usager sur le miroir) sont ADOPTÉES + alignées sur le parent (comme l'upsert),
+  // les autres occurrences sont créées en un seul createMany.
   let created = 0;
   let updated = 0;
-  for (const slotId of createIds) {
-    await tx.booking.upsert({
-      where: {
-        uq_recurring: {
+  if (createIds.length > 0) {
+    const uqWhere = {
+      userId: parent.userId,
+      serviceId: parent.serviceId,
+      periodId: 0,
+      week: "",
+    };
+    const existingRows = await tx.booking.findMany({
+      where: { ...uqWhere, slotId: { in: createIds } },
+      select: { slotId: true },
+    });
+    const existingIds = existingRows.map((b) => b.slotId);
+    if (existingIds.length > 0) {
+      const upd = await tx.booking.updateMany({
+        where: { ...uqWhere, slotId: { in: existingIds } },
+        data: {
+          parentBookingId: parent.id,
+          themeLabel: parent.themeLabel,
+          enfants: parent.enfants,
+          accompagnants: parent.accompagnants,
+          validated: parent.validated,
+        },
+      });
+      updated = upd.count;
+    }
+    const existingSet = new Set(existingIds);
+    const toCreate = createIds.filter((slotId) => !existingSet.has(slotId));
+    if (toCreate.length > 0) {
+      // skipDuplicates : une création concurrente entre le findMany et ici ne fait
+      // pas échouer la transaction (l'unicité uq_recurring reste garantie par la base).
+      const res = await tx.booking.createMany({
+        data: toCreate.map((slotId) => ({
+          bookingType: "unique",
           userId: parent.userId,
           serviceId: parent.serviceId,
           slotId,
           periodId: 0,
           week: "",
-        },
-      },
-      update: {
-        parentBookingId: parent.id,
-        themeLabel: parent.themeLabel,
-        enfants: parent.enfants,
-        accompagnants: parent.accompagnants,
-        validated: parent.validated,
-      },
-      create: {
-        bookingType: "unique",
-        userId: parent.userId,
-        serviceId: parent.serviceId,
-        slotId,
-        periodId: 0,
-        week: "",
-        parentBookingId: parent.id,
-        themeLabel: parent.themeLabel,
-        enfants: parent.enfants,
-        accompagnants: parent.accompagnants,
-        validated: parent.validated,
-        autoValidateFrom: null,
-      },
-    });
-    if (existing.has(slotId)) updated += 1;
-    else created += 1;
+          parentBookingId: parent.id,
+          themeLabel: parent.themeLabel,
+          enfants: parent.enfants,
+          accompagnants: parent.accompagnants,
+          validated: parent.validated,
+          autoValidateFrom: null,
+        })),
+        skipDuplicates: true,
+      });
+      created = res.count;
+    }
   }
 
   // Enfants dont l'occurrence n'est PLUS valide (semaine/fériés/vacances) → supprimés.

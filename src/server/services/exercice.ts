@@ -270,6 +270,9 @@ async function generateMirrorSlots(
     for (const h of holidaysInRange(rangeStart, rangeEnd)) holidaySet.add(h.date);
   }
 
+  // Accumulation puis UN SEUL createMany : un INSERT par occurrence faisait dépasser
+  // le timeout de transaction Prisma (5 s par défaut) dès quelques créneaux × périodes.
+  const rows: Prisma.SlotCreateManyInput[] = [];
   const created: string[] = [];
   const end = dateFromYmd(rangeEnd);
   const cursor = dateFromYmd(rangeStart);
@@ -287,20 +290,18 @@ async function generateMirrorSlots(
       const cap = capForDay(src, iso);
       if (weekOk && cap !== null) {
         const mid = `u_${slotId}_${dateStr}`;
-        await tx.slot.create({
-          data: {
-            id: mid,
-            serviceId,
-            slotType: "unique",
-            startTime: src.startTime,
-            endTime: src.endTime,
-            slotDate: dateFromYmd(dateStr),
-            capacity: cap,
-            periodId,
-            parentSlotId: slotId,
-            weeks: null,
-            state: "actif",
-          },
+        rows.push({
+          id: mid,
+          serviceId,
+          slotType: "unique",
+          startTime: src.startTime,
+          endTime: src.endTime,
+          slotDate: dateFromYmd(dateStr),
+          capacity: cap,
+          periodId,
+          parentSlotId: slotId,
+          weeks: null,
+          state: "actif",
         });
         created.push(mid);
       }
@@ -308,6 +309,7 @@ async function generateMirrorSlots(
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
+  if (rows.length > 0) await tx.slot.createMany({ data: rows });
   return created;
 }
 
@@ -321,156 +323,162 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
   // fait rien (no-op). `recreateSlots` ne gate, lui, que le clonage des créneaux.
   if (!recreatePeriods) return { created: 0, slotsCreated: 0 };
 
-  return prisma.$transaction(async (tx) => {
-    const service = await tx.service.findUnique({ where: { id: serviceId } });
-    if (!service) throw new Error("Service introuvable.");
+  return prisma.$transaction(
+    async (tx) => {
+      const service = await tx.service.findUnique({ where: { id: serviceId } });
+      if (!service) throw new Error("Service introuvable.");
 
-    // 1. périodes actives triées (date_start nulls last, id)
-    const actives = await tx.period.findMany({
-      where: { serviceId, state: "actif" },
-      orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
-    });
-    if (actives.length === 0) {
-      throw new Error("Aucune période active à reconduire.");
-    }
-
-    // 2. snapshot des créneaux récurrents actifs par période active
-    const slotsByPeriod = new Map<number, SlotSnapshot[]>();
-    for (const p of actives) {
-      const slots = await tx.slot.findMany({
-        where: { serviceId, periodId: p.id, slotType: "recurring", state: "actif" },
+      // 1. périodes actives triées (date_start nulls last, id)
+      const actives = await tx.period.findMany({
+        where: { serviceId, state: "actif" },
+        orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
       });
-      slotsByPeriod.set(
-        p.id,
-        slots.map((s) => ({
-          startTime: s.startTime,
-          endTime: s.endTime,
-          capacity: s.capacity,
-          slotDay: s.slotDay,
-          weeks: s.weeks,
-        })),
-      );
-    }
-
-    // 3. capture des périodes désactivées (à archiver)
-    const deactivated = await tx.period.findMany({
-      where: { serviceId, state: "desactive" },
-      select: { id: true },
-    });
-    const archivedPeriodIds = deactivated.map((r) => r.id);
-
-    // 4. désactivées → archivées
-    if (archivedPeriodIds.length > 0) {
-      await tx.period.updateMany({
-        where: { id: { in: archivedPeriodIds } },
-        data: { state: "archive" },
-      });
-    }
-
-    // 5. label du nouvel exercice (dates décalées +1 an)
-    // Nouvel exercice = ANNÉE SCOLAIRE des périodes décalées (+1 an), même convention que
-    // la création/édition manuelle (periods.ts) → un exercice unique par année scolaire.
-    const shiftedStarts = actives
-      .map((p) => shiftDateOneYear(fmtDateUtc(p.dateStart)))
-      .filter((d): d is string => d !== null)
-      .sort();
-    const refStart = shiftedStarts[0] ?? `${new Date().getUTCFullYear() + 1}-09-01`;
-    const exId = await ensureExerciceTx(tx, schoolYearLabel(refStart));
-
-    // 6. recopie des périodes
-    const activeDays = parseActiveDays(service.activeDays);
-    const newPeriodIds: number[] = [];
-    const newRecurringSlotIds: string[] = [];
-    const newMirrorSlotIds: string[] = [];
-
-    for (const p of actives) {
-      const ns = shiftDateOneYear(fmtDateUtc(p.dateStart));
-      const ne = shiftDateOneYear(fmtDateUtc(p.dateEnd));
-
-      const newPeriod = await tx.period.create({
-        data: {
-          serviceId,
-          exerciceId: exId,
-          label: p.label,
-          etiquette: p.etiquette,
-          dateStart: ns ? dateFromYmd(ns) : null,
-          dateEnd: ne ? dateFromYmd(ne) : null,
-          color: p.color,
-          position: p.position,
-          state: "actif",
-        },
-      });
-      newPeriodIds.push(newPeriod.id);
-
-      // fériés de la nouvelle période
-      if (ns && ne) {
-        for (const h of holidaysInRange(ns, ne)) {
-          await tx.periodHoliday.create({
-            data: { periodId: newPeriod.id, date: dateFromYmd(h.date), label: h.label },
-          });
-        }
+      if (actives.length === 0) {
+        throw new Error("Aucune période active à reconduire.");
       }
 
-      // créneaux
-      if (recreateSlots) {
-        const snapshot = slotsByPeriod.get(p.id) ?? [];
-        for (const s of snapshot) {
-          const newSlotId = `sl_${randomUUID().slice(0, 8)}`;
-          await tx.slot.create({
-            data: {
-              id: newSlotId,
-              serviceId,
-              slotType: "recurring",
-              startTime: s.startTime,
-              endTime: s.endTime,
-              slotDate: null,
-              capacity: s.capacity,
-              slotDay: s.slotDay,
-              periodId: newPeriod.id,
-              parentSlotId: null,
-              weeks: s.weeks,
-              state: "actif",
-            },
-          });
-          newRecurringSlotIds.push(newSlotId);
+      // 2. snapshot des créneaux récurrents actifs par période active
+      const slotsByPeriod = new Map<number, SlotSnapshot[]>();
+      for (const p of actives) {
+        const slots = await tx.slot.findMany({
+          where: { serviceId, periodId: p.id, slotType: "recurring", state: "actif" },
+        });
+        slotsByPeriod.set(
+          p.id,
+          slots.map((s) => ({
+            startTime: s.startTime,
+            endTime: s.endTime,
+            capacity: s.capacity,
+            slotDay: s.slotDay,
+            weeks: s.weeks,
+          })),
+        );
+      }
 
-          if (ns && ne) {
-            const mirrors = await generateMirrorSlots(tx, {
-              serviceId,
-              slotId: newSlotId,
-              periodId: newPeriod.id,
-              src: s,
-              rangeStart: ns,
-              rangeEnd: ne,
-              activeDays,
-              openOnHolidays: service.openOnHolidays,
+      // 3. capture des périodes désactivées (à archiver)
+      const deactivated = await tx.period.findMany({
+        where: { serviceId, state: "desactive" },
+        select: { id: true },
+      });
+      const archivedPeriodIds = deactivated.map((r) => r.id);
+
+      // 4. désactivées → archivées
+      if (archivedPeriodIds.length > 0) {
+        await tx.period.updateMany({
+          where: { id: { in: archivedPeriodIds } },
+          data: { state: "archive" },
+        });
+      }
+
+      // 5. label du nouvel exercice (dates décalées +1 an)
+      // Nouvel exercice = ANNÉE SCOLAIRE des périodes décalées (+1 an), même convention que
+      // la création/édition manuelle (periods.ts) → un exercice unique par année scolaire.
+      const shiftedStarts = actives
+        .map((p) => shiftDateOneYear(fmtDateUtc(p.dateStart)))
+        .filter((d): d is string => d !== null)
+        .sort();
+      const refStart = shiftedStarts[0] ?? `${new Date().getUTCFullYear() + 1}-09-01`;
+      const exId = await ensureExerciceTx(tx, schoolYearLabel(refStart));
+
+      // 6. recopie des périodes
+      const activeDays = parseActiveDays(service.activeDays);
+      const newPeriodIds: number[] = [];
+      const newRecurringSlotIds: string[] = [];
+      const newMirrorSlotIds: string[] = [];
+
+      for (const p of actives) {
+        const ns = shiftDateOneYear(fmtDateUtc(p.dateStart));
+        const ne = shiftDateOneYear(fmtDateUtc(p.dateEnd));
+
+        const newPeriod = await tx.period.create({
+          data: {
+            serviceId,
+            exerciceId: exId,
+            label: p.label,
+            etiquette: p.etiquette,
+            dateStart: ns ? dateFromYmd(ns) : null,
+            dateEnd: ne ? dateFromYmd(ne) : null,
+            color: p.color,
+            position: p.position,
+            state: "actif",
+          },
+        });
+        newPeriodIds.push(newPeriod.id);
+
+        // fériés de la nouvelle période (un seul createMany — cf. generateMirrorSlots)
+        if (ns && ne) {
+          const holidayRows = holidaysInRange(ns, ne).map((h) => ({
+            periodId: newPeriod.id,
+            date: dateFromYmd(h.date),
+            label: h.label,
+          }));
+          if (holidayRows.length > 0) await tx.periodHoliday.createMany({ data: holidayRows });
+        }
+
+        // créneaux
+        if (recreateSlots) {
+          const snapshot = slotsByPeriod.get(p.id) ?? [];
+          for (const s of snapshot) {
+            const newSlotId = `sl_${randomUUID().slice(0, 8)}`;
+            await tx.slot.create({
+              data: {
+                id: newSlotId,
+                serviceId,
+                slotType: "recurring",
+                startTime: s.startTime,
+                endTime: s.endTime,
+                slotDate: null,
+                capacity: s.capacity,
+                slotDay: s.slotDay,
+                periodId: newPeriod.id,
+                parentSlotId: null,
+                weeks: s.weeks,
+                state: "actif",
+              },
             });
-            for (const mid of mirrors) newMirrorSlotIds.push(mid);
+            newRecurringSlotIds.push(newSlotId);
+
+            if (ns && ne) {
+              const mirrors = await generateMirrorSlots(tx, {
+                serviceId,
+                slotId: newSlotId,
+                periodId: newPeriod.id,
+                src: s,
+                rangeStart: ns,
+                rangeEnd: ne,
+                activeDays,
+                openOnHolidays: service.openOnHolidays,
+              });
+              for (const mid of mirrors) newMirrorSlotIds.push(mid);
+            }
           }
         }
+
+        // 7. ancienne période active → desactive
+        await tx.period.update({ where: { id: p.id }, data: { state: "desactive" } });
       }
 
-      // 7. ancienne période active → desactive
-      await tx.period.update({ where: { id: p.id }, data: { state: "desactive" } });
-    }
+      // 8. journaliser le cycle
+      const payload: CycleEventData = {
+        archivedPeriodIds,
+        newPeriodIds,
+        newRecurringSlotIds,
+        newMirrorSlotIds,
+        oldDeactivatedPeriodIds: actives.map((p) => p.id),
+      };
+      await tx.cycleEvent.create({
+        data: { serviceId, data: payload as unknown as Prisma.InputJsonValue },
+      });
 
-    // 8. journaliser le cycle
-    const payload: CycleEventData = {
-      archivedPeriodIds,
-      newPeriodIds,
-      newRecurringSlotIds,
-      newMirrorSlotIds,
-      oldDeactivatedPeriodIds: actives.map((p) => p.id),
-    };
-    await tx.cycleEvent.create({
-      data: { serviceId, data: payload as unknown as Prisma.InputJsonValue },
-    });
-
-    return {
-      created: newPeriodIds.length,
-      slotsCreated: newRecurringSlotIds.length,
-    };
-  });
+      return {
+        created: newPeriodIds.length,
+        slotsCreated: newRecurringSlotIds.length,
+      };
+      // Timeout élargi : la bascule reste l'opération la plus lourde de l'app
+      // (périodes × créneaux × occurrences) — le défaut Prisma (5 s) est trop court.
+    },
+    { timeout: 120_000, maxWait: 10_000 },
+  );
 }
 
 // =====================================================================================
@@ -478,75 +486,79 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
 // =====================================================================================
 
 export async function undoCycle(serviceId: string): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    const ev = await tx.cycleEvent.findFirst({
-      where: { serviceId },
-      orderBy: { id: "desc" },
-    });
-    if (!ev) return; // no-op
-
-    const data = ev.data as unknown as CycleEventData;
-    const newMirrorSlotIds = data.newMirrorSlotIds ?? [];
-    const newRecurringSlotIds = data.newRecurringSlotIds ?? [];
-    const newPeriodIds = data.newPeriodIds ?? [];
-    const oldDeactivatedPeriodIds = data.oldDeactivatedPeriodIds ?? [];
-    const archivedPeriodIds = data.archivedPeriodIds ?? [];
-
-    // 1. miroirs uniques : bookings unique puis slots
-    if (newMirrorSlotIds.length > 0) {
-      await tx.booking.deleteMany({
-        where: { slotId: { in: newMirrorSlotIds }, bookingType: "unique" },
+  await prisma.$transaction(
+    async (tx) => {
+      const ev = await tx.cycleEvent.findFirst({
+        where: { serviceId },
+        orderBy: { id: "desc" },
       });
-      await tx.slot.deleteMany({ where: { id: { in: newMirrorSlotIds } } });
-    }
+      if (!ev) return; // no-op
 
-    // 2. récurrents : bookings recurring puis slots
-    if (newRecurringSlotIds.length > 0) {
-      await tx.booking.deleteMany({
-        where: { slotId: { in: newRecurringSlotIds }, bookingType: "recurring" },
+      const data = ev.data as unknown as CycleEventData;
+      const newMirrorSlotIds = data.newMirrorSlotIds ?? [];
+      const newRecurringSlotIds = data.newRecurringSlotIds ?? [];
+      const newPeriodIds = data.newPeriodIds ?? [];
+      const oldDeactivatedPeriodIds = data.oldDeactivatedPeriodIds ?? [];
+      const archivedPeriodIds = data.archivedPeriodIds ?? [];
+
+      // 1. miroirs uniques : bookings unique puis slots
+      if (newMirrorSlotIds.length > 0) {
+        await tx.booking.deleteMany({
+          where: { slotId: { in: newMirrorSlotIds }, bookingType: "unique" },
+        });
+        await tx.slot.deleteMany({ where: { id: { in: newMirrorSlotIds } } });
+      }
+
+      // 2. récurrents : bookings recurring puis slots
+      if (newRecurringSlotIds.length > 0) {
+        await tx.booking.deleteMany({
+          where: { slotId: { in: newRecurringSlotIds }, bookingType: "recurring" },
+        });
+        await tx.slot.deleteMany({ where: { id: { in: newRecurringSlotIds } } });
+      }
+
+      // 3. périodes : bookings recurring, fériés, puis périodes
+      if (newPeriodIds.length > 0) {
+        await tx.booking.deleteMany({
+          where: { periodId: { in: newPeriodIds }, bookingType: "recurring" },
+        });
+        await tx.periodHoliday.deleteMany({ where: { periodId: { in: newPeriodIds } } });
+        await tx.period.deleteMany({ where: { id: { in: newPeriodIds } } });
+      }
+
+      // 4. anciennes désactivées → actif
+      if (oldDeactivatedPeriodIds.length > 0) {
+        await tx.period.updateMany({
+          where: { id: { in: oldDeactivatedPeriodIds } },
+          data: { state: "actif" },
+        });
+      }
+
+      // 5. archivées → desactive
+      if (archivedPeriodIds.length > 0) {
+        await tx.period.updateMany({
+          where: { id: { in: archivedPeriodIds } },
+          data: { state: "desactive" },
+        });
+      }
+
+      // 6. supprimer l'événement
+      await tx.cycleEvent.delete({ where: { id: ev.id } });
+
+      // 7. nettoyer les exercices orphelins (sans période rattachée)
+      const referenced = await tx.period.findMany({
+        where: { exerciceId: { not: null } },
+        select: { exerciceId: true },
+        distinct: ["exerciceId"],
       });
-      await tx.slot.deleteMany({ where: { id: { in: newRecurringSlotIds } } });
-    }
-
-    // 3. périodes : bookings recurring, fériés, puis périodes
-    if (newPeriodIds.length > 0) {
-      await tx.booking.deleteMany({
-        where: { periodId: { in: newPeriodIds }, bookingType: "recurring" },
+      const keep = referenced.map((r) => r.exerciceId).filter((x): x is number => x !== null);
+      await tx.exercice.deleteMany({
+        where: keep.length > 0 ? { id: { notIn: keep } } : {},
       });
-      await tx.periodHoliday.deleteMany({ where: { periodId: { in: newPeriodIds } } });
-      await tx.period.deleteMany({ where: { id: { in: newPeriodIds } } });
-    }
-
-    // 4. anciennes désactivées → actif
-    if (oldDeactivatedPeriodIds.length > 0) {
-      await tx.period.updateMany({
-        where: { id: { in: oldDeactivatedPeriodIds } },
-        data: { state: "actif" },
-      });
-    }
-
-    // 5. archivées → desactive
-    if (archivedPeriodIds.length > 0) {
-      await tx.period.updateMany({
-        where: { id: { in: archivedPeriodIds } },
-        data: { state: "desactive" },
-      });
-    }
-
-    // 6. supprimer l'événement
-    await tx.cycleEvent.delete({ where: { id: ev.id } });
-
-    // 7. nettoyer les exercices orphelins (sans période rattachée)
-    const referenced = await tx.period.findMany({
-      where: { exerciceId: { not: null } },
-      select: { exerciceId: true },
-      distinct: ["exerciceId"],
-    });
-    const keep = referenced.map((r) => r.exerciceId).filter((x): x is number => x !== null);
-    await tx.exercice.deleteMany({
-      where: keep.length > 0 ? { id: { notIn: keep } } : {},
-    });
-  });
+      // Timeout élargi : suppressions en masse (miroirs + réservations d'un exercice entier).
+    },
+    { timeout: 120_000, maxWait: 10_000 },
+  );
 }
 
 // =====================================================================================

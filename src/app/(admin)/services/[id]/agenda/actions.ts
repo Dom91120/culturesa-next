@@ -942,7 +942,19 @@ export async function cutBookingAction(input: {
   if (!res.ok) return res;
   const id = idSchema.safeParse(input.sourceBookingId);
   if (id.success) {
-    await prisma.booking.delete({ where: { id: id.data } }).catch(() => {});
+    // La copie est committée : si la suppression de la source échoue, on le DIT
+    // (sinon : doublon silencieux consommant la jauge). Scopée au service (anti-IDOR).
+    const del = await prisma.booking
+      .deleteMany({ where: { id: id.data, serviceId: input.serviceId } })
+      .catch(() => null);
+    if (!del || del.count === 0) {
+      revalidatePath(`/services/${input.serviceId}/agenda`);
+      return {
+        ok: false,
+        error:
+          "Réservation copiée, mais la source n'a pas pu être supprimée — retirez-la manuellement.",
+      };
+    }
   }
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return { ok: true };

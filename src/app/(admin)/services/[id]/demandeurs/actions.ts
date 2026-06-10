@@ -46,6 +46,7 @@ export async function saveDemandeurSettingsAction(
   } catch {
     return { ok: false, error: "Échec de l'enregistrement." };
   }
-  revalidatePath(`/services/${serviceId}/demandeurs`);
+  // Consommée par le panneau Configuration (l'onglet Demandeurs dédié a été supprimé).
+  revalidatePath(`/services/${serviceId}/config`);
   return { ok: true };
 }
