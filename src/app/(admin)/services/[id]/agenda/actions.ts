@@ -218,6 +218,42 @@ export async function setServiceDefaultCapacityAction(input: {
   return { ok: true };
 }
 
+/**
+ * Liste des usagers proposés dans la modale de création de réservation. Chargée À LA
+ * DEMANDE (ouverture de la modale) : auparavant TOUS les comptes étaient chargés par
+ * la page agenda et re-fetchés à chaque tick d'auto-rafraîchissement (audit perf).
+ */
+export async function listAgendaUsersAction(serviceId: string): Promise<
+  {
+    id: string;
+    label: string;
+    demandeur: string;
+    structure: string;
+    openOnSchoolHolidays: boolean;
+  }[]
+> {
+  await requireServiceManager(serviceId);
+  const users = await prisma.user.findMany({
+    where: { role: "utilisateur" },
+    orderBy: [{ nom: "asc" }, { prenom: "asc" }],
+    select: {
+      id: true,
+      nom: true,
+      prenom: true,
+      demandeur: { select: { label: true, openOnSchoolHolidays: true } },
+      structure: { select: { label: true } },
+    },
+  });
+  return users.map((u) => ({
+    id: u.id,
+    label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
+    demandeur: u.demandeur?.label ?? "",
+    structure: u.structure?.label ?? "",
+    // Politique vacances scolaires du demandeur (false = fermé → occurrences exclues).
+    openOnSchoolHolidays: u.demandeur?.openOnSchoolHolidays ?? true,
+  }));
+}
+
 /** Pose la liste de demandeurs autorisés sur un créneau (vide = ouvert à tous). */
 async function setSlotDemandeurs(slotId: string, demandeurIds: number[] | undefined) {
   const ids = [...new Set((demandeurIds ?? []).filter((d) => Number.isInteger(d) && d > 0))];

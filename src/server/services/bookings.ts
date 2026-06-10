@@ -398,10 +398,29 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     exerciceId: true,
   } as const;
 
+  // Périodes : celles du service, sinon les globales (fallback, comme l'agenda admin).
+  // Chargées AVANT les créneaux/réservations : elles servent de borne de chargement.
+  let periods = await prisma.period.findMany({
+    where: { serviceId, state: "actif" },
+    orderBy: [{ position: "asc" }, { id: "asc" }],
+    select: periodSelect,
+  });
+  if (periods.length === 0) {
+    periods = await prisma.period.findMany({
+      where: { serviceId: null, state: "actif" },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+      select: periodSelect,
+    });
+  }
+  // Borne de chargement : UNIQUEMENT les créneaux/réservations des périodes actives
+  // affichées. Sans elle, l'agenda usager chargeait tous les exercices accumulés
+  // — payload re-fetché par chaque tick d'auto-rafraîchissement (audit perf).
+  const periodIds = periods.map((p) => p.id);
+
   const [settings, recurSlots, uniqueSlots, bookings, themeRows] = await Promise.all([
     getServiceDemandeurSettings(serviceId),
     prisma.slot.findMany({
-      where: { serviceId, slotType: "recurring", state: "actif" },
+      where: { serviceId, slotType: "recurring", state: "actif", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -413,7 +432,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       },
     }),
     prisma.slot.findMany({
-      where: { serviceId, slotType: "unique", state: "actif" },
+      where: { serviceId, slotType: "unique", state: "actif", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -424,7 +443,12 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       },
     }),
     prisma.booking.findMany({
-      where: { serviceId, bookingType: { in: ["recurring", "unique"] } },
+      // Bornées via leur créneau : seules celles d'un créneau affiché sont rendues.
+      where: {
+        serviceId,
+        bookingType: { in: ["recurring", "unique"] },
+        slot: { state: "actif", periodId: { in: periodIds } },
+      },
       select: {
         id: true,
         slotId: true,
@@ -448,20 +472,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         })
       : Promise.resolve([] as { label: string }[]),
   ]);
-
-  // Périodes : celles du service, sinon les globales (fallback, comme l'agenda admin).
-  let periods = await prisma.period.findMany({
-    where: { serviceId, state: "actif" },
-    orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: periodSelect,
-  });
-  if (periods.length === 0) {
-    periods = await prisma.period.findMany({
-      where: { serviceId: null, state: "actif" },
-      orderBy: [{ position: "asc" }, { id: "asc" }],
-      select: periodSelect,
-    });
-  }
 
   // Modes dérivés du demandeur EFFECTIF de l'usager (repli sur tous si non rattaché).
   const mineSettings =

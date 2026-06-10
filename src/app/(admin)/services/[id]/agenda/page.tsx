@@ -67,9 +67,15 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     });
   }
 
-  const [slots, uniqueSlots, bookings, users] = await Promise.all([
+  // Borne de chargement : UNIQUEMENT les créneaux/réservations des périodes
+  // affichées (exercice courant, + exercices passés si showPreviousExercices).
+  // Sans cette borne, l'agenda chargeait TOUS les exercices accumulés — payload
+  // et requêtes croissant sans limite à chaque bascule d'exercice (audit perf).
+  const periodIds = periods.map((p) => p.id);
+
+  const [slots, uniqueSlots, bookings] = await Promise.all([
     prisma.slot.findMany({
-      where: { serviceId: id, slotType: "recurring", state: "actif" },
+      where: { serviceId: id, slotType: "recurring", state: "actif", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -83,7 +89,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     // Créneaux ponctuels (datés) : affichés dans l'agenda en mode « Semaine réelle »
     // sur le jour de leur date (cf. legacy renderAgendaWeekly, branche realweek).
     prisma.slot.findMany({
-      where: { serviceId: id, slotType: "unique", state: "actif" },
+      where: { serviceId: id, slotType: "unique", state: "actif", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -96,7 +102,12 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     prisma.booking.findMany({
       // Récurrentes ET ponctuelles : les ponctuelles (bookingType "unique") sont
       // rattachées à leur bloc ponctuel daté dans l'agenda « Semaine réelle ».
-      where: { serviceId: id, bookingType: { in: ["recurring", "unique"] } },
+      // Bornées via leur créneau : seules celles d'un créneau affiché sont rendues.
+      where: {
+        serviceId: id,
+        bookingType: { in: ["recurring", "unique"] },
+        slot: { state: "actif", periodId: { in: periodIds } },
+      },
       select: {
         id: true,
         slotId: true,
@@ -121,17 +132,6 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         },
       },
     }),
-    prisma.user.findMany({
-      where: { role: "utilisateur" },
-      orderBy: [{ nom: "asc" }, { prenom: "asc" }],
-      select: {
-        id: true,
-        nom: true,
-        prenom: true,
-        demandeur: { select: { label: true, openOnSchoolHolidays: true } },
-        structure: { select: { label: true } },
-      },
-    }),
   ]);
 
   // Demandeurs autorisés par créneau (SlotDemandeur) + liste des demandeurs du service,
@@ -150,15 +150,6 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     slotDemandeurs[r.slotId] = list;
   }
   const serviceDemandeurs = demRows.map((r) => ({ id: r.demandeurId, label: r.label }));
-
-  const usersData = users.map((u) => ({
-    id: u.id,
-    label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
-    demandeur: u.demandeur?.label ?? "",
-    structure: u.structure?.label ?? "",
-    // Politique vacances scolaires du demandeur (false = fermé → occurrences exclues).
-    openOnSchoolHolidays: u.demandeur?.openOnSchoolHolidays ?? true,
-  }));
 
   const bookingsData = bookings.map((b) => ({
     id: b.id,
@@ -258,7 +249,6 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         slots={slotsData}
         uniqueSlots={uniqueSlotsData}
         bookings={bookingsData}
-        users={usersData}
         themes={themes}
         modes={modes}
         exercices={exercices}

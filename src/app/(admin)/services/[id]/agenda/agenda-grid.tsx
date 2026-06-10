@@ -41,6 +41,7 @@ import {
   cutBookingAction,
   deleteBookingAdminAction,
   deleteSlotAction,
+  listAgendaUsersAction,
   moveBookingAction,
   moveRecurringSlotAction,
   moveUniqueSlotAction,
@@ -140,7 +141,6 @@ export function AgendaGrid({
   slots,
   uniqueSlots,
   bookings: bookingsRaw,
-  users,
   themes,
   modes,
   exercices,
@@ -156,7 +156,6 @@ export function AgendaGrid({
   uniqueSlots: UniqueSlot[];
   // Le serveur ne stocke plus dayKey : il est dérivé du slot (slotDay / date).
   bookings: Omit<Booking, "dayKey">[];
-  users: UserOpt[];
   themes: string[];
   modes: ServiceModes;
   exercices: Exercice[];
@@ -309,6 +308,16 @@ export function AgendaGrid({
   const [stackKey, setStackKey] = useState<{ slotId: string; dayKey: string } | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [createCtx, setCreateCtx] = useState<CreateCtx>(null);
+  // Usagers de la modale de création : chargés À LA DEMANDE (première ouverture),
+  // plus dans le payload de la page — ils ne participent donc plus au coût de
+  // l'auto-rafraîchissement (audit perf).
+  const [users, setUsers] = useState<UserOpt[]>([]);
+  const usersLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!createCtx || usersLoadedRef.current) return;
+    usersLoadedRef.current = true;
+    void listAgendaUsersAction(service.id).then(setUsers);
+  }, [createCtx, service.id]);
   const [cUser, setCUser] = useState("");
   // Filtres « Type de demandeur » et « Structure » (modale legacy) : restreignent la liste des usagers.
   const [cDemType, setCDemType] = useState("");
@@ -433,22 +442,30 @@ export function AgendaGrid({
   const effectivePeriodId = mode === "realweek" ? (coveringPeriod?.id ?? -1) : selectedPeriodId;
 
   // Dates (YYYY-MM-DD) des créneaux ponctuels (datés) ayant au moins une réservation
-  // (port legacy _agendaBookedSlotDates). Trié croissant.
-  const bookedSlotDates = uniqueSlots
-    .filter((s) => s.slotDate && bookings.some((b) => b.slotId === s.id))
-    .map((s) => s.slotDate as string)
-    .sort();
+  // (port legacy _agendaBookedSlotDates). Trié croissant. Mémoïsé + Set : l'ancien
+  // filter×some était O(miroirs × réservations) recalculé à CHAQUE rendu (survol,
+  // drag…) — audit perf.
+  const bookedSlotDates = useMemo(() => {
+    const bookedSlotIds = new Set(bookings.map((b) => b.slotId));
+    return uniqueSlots
+      .filter((s) => s.slotDate && bookedSlotIds.has(s.id))
+      .map((s) => s.slotDate as string)
+      .sort();
+  }, [uniqueSlots, bookings]);
   // Parités A/B couvertes par les réservations RÉCURRENTES (periodId > 0) de chaque
   // période. Une résa sans semaine ("") vaut pour A ET B. Ces résas se répètent chaque
   // semaine de la période → une semaine est « non vide » seulement si sa parité figure
   // ici. (Hors mode A/B, on enregistre "A"/"B"/"" sans distinction — voir weekHasBooking.)
-  const recurAbByPeriod = new Map<number, Set<"A" | "B" | "">>();
-  for (const b of bookings) {
-    if (b.periodId <= 0) continue;
-    const set = recurAbByPeriod.get(b.periodId) ?? new Set<"A" | "B" | "">();
-    set.add((b.week === "A" || b.week === "B" ? b.week : "") as "A" | "B" | "");
-    recurAbByPeriod.set(b.periodId, set);
-  }
+  const recurAbByPeriod = useMemo(() => {
+    const map = new Map<number, Set<"A" | "B" | "">>();
+    for (const b of bookings) {
+      if (b.periodId <= 0) continue;
+      const set = map.get(b.periodId) ?? new Set<"A" | "B" | "">();
+      set.add((b.week === "A" || b.week === "B" ? b.week : "") as "A" | "B" | "");
+      map.set(b.periodId, set);
+    }
+    return map;
+  }, [bookings]);
 
   // Une semaine (lundi → dimanche) contient-elle une réservation visible ?
   // - ponctuel daté réservé dans la semaine, OU
@@ -484,16 +501,24 @@ export function AgendaGrid({
   // couvre la semaine courante) et on ne navigue pas au-delà de ses dates.
   // En mode hideEmpty, on désactive aussi ◀/▶ s'il n'existe plus aucune semaine
   // AVEC réservation dans la direction (cf. legacy renderAgendaWeekly).
-  const canWeekPrev = mondayStr
-    ? (coveringPeriod?.dateStart
-        ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
-        : true) &&
-      (!hideEmpty || hasBookedWeekBeyond(mondayStr, -1))
-    : false;
-  const canWeekNext = mondayStr
-    ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
-      (!hideEmpty || hasBookedWeekBeyond(mondayStr, 1))
-    : false;
+  // Mémoïsé : hasBookedWeekBeyond balaie jusqu'à 260 semaines — à ne recalculer que
+  // quand les données ou la semaine changent, pas à chaque survol/drag (audit perf).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hasBookedWeekBeyond est une closure recréée à chaque rendu ; ses entrées réelles sont listées (bookedSlotDates, recurAbByPeriod, coveringPeriod, periods, modes.abMode).
+  const { canWeekPrev, canWeekNext } = useMemo(
+    () => ({
+      canWeekPrev: mondayStr
+        ? (coveringPeriod?.dateStart
+            ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
+            : true) &&
+          (!hideEmpty || hasBookedWeekBeyond(mondayStr, -1))
+        : false,
+      canWeekNext: mondayStr
+        ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
+          (!hideEmpty || hasBookedWeekBeyond(mondayStr, 1))
+        : false,
+    }),
+    [mondayStr, hideEmpty, coveringPeriod, bookedSlotDates, recurAbByPeriod, periods, modes.abMode],
+  );
 
   // Navigation hebdo (◀/▶) : en mode hideEmpty, on saute aux semaines AYANT au moins
   // une réservation (ponctuelle OU récurrente — port legacy shiftAgendaWeek), bornée
@@ -625,10 +650,12 @@ export function AgendaGrid({
     // Ids des créneaux ponctuels (datés) ayant une réservation dans la semaine affichée.
     const uniqBookedSlotIds = new Set<string>();
     const uniqSunday = sundayStr ?? mondayStr;
+    // Lookup par id (l'ancien uniqueSlots.find dans la boucle était O(B×U) par rendu).
+    const uniqById = new Map(uniqueSlots.map((s) => [s.id, s]));
     for (const b of bookings) {
       if (uniqueIdSet.has(b.slotId)) {
         if (mode !== "realweek" || !mondayStr) continue;
-        const u = uniqueSlots.find((s) => s.id === b.slotId);
+        const u = uniqById.get(b.slotId);
         if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
           continue;
         uniqBookedSlotIds.add(b.slotId);
@@ -758,6 +785,8 @@ export function AgendaGrid({
       groups.set(key, arr);
     };
     const uniqSunday = sundayStr ?? mondayStr;
+    // Lookup par id (l'ancien uniqueSlots.find dans la boucle était O(B×U)).
+    const uniqById = new Map(uniqueSlots.map((s) => [s.id, s]));
     for (const b of bookings) {
       // Réservation-ENFANT (matérialisation d'une récurrente sur un slot miroir daté) :
       // en « Semaine réelle », rattachée à la cellule du SLOT PARENT du jour affiché
@@ -777,7 +806,7 @@ export function AgendaGrid({
       // jour = jour de la date du créneau), en ignorant période/semaine.
       if (uniqueIdSet.has(b.slotId)) {
         if (mode !== "realweek" || !mondayStr) continue;
-        const u = uniqueSlots.find((s) => s.id === b.slotId);
+        const u = uniqById.get(b.slotId);
         if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
           continue;
         const dk = dayKeyFromYmd(u.slotDate);

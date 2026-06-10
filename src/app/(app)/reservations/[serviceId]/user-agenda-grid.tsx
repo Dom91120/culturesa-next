@@ -936,22 +936,30 @@ export function UserAgendaGrid({
 
   // Dates (YYYY-MM-DD) des créneaux ponctuels AUTONOMES (datés) réservables — sert au
   // mode « Masquer les horaires sans créneau » pour sauter aux semaines portant au moins
-  // un créneau et (dés)activer ◀/▶. Trié croissant.
-  const uniqSlotDates = uniqueSlots
-    .filter((s) => !s.parentSlotId && s.slotDate && (s.capacity ?? service.capacity) > 0)
-    .map((s) => s.slotDate as string)
-    .sort();
+  // un créneau et (dés)activer ◀/▶. Trié croissant. Mémoïsé : recalculé sinon à chaque
+  // rendu (survol/drag), hideNoSlot étant actif par défaut (audit perf).
+  const uniqSlotDates = useMemo(
+    () =>
+      uniqueSlots
+        .filter((s) => !s.parentSlotId && s.slotDate && (s.capacity ?? service.capacity) > 0)
+        .map((s) => s.slotDate as string)
+        .sort(),
+    [uniqueSlots, service.capacity],
+  );
   // Parités A/B couvertes par les créneaux RÉCURRENTS de chaque période (un créneau
   // « A,B » couvre les deux). Les récurrents se répètent chaque semaine de la période →
   // une semaine porte un créneau si sa parité y figure (ou hors mode A/B).
-  const recurSlotAbByPeriod = new Map<number, Set<"A" | "B">>();
-  for (const s of slots) {
-    if (s.periodId == null || s.periodId <= 0) continue;
-    if ((s.capacity ?? service.capacity) <= 0) continue;
-    const set = recurSlotAbByPeriod.get(s.periodId) ?? new Set<"A" | "B">();
-    for (const w of parseWeeks(s.weeks)) set.add(w);
-    recurSlotAbByPeriod.set(s.periodId, set);
-  }
+  const recurSlotAbByPeriod = useMemo(() => {
+    const map = new Map<number, Set<"A" | "B">>();
+    for (const s of slots) {
+      if (s.periodId == null || s.periodId <= 0) continue;
+      if ((s.capacity ?? service.capacity) <= 0) continue;
+      const set = map.get(s.periodId) ?? new Set<"A" | "B">();
+      for (const w of parseWeeks(s.weeks)) set.add(w);
+      map.set(s.periodId, set);
+    }
+    return map;
+  }, [slots, service.capacity]);
 
   // Une semaine (lundi → dimanche) contient-elle au moins un créneau visible ?
   // - créneau ponctuel daté dans la semaine, OU
@@ -986,16 +994,32 @@ export function UserAgendaGrid({
   // couvre la semaine courante) et on ne navigue pas au-delà de ses dates.
   // En mode hideNoSlot, on désactive aussi ◀/▶ s'il n'existe plus aucune semaine
   // AVEC créneau dans la direction (port legacy).
-  const canWeekPrev = mondayStr
-    ? (coveringPeriod?.dateStart
-        ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
-        : true) &&
-      (!hideNoSlot || hasSlotWeekBeyond(mondayStr, -1))
-    : false;
-  const canWeekNext = mondayStr
-    ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
-      (!hideNoSlot || hasSlotWeekBeyond(mondayStr, 1))
-    : false;
+  // Mémoïsé : hasSlotWeekBeyond balaie jusqu'à 260 semaines — à ne recalculer que
+  // quand les données ou la semaine changent, pas à chaque survol/drag (audit perf).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hasSlotWeekBeyond est une closure recréée à chaque rendu ; ses entrées réelles sont listées (uniqSlotDates, recurSlotAbByPeriod, coveringPeriod, periods, modes.abMode).
+  const { canWeekPrev, canWeekNext } = useMemo(
+    () => ({
+      canWeekPrev: mondayStr
+        ? (coveringPeriod?.dateStart
+            ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
+            : true) &&
+          (!hideNoSlot || hasSlotWeekBeyond(mondayStr, -1))
+        : false,
+      canWeekNext: mondayStr
+        ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
+          (!hideNoSlot || hasSlotWeekBeyond(mondayStr, 1))
+        : false,
+    }),
+    [
+      mondayStr,
+      hideNoSlot,
+      coveringPeriod,
+      uniqSlotDates,
+      recurSlotAbByPeriod,
+      periods,
+      modes.abMode,
+    ],
+  );
 
   // Navigation hebdo (◀/▶) : en mode hideNoSlot, on saute aux semaines AYANT au moins
   // un créneau (ponctuel OU récurrent — port legacy shiftUserAgendaWeek), bornée à la
@@ -1290,6 +1314,8 @@ export function UserAgendaGrid({
       groups.set(key, arr);
     };
     const uniqSunday = sundayStr ?? mondayStr;
+    // Lookup par id (l'ancien uniqueSlots.find dans la boucle était O(B×U)).
+    const uniqById = new Map(uniqueSlots.map((s) => [s.id, s]));
     for (const b of bookings) {
       // Réservation DÉPLACÉE (brouillon) : rattachée à son créneau CIBLE, plus à son
       // créneau d'origine (used/full suivent automatiquement). Hors période/semaine
@@ -1322,7 +1348,7 @@ export function UserAgendaGrid({
       // jour de la date du créneau), en ignorant période/semaine.
       if (uniqueIdSet.has(b.slotId)) {
         if (mode !== "realweek" || !mondayStr) continue;
-        const u = uniqueSlots.find((s) => s.id === b.slotId);
+        const u = uniqById.get(b.slotId);
         if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
           continue;
         const dk = dayKeyFromYmd(u.slotDate);
