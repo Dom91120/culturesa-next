@@ -1,3 +1,4 @@
+import { gaugeUnits } from "@/lib/gauge";
 import { prisma } from "@/server/db";
 
 // =====================================================================================
@@ -37,6 +38,8 @@ export type ServiceStats = {
   byMonth: LabeledCount[];
   topStructures: LabeledCount[];
   topNiveaux: LabeledCount[];
+  // Taux de remplissage moyen (%, unités de jauge) des créneaux réservés, par structure.
+  fillByStructure: LabeledCount[];
 };
 
 /** Date UTC → 'YYYY-MM-DD'. */
@@ -116,10 +119,19 @@ export async function getServiceStats(
       userId: true,
       bookingType: true,
       periodId: true,
-      slot: { select: { slotDay: true, slotDate: true } },
+      slotId: true,
+      slot: { select: { slotDay: true, slotDate: true, capacity: true } },
       user: { select: { niveau: true, structure: { select: { label: true } } } },
     },
   });
+
+  // Service : capacité par défaut + prise en compte des accompagnants dans la jauge.
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { capacity: true, gaugeAccompagnants: true },
+  });
+  const serviceCapacity = service?.capacity ?? 1;
+  const gaugeAccompagnants = service?.gaugeAccompagnants ?? true;
 
   const volPass = (b: (typeof volumeRows)[number]): boolean => {
     if (type === "rec" && b.bookingType !== "recurring") return false;
@@ -145,9 +157,17 @@ export async function getServiceStats(
   const monthMap = new Map<string, number>();
   const structMap = new Map<string, number>();
   const niveauMap = new Map<string, number>();
+  // Pour le remplissage : occupation (unités de jauge) et capacité par créneau.
+  const occBySlot = new Map<string, number>();
+  const capBySlot = new Map<string, number>();
   for (const b of vol) {
     const dk = dayKeyOf(b.slot.slotDay, b.slot.slotDate);
     if (dk) dayMap.set(dk, (dayMap.get(dk) ?? 0) + 1);
+    capBySlot.set(b.slotId, b.slot.capacity ?? serviceCapacity);
+    occBySlot.set(
+      b.slotId,
+      (occBySlot.get(b.slotId) ?? 0) + gaugeUnits(b.enfants, b.accompagnants, gaugeAccompagnants),
+    );
     // Mois : date du créneau (ponctuel) sinon début de période (récurrent), comme le legacy.
     const ref = b.slot.slotDate ?? periodsById.get(b.periodId)?.dateStart ?? null;
     if (ref) {
@@ -172,6 +192,23 @@ export async function getServiceStats(
       const [y, m] = bucket.split("-");
       return { label: `${MONTH_NAMES[Number(m) - 1]} ${y}`, value };
     });
+
+  // Taux de remplissage moyen par structure : pour chaque réservation, remplissage du
+  // créneau (occupation jauge / capacité, plafonné à 100 %) ; moyenne par structure.
+  const fillSum = new Map<string, number>();
+  const fillCnt = new Map<string, number>();
+  for (const b of vol) {
+    const cap = capBySlot.get(b.slotId) ?? 0;
+    if (cap <= 0) continue;
+    const fill = Math.min(100, (100 * (occBySlot.get(b.slotId) ?? 0)) / cap);
+    const s = b.user.structure?.label ?? "(sans structure)";
+    fillSum.set(s, (fillSum.get(s) ?? 0) + fill);
+    fillCnt.set(s, (fillCnt.get(s) ?? 0) + 1);
+  }
+  const fillByStructure = [...fillSum.entries()]
+    .map(([label, sum]) => ({ label, value: Math.round(sum / (fillCnt.get(label) ?? 1)) }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
 
   // ── Population PRÉVU/RÉALISÉ (occurrences datées passées, validées) ────────────
   const occRows = await prisma.booking.findMany({
@@ -210,5 +247,6 @@ export async function getServiceStats(
     byMonth,
     topStructures: topN(structMap, 10),
     topNiveaux: topN(niveauMap, 10),
+    fillByStructure,
   };
 }

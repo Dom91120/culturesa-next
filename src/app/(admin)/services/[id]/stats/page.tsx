@@ -58,7 +58,8 @@ function BarRow({
   value,
   max,
   color,
-}: { label: string; value: number; max: number; color?: string }) {
+  suffix,
+}: { label: string; value: number; max: number; color?: string; suffix?: string }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: ".5rem" }}>
@@ -92,9 +93,10 @@ function BarRow({
         />
       </div>
       <div
-        style={{ width: 36, fontSize: ".75rem", fontWeight: 600, textAlign: "left", flexShrink: 0 }}
+        style={{ width: 44, fontSize: ".75rem", fontWeight: 600, textAlign: "left", flexShrink: 0 }}
       >
         {value}
+        {suffix ?? ""}
       </div>
     </div>
   );
@@ -294,6 +296,22 @@ export default async function StatsPage({
         <Panel title="Top niveaux" empty={stats.topNiveaux.length === 0}>
           {stats.topNiveaux.map((r) => (
             <BarRow key={r.label} label={r.label} value={r.value} max={niveauMax} color="#5ab4e8" />
+          ))}
+        </Panel>
+
+        <Panel
+          title="Remplissage moyen par structure (jauge)"
+          empty={stats.fillByStructure.length === 0}
+        >
+          {stats.fillByStructure.map((r) => (
+            <BarRow
+              key={r.label}
+              label={r.label}
+              value={r.value}
+              max={100}
+              color="#a07dd4"
+              suffix="%"
+            />
           ))}
         </Panel>
       </div>
