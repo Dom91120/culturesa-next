@@ -97,11 +97,13 @@ export function FailedMailsPanel({ mails }: { mails: FailedMailRow[] }) {
 
       {mails.length === 0 ? (
         <p style={{ fontSize: ".82rem", color: "var(--muted)", margin: ".25rem 0 0" }}>
-          Aucun e-mail en échec. Les notifications qui n&apos;ont pas pu être envoyées
-          apparaîtront ici et pourront être renvoyées.
+          Aucun e-mail en échec. Les notifications qui n&apos;ont pas pu être envoyées apparaîtront
+          ici et pourront être renvoyées.
         </p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: ".5rem", marginTop: ".25rem" }}>
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: ".5rem", marginTop: ".25rem" }}
+        >
           {mails.map((m) => (
             <div
               key={m.id}

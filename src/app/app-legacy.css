@@ -3654,7 +3654,7 @@ textarea.theme-pending:focus::placeholder {
   border-left: 1px solid var(--border);
 }
 .mobile-day-nav button:disabled {
-  opacity: .4;
+  opacity: 0.4;
   cursor: default;
 }
 .mobile-day-label {
