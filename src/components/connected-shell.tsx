@@ -23,7 +23,6 @@ function serviceTabs(id: string): Tab[] {
     { href: `/services/${id}/agenda`, label: "Agenda", icon: "📆" },
     { href: `/services/${id}/editions`, label: "Éditions", icon: "📋" },
     { href: `/services/${id}/stats`, label: "Statistiques", icon: "📈" },
-    { href: `/services/${id}/creneaux`, label: "Créneaux", icon: "🕘" },
     { href: `/services/${id}`, label: "Paramètres", icon: "🔧" },
   ];
 }

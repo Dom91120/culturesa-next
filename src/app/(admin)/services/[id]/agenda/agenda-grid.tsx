@@ -3723,7 +3723,20 @@ export function AgendaGrid({
                     }
                   >
                     <div className="cell-stack-list">
-                      {stackBlock.bookings.map((bk) => (
+                      {[...stackBlock.bookings]
+                        // Tri des badges par demandeur (puis structure, puis nom) pour
+                        // regrouper visuellement les réservations d'un même demandeur.
+                        .sort(
+                          (a, b) =>
+                            a.demandeur.localeCompare(b.demandeur, "fr", {
+                              sensitivity: "base",
+                            }) ||
+                            a.structure.localeCompare(b.structure, "fr", {
+                              sensitivity: "base",
+                            }) ||
+                            a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
+                        )
+                        .map((bk) => (
                         // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
                         <div
                           key={bk.id}
