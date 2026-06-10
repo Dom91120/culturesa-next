@@ -20,6 +20,41 @@ function startOfToday() {
 }
 
 /**
+ * Demandeur EFFECTIF de l'usager : le sien, sinon celui de sa structure (port du
+ * `COALESCE(u.demandeur_id, str.demandeur_id)` legacy). `null` = aucun (ex. admin).
+ */
+export async function effectiveDemandeurId(
+  db: Prisma.TransactionClient,
+  userId: string,
+): Promise<number | null> {
+  const u = await db.user.findUnique({
+    where: { id: userId },
+    select: { demandeurId: true, structure: { select: { demandeurId: true } } },
+  });
+  return u?.demandeurId ?? u?.structure?.demandeurId ?? null;
+}
+
+/**
+ * L'usager a-t-il accès à ce service ? Accès = son demandeur effectif est référencé
+ * dans `service_demandeur_settings`. Sans demandeur effectif (ex. administrateur) →
+ * accès libre (voit/réserve tout). Port legacy `require_service_access` (scoping par
+ * demandeur via `service_demandeur_settings`).
+ */
+export async function userCanAccessService(
+  db: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+): Promise<boolean> {
+  const demId = await effectiveDemandeurId(db, userId);
+  if (demId == null) return true;
+  const accepts = await db.serviceDemandeurSettings.findFirst({
+    where: { serviceId, demandeurId: demId },
+    select: { serviceId: true },
+  });
+  return !!accepts;
+}
+
+/**
  * Services réservables PAR L'USAGER courant (avec un aperçu du nombre de créneaux à
  * venir). Un usager ne voit que les services configurés pour SON type de demandeur
  * (présence d'une ligne ServiceDemandeurSettings). Un compte sans demandeur (ex.
@@ -30,11 +65,12 @@ export async function listBookableServices() {
   const userId = session?.user?.id;
   let demandeurId: number | null = null;
   if (userId) {
+    // Demandeur effectif (usager direct, sinon celui de sa structure).
     const u = await prisma.user.findUnique({
       where: { id: userId },
-      select: { demandeurId: true },
+      select: { demandeurId: true, structure: { select: { demandeurId: true } } },
     });
-    demandeurId = u?.demandeurId ?? null;
+    demandeurId = u?.demandeurId ?? u?.structure?.demandeurId ?? null;
   }
   return prisma.service.findMany({
     where: demandeurId != null ? { demandeurSettings: { some: { demandeurId } } } : undefined,
@@ -153,6 +189,10 @@ export async function createUniqueBooking(
         });
         if (!slot || slot.slotType !== "unique" || slot.state !== "actif") {
           throw new BookingError("Ce créneau n'est pas disponible.");
+        }
+        // Accès service : le demandeur effectif de l'usager doit accepter ce service.
+        if (!(await userCanAccessService(tx, userId, slot.serviceId))) {
+          throw new BookingError("Vous n'avez pas accès à ce service.");
         }
         if (!slot.slotDate || slot.slotDate < startOfToday()) {
           throw new BookingError("Ce créneau est passé.");
@@ -331,6 +371,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     select: {
       demandeurId: true,
       demandeur: { select: { label: true, openOnSchoolHolidays: true } },
+      structure: { select: { demandeurId: true } },
       nom: true,
       prenom: true,
       email: true,
@@ -340,11 +381,14 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     },
   });
 
+  // Demandeur effectif : l'usager direct, sinon celui de sa structure (COALESCE legacy).
+  const effDemandeurId = user?.demandeurId ?? user?.structure?.demandeurId ?? null;
+
   // Accès direct : un usager ne peut ouvrir un service que s'il accepte SON type de
   // demandeur (cf. listBookableServices). Compte sans demandeur (ex. admin) : autorisé.
-  if (user?.demandeurId != null) {
+  if (effDemandeurId != null) {
     const accepts = await prisma.serviceDemandeurSettings.findFirst({
-      where: { serviceId, demandeurId: user.demandeurId },
+      where: { serviceId, demandeurId: effDemandeurId },
       select: { serviceId: true },
     });
     if (!accepts) return null;
@@ -424,10 +468,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     });
   }
 
-  // Modes dérivés du demandeur de l'usager (repli sur tous si non rattaché / absent).
-  const mineSettings = user?.demandeurId
-    ? settings.filter((s) => s.demandeurId === user.demandeurId)
-    : [];
+  // Modes dérivés du demandeur EFFECTIF de l'usager (repli sur tous si non rattaché).
+  const mineSettings =
+    effDemandeurId != null ? settings.filter((s) => s.demandeurId === effDemandeurId) : [];
   const modes = deriveServiceModes(mineSettings.length ? mineSettings : settings);
 
   // Vacances scolaires de la zone configurée : sert à filtrer les dates « prédites »

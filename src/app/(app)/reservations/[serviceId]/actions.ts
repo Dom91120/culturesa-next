@@ -13,6 +13,7 @@ import {
   assertNotSchoolHolidayForUser,
   cancelUserBooking,
   createUniqueBooking,
+  userCanAccessService,
 } from "@/server/services/bookings";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import { Prisma } from "@prisma/client";
@@ -52,6 +53,10 @@ export async function reserveRecurringAction(
           slot.state !== "actif"
         ) {
           throw new BookingError("Ce créneau n'est pas disponible.");
+        }
+        // Accès service : le demandeur effectif de l'usager doit accepter ce service.
+        if (!(await userCanAccessService(tx, session.user.id, serviceId))) {
+          throw new BookingError("Vous n'avez pas accès à ce service.");
         }
         const user = await tx.user.findUnique({
           where: { id: session.user.id },
