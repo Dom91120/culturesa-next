@@ -3,6 +3,7 @@ import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { listEditionRows } from "@/server/services/editions";
 import { notFound } from "next/navigation";
+import { PrintButton } from "./print-button";
 
 export default async function EditionsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,13 +29,30 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
           <span className="dot" />
           Éditions — {service.label}
         </div>
-        <a
-          href={`/services/${id}/editions/export`}
-          className="btn btn-primary"
-          style={{ textDecoration: "none" }}
-        >
-          📥 Export CSV
-        </a>
+        <div className="no-print" style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+          <a
+            href={`/services/${id}/editions/export`}
+            className="btn btn-primary"
+            style={{ textDecoration: "none" }}
+          >
+            📥 Export CSV
+          </a>
+          <a
+            href={`/services/${id}/editions/planning`}
+            className="btn"
+            style={{ textDecoration: "none" }}
+          >
+            🗓 Planning hebdomadaire
+          </a>
+          <a
+            href={`/services/${id}/editions/pointages`}
+            className="btn"
+            style={{ textDecoration: "none" }}
+          >
+            ✔ Pointages
+          </a>
+          <PrintButton label="🖨 Imprimer la liste" />
+        </div>
       </div>
 
       <div className="admin-table-wrap">
