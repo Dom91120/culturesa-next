@@ -1,7 +1,7 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import { saveServiceThemes } from "@/server/services/themes";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -16,7 +16,7 @@ export type SaveThemesInput = z.infer<typeof saveThemesSchema>;
 
 /** Enregistre le mode + la liste de thèmes d'un service (sous-onglet Paramètres → Thèmes). */
 export async function saveThemesAction(input: SaveThemesInput): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = saveThemesSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };

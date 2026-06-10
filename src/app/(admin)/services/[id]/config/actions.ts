@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -12,7 +12,7 @@ export async function setGaugeAccompagnantsAction(
   serviceId: string,
   value: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   await prisma.service.update({
     where: { id: serviceId },
     data: { gaugeAccompagnants: value },

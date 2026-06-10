@@ -1,5 +1,5 @@
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import { listEditionRows } from "@/server/services/editions";
 
 function csvCell(v: string | number): string {
@@ -21,8 +21,8 @@ const HEADER = [
 ];
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireRole("gestionnaire");
   const { id } = await params;
+  await requireServiceManager(id);
 
   const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
   if (!service) return new Response("Service introuvable", { status: 404 });

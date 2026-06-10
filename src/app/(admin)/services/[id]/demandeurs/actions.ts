@@ -1,7 +1,7 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import {
   type DemandeurSettingRow,
   saveServiceDemandeurSettings,
@@ -35,7 +35,7 @@ export type SaveDemandeurSettingsInput = {
 export async function saveDemandeurSettingsAction(
   input: SaveDemandeurSettingsInput,
 ): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };

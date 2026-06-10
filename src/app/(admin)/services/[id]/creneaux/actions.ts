@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import {
   deleteSlots,
   saveRecurringSlots,
@@ -44,7 +44,7 @@ export async function saveRecurringSlotsAction(
   periodId: number,
   slots: z.infer<typeof recurSlotSchema>[],
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const parsed = z.array(recurSlotSchema).safeParse(slots);
   if (!parsed.success) return { ok: false as const, error: "Données invalides" };
   const res = await saveRecurringSlots(serviceId, periodId, parsed.data);
@@ -57,7 +57,7 @@ export async function saveUniqueSlotsAction(
   serviceId: string,
   slots: z.infer<typeof uniqueSlotSchema>[],
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const parsed = z.array(uniqueSlotSchema).safeParse(slots);
   if (!parsed.success) return { ok: false as const, error: "Données invalides" };
   const res = await saveUniqueSlots(serviceId, parsed.data);
@@ -67,7 +67,7 @@ export async function saveUniqueSlotsAction(
 }
 
 export async function deleteSlotsAction(serviceId: string, ids: string[]) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const res = await deleteSlots(serviceId, ids);
   if (!res.ok) return res;
   revalidate(serviceId);
@@ -75,7 +75,7 @@ export async function deleteSlotsAction(serviceId: string, ids: string[]) {
 }
 
 export async function setSlotsStateAction(serviceId: string, ids: string[], state: string) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const res = await setSlotsState(ids, state);
   if (!res.ok) return res;
   revalidate(serviceId);
@@ -87,7 +87,7 @@ export async function setSlotDemandeursAction(
   slotId: string,
   demandeurIds: number[],
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const parsed = z.array(z.number().int()).safeParse(demandeurIds);
   if (!parsed.success) return { ok: false as const, error: "Données invalides" };
   const res = await setSlotDemandeurs(slotId, parsed.data);
@@ -100,7 +100,7 @@ export async function saveServiceSlotDefaultsAction(
   serviceId: string,
   defaults: { duration?: number; capacity?: number },
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const schema = z.object({
     duration: z.number().int().positive().optional(),
     capacity: z.number().int().min(0).optional(),

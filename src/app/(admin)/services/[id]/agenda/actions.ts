@@ -3,7 +3,7 @@
 import { todayParisISO } from "@/lib/booking-delay";
 import { wrapEmailHtml } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import { sendMailOrQueue } from "@/server/mailer";
 import { resolvePeriodLabel, sendBookingConfirmationMail } from "@/server/services/booking-mail";
 import { BookingError, assertSlotCapacity } from "@/server/services/bookings";
@@ -66,7 +66,7 @@ export async function setBookingValidatedAction(
   serviceId: string,
   validated: boolean,
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
   const b = await prisma.booking.findUnique({
@@ -89,7 +89,7 @@ export async function setBookingPointageAction(
   serviceId: string,
   pointage: "present" | "absent" | null,
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
   // Les parents (récurrents) NE sont PAS pointables : seuls les miroirs (et les
@@ -114,7 +114,7 @@ export async function saveSlotConfigAction(input: {
   capacity: number;
   demandeurIds: number[];
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const { serviceId, slotId, capacity, demandeurIds } = input;
   if (!Number.isInteger(capacity) || capacity < 0) {
     return { ok: false, error: "Capacité invalide." };
@@ -149,7 +149,7 @@ export async function copyWeekSlotsAction(input: {
   fromWeek: "A" | "B";
   toWeek: "A" | "B";
 }): Promise<{ ok: boolean; error?: string; created?: number }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const res = await copyRecurringWeek(
     input.serviceId,
     input.periodId,
@@ -170,7 +170,7 @@ export async function setServiceDefaultCapacityAction(input: {
   serviceId: string;
   value: number;
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const value = Math.max(1, Math.floor(input.value));
   if (!Number.isFinite(value)) return { ok: false, error: "Capacité invalide." };
   await prisma.service.update({
@@ -201,7 +201,7 @@ export async function createRecurringSlotAction(input: {
   capacity: number;
   demandeurIds?: number[];
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   if (!(DAY_KEYS as readonly string[]).includes(input.dayKey)) {
     return { ok: false, error: "Jour invalide." };
   }
@@ -226,7 +226,7 @@ export async function createUniqueSlotAction(input: {
   capacity: number;
   demandeurIds?: number[];
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const res = await addUniqueSlot(input.serviceId, {
     slotDate: input.slotDate,
     startTime: input.startTime,
@@ -247,7 +247,7 @@ export async function moveRecurringSlotAction(input: {
   startTime: string;
   endTime: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   if (
     !(DAY_KEYS as readonly string[]).includes(input.fromDayKey) ||
     !(DAY_KEYS as readonly string[]).includes(input.toDayKey)
@@ -274,7 +274,7 @@ export async function moveUniqueSlotAction(input: {
   startTime: string;
   endTime: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const res = await moveUniqueSlot(
     input.serviceId,
     input.slotId,
@@ -291,7 +291,7 @@ export async function deleteSlotAction(
   serviceId: string,
   slotId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const res = await deleteSlots(serviceId, [slotId]);
   revalidatePath(`/services/${serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
@@ -343,7 +343,7 @@ export async function deleteBookingAdminAction(
   serviceId: string,
   motif?: string,
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
   // Infos nécessaires au mail + verrou, lues AVANT la suppression.
@@ -432,7 +432,7 @@ export async function updateBookingDetailAction(input: {
   accompagnants: number;
   theme: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = detailSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
   const d = parsed.data;
@@ -513,7 +513,7 @@ export async function moveBookingAction(
   _dayKey: string,
   slotId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
   // Miroir immuable / réservation verrouillée par un pointage → pas de déplacement.
@@ -607,7 +607,7 @@ export async function createRecurringBookingAction(input: {
   theme: string;
   week: "" | "A" | "B";
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
   const d = parsed.data;
@@ -724,7 +724,7 @@ export async function createUniqueBookingAction(input: {
   accompagnants: number;
   theme: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = createUniqueSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
   const d = parsed.data;
@@ -834,7 +834,7 @@ export async function copyBookingAction(input: {
     | { kind: "recurring"; periodId: number; dayKey: string; slotId: string; week: "" | "A" | "B" }
     | { kind: "unique"; slotId: string };
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const id = idSchema.safeParse(input.sourceBookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
   const target = copyTargetSchema.safeParse(input.target);
@@ -901,7 +901,7 @@ export async function cutBookingAction(input: {
     | { kind: "recurring"; periodId: number; dayKey: string; slotId: string; week: "" | "A" | "B" }
     | { kind: "unique"; slotId: string };
 }): Promise<{ ok: boolean; error?: string }> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const res = await copyBookingAction(input);
   if (!res.ok) return res;
   const id = idSchema.safeParse(input.sourceBookingId);

@@ -3,7 +3,7 @@
 import type { ActionState } from "@/lib/action-state";
 import { slotSchema, stringIdSchema } from "@/schemas/config";
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import * as svc from "@/server/services/slots";
 import { revalidatePath } from "next/cache";
 
@@ -33,7 +33,7 @@ export async function createSlotAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(String(formData.get("serviceId") ?? ""));
   const parsed = readForm(formData);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message };
   await svc.createSlot(parsed.data);
@@ -42,7 +42,7 @@ export async function createSlotAction(
 }
 
 export async function updateSlotAction(formData: FormData) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(String(formData.get("serviceId") ?? ""));
   const id = stringIdSchema.safeParse(formData.get("id"));
   const parsed = readForm(formData);
   if (!id.success || !parsed.success) return;
@@ -51,7 +51,7 @@ export async function updateSlotAction(formData: FormData) {
 }
 
 export async function deleteSlotAction(formData: FormData) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(String(formData.get("serviceId") ?? ""));
   const id = stringIdSchema.safeParse(formData.get("id"));
   if (!id.success) return;
   await svc.deleteSlot(id.data);
@@ -67,7 +67,7 @@ export async function toggleSlotDemandeurAction(
   demandeurId: number,
   allowed: boolean,
 ) {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   if (allowed) {
     await prisma.slotDemandeur.upsert({
       where: { slotId_demandeurId: { slotId, demandeurId } },

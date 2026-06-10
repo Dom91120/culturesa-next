@@ -1,7 +1,7 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import { cycleService, setShowPreviousExercices, undoCycle } from "@/server/services/exercice";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -21,7 +21,7 @@ export async function setShowPreviousExercicesAction(
   serviceId: string,
   value: boolean,
 ): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const parsed = z
     .object({ serviceId: z.string().trim().min(1), value: z.boolean() })
     .safeParse({ serviceId, value });
@@ -48,7 +48,7 @@ export async function cycleAction(
   recreatePeriods: boolean,
   recreateSlots: boolean,
 ): Promise<CycleActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const parsed = cycleSchema.safeParse({ serviceId, recreatePeriods, recreateSlots });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
@@ -68,7 +68,7 @@ export async function cycleAction(
 const undoSchema = z.object({ serviceId: z.string().trim().min(1) });
 
 export async function undoCycleAction(serviceId: string): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   const parsed = undoSchema.safeParse({ serviceId });
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };

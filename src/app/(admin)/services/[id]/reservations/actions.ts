@@ -2,7 +2,7 @@
 
 import type { ActionState } from "@/lib/action-state";
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import { WEEKDAYS } from "@/server/services/manager-notice";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -34,7 +34,7 @@ export type ReservationSettingsInput = z.infer<typeof reservationSettingsSchema>
 export async function updateReservationSettingsAction(
   input: ReservationSettingsInput,
 ): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.id);
   const parsed = reservationSettingsSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };

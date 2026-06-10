@@ -1,7 +1,7 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import {
   createServicePeriod,
   deleteServicePeriod,
@@ -73,7 +73,7 @@ export type UpdatePeriodInput = z.input<typeof updateSchema>;
 export type SaveOpeningConfigInput = z.input<typeof openingSchema>;
 
 export async function createPeriodAction(input: CreatePeriodInput): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
@@ -95,7 +95,7 @@ export async function createPeriodAction(input: CreatePeriodInput): Promise<Acti
 }
 
 export async function updatePeriodAction(input: UpdatePeriodInput): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
@@ -120,7 +120,7 @@ export async function deletePeriodAction(input: {
   serviceId: string;
   id: number;
 }): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = deleteSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };
@@ -139,7 +139,7 @@ export async function reactivatePeriodsAction(input: {
   serviceId: string;
   ids: number[];
 }): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = reactivateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };
@@ -157,7 +157,7 @@ export async function reactivatePeriodsAction(input: {
 }
 
 export async function saveOpeningConfigAction(input: SaveOpeningConfigInput): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(input.serviceId);
   const parsed = openingSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };

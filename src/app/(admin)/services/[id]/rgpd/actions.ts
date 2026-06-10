@@ -1,7 +1,7 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
-import { requireRole } from "@/server/guards";
+import { requireServiceManager } from "@/server/guards";
 import { anonymizeUser } from "@/server/services/rgpd";
 import { revalidatePath } from "next/cache";
 
@@ -16,7 +16,7 @@ export async function anonymizeServiceUserAction(
   serviceId: string,
   userId: string,
 ): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  await requireServiceManager(serviceId);
   if (!userId) return { ok: false, error: "Usager cible manquant." };
 
   await anonymizeUser(userId, "admin");
