@@ -98,11 +98,100 @@ export async function exerciceIdForPeriod(
   dateStart: Date | null,
   dateEnd: Date | null,
 ): Promise<number> {
-  const ref = dateStart ?? dateEnd ?? new Date();
+  return ensureExercice(schoolStartYear(dateStart ?? dateEnd ?? new Date()));
+}
+
+/** Année de début d'exercice scolaire pour une date (mois ≥ août → Y, sinon Y-1). */
+function schoolStartYear(ref: Date): number {
   const y = ref.getUTCFullYear();
-  const month = ref.getUTCMonth() + 1; // 1..12
-  const startYear = month >= 8 ? y : y - 1;
-  return ensureExercice(startYear);
+  return ref.getUTCMonth() + 1 >= 8 ? y : y - 1;
+}
+
+/** Erreur métier de gestion des périodes (message destiné à l'admin). */
+export class PeriodError extends Error {}
+
+/** startYear d'un libellé d'exercice « 2025-2026 » → 2025 (null si non parsable). */
+function startYearFromLabel(label: string | null | undefined): number | null {
+  const m = label ? /^(\d{4})/.exec(label) : null;
+  return m ? Number(m[1]) : null;
+}
+
+/** startYear de l'exercice le plus récent du service, ou null si aucune période datée. */
+async function latestExerciceStartYearForService(serviceId: string): Promise<number | null> {
+  const rows = await prisma.period.findMany({
+    where: { serviceId, exerciceId: { not: null } },
+    select: { exercice: { select: { label: true } } },
+  });
+  let max: number | null = null;
+  for (const r of rows) {
+    const y = startYearFromLabel(r.exercice?.label);
+    if (y != null && (max == null || y > max)) max = y;
+  }
+  return max;
+}
+
+/**
+ * Verrou « dernier exercice » (port legacy) : création/modification/suppression d'une
+ * période limitées à l'exercice le PLUS RÉCENT du service. Les exercices antérieurs sont
+ * figés ; on n'ouvre pas non plus manuellement un exercice futur (passer par la bascule).
+ * `null` (1ʳᵉ période du service) = autorisé.
+ */
+async function assertLatestExercice(serviceId: string, targetStartYear: number): Promise<void> {
+  const latest = await latestExerciceStartYearForService(serviceId);
+  if (latest == null || targetStartYear === latest) return;
+  throw new PeriodError(
+    targetStartYear < latest
+      ? "Les périodes d'un exercice antérieur ne sont plus modifiables."
+      : "Création limitée au dernier exercice : utilisez la bascule pour ouvrir un nouvel exercice.",
+  );
+}
+
+/**
+ * Validation période-dans-exercice (port legacy `validate_period_in_exercice`) :
+ *   - date de début ≤ date de fin ;
+ *   - toutes les périodes de l'exercice tiennent sur ≤ 2 années contigües (tous services) ;
+ *   - pas de chevauchement avec une autre période du MÊME service dans l'exercice.
+ * Lève `PeriodError` sinon. No-op si dates absentes.
+ */
+async function validatePeriodInExercice(
+  serviceId: string,
+  dateStart: Date | null,
+  dateEnd: Date | null,
+  excludePeriodId?: number,
+): Promise<void> {
+  if (!dateStart || !dateEnd) return;
+  if (dateStart > dateEnd) {
+    throw new PeriodError("La date de début doit être avant la date de fin.");
+  }
+  const label = exerciceLabelForYear(schoolStartYear(dateStart));
+  const siblings = await prisma.period.findMany({
+    where: {
+      exercice: { label },
+      dateStart: { not: null },
+      dateEnd: { not: null },
+      ...(excludePeriodId != null ? { id: { not: excludePeriodId } } : {}),
+    },
+    select: { serviceId: true, dateStart: true, dateEnd: true },
+  });
+  let ys = dateStart.getUTCFullYear();
+  let ye = dateEnd.getUTCFullYear();
+  for (const p of siblings) {
+    if (p.dateStart) ys = Math.min(ys, p.dateStart.getUTCFullYear());
+    if (p.dateEnd) ye = Math.max(ye, p.dateEnd.getUTCFullYear());
+  }
+  if (ye - ys > 1) {
+    throw new PeriodError(
+      "Les périodes d'un exercice doivent tenir sur la même année ou sur 2 années contigües.",
+    );
+  }
+  for (const p of siblings) {
+    if (p.serviceId !== serviceId || !p.dateStart || !p.dateEnd) continue;
+    if (!(dateEnd < p.dateStart || dateStart > p.dateEnd)) {
+      throw new PeriodError(
+        `La période chevauche une autre période de l'exercice (${ymdUtc(p.dateStart)} → ${ymdUtc(p.dateEnd)}).`,
+      );
+    }
+  }
 }
 
 export type PeriodRow = {
@@ -188,6 +277,11 @@ export async function createServicePeriod(
   serviceId: string,
   input: CreateServicePeriodInput,
 ): Promise<PeriodRow> {
+  await validatePeriodInExercice(serviceId, input.dateStart, input.dateEnd);
+  await assertLatestExercice(
+    serviceId,
+    schoolStartYear(input.dateStart ?? input.dateEnd ?? new Date()),
+  );
   const exerciceId = await exerciceIdForPeriod(input.dateStart, input.dateEnd);
   const period = await prisma.period.create({
     data: {
@@ -237,15 +331,32 @@ export async function updateServicePeriod(
   if (input.color !== undefined) data.color = input.color;
   if (input.state !== undefined) data.state = input.state;
 
+  // Période courante (service + exercice) pour le verrou « dernier exercice ».
+  const current = await prisma.period.findUnique({
+    where: { id },
+    select: {
+      serviceId: true,
+      dateStart: true,
+      dateEnd: true,
+      exercice: { select: { label: true } },
+    },
+  });
+  if (!current?.serviceId) throw new PeriodError("Période introuvable.");
+  const currentStartYear =
+    startYearFromLabel(current.exercice?.label) ??
+    (current.dateStart ? schoolStartYear(current.dateStart) : null);
+  if (currentStartYear != null) await assertLatestExercice(current.serviceId, currentStartYear);
+
   const datesChange = input.dateStart !== undefined || input.dateEnd !== undefined;
   if (datesChange) {
-    const current = await prisma.period.findUnique({
-      where: { id },
-      select: { dateStart: true, dateEnd: true },
-    });
-    const nextStart =
-      input.dateStart !== undefined ? input.dateStart : (current?.dateStart ?? null);
-    const nextEnd = input.dateEnd !== undefined ? input.dateEnd : (current?.dateEnd ?? null);
+    const nextStart = input.dateStart !== undefined ? input.dateStart : current.dateStart;
+    const nextEnd = input.dateEnd !== undefined ? input.dateEnd : current.dateEnd;
+    // Nouvelles dates : validation (≤2 ans, chevauchement) + verrou sur l'exercice cible.
+    await validatePeriodInExercice(current.serviceId, nextStart, nextEnd, id);
+    await assertLatestExercice(
+      current.serviceId,
+      schoolStartYear(nextStart ?? nextEnd ?? new Date()),
+    );
     data.dateStart = nextStart;
     data.dateEnd = nextEnd;
     data.exerciceId = await exerciceIdForPeriod(nextStart, nextEnd);
@@ -257,12 +368,31 @@ export async function updateServicePeriod(
   return period;
 }
 
-export function deleteServicePeriod(id: number) {
+/** startYear de l'exercice d'une période (par son libellé, repli sur sa date de début). */
+async function periodStartYear(
+  id: number,
+): Promise<{ serviceId: string; startYear: number | null } | null> {
+  const cur = await prisma.period.findUnique({
+    where: { id },
+    select: { serviceId: true, dateStart: true, exercice: { select: { label: true } } },
+  });
+  if (!cur?.serviceId) return null;
+  const startYear =
+    startYearFromLabel(cur.exercice?.label) ??
+    (cur.dateStart ? schoolStartYear(cur.dateStart) : null);
+  return { serviceId: cur.serviceId, startYear };
+}
+
+export async function deleteServicePeriod(id: number) {
+  const cur = await periodStartYear(id);
+  if (cur?.startYear != null) await assertLatestExercice(cur.serviceId, cur.startYear);
   return prisma.period.delete({ where: { id } });
 }
 
-/** Réactive une période (state → actif). */
-export function reactivatePeriod(id: number): Promise<PeriodRow> {
+/** Réactive une période (state → actif). Limité au dernier exercice du service. */
+export async function reactivatePeriod(id: number): Promise<PeriodRow> {
+  const cur = await periodStartYear(id);
+  if (cur?.startYear != null) await assertLatestExercice(cur.serviceId, cur.startYear);
   return prisma.period.update({
     where: { id },
     data: { state: "actif" },

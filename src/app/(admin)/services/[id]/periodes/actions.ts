@@ -3,6 +3,7 @@
 import type { ActionState } from "@/lib/action-state";
 import { requireServiceManager } from "@/server/guards";
 import {
+  PeriodError,
   createServicePeriod,
   deleteServicePeriod,
   reactivatePeriod,
@@ -87,7 +88,8 @@ export async function createPeriodAction(input: CreatePeriodInput): Promise<Acti
       dateEnd: toDate(dateEnd),
       color,
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la création." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);
@@ -109,7 +111,8 @@ export async function updatePeriodAction(input: UpdatePeriodInput): Promise<Acti
       dateEnd: toDate(dateEnd),
       color,
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de l'enregistrement." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);
@@ -128,7 +131,8 @@ export async function deletePeriodAction(input: {
   const { serviceId, id } = parsed.data;
   try {
     await deleteServicePeriod(id);
-  } catch {
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la suppression." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);
@@ -149,7 +153,8 @@ export async function reactivatePeriodsAction(input: {
     for (const id of ids) {
       await reactivatePeriod(id);
     }
-  } catch {
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la réactivation." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);
