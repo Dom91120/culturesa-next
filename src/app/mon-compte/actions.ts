@@ -3,6 +3,7 @@
 import type { ActionState } from "@/lib/action-state";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
+import { requestAccountDeletion } from "@/server/services/account-deletion";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -34,5 +35,16 @@ export async function updateProfileAction(
     },
   });
   revalidatePath("/mon-compte");
+  return { ok: true };
+}
+
+/**
+ * Demande de suppression de compte (RGPD art. 17) : envoie à l'usager connecté un
+ * e-mail avec un lien de confirmation valable 24 h. La suppression effective a lieu
+ * seulement après clic sur ce lien (cf. /supprimer-compte).
+ */
+export async function requestAccountDeletionAction(): Promise<ActionState> {
+  const session = await requireUser();
+  await requestAccountDeletion(session.user.id);
   return { ok: true };
 }

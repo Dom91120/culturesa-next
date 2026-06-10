@@ -1,10 +1,12 @@
 "use server";
 
+import { todayParisISO } from "@/lib/booking-delay";
 import { wrapEmailHtml } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { sendMailOrQueue } from "@/server/mailer";
 import { resolvePeriodLabel, sendBookingConfirmationMail } from "@/server/services/booking-mail";
+import { BookingError, assertSlotCapacity } from "@/server/services/bookings";
 import { isMailEnabled } from "@/server/services/mail-prefs";
 import {
   getMailTemplate,
@@ -12,6 +14,7 @@ import {
   renderHtmlTemplate,
   renderSubjectTemplate,
 } from "@/server/services/mail-templates";
+import { syncRecurringChildren } from "@/server/services/recurring-children";
 import {
   addRecurringSlot,
   addUniqueSlot,
@@ -29,6 +32,35 @@ type DayKeyT = (typeof DAY_KEYS)[number];
 
 const idSchema = z.coerce.number().int().positive();
 
+/** Un parent récurrent a-t-il au moins un miroir (enfant) POINTÉ ? → il devient immuable. */
+async function parentLockedByPointage(parentId: number): Promise<boolean> {
+  return (
+    (await prisma.booking.count({
+      where: { parentBookingId: parentId, pointage: { not: null } },
+    })) > 0
+  );
+}
+
+/**
+ * Une réservation est-elle verrouillée pour toute action de gestion (supprimer,
+ * modifier, déplacer, copier, valider) ? Règles :
+ *   - un MIROIR (enfant, parentBookingId non null) est toujours immuable ;
+ *   - une réservation autonome POINTÉE est verrouillée ;
+ *   - un PARENT récurrent dont un miroir est pointé est verrouillé.
+ * Seul le pointage d'un miroir échappe à ce verrou (géré à part).
+ */
+async function bookingLocked(b: {
+  id: number;
+  bookingType: string;
+  parentBookingId: number | null;
+  pointage: string | null;
+}): Promise<boolean> {
+  if (b.parentBookingId != null) return true; // miroir : immuable
+  if (b.pointage != null) return true; // réservation pointée
+  if (b.bookingType === "recurring" && (await parentLockedByPointage(b.id))) return true;
+  return false;
+}
+
 export async function setBookingValidatedAction(
   bookingId: number,
   serviceId: string,
@@ -37,7 +69,18 @@ export async function setBookingValidatedAction(
   await requireRole("gestionnaire");
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
-  await prisma.booking.update({ where: { id: id.data }, data: { validated } });
+  const b = await prisma.booking.findUnique({
+    where: { id: id.data },
+    select: { id: true, bookingType: true, parentBookingId: true, pointage: true },
+  });
+  if (!b) return;
+  // Miroir non validable ; parent/​autonome verrouillé par un pointage non plus.
+  if (await bookingLocked(b)) return;
+  // Validation au niveau de la SÉRIE : le parent + propagation à tous ses miroirs.
+  await prisma.$transaction([
+    prisma.booking.update({ where: { id: id.data }, data: { validated } }),
+    prisma.booking.updateMany({ where: { parentBookingId: id.data }, data: { validated } }),
+  ]);
   revalidatePath(`/services/${serviceId}/agenda`);
 }
 
@@ -49,6 +92,13 @@ export async function setBookingPointageAction(
   await requireRole("gestionnaire");
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
+  // Les parents (récurrents) NE sont PAS pointables : seuls les miroirs (et les
+  // ponctuelles autonomes) le sont.
+  const b = await prisma.booking.findUnique({
+    where: { id: id.data },
+    select: { bookingType: true },
+  });
+  if (!b || b.bookingType === "recurring") return;
   await prisma.booking.update({ where: { id: id.data }, data: { pointage } });
   revalidatePath(`/services/${serviceId}/agenda`);
 }
@@ -296,17 +346,32 @@ export async function deleteBookingAdminAction(
   await requireRole("gestionnaire");
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
-  // Infos nécessaires au mail, lues AVANT la suppression.
+  // Infos nécessaires au mail + verrou, lues AVANT la suppression.
   const booking = await prisma.booking.findUnique({
     where: { id: id.data },
     select: {
       validated: true,
       periodId: true,
+      bookingType: true,
+      parentBookingId: true,
+      pointage: true,
       user: { select: { email: true, prenom: true } },
       service: { select: { label: true } },
       slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
     },
   });
+  if (!booking) return;
+  // Miroir immuable, ou réservation/​parent verrouillé par un pointage → pas de suppression.
+  if (
+    await bookingLocked({
+      id: id.data,
+      bookingType: booking.bookingType,
+      parentBookingId: booking.parentBookingId,
+      pointage: booking.pointage,
+    })
+  ) {
+    return;
+  }
   await prisma.booking.delete({ where: { id: id.data } });
   revalidatePath(`/services/${serviceId}/agenda`);
 
@@ -373,16 +438,69 @@ export async function updateBookingDetailAction(input: {
   const d = parsed.data;
   const current = await prisma.booking.findUnique({
     where: { id: d.bookingId },
-    select: { pointage: true },
+    select: {
+      bookingType: true,
+      parentBookingId: true,
+      pointage: true,
+      slotId: true,
+      periodId: true,
+    },
   });
   if (!current) return { ok: false, error: "Réservation introuvable." };
-  if (current.pointage != null) {
+  if (current.parentBookingId != null) {
+    return { ok: false, error: "Une séance (miroir) n'est pas modifiable." };
+  }
+  if (await bookingLocked({ id: d.bookingId, ...current })) {
     return { ok: false, error: "Réservation pointée, non modifiable." };
   }
-  await prisma.booking.update({
-    where: { id: d.bookingId },
-    data: { enfants: d.enfants, accompagnants: d.accompagnants, themeLabel: d.theme },
-  });
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        // Anti-surbooking : augmenter les compteurs ne doit pas dépasser la jauge/capacité
+        // (la réservation courante est exclue du décompte).
+        await assertSlotCapacity(tx, {
+          serviceId: d.serviceId,
+          slotId: current.slotId,
+          bookingType: current.bookingType === "recurring" ? "recurring" : "unique",
+          periodId: current.periodId,
+          enfants: d.enfants,
+          accompagnants: d.accompagnants,
+          excludeBookingId: d.bookingId,
+        });
+        await tx.booking.update({
+          where: { id: d.bookingId },
+          data: { enfants: d.enfants, accompagnants: d.accompagnants, themeLabel: d.theme },
+        });
+        const b = await tx.booking.findUnique({
+          where: { id: d.bookingId },
+          select: {
+            id: true,
+            bookingType: true,
+            userId: true,
+            serviceId: true,
+            slotId: true,
+            periodId: true,
+            week: true,
+            themeLabel: true,
+            enfants: true,
+            accompagnants: true,
+            validated: true,
+          },
+        });
+        // Récurrente : propage counts/thème aux réservations-enfants.
+        // Gestionnaire : pas de délai de réservation, on borne juste au présent.
+        if (b && b.bookingType === "recurring")
+          await syncRecurringChildren(tx, b, { cutoffISO: todayParisISO() });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Modification simultanée détectée, réessayez." };
+    }
+    throw e;
+  }
   revalidatePath(`/services/${d.serviceId}/agenda`);
   return { ok: true };
 }
@@ -394,16 +512,75 @@ export async function moveBookingAction(
   serviceId: string,
   _dayKey: string,
   slotId: string,
-) {
+): Promise<{ ok: boolean; error?: string }> {
   await requireRole("gestionnaire");
   const id = idSchema.safeParse(bookingId);
-  if (!id.success) return;
-  await prisma.booking.update({
+  if (!id.success) return { ok: false, error: "Données invalides." };
+  // Miroir immuable / réservation verrouillée par un pointage → pas de déplacement.
+  const lk = await prisma.booking.findUnique({
     where: { id: id.data },
-    // auto_validate_from réinitialisé à NOW() sur un déplacement (cf. logique d'origine).
-    data: { slotId, autoValidateFrom: new Date() },
+    select: {
+      id: true,
+      bookingType: true,
+      parentBookingId: true,
+      pointage: true,
+      periodId: true,
+      enfants: true,
+      accompagnants: true,
+    },
   });
+  if (!lk) return { ok: false, error: "Réservation introuvable." };
+  if (await bookingLocked(lk)) return { ok: false, error: "Réservation verrouillée." };
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        // Anti-surbooking : déplacer vers un créneau complet est refusé (jauge/capacité).
+        await assertSlotCapacity(tx, {
+          serviceId,
+          slotId,
+          bookingType: lk.bookingType === "recurring" ? "recurring" : "unique",
+          periodId: lk.periodId,
+          enfants: lk.enfants,
+          accompagnants: lk.accompagnants,
+          excludeBookingId: id.data,
+        });
+        await tx.booking.update({
+          where: { id: id.data },
+          // auto_validate_from réinitialisé à NOW() sur un déplacement (cf. logique d'origine).
+          data: { slotId, autoValidateFrom: new Date() },
+        });
+        const b = await tx.booking.findUnique({
+          where: { id: id.data },
+          select: {
+            id: true,
+            bookingType: true,
+            userId: true,
+            serviceId: true,
+            slotId: true,
+            periodId: true,
+            week: true,
+            themeLabel: true,
+            enfants: true,
+            accompagnants: true,
+            validated: true,
+          },
+        });
+        // Récurrente : régénère les enfants sur les miroirs du nouveau créneau.
+        // Gestionnaire : pas de délai de réservation, on borne juste au présent.
+        if (b && b.bookingType === "recurring")
+          await syncRecurringChildren(tx, b, { cutoffISO: todayParisISO() });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Déplacement simultané détecté, réessayez." };
+    }
+    throw e;
+  }
   revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true };
 }
 
 const createSchema = z.object({
@@ -435,24 +612,60 @@ export async function createRecurringBookingAction(input: {
   if (!parsed.success) return { ok: false, error: "Données invalides." };
   const d = parsed.data;
   try {
-    await prisma.booking.create({
-      data: {
-        bookingType: "recurring",
-        userId: d.userId,
-        serviceId: d.serviceId,
-        slotId: d.slotId,
-        periodId: d.periodId,
-        week: d.week,
-        enfants: d.enfants,
-        accompagnants: d.accompagnants,
-        themeLabel: d.theme,
-        validated: true,
-        autoValidateFrom: new Date(),
+    await prisma.$transaction(
+      async (tx) => {
+        // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.
+        // (pas de délai de réservation côté gestionnaire, mais la capacité s'applique.)
+        await assertSlotCapacity(tx, {
+          serviceId: d.serviceId,
+          slotId: d.slotId,
+          bookingType: "recurring",
+          periodId: d.periodId,
+          enfants: d.enfants,
+          accompagnants: d.accompagnants,
+        });
+        const created = await tx.booking.create({
+          data: {
+            bookingType: "recurring",
+            userId: d.userId,
+            serviceId: d.serviceId,
+            slotId: d.slotId,
+            periodId: d.periodId,
+            week: d.week,
+            enfants: d.enfants,
+            accompagnants: d.accompagnants,
+            themeLabel: d.theme,
+            validated: true,
+            autoValidateFrom: new Date(),
+          },
+        });
+        await syncRecurringChildren(
+          tx,
+          {
+            id: created.id,
+            userId: d.userId,
+            serviceId: d.serviceId,
+            slotId: d.slotId,
+            periodId: d.periodId,
+            week: d.week,
+            themeLabel: d.theme,
+            enfants: d.enfants,
+            accompagnants: d.accompagnants,
+            validated: true,
+          },
+          // Gestionnaire : pas de délai de réservation (borne au présent).
+          { cutoffISO: todayParisISO() },
+        );
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { ok: false, error: "Cet usager a déjà une réservation sur ce créneau." };
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Réservation simultanée détectée, réessayez." };
     }
     throw e;
   }
@@ -499,10 +712,9 @@ const createUniqueSchema = z.object({
 
 /**
  * Crée une réservation PONCTUELLE (clic sur un créneau ponctuel de l'agenda).
- * Insert direct validé côté admin : pas de contrôle « créneau passé » ni de jauge
- * (le gestionnaire peut réserver n'importe quel créneau), à l'image de
- * `createRecurringBookingAction`. Un ponctuel n'a ni période ni jour : periodId=0,
- * dayKey="" et week="" (cf. modèle Booking / createUniqueBooking).
+ * Insert direct validé côté admin : pas de jauge ni de délai de réservation (le
+ * gestionnaire peut réserver n'importe quel créneau FUTUR), mais on refuse une date
+ * déjà passée. Un ponctuel n'a ni période ni jour : periodId=0, dayKey="" et week="".
  */
 export async function createUniqueBookingAction(input: {
   serviceId: string;
@@ -531,25 +743,47 @@ export async function createUniqueBookingAction(input: {
   if (!slot || slot.slotType !== "unique" || slot.serviceId !== d.serviceId) {
     return { ok: false, error: "Créneau introuvable." };
   }
+  // Gestionnaire : pas de délai, mais on n'autorise pas une date déjà passée.
+  if (slot.slotDate && slot.slotDate.toISOString().slice(0, 10) < todayParisISO()) {
+    return { ok: false, error: "Ce créneau est passé." };
+  }
   try {
-    await prisma.booking.create({
-      data: {
-        bookingType: "unique",
-        userId: d.userId,
-        serviceId: d.serviceId,
-        slotId: d.slotId,
-        periodId: 0,
-        week: "",
-        enfants: d.enfants,
-        accompagnants: d.accompagnants,
-        themeLabel: d.theme,
-        validated: true,
-        autoValidateFrom: new Date(),
+    await prisma.$transaction(
+      async (tx) => {
+        // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.
+        await assertSlotCapacity(tx, {
+          serviceId: d.serviceId,
+          slotId: d.slotId,
+          bookingType: "unique",
+          periodId: 0,
+          enfants: d.enfants,
+          accompagnants: d.accompagnants,
+        });
+        await tx.booking.create({
+          data: {
+            bookingType: "unique",
+            userId: d.userId,
+            serviceId: d.serviceId,
+            slotId: d.slotId,
+            periodId: 0,
+            week: "",
+            enfants: d.enfants,
+            accompagnants: d.accompagnants,
+            themeLabel: d.theme,
+            validated: true,
+            autoValidateFrom: new Date(),
+          },
+        });
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { ok: false, error: "Cet usager a déjà une réservation sur ce créneau." };
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Réservation simultanée détectée, réessayez." };
     }
     throw e;
   }
@@ -613,10 +847,24 @@ export async function copyBookingAction(input: {
       accompagnants: true,
       themeLabel: true,
       serviceId: true,
+      bookingType: true,
+      parentBookingId: true,
+      pointage: true,
     },
   });
   if (!src || src.serviceId !== input.serviceId) {
     return { ok: false, error: "Réservation introuvable." };
+  }
+  // Miroir non copiable ; source verrouillée par un pointage non plus.
+  if (
+    await bookingLocked({
+      id: id.data,
+      bookingType: src.bookingType,
+      parentBookingId: src.parentBookingId,
+      pointage: src.pointage,
+    })
+  ) {
+    return { ok: false, error: "Réservation non copiable (séance pointée ou miroir)." };
   }
   if (target.data.kind === "recurring") {
     return createRecurringBookingAction({

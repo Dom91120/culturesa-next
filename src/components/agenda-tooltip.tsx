@@ -11,7 +11,14 @@ export type AgendaTip =
   // Survol d'un créneau récurrent : dates concrètes + (côté admin) capacité et
   // demandeurs autorisés. `demandeurs` absent = service sans demandeurs (ligne
   // masquée) ; tableau vide = aucune restriction (« Ouvert à tous »).
-  | { dates: string[]; capacity?: number | null; demandeurs?: string[] }
+  // `recurInfo` (côté admin) : résumé période + jour/heures du créneau parent,
+  // affiché À LA PLACE de la liste de dates.
+  | {
+      dates: string[];
+      capacity?: number | null;
+      demandeurs?: string[];
+      recurInfo?: { period: string; dayHours: string };
+    }
   | null;
 
 /**
@@ -32,7 +39,11 @@ export function useAgendaTooltip(opts: {
   getMeta?: (
     slotId: string,
     dayKey: string,
-  ) => { capacity?: number | null; demandeurs?: string[] };
+  ) => {
+    capacity?: number | null;
+    demandeurs?: string[];
+    recurInfo?: { period: string; dayHours: string };
+  };
   // Quand true, aucune info-bulle (ex. saisie de thème en cours côté usager).
   suppressed?: () => boolean;
 }) {
@@ -80,9 +91,14 @@ export function useAgendaTooltip(opts: {
       if (slotId && dayKey) {
         const dates = opts.getDates(slotId, dayKey);
         const meta = opts.getMeta?.(slotId, dayKey) ?? {};
-        if (dates.length || meta.capacity != null || meta.demandeurs != null) {
+        if (dates.length || meta.capacity != null || meta.demandeurs != null || meta.recurInfo) {
           key = `d:${slotId}|${dayKey}`;
-          next = { dates, capacity: meta.capacity, demandeurs: meta.demandeurs };
+          next = {
+            dates,
+            capacity: meta.capacity,
+            demandeurs: meta.demandeurs,
+            recurInfo: meta.recurInfo,
+          };
         }
       }
     }
@@ -138,17 +154,27 @@ export function AgendaTooltip({
         tip.text
       ) : (
         <>
-          {tip.dates.length > 0 && (
+          {tip.recurInfo ? (
+            // Côté admin : période en cours (en-tête) + jour/heures du créneau parent.
             <div style={{ marginBottom: 4 }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Journées concernées :</div>
-              <div
-                style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0 12px" }}
-              >
-                {tip.dates.map((d) => (
-                  <div key={d}>• {TIP_DATE_FMT.format(new Date(`${d}T12:00:00`))}</div>
-                ))}
-              </div>
+              {tip.recurInfo.period && (
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>{tip.recurInfo.period}</div>
+              )}
+              <div style={{ textTransform: "capitalize" }}>{tip.recurInfo.dayHours}</div>
             </div>
+          ) : (
+            tip.dates.length > 0 && (
+              <div style={{ marginBottom: 4 }}>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>Journées concernées :</div>
+                <div
+                  style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0 12px" }}
+                >
+                  {tip.dates.map((d) => (
+                    <div key={d}>• {TIP_DATE_FMT.format(new Date(`${d}T12:00:00`))}</div>
+                  ))}
+                </div>
+              </div>
+            )
           )}
           {tip.demandeurs && (
             <div style={{ marginBottom: 2 }}>

@@ -193,6 +193,14 @@ model Service {
   //   positif = N (semaines) calendaires après la résa.
   autoValidationDelay   Int        @default(0)
 
+  // Notification des gestionnaires sur les auto-validations (digest par service).
+  //   mode : none | hours | daily | weekly ; cf. services/manager-notice.ts.
+  mgrNoticeMode          String    @default("none")
+  mgrNoticeIntervalHours Int       @default(4)
+  mgrNoticeHour          Int       @default(8)
+  mgrNoticeWeekday       String    @default("lun")
+  mgrNoticeLastSentAt    DateTime? @db.Timestamptz
+
   slots             Slot[]
   periods           Period[]
   cycleEvents       CycleEvent[]
@@ -408,11 +416,19 @@ model Booking {
 
   // Point de départ du décompte d'auto-validation (= createdAt, MAJ sur déplacement).
   autoValidateFrom DateTime? @db.Timestamptz
+  // Horodatage de l'auto-validation (null = jamais auto-validée). Sert au digest de
+  // notification des gestionnaires (cf. services/manager-notice.ts).
+  autoValidatedAt  DateTime? @db.Timestamptz
   pointage         Pointage?
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  slot    Slot    @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  slot      Slot              @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  reminders BookingReminder[]
+  // Réservation récurrente « parente » → réservations-enfants datées (une par
+  // occurrence, bookingType=unique). Supprimer le parent supprime ses enfants.
+  parent    Booking?          @relation("BookingChildren", fields: [parentBookingId], references: [id], onDelete: Cascade)
+  children  Booking[]         @relation("BookingChildren")
 
   @@unique([userId, serviceId, slotId, periodId, week], name: "uq_recurring")
   @@index([userId])
@@ -421,6 +437,23 @@ model Booking {
   @@index([slotId])
   @@index([parentBookingId])
   @@map("bookings")
+}
+
+// Journal des rappels de réservation déjà envoyés : garantit l'idempotence du cron
+// (un rappel J-7 et un rappel J-1 au maximum par occurrence). `slotDate` = date de
+// l'occurrence concernée ; `kind` = "week" (J-7) ou "day" (J-1).
+model BookingReminder {
+  id        Int      @id @default(autoincrement())
+  bookingId Int
+  slotDate  DateTime @db.Date
+  kind      String
+  sentAt    DateTime @default(now()) @db.Timestamptz
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, slotDate, kind])
+  @@index([slotDate])
+  @@map("booking_reminders")
 }
 
 // Journal d'audit RGPD — pas de FK : conservé même après anonymisation/suppression.

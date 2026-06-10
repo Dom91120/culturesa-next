@@ -101,6 +101,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         slotId: true,
         periodId: true,
         week: true,
+        bookingType: true,
+        parentBookingId: true,
         enfants: true,
         accompagnants: true,
         themeLabel: true,
@@ -125,7 +127,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         id: true,
         nom: true,
         prenom: true,
-        demandeur: { select: { label: true } },
+        demandeur: { select: { label: true, openOnSchoolHolidays: true } },
         structure: { select: { label: true } },
       },
     }),
@@ -153,6 +155,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
     demandeur: u.demandeur?.label ?? "",
     structure: u.structure?.label ?? "",
+    // Politique vacances scolaires du demandeur (false = fermé → occurrences exclues).
+    openOnSchoolHolidays: u.demandeur?.openOnSchoolHolidays ?? true,
   }));
 
   const bookingsData = bookings.map((b) => ({
@@ -160,6 +164,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     slotId: b.slotId,
     periodId: b.periodId,
     week: b.week,
+    bookingType: b.bookingType,
+    parentBookingId: b.parentBookingId,
     enfants: b.enfants,
     accompagnants: b.accompagnants,
     theme: b.themeLabel ?? "",
@@ -229,9 +235,19 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       : [];
 
   // Intervalle d'auto-rafraîchissement de l'agenda (Administration > Configuration). Défaut 60 s.
-  const refreshCfg = await getConfigMany(["agenda.autoRefreshSeconds"]);
+  // + zone de vacances scolaires (pour filtrer les occurrences des demandeurs « fermés »).
+  const refreshCfg = await getConfigMany(["agenda.autoRefreshSeconds", "school.zone"]);
   const rawAgendaRefresh = Number.parseInt(refreshCfg["agenda.autoRefreshSeconds"], 10);
   const autoRefreshSeconds = Number.isFinite(rawAgendaRefresh) ? rawAgendaRefresh : 60;
+  const schoolHolidays = (
+    await prisma.schoolHoliday.findMany({
+      where: { zone: refreshCfg["school.zone"] || "A" },
+      select: { dateStart: true, dateEnd: true },
+    })
+  ).map((h) => ({
+    dateStart: h.dateStart.toISOString().slice(0, 10),
+    dateEnd: h.dateEnd.toISOString().slice(0, 10),
+  }));
 
   return (
     <>
@@ -248,6 +264,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         showPrevious={service.showPreviousExercices}
         slotDemandeurs={slotDemandeurs}
         serviceDemandeurs={serviceDemandeurs}
+        schoolHolidays={schoolHolidays}
         autoRefreshSeconds={autoRefreshSeconds}
       />
       <AdminDemInfo rows={demRows} />

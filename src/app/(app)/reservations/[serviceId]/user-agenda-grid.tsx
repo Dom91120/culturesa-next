@@ -1,6 +1,7 @@
 "use client";
 
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
+import { earliestBookableISO } from "@/lib/booking-delay";
 import { gaugeUnits } from "@/lib/gauge";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
@@ -18,6 +19,7 @@ type Service = {
   id: string;
   label: string;
   activeDays: string;
+  bookingDelay: number;
   morningStart: string;
   morningEnd: string;
   afternoonStart: string;
@@ -29,6 +31,7 @@ type Service = {
   maxReservationsPeriod: number;
   openOnHolidays: boolean;
   gaugeAccompagnants: boolean;
+  validationBloquante: boolean;
 };
 type Period = {
   id: number;
@@ -351,6 +354,7 @@ function MineBadge({
   onSetTheme,
   onBodyClick,
   title,
+  locked = false,
   draggable = false,
   dragging = false,
   onDragStart,
@@ -375,6 +379,9 @@ function MineBadge({
   onBodyClick: () => void;
   // Infobulle au survol : horaire + état + participants + semaine.
   title?: string;
+  // Validation bloquante : résa validée verrouillée → pas de croix de suppression
+  // (port legacy `_blockedDelete` / `noCloseBtn`).
+  locked?: boolean;
   // Glisser-déplacer : le badge devient draggable (brouillon / résa « en attente »).
   draggable?: boolean;
   dragging?: boolean;
@@ -436,27 +443,30 @@ function MineBadge({
             }
       }
     >
-      {/* × : supprime la réservation (ou le brouillon) — caché, affiché au survol via CSS. */}
-      <button
-        type="button"
-        className="slot-btn-close"
-        data-tip={markedRemoval ? "Rétablir" : "Supprimer"}
-        aria-label={markedRemoval ? "Rétablir" : "Supprimer"}
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        // Pas de `font: inherit` ni de fontSize inline ici : ils écrasaient la taille
-        // voulue par .slot-btn-close (1.15rem) en la rabattant sur la police héritée du
-        // bloc agenda (.68rem), d'où une croix minuscule. On laisse la CSS décider.
-        style={{ border: "none", padding: 0 }}
-      >
-        {closeIcon}
-      </button>
+      {/* × : supprime la réservation (ou le brouillon) — caché, affiché au survol via CSS.
+          Masqué si la résa est verrouillée (validation bloquante). */}
+      {!locked && (
+        <button
+          type="button"
+          className="slot-btn-close"
+          data-tip={markedRemoval ? "Rétablir" : "Supprimer"}
+          aria-label={markedRemoval ? "Rétablir" : "Supprimer"}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          // Pas de `font: inherit` ni de fontSize inline ici : ils écrasaient la taille
+          // voulue par .slot-btn-close (1.15rem) en la rabattant sur la police héritée du
+          // bloc agenda (.68rem), d'où une croix minuscule. On laisse la CSS décider.
+          style={{ border: "none", padding: 0 }}
+        >
+          {closeIcon}
+        </button>
+      )}
       {editable ? (
         // Graphique jauge (legacy _createGaugeBadge) : deux colonnes Enfants | icône |
         // Adultes ; chaque compteur = bouton rond − à gauche, nombre, bouton rond + à
@@ -782,6 +792,8 @@ type Booking = {
   periodId: number;
   dayKey: string;
   week: string;
+  bookingType: string;
+  parentBookingId: number | null;
   enfants: number;
   accompagnants: number;
   theme: string;
@@ -1342,7 +1354,6 @@ export function UserAgendaGrid({
   const firstHour = baseFirst;
   const lastHour = baseLast;
 
-  const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
   const gridStartMin = firstHour * 60;
   const gridEndMin = lastHour * 60;
   const QUARTER_H = ROW_H / 4; // px par tranche de 15 min
@@ -1352,6 +1363,18 @@ export function UserAgendaGrid({
   // la réservation ponctuelle relève d'un autre flux).
   const uniqueIdSet = useMemo(
     () => new Set(uniqueSlots.filter((s) => !s.parentSlotId).map((s) => s.id)),
+    [uniqueSlots],
+  );
+  // Slots miroirs → parent + date : rattache les réservations-enfants à la cellule du
+  // slot parent en « Semaine réelle » (elles y portent le pointage, en lecture seule
+  // côté usager).
+  const mirrorMap = useMemo(
+    () =>
+      new Map(
+        uniqueSlots
+          .filter((s) => s.parentSlotId)
+          .map((s) => [s.id, { parentSlotId: s.parentSlotId as string, slotDate: s.slotDate }]),
+      ),
     [uniqueSlots],
   );
 
@@ -1528,9 +1551,21 @@ export function UserAgendaGrid({
         pushGroup(`${mv.dayKey}|${mv.slotId}`, b);
         continue;
       }
-      // Réservation PONCTUELLE : rattachée à son bloc ponctuel projeté (clé jour =
-      // jour de la date du créneau), en ignorant période/semaine (un ponctuel n'en
-      // a pas : periodId=0, dayKey="").
+      // Réservation-ENFANT (matérialisation d'une récurrente, sur un slot miroir daté) :
+      // en « Semaine réelle », rattachée à la cellule du SLOT PARENT du jour affiché.
+      // En mode « Modèle », c'est la parente qui s'affiche → enfant non projeté.
+      const mir = mirrorMap.get(b.slotId);
+      if (mir) {
+        if (mode !== "realweek" || !mondayStr) continue;
+        if (!mir.slotDate || mir.slotDate < mondayStr || (uniqSunday && mir.slotDate > uniqSunday))
+          continue;
+        const dk = dayKeyFromYmd(mir.slotDate);
+        if (!days.includes(dk)) continue;
+        pushGroup(`${dk}|${mir.parentSlotId}`, b);
+        continue;
+      }
+      // Réservation PONCTUELLE autonome : rattachée à son bloc ponctuel projeté (clé jour =
+      // jour de la date du créneau), en ignorant période/semaine.
       if (uniqueIdSet.has(b.slotId)) {
         if (mode !== "realweek" || !mondayStr) continue;
         const u = uniqueSlots.find((s) => s.id === b.slotId);
@@ -1541,6 +1576,9 @@ export function UserAgendaGrid({
         pushGroup(`${dk}|${b.slotId}`, b);
         continue;
       }
+      // Réservation RÉCURRENTE parente : en semaine réelle, ses enfants datés s'affichent
+      // (ci-dessus) → on ne projette pas la parente. En mode Modèle, projection normale.
+      if (mode === "realweek") continue;
       if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
       // A/B : une résa sans semaine ("") vaut pour les deux semaines.
       if (effectiveWeek != null && b.week !== effectiveWeek && b.week !== "") continue;
@@ -1640,6 +1678,7 @@ export function UserAgendaGrid({
     slots,
     uniqueSlots,
     uniqueIdSet,
+    mirrorMap,
     mode,
     mondayStr,
     sundayStr,
@@ -1678,10 +1717,19 @@ export function UserAgendaGrid({
     if (on) setValidation(false);
   }
 
+  // Validation bloquante (port legacy `_blockedDelete = validationMode && validated &&
+  // validationBloquante`) : une résa VALIDÉE est verrouillée quand le service a
+  // `validationBloquante` ET que le demandeur de l'usager est en mode validation.
+  function bookingLocked(bk: { validated: boolean }): boolean {
+    return service.validationBloquante && modes.validationMode && bk.validated;
+  }
+
   // Agenda USAGER : clic sur une réservation. Si c'est la mienne → annulation ;
   // sinon (réservation d'autrui, anonyme) → aucune action. La réservation d'un
   // créneau libre passe par la modale de confirmation (openCreate → submitCreate).
   function onBlockQuickAction(bk: Booking): boolean {
+    // Résa verrouillée (validation bloquante) → aucune action.
+    if (bookingLocked(bk)) return true;
     // Clic sur MA réservation → la marque (ou démarque) pour annulation (brouillon).
     if (bk.mine) {
       togglePendingRemoval(bk);
@@ -2023,6 +2071,8 @@ export function UserAgendaGrid({
 
   // Marque / démarque une de MES réservations pour annulation (sans appel serveur).
   function togglePendingRemoval(bk: Booking) {
+    // Résa verrouillée (validation bloquante) → annulation impossible.
+    if (bookingLocked(bk)) return;
     setCommitError(null);
     // Supprimer une réservation annule un éventuel déplacement en attente (sinon le
     // commit échouerait : suppression puis déplacement d'une résa déjà supprimée).
@@ -2095,7 +2145,8 @@ export function UserAgendaGrid({
         // Ordre : suppressions (libèrent des places) → modifications → déplacements
         // (capacité revérifiée côté serveur) → nouvelles réservations.
         for (const r of pendingRemovals) {
-          await cancelMyBookingAction(service.id, r.bookingId);
+          const res = await cancelMyBookingAction(service.id, r.bookingId);
+          if (!res.ok) throw new Error(res.error ?? "Échec d'une annulation.");
         }
         for (const [id, u] of Object.entries(pendingUpdates)) {
           await updateMyBookingAction(service.id, Number(id), u.enfants, u.accompagnants, u.theme);
@@ -2158,6 +2209,15 @@ export function UserAgendaGrid({
   // (créneaux uniques datés générés pour la période, hors jours fériés exclus à la
   // génération), restreints à la semaine A/B active puis filtrés des vacances
   // scolaires si le demandeur ferme alors. Trié. Port _predictedDatesForCurrentUser.
+  // Date la plus proche réservable (aujourd'hui + délai du service) : côté USAGER, les
+  // occurrences antérieures ne seront pas créées → on ne les affiche pas.
+  const earliestBookable = earliestBookableISO(
+    service.bookingDelay,
+    service.activeDays
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
   const concernedDatesForBlock = (slotId: string, dayKey: string): string[] => {
     const dates = uniqueSlots
       .filter(
@@ -2165,6 +2225,8 @@ export function UserAgendaGrid({
       )
       .map((u) => u.slotDate as string)
       .filter((d) => {
+        // Délai de réservation : occurrences ≥ aujourd'hui + délai seulement.
+        if (d < earliestBookable) return false;
         if (!abMode || effectiveWeek == null) return true;
         // Convention UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B (cf.
         // realWeekParity / slotWeekTag). effectiveWeek est dans cette même convention.
@@ -2343,6 +2405,7 @@ export function UserAgendaGrid({
                     cur.accompagnants,
                   )}${tipWeek}`}
                   closeIcon={markedRemoval ? "↺" : "×"}
+                  locked={bookingLocked(mb)}
                   onClose={() => togglePendingRemoval(mb)}
                   onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
                   onSetCount={(f, v) => setMyCount(mb, f, v, remaining)}
@@ -2862,27 +2925,61 @@ export function UserAgendaGrid({
 
           <div className="agenda-time-col" style={{ height: totalH }}>
             {(() => {
-              // On masque l'heure si son quart pile (h:00) est dans la pause compactée.
-              const visibleHours = hours.filter((h) => h * 60 >= gridEndMin || qIdx.has(h * 60));
-              return visibleHours.map((h, i) => {
-                // Première heure : poussée sous sa ligne (is-break-start) ; dernière :
-                // remontée au-dessus de sa ligne (is-break-end) pour rester dans la colonne.
-                const edge =
-                  i === 0
-                    ? " is-break-start"
-                    : i === visibleHours.length - 1
-                      ? " is-break-end"
-                      : "";
-                return (
-                  <div
-                    key={h}
-                    className={`agenda-time-mark${edge}`}
-                    style={{ top: mapMinToY(h * 60) }}
-                  >
-                    {String(h).padStart(2, "0")}:00
-                  </div>
-                );
-              });
+              // Colonne d'heures (port legacy renderUserAgenda). En mode « masquer les
+              // horaires sans créneau », la grille est compactée : la colonne ne doit
+              // afficher que les heures RÉELLEMENT visibles et se terminer sur la fin du
+              // dernier créneau affiché — PAS sur la borne de la plage/journée. On marque
+              // donc aussi la fin réelle de chaque plage (rupture) avec son horaire exact.
+              const minLabel = (m: number) =>
+                `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+              // Fin réelle de la grille = fin du dernier quart visible (≠ gridEndMin si compacté).
+              const effectiveEnd = quarters.length
+                ? quarters[quarters.length - 1] + 15
+                : gridEndMin;
+              // La rupture de la pause méridienne est déjà signalée par sa bande grise :
+              // on ne l'annote pas comme une rupture de plage.
+              const isLunchBreak = (i: number) =>
+                hasLunch &&
+                lunchSkipFrom !== null &&
+                quarters[i + 1] === lunchEnd &&
+                quarters[i] + 15 >= lunchSkipFrom;
+              const breakStarts = new Set<number>();
+              for (let i = 0; i < quarters.length - 1; i++) {
+                if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
+                  breakStarts.add(quarters[i + 1]);
+                }
+              }
+
+              const marks: { key: string; top: number; cls: string; label: string }[] = [];
+              // Heures pleines visibles + borne de fin réelle.
+              let first = true;
+              for (let m = Math.ceil(gridStartMin / 60) * 60; m <= effectiveEnd; m += 60) {
+                if (m < gridStartMin) continue;
+                if (m < effectiveEnd && !qIdx.has(m)) continue;
+                let cls = "agenda-time-mark";
+                if (m === effectiveEnd) cls += " is-break-end";
+                else if (first || breakStarts.has(m)) cls += " is-break-start";
+                marks.push({ key: `h-${m}`, top: mapMinToY(m), cls, label: minLabel(m) });
+                first = false;
+              }
+              // Fin de chaque plage précédant une rupture (hors pause) : l'heure de fin
+              // réelle du dernier créneau de la plage, remontée au-dessus de sa ligne.
+              for (let i = 0; i < quarters.length - 1; i++) {
+                if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
+                  const endOfPlage = quarters[i] + 15;
+                  marks.push({
+                    key: `e-${endOfPlage}`,
+                    top: mapMinToY(endOfPlage),
+                    cls: "agenda-time-mark is-break-end",
+                    label: minLabel(endOfPlage),
+                  });
+                }
+              }
+              return marks.map((mk) => (
+                <div key={mk.key} className={mk.cls} style={{ top: mk.top }}>
+                  {mk.label}
+                </div>
+              ));
             })()}
           </div>
 
@@ -3213,9 +3310,9 @@ export function UserAgendaGrid({
                           }}
                         >
                           <PointagePill pointage={bk.pointage} />
-                          {/* Réservation pointée → verrouillée : pas de suppression
-                              rapide (cf. legacy isLockedBadge, croix masquée). */}
-                          {bk.pointage == null && (
+                          {/* Réservation pointée OU validée-bloquée → verrouillée : pas de
+                              suppression rapide (cf. legacy isLockedBadge, croix masquée). */}
+                          {bk.pointage == null && !bookingLocked(bk) && (
                             <button
                               type="button"
                               className="planning-name-tag-close"

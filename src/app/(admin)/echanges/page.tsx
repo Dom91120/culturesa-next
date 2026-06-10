@@ -26,6 +26,11 @@ const META: Record<TemplateKind, { label: string; description: string }> = {
     label: "Réservation non validée (refus)",
     description: "Envoyé lorsqu'un gestionnaire supprime/refuse une réservation en attente.",
   },
+  booking_reminder: {
+    label: "Rappel de réservation",
+    description:
+      "Envoyé automatiquement une semaine avant, puis la veille de chaque séance réservée (réservations confirmées).",
+  },
   email_verification: {
     label: "Confirmation d'adresse e-mail",
     description: "Envoyé à l'inscription pour activer le compte (toujours envoyé).",
@@ -33,6 +38,11 @@ const META: Record<TemplateKind, { label: string; description: string }> = {
   password_reset: {
     label: "Réinitialisation du mot de passe",
     description: "Envoyé lors d'une demande de réinitialisation (toujours envoyé).",
+  },
+  account_deletion_request: {
+    label: "Demande de suppression de compte",
+    description:
+      "Envoyé à l'usager qui demande la suppression de son compte (lien de confirmation 24 h, toujours envoyé).",
   },
   account_deletion_notice: {
     label: "Préavis de suppression de compte (RGPD)",

@@ -185,6 +185,8 @@ type Booking = {
   periodId: number;
   dayKey: string;
   week: string;
+  bookingType: string;
+  parentBookingId: number | null;
   enfants: number;
   accompagnants: number;
   theme: string;
@@ -196,7 +198,22 @@ type Booking = {
   demandeur: string;
   structure: string;
 };
-type UserOpt = { id: string; label: string; demandeur?: string; structure?: string };
+type UserOpt = {
+  id: string;
+  label: string;
+  demandeur?: string;
+  structure?: string;
+  openOnSchoolHolidays?: boolean;
+};
+
+// Une date 'YYYY-MM-DD' tombe-t-elle en vacances scolaires ? (convention identique à
+// la grille usager : dateStart exclusif, dateEnd inclus).
+function inSchoolHolidayRange(
+  date: string,
+  ranges: { dateStart: string; dateEnd: string }[],
+): boolean {
+  return ranges.some((p) => date > p.dateStart && date <= p.dateEnd);
+}
 
 const DAY_NAMES: Record<string, string> = {
   lun: "Lundi",
@@ -368,6 +385,7 @@ export function AgendaGrid({
   showPrevious,
   slotDemandeurs,
   serviceDemandeurs,
+  schoolHolidays,
   autoRefreshSeconds,
 }: {
   service: Service;
@@ -384,6 +402,9 @@ export function AgendaGrid({
   // Demandeurs autorisés par créneau (slotId → ids) et liste des demandeurs du service.
   slotDemandeurs: Record<string, number[]>;
   serviceDemandeurs: { id: number; label: string }[];
+  // Plages de vacances scolaires (zone configurée) : exclut les occurrences des
+  // demandeurs fermés pendant les vacances dans l'aperçu de création.
+  schoolHolidays: { dateStart: string; dateEnd: string }[];
   // Intervalle d'auto-rafraîchissement de l'agenda, en secondes (0 = désactivé).
   autoRefreshSeconds: number;
 }) {
@@ -789,7 +810,6 @@ export function AgendaGrid({
   const firstHour = baseFirst;
   const lastHour = baseLast;
 
-  const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
   const gridStartMin = firstHour * 60;
   const gridEndMin = lastHour * 60;
   const QUARTER_H = ROW_H / 4; // px par tranche de 15 min
@@ -799,6 +819,17 @@ export function AgendaGrid({
   // la réservation ponctuelle relève d'un autre flux).
   const uniqueIdSet = useMemo(
     () => new Set(uniqueSlots.filter((s) => !s.parentSlotId).map((s) => s.id)),
+    [uniqueSlots],
+  );
+  // Slots MIROIRS (matérialisations datées des récurrents) → leur slot parent + date.
+  // Sert à rattacher les réservations-ENFANTS à la cellule du parent en semaine réelle.
+  const mirrorMap = useMemo(
+    () =>
+      new Map(
+        uniqueSlots
+          .filter((s) => s.parentSlotId)
+          .map((s) => [s.id, { parentSlotId: s.parentSlotId as string, slotDate: s.slotDate }]),
+      ),
     [uniqueSlots],
   );
 
@@ -964,9 +995,22 @@ export function AgendaGrid({
     };
     const uniqSunday = sundayStr ?? mondayStr;
     for (const b of bookings) {
-      // Réservation PONCTUELLE : rattachée à son bloc ponctuel projeté (clé jour =
-      // jour de la date du créneau), en ignorant période/semaine (un ponctuel n'en
-      // a pas : periodId=0, dayKey="").
+      // Réservation-ENFANT (matérialisation d'une récurrente sur un slot miroir daté) :
+      // en « Semaine réelle », rattachée à la cellule du SLOT PARENT du jour affiché
+      // (elle y porte le pointage). En mode « Modèle », c'est la parente qui s'affiche
+      // → l'enfant n'est pas projeté.
+      const mir = mirrorMap.get(b.slotId);
+      if (mir) {
+        if (mode !== "realweek" || !mondayStr) continue;
+        if (!mir.slotDate || mir.slotDate < mondayStr || (uniqSunday && mir.slotDate > uniqSunday))
+          continue;
+        const dk = dayKeyFromYmd(mir.slotDate);
+        if (!days.includes(dk)) continue;
+        pushGroup(`${dk}|${mir.parentSlotId}`, b);
+        continue;
+      }
+      // Réservation PONCTUELLE autonome : rattachée à son bloc ponctuel projeté (clé
+      // jour = jour de la date du créneau), en ignorant période/semaine.
       if (uniqueIdSet.has(b.slotId)) {
         if (mode !== "realweek" || !mondayStr) continue;
         const u = uniqueSlots.find((s) => s.id === b.slotId);
@@ -977,6 +1021,10 @@ export function AgendaGrid({
         pushGroup(`${dk}|${b.slotId}`, b);
         continue;
       }
+      // Réservation RÉCURRENTE parente : en semaine réelle, ce sont ses enfants datés
+      // qui s'affichent (ci-dessus) → on ne projette PAS la parente. En mode Modèle,
+      // projection normale sur son jour.
+      if (mode === "realweek") continue;
       if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
       // A/B : une résa sans semaine ("") vaut pour les deux semaines.
       if (effectiveWeek != null && b.week !== effectiveWeek && b.week !== "") continue;
@@ -1072,6 +1120,7 @@ export function AgendaGrid({
     slots,
     uniqueSlots,
     uniqueIdSet,
+    mirrorMap,
     mode,
     mondayStr,
     sundayStr,
@@ -1093,6 +1142,21 @@ export function AgendaGrid({
     setDetail(null);
     startTransition(async () => {
       await p;
+      router.refresh();
+    });
+  }
+
+  // Variante de `run` pour les actions qui renvoient { ok, error } : en cas d'échec
+  // (ex. créneau complet / jauge atteinte sur un déplacement ou copier/couper), on
+  // affiche l'erreur via le toast d'avertissement au lieu de l'ignorer silencieusement.
+  function runResult(p: Promise<{ ok: boolean; error?: string }>) {
+    setDetail(null);
+    startTransition(async () => {
+      const res = await p;
+      if (!res.ok) {
+        showWarnToast(res.error ?? "Action impossible.");
+        return;
+      }
       router.refresh();
     });
   }
@@ -1503,7 +1567,7 @@ export function AgendaGrid({
           week: effectiveWeek ?? "",
         } as const);
     const action = copiedBooking.mode === "cut" ? cutBookingAction : copyBookingAction;
-    run(action({ serviceId: service.id, sourceBookingId: copiedBooking.id, target }));
+    runResult(action({ serviceId: service.id, sourceBookingId: copiedBooking.id, target }));
     // Couper = à usage unique (la source est déplacée) → on vide le presse-papier.
     if (copiedBooking.mode === "cut") setCopiedBooking(null);
   }
@@ -1890,12 +1954,19 @@ export function AgendaGrid({
   }, [hResizeDrag !== null]);
 
   // Clic rapide sur un bloc en mode validation / pointage (sinon : ouvre le menu).
+  // Réservation verrouillée par le pointage : elle-même pointée (ponctuelle/miroir),
+  // OU parent récurrent dont un miroir est pointé. Verrouillée = ni validation, ni
+  // déplacement, ni suppression, ni copie (cf. règles métier).
+  const lockedByPointage = (bk: Booking): boolean =>
+    bk.pointage != null ||
+    (bk.bookingType === "recurring" &&
+      bookings.some((c) => c.parentBookingId === bk.id && c.pointage != null));
+
   function onBlockQuickAction(bk: Booking): boolean {
     if (validation) {
-      // Une résa pointée est verrouillée : sa validation ne change plus (cf.
-      // legacy openBadgeDetail/_ctxValidate). On laisse le clic ouvrir la fiche
-      // (bouton Valider désactivé) plutôt que d'agir silencieusement.
-      if (bk.pointage != null) return false;
+      // Une résa verrouillée (pointée, ou parent à miroir pointé) ne se valide plus.
+      // On laisse le clic ouvrir la fiche plutôt que d'agir silencieusement.
+      if (lockedByPointage(bk)) return false;
       // Bascule validé ↔ en attente (legacy _quickValidate togglait dans les deux sens).
       run(setBookingValidatedAction(bk.id, service.id, !bk.validated));
       return true;
@@ -2135,14 +2206,26 @@ export function AgendaGrid({
   const recMetaForBlock = (
     slotId: string,
     dayKey: string,
-  ): { capacity?: number | null; demandeurs?: string[] } => {
+  ): {
+    capacity?: number | null;
+    demandeurs?: string[];
+    recurInfo?: { period: string; dayHours: string };
+  } => {
+    const slot = slots.find((s) => s.id === slotId);
     const block = blocksByDay[dayKey]?.find((bl) => bl.slotId === slotId);
-    const capacity =
-      block?.capacity ?? slots.find((s) => s.id === slotId)?.capacity ?? service.capacity;
-    if (!serviceDemandeurs.length) return { capacity };
+    const capacity = block?.capacity ?? slot?.capacity ?? service.capacity;
+    // Résumé récurrent affiché dans l'info-bulle : période active + jour/heures du
+    // créneau PARENT (remplace la liste des dates côté admin).
+    const recurInfo = slot
+      ? {
+          period: periods.find((p) => p.id === effectivePeriodId)?.label ?? "",
+          dayHours: `${DAY_NAMES[slot.slotDay ?? ""] ?? slot.slotDay ?? ""} · ${slot.startTime}–${slot.endTime}`,
+        }
+      : undefined;
+    if (!serviceDemandeurs.length) return { capacity, recurInfo };
     const ids = slotDemandeurs[slotId] ?? [];
     const demandeurs = serviceDemandeurs.filter((d) => ids.includes(d.id)).map((d) => d.label);
-    return { capacity, demandeurs };
+    return { capacity, demandeurs, recurInfo };
   };
 
   const renderBlock = (b: Block, allday: boolean) => {
@@ -2283,7 +2366,7 @@ export function AgendaGrid({
           if (!dragged) return;
           // Refus : changement de type (récurrent↔ponctuel) ou récurrent en semaine réelle.
           if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell || realWeekRecurring) return;
-          run(moveBookingAction(id, service.id, b.dayKey, b.slotId));
+          runResult(moveBookingAction(id, service.id, b.dayKey, b.slotId));
         }}
       >
         {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
@@ -2445,9 +2528,9 @@ export function AgendaGrid({
               // ligne2 = NOM Prénom, ligne3 = thème (si présent).
               const primaryLabel = bk.structure || bk.demandeur;
               const accentColor = bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)";
-              // Réservation pointée → verrouillée : plus déplaçable
-              // (cf. legacy isLockedBadge → draggable=false).
-              const locked = bk.pointage != null;
+              // Verrouillée (pointée, ou parent à miroir pointé) → ni déplacement, ni
+              // suppression, ni copie (cf. règles métier).
+              const locked = lockedByPointage(bk);
               return (
                 // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic = valider/pointer/éditer)
                 <div
@@ -2464,7 +2547,7 @@ export function AgendaGrid({
                         ? 0.4
                         : 1,
                     cursor:
-                      quickActive && !realWeekRecurring
+                      quickActive && (!realWeekRecurring || pointageMode)
                         ? "pointer"
                         : locked || realWeekRecurring
                           ? "default"
@@ -2479,7 +2562,8 @@ export function AgendaGrid({
                   // Clic droit → menu « Copier » (pas en mode création ni sur un
                   // récurrent en semaine réelle).
                   onContextMenu={(e) => {
-                    if (creationMode || realWeekRecurring) return;
+                    // Verrouillée (pointée / parent à miroir pointé) → pas de copier/couper.
+                    if (creationMode || realWeekRecurring || locked) return;
                     e.preventDefault();
                     e.stopPropagation();
                     clearTip();
@@ -2505,6 +2589,9 @@ export function AgendaGrid({
                       warnRecurringValidation();
                       return;
                     }
+                    // Pointage autorisé sur les réservations-enfants (cellule récurrente
+                    // en semaine réelle) même si le reste de la cellule est en lecture seule.
+                    if (realWeekRecurring && pointageMode && onBlockQuickAction(bk)) return;
                     if (!realWeekRecurring && onBlockQuickAction(bk)) return;
                     setDetail({ booking: bk });
                   }}
@@ -3134,27 +3221,61 @@ export function AgendaGrid({
 
           <div className="agenda-time-col" style={{ height: totalH }}>
             {(() => {
-              // On masque l'heure si son quart pile (h:00) est dans la pause compactée.
-              const visibleHours = hours.filter((h) => h * 60 >= gridEndMin || qIdx.has(h * 60));
-              return visibleHours.map((h, i) => {
-                // Première heure : poussée sous sa ligne (is-break-start) ; dernière :
-                // remontée au-dessus de sa ligne (is-break-end) pour rester dans la colonne.
-                const edge =
-                  i === 0
-                    ? " is-break-start"
-                    : i === visibleHours.length - 1
-                      ? " is-break-end"
-                      : "";
-                return (
-                  <div
-                    key={h}
-                    className={`agenda-time-mark${edge}`}
-                    style={{ top: mapMinToY(h * 60) }}
-                  >
-                    {String(h).padStart(2, "0")}:00
-                  </div>
-                );
-              });
+              // Colonne d'heures (port legacy renderAgendaWeekly). En mode « masquer les
+              // horaires sans créneau », la grille est compactée : la colonne ne doit
+              // afficher que les heures RÉELLEMENT visibles et se terminer sur la fin du
+              // dernier créneau affiché — PAS sur la borne de la plage/journée. On marque
+              // donc aussi la fin réelle de chaque plage (rupture) avec son horaire exact.
+              const minLabel = (m: number) =>
+                `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+              // Fin réelle de la grille = fin du dernier quart visible (≠ gridEndMin si compacté).
+              const effectiveEnd = quarters.length
+                ? quarters[quarters.length - 1] + 15
+                : gridEndMin;
+              // La rupture de la pause méridienne est déjà signalée par sa bande grise :
+              // on ne l'annote pas comme une rupture de plage.
+              const isLunchBreak = (i: number) =>
+                hasLunch &&
+                lunchSkipFrom !== null &&
+                quarters[i + 1] === lunchEnd &&
+                quarters[i] + 15 >= lunchSkipFrom;
+              const breakStarts = new Set<number>();
+              for (let i = 0; i < quarters.length - 1; i++) {
+                if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
+                  breakStarts.add(quarters[i + 1]);
+                }
+              }
+
+              const marks: { key: string; top: number; cls: string; label: string }[] = [];
+              // Heures pleines visibles + borne de fin réelle.
+              let first = true;
+              for (let m = Math.ceil(gridStartMin / 60) * 60; m <= effectiveEnd; m += 60) {
+                if (m < gridStartMin) continue;
+                if (m < effectiveEnd && !qIdx.has(m)) continue;
+                let cls = "agenda-time-mark";
+                if (m === effectiveEnd) cls += " is-break-end";
+                else if (first || breakStarts.has(m)) cls += " is-break-start";
+                marks.push({ key: `h-${m}`, top: mapMinToY(m), cls, label: minLabel(m) });
+                first = false;
+              }
+              // Fin de chaque plage précédant une rupture (hors pause) : l'heure de fin
+              // réelle du dernier créneau de la plage, remontée au-dessus de sa ligne.
+              for (let i = 0; i < quarters.length - 1; i++) {
+                if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
+                  const endOfPlage = quarters[i] + 15;
+                  marks.push({
+                    key: `e-${endOfPlage}`,
+                    top: mapMinToY(endOfPlage),
+                    cls: "agenda-time-mark is-break-end",
+                    label: minLabel(endOfPlage),
+                  });
+                }
+              }
+              return marks.map((mk) => (
+                <div key={mk.key} className={mk.cls} style={{ top: mk.top }}>
+                  {mk.label}
+                </div>
+              ));
             })()}
           </div>
 
@@ -3187,7 +3308,7 @@ export function AgendaGrid({
                 setDraggingId(null);
                 // Cible récurrente en semaine réelle (consultation) → déplacement refusé.
                 if (slot && !isRealweekRecurringSlot(slot.id))
-                  run(moveBookingAction(id, service.id, d, slot.id));
+                  runResult(moveBookingAction(id, service.id, d, slot.id));
               }}
             >
               {/* Lignes de grille sur les quarts VISIBLES (compactage pause) :
@@ -3531,11 +3652,23 @@ export function AgendaGrid({
                     style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}
                   >
                     {stackReadOnly ? (
-                      <span
-                        style={{ fontSize: ".7rem", color: "var(--muted)", fontStyle: "italic" }}
-                      >
-                        Consultation — édition en vue « Modèle de période »
-                      </span>
+                      <>
+                        {/* Récurrent en semaine réelle : pointage par séance autorisé sur
+                            les réservations-enfants ; validation/édition en vue Modèle. */}
+                        <label className="planning-option" style={{ margin: 0 }}>
+                          Mode pointage{" "}
+                          <input
+                            type="checkbox"
+                            checked={pointageMode}
+                            onChange={(e) => togglePointageMode(e.target.checked)}
+                          />
+                        </label>
+                        <span
+                          style={{ fontSize: ".7rem", color: "var(--muted)", fontStyle: "italic" }}
+                        >
+                          Validation/édition en vue « Modèle de période »
+                        </span>
+                      </>
                     ) : (
                       <>
                         <label className="planning-option" style={{ margin: 0 }}>
@@ -3587,13 +3720,18 @@ export function AgendaGrid({
                         // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
                         <div
                           key={bk.id}
-                          className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${bk.pointage != null ? " is-locked" : ""}`}
-                          // Glisser-déplacer depuis la pile : sauf si pointée (verrouillée)
-                          // ou en consultation (récurrent en semaine réelle).
-                          draggable={bk.pointage == null && !stackReadOnly}
+                          className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
+                          // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée
+                          // ou parent à miroir pointé) ou en consultation (récurrent semaine réelle).
+                          draggable={!lockedByPointage(bk) && !stackReadOnly}
                           style={{
                             ...badgeStyle(bk.validated),
-                            cursor: bk.pointage == null && !stackReadOnly ? "grab" : "default",
+                            cursor:
+                              !lockedByPointage(bk) && !stackReadOnly
+                                ? "grab"
+                                : stackReadOnly && pointageMode
+                                  ? "pointer"
+                                  : "default",
                             position: "relative",
                             opacity:
                               draggingId === bk.id ||
@@ -3603,7 +3741,7 @@ export function AgendaGrid({
                           }}
                           data-tip={badgeTitle(bk)}
                           onDragStart={
-                            bk.pointage != null || stackReadOnly
+                            lockedByPointage(bk) || stackReadOnly
                               ? undefined
                               : (e) => {
                                   // On amorce le drag, PUIS on ferme la pile au tick suivant
@@ -3615,7 +3753,7 @@ export function AgendaGrid({
                                 }
                           }
                           onDragEnd={
-                            bk.pointage != null || stackReadOnly
+                            lockedByPointage(bk) || stackReadOnly
                               ? undefined
                               : () => setDraggingId(null)
                           }
@@ -3627,14 +3765,18 @@ export function AgendaGrid({
                               warnRecurringValidation();
                               return;
                             }
+                            // Pointage autorisé sur les réservations-enfants (récurrent
+                            // en semaine réelle) même si la pile est en lecture seule.
+                            if (stackReadOnly && pointageMode && onBlockQuickAction(bk)) return;
                             if (!stackReadOnly && onBlockQuickAction(bk)) return;
                             // On garde la pile ouverte : la modale détail s'empile
                             // par-dessus, et sa fermeture y ramène.
                             setDetail({ booking: bk });
                           }}
-                          // Clic droit → menu « Copier » (pas en mode création ni en consultation).
+                          // Clic droit → menu « Copier » (pas en création/consultation, ni
+                          // sur une réservation verrouillée par un pointage).
                           onContextMenu={(e) => {
-                            if (creationMode || stackReadOnly) return;
+                            if (creationMode || stackReadOnly || lockedByPointage(bk)) return;
                             e.preventDefault();
                             e.stopPropagation();
                             clearTip();
@@ -3647,9 +3789,9 @@ export function AgendaGrid({
                           }}
                         >
                           <PointagePill pointage={bk.pointage} />
-                          {/* Croix masquée si pointée (verrouillée) ou en consultation
-                              (récurrent en semaine réelle). */}
-                          {bk.pointage == null && !stackReadOnly && (
+                          {/* Croix masquée si verrouillée (pointée / parent à miroir pointé)
+                              ou en consultation (récurrent en semaine réelle). */}
+                          {!lockedByPointage(bk) && !stackReadOnly && (
                             <button
                               type="button"
                               className="planning-name-tag-close"
@@ -3760,15 +3902,20 @@ export function AgendaGrid({
               })
             : (DAY_NAMES[bk.dayKey] ?? bk.dayKey);
           const dayHour = dayLabel + (slot ? ` · ${slot.startTime}–${slot.endTime}` : "");
-          // Occurrences (récurrent uniquement) = créneaux miroirs datés du slot.
+          // Occurrences (récurrent uniquement) = dates des réservations-ENFANTS réelles
+          // de cette réservation (et non tous les miroirs du slot) → reflète exactement
+          // les séances effectivement créées (cutoff, semaine A/B, vacances scolaires).
           const occurrenceDates = recurSlot
-            ? uniqueSlots
-                .filter((u) => u.parentSlotId === bk.slotId)
-                .map((u) => u.slotDate)
+            ? bookings
+                .filter((c) => c.parentBookingId === bk.id)
+                .map((c) => uniqueSlots.find((u) => u.id === c.slotId)?.slotDate)
+                .filter((d): d is string => !!d)
                 .sort()
             : [];
-          // Récurrent affiché en semaine réelle → consultation seule (lecture seule).
-          const readOnly = mode === "realweek" && !!recurSlot;
+          // Lecture seule si : récurrent en semaine réelle, OU réservation verrouillée
+          // par un pointage (pointée / parent à miroir pointé) → ni édition, ni
+          // suppression, ni validation depuis la fiche.
+          const readOnly = (mode === "realweek" && !!recurSlot) || lockedByPointage(bk);
           return (
             <BookingDetailModal
               booking={bk}
@@ -4023,10 +4170,27 @@ export function AgendaGrid({
                 )}
                 {!createCtx.ponctuel && createSlot && (
                   <OccurrencesField
-                    dates={uniqueSlots
-                      .filter((u) => u.parentSlotId === createCtx.slotId)
-                      .map((u) => u.slotDate)
-                      .sort()}
+                    // « Créneaux concernés » = occurrences qui seront EFFECTIVEMENT créées :
+                    // miroirs du slot ≥ aujourd'hui (le gestionnaire ne crée pas le passé),
+                    // de la semaine A/B effective (en mode A/B), et hors vacances scolaires
+                    // si le demandeur sélectionné est fermé pendant les vacances.
+                    dates={(() => {
+                      const todayISO = ymd(new Date());
+                      const selUser = users.find((u) => u.id === cUser);
+                      const closedOnSchool = selUser?.openOnSchoolHolidays === false;
+                      return uniqueSlots
+                        .filter((u) => u.parentSlotId === createCtx.slotId && u.slotDate)
+                        .map((u) => u.slotDate as string)
+                        .filter((d) => {
+                          if (d < todayISO) return false;
+                          if (closedOnSchool && inSchoolHolidayRange(d, schoolHolidays))
+                            return false;
+                          if (!abMode || effectiveWeek == null) return true;
+                          const parity = isoWeek(new Date(`${d}T00:00:00`)) % 2 === 1 ? "A" : "B";
+                          return parity === effectiveWeek;
+                        })
+                        .sort();
+                    })()}
                     startTime={createSlot.startTime}
                     endTime={createSlot.endTime}
                   />

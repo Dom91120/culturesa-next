@@ -1,7 +1,13 @@
+import { todayParisISO } from "@/lib/booking-delay";
+import { slotWeekTag } from "@/lib/iso-week";
 import type { SlotInput } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import { getSchoolZone, syncChildrenForRecurringSlot } from "@/server/services/recurring-children";
 import type { EntityState } from "@prisma/client";
 import { type ServiceModes, deriveServiceModes } from "./service-modes";
+
+// Ré-export pour les consommateurs qui importent slotWeekTag depuis ce module.
+export { slotWeekTag };
 
 // ─── Legacy CRUD (consumed by services/[id]/page.tsx + slot-actions.ts) ──
 
@@ -65,22 +71,6 @@ function toISO(d: Date): string {
 
 function fromISO(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00Z`);
-}
-
-// ISO 8601 week number (matches PHP date('W') and legacy _isoWeek).
-function isoWeek(dateStr: string): number {
-  const d = fromISO(dateStr);
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
-
-// Tag A/B d'une date — CONVENTION UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B
-// (identique à realWeekParity des grilles agenda admin/usager). Toute la chaîne A/B
-// (slots, miroirs, réservations, affichage) doit utiliser cette même convention.
-export function slotWeekTag(dateStr: string): "A" | "B" {
-  return isoWeek(dateStr) % 2 === 1 ? "A" : "B";
 }
 
 function parseWeeks(weeks: string | null | undefined): string[] {
@@ -299,6 +289,8 @@ export async function saveRecurringSlots(
     ).map((s) => s.demandeurId),
   );
 
+  const schoolZone = await getSchoolZone();
+
   await prisma.$transaction(async (tx) => {
     const keepIds: string[] = [];
 
@@ -396,6 +388,11 @@ export async function saveRecurringSlots(
           await tx.slot.delete({ where: { id: mid } });
         }
       }
+
+      // Miroirs régénérés → resynchronise les réservations-enfants des récurrentes
+      // posées sur ce slot parent (occurrences ajoutées/retirées). Re-synchro (pas une
+      // création usager) → on borne au présent, pas au délai de réservation.
+      await syncChildrenForRecurringSlot(tx, slId, { schoolZone, cutoffISO: todayParisISO() });
     }
 
     // delete active recurring slots of the period absent from payload

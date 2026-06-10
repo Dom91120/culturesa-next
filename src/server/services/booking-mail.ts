@@ -23,7 +23,7 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 /** Libellé « créneau » lisible : date+heure (ponctuel) ou jour+heure (récurrent). */
-function slotLabel(slot: {
+export function formatSlotLabel(slot: {
   startTime: string;
   endTime: string;
   slotDate: Date | null;
@@ -131,7 +131,7 @@ export async function sendBookingConfirmationMail(
       salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
       prenom,
       service: params.serviceLabel,
-      creneau: slotLabel(params.slot),
+      creneau: formatSlotLabel(params.slot),
       periode: periodLabel,
       participants,
       theme: params.theme.trim(),

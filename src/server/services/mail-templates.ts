@@ -6,15 +6,17 @@ import { getConfigMany, setConfigMany } from "@/server/config";
 // la variable BRUTE `{{bouton}}` (lien d'action), et des blocs conditionnels
 // `{{#if nom}}…{{/if}}` (n'affiche le bloc que si la variable est renseignée).
 
-// Types d'e-mails disposant d'un gabarit. Les 4 premiers (réservations) sont
+// Types d'e-mails disposant d'un gabarit. Les 5 premiers (réservations) sont
 // désactivables ; les suivants (compte/sécurité) sont toujours envoyés.
 export const TEMPLATE_KINDS = [
   "booking_confirmed",
   "booking_pending",
   "booking_cancelled",
   "booking_refused",
+  "booking_reminder",
   "email_verification",
   "password_reset",
+  "account_deletion_request",
   "account_deletion_notice",
   "email_test",
 ] as const;
@@ -43,6 +45,17 @@ const DELETE_VARS: MailVar[] = [
   ...COMMON_VARS,
   { name: "motif", desc: "Motif saisi par le gestionnaire (peut être vide)" },
 ];
+const REMINDER_VARS: MailVar[] = [
+  { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, »)" },
+  { name: "prenom", desc: "Prénom de l'usager" },
+  { name: "service", desc: "Nom du service / de l'activité" },
+  {
+    name: "creneau",
+    desc: "Date + heure de la séance à venir, ex. « lundi 15 juin 2026 · 10:00 – 12:00 »",
+  },
+  { name: "periode", desc: "Libellé de la période (peut être vide)" },
+  { name: "echeance", desc: "« dans une semaine » (J-7) ou « demain » (J-1)" },
+];
 const LINK_VARS: MailVar[] = [
   { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, »)" },
   { name: "prenom", desc: "Prénom de l'usager" },
@@ -55,8 +68,10 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
   booking_pending: BOOKING_VARS,
   booking_cancelled: DELETE_VARS,
   booking_refused: DELETE_VARS,
+  booking_reminder: REMINDER_VARS,
   email_verification: LINK_VARS,
   password_reset: LINK_VARS,
+  account_deletion_request: LINK_VARS,
   account_deletion_notice: [
     { name: "salutation", desc: "« Bonjour Prénom Nom, »" },
     { name: "prenom", desc: "Prénom de l'usager" },
@@ -109,12 +124,21 @@ ${DETAILS_CONFIRMATION}
 {{#if motif}}<p><strong>Motif :</strong><br>{{motif}}</p>{{/if}}
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
+  booking_reminder: {
+    subject: "Rappel — {{service}} {{echeance}}",
+    html: `<p>{{salutation}}</p>
+<p>Petit rappel : vous avez une réservation pour « {{service}} » <strong>{{echeance}}</strong>.</p>
+<p><strong>Créneau :</strong> {{creneau}}</p>
+{{#if periode}}<p><strong>Période :</strong> {{periode}}</p>{{/if}}
+<p>Si vous ne pouvez plus vous y rendre, pensez à annuler votre réservation depuis votre espace CultuRésa afin de libérer la place.</p>
+<p>À bientôt,<br>L'équipe CultuRésa</p>`,
+  },
   email_verification: {
     subject: "Confirmez votre adresse e-mail — CultuRésa",
     html: `<p>{{salutation}}</p>
 <p>Bienvenue sur CultuRésa ! Pour activer votre compte, confirmez votre adresse e-mail :</p>
 <p>{{bouton}}</p>
-<p style="font-size:13px;color:#5a7a4f;">Si le bouton ne fonctionne pas, copiez cette adresse dans votre navigateur :<br>{{url}}</p>`,
+<p>Si le bouton ne fonctionne pas, copiez cette adresse dans votre navigateur :<br>{{url}}</p>`,
   },
   password_reset: {
     subject: "Réinitialisation de votre mot de passe — CultuRésa",
@@ -122,6 +146,14 @@ ${DETAILS_CONFIRMATION}
 <p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous (lien valable 1&nbsp;h) :</p>
 <p>{{bouton}}</p>
 <p style="font-size:13px;color:#5a7a4f;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.<br>Adresse de secours : {{url}}</p>`,
+  },
+  account_deletion_request: {
+    subject: "Confirmez la suppression de votre compte — CultuRésa",
+    html: `<p>{{salutation}}</p>
+<p>Vous avez demandé la <strong>suppression de votre compte</strong> CultuRésa. Pour confirmer, cliquez sur le bouton ci-dessous (lien valable 24&nbsp;h) :</p>
+<p>{{bouton}}</p>
+<p>Cette action est <strong>irréversible</strong> : vos données personnelles seront anonymisées. Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail — votre compte restera inchangé.</p>
+<p>Si le bouton ne fonctionne pas, copiez cette adresse dans votre navigateur :<br>{{url}}</p>`,
   },
   account_deletion_notice: {
     subject: "Préavis de suppression de votre compte — CultuRésa",

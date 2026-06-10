@@ -3,6 +3,7 @@
 import type { ActionState } from "@/lib/action-state";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
+import { WEEKDAYS } from "@/server/services/manager-notice";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -20,6 +21,11 @@ const reservationSettingsSchema = z.object({
   bookingDelay: z.coerce.number().int(),
   autoValidationDelay: z.coerce.number().int(),
   validationBloquante: z.boolean(),
+  // Notification gestionnaires (digest des auto-validations) — par service.
+  mgrNoticeMode: z.enum(["none", "hours", "daily", "weekly"]),
+  mgrNoticeIntervalHours: z.coerce.number().int().min(1).max(168),
+  mgrNoticeHour: z.coerce.number().int().min(0).max(23),
+  mgrNoticeWeekday: z.enum(WEEKDAYS),
 });
 
 export type ReservationSettingsInput = z.infer<typeof reservationSettingsSchema>;
@@ -35,7 +41,20 @@ export async function updateReservationSettingsAction(
   }
   const { id, ...data } = parsed.data;
   try {
-    await prisma.service.update({ where: { id }, data });
+    // À l'activation de la notification (mode ≠ none) sans curseur, on l'initialise
+    // à maintenant : le premier digest ne couvrira que les auto-validations à venir.
+    let mgrNoticeLastSentAt: Date | undefined;
+    if (data.mgrNoticeMode !== "none") {
+      const svc = await prisma.service.findUnique({
+        where: { id },
+        select: { mgrNoticeLastSentAt: true },
+      });
+      if (svc && svc.mgrNoticeLastSentAt == null) mgrNoticeLastSentAt = new Date();
+    }
+    await prisma.service.update({
+      where: { id },
+      data: { ...data, ...(mgrNoticeLastSentAt ? { mgrNoticeLastSentAt } : {}) },
+    });
   } catch {
     return { ok: false, error: "Échec de l'enregistrement." };
   }

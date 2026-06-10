@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
+import { DeleteAccount } from "./delete-account";
 import { PasswordForm } from "./password-form";
 import { ProfileForm } from "./profile-form";
 
@@ -21,6 +22,7 @@ export default async function MonComptePage() {
     <div>
       <ProfileForm profile={profile} />
       <PasswordForm />
+      <DeleteAccount />
     </div>
   );
 }

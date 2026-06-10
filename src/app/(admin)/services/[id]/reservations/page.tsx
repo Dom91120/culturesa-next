@@ -22,6 +22,10 @@ export default async function ReservationsPage({
         bookingDelay={service.bookingDelay}
         autoValidationDelay={service.autoValidationDelay}
         validationBloquante={service.validationBloquante}
+        mgrNoticeMode={service.mgrNoticeMode}
+        mgrNoticeIntervalHours={service.mgrNoticeIntervalHours}
+        mgrNoticeHour={service.mgrNoticeHour}
+        mgrNoticeWeekday={service.mgrNoticeWeekday}
       />
     </div>
   );

@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { updateReservationSettingsAction } from "./actions";
 
+type NoticeMode = "none" | "hours" | "daily" | "weekly";
+
 type Props = {
   serviceId: string;
   maxReservations: number;
@@ -10,7 +12,21 @@ type Props = {
   bookingDelay: number;
   autoValidationDelay: number;
   validationBloquante: boolean;
+  mgrNoticeMode: string;
+  mgrNoticeIntervalHours: number;
+  mgrNoticeHour: number;
+  mgrNoticeWeekday: string;
 };
+
+const WEEKDAY_LABELS: { value: string; label: string }[] = [
+  { value: "lun", label: "Lundi" },
+  { value: "mar", label: "Mardi" },
+  { value: "mer", label: "Mercredi" },
+  { value: "jeu", label: "Jeudi" },
+  { value: "ven", label: "Vendredi" },
+  { value: "sam", label: "Samedi" },
+  { value: "dim", label: "Dimanche" },
+];
 
 const BOOKING_DELAY_OPTIONS: { value: number; label: string }[] = [
   { value: 0, label: "Aucun délai" },
@@ -42,6 +58,24 @@ const selectStyle: React.CSSProperties = {
   color: "var(--text)",
 };
 
+const radioRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: ".4rem",
+  fontSize: ".85rem",
+  flexWrap: "wrap",
+};
+
+const numStyle: React.CSSProperties = {
+  width: 56,
+  fontSize: ".85rem",
+  padding: ".2rem .35rem",
+  borderRadius: "var(--rad-sm)",
+  border: "1px solid var(--border)",
+  background: "var(--surface2)",
+  color: "var(--text)",
+};
+
 /** Pastille secondaire (titres des sections 2-4) — variante discrète. */
 function SecondTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -62,6 +96,14 @@ export function ReservationsPanel(props: Props) {
   const [bookingDelay, setBookingDelay] = useState(props.bookingDelay);
   const [autoValidationDelay, setAutoValidationDelay] = useState(props.autoValidationDelay);
   const [validationBloquante, setValidationBloquante] = useState(props.validationBloquante);
+  const [mgrMode, setMgrMode] = useState<NoticeMode>(
+    (["hours", "daily", "weekly"].includes(props.mgrNoticeMode)
+      ? props.mgrNoticeMode
+      : "none") as NoticeMode,
+  );
+  const [mgrInterval, setMgrInterval] = useState(props.mgrNoticeIntervalHours);
+  const [mgrHour, setMgrHour] = useState(props.mgrNoticeHour);
+  const [mgrWeekday, setMgrWeekday] = useState(props.mgrNoticeWeekday);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -77,6 +119,10 @@ export function ReservationsPanel(props: Props) {
       bookingDelay,
       autoValidationDelay,
       validationBloquante,
+      mgrNoticeMode: mgrMode,
+      mgrNoticeIntervalHours: mgrInterval,
+      mgrNoticeHour: mgrHour,
+      mgrNoticeWeekday: mgrWeekday,
       ...overrides,
     };
     startTransition(async () => {
@@ -87,6 +133,17 @@ export function ReservationsPanel(props: Props) {
         bookingDelay: next.bookingDelay,
         autoValidationDelay: next.autoValidationDelay,
         validationBloquante: next.validationBloquante,
+        mgrNoticeMode: next.mgrNoticeMode as NoticeMode,
+        mgrNoticeIntervalHours: next.mgrNoticeIntervalHours,
+        mgrNoticeHour: next.mgrNoticeHour,
+        mgrNoticeWeekday: next.mgrNoticeWeekday as
+          | "lun"
+          | "mar"
+          | "mer"
+          | "jeu"
+          | "ven"
+          | "sam"
+          | "dim",
       });
       if (res?.ok) {
         setSaved(true);
@@ -180,6 +237,7 @@ export function ReservationsPanel(props: Props) {
           userSelect: "none",
         }}
       >
+        Verrouillage des réservations validées
         <input
           type="checkbox"
           className="admin-cb"
@@ -192,7 +250,6 @@ export function ReservationsPanel(props: Props) {
           }}
           style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
         />
-        Une réservation doit être validée pour bloquer une place
       </label>
 
       <SecondTitle>Auto-validation</SecondTitle>
@@ -224,6 +281,131 @@ export function ReservationsPanel(props: Props) {
           ))}
         </select>
       </label>
+
+      <SecondTitle>Auto-validation — notification aux gestionnaires</SecondTitle>
+      <div style={{ display: "flex", flexDirection: "column", gap: ".4rem" }}>
+        <label style={radioRow}>
+          <input
+            type="radio"
+            name="mgr-notice"
+            checked={mgrMode === "none"}
+            disabled={pending}
+            onChange={() => {
+              setMgrMode("none");
+              save({ mgrNoticeMode: "none" });
+            }}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          Aucune
+        </label>
+
+        <label style={radioRow}>
+          <input
+            type="radio"
+            name="mgr-notice"
+            checked={mgrMode === "hours"}
+            disabled={pending}
+            onChange={() => {
+              setMgrMode("hours");
+              save({ mgrNoticeMode: "hours" });
+            }}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          Toutes les
+          <input
+            type="number"
+            min={1}
+            max={168}
+            value={mgrInterval}
+            disabled={pending || mgrMode !== "hours"}
+            onChange={(e) => {
+              const v = Math.max(1, Math.min(168, Number(e.target.value) || 1));
+              setMgrInterval(v);
+              setMgrMode("hours");
+              save({ mgrNoticeMode: "hours", mgrNoticeIntervalHours: v });
+            }}
+            style={numStyle}
+          />
+          heures
+        </label>
+
+        <label style={radioRow}>
+          <input
+            type="radio"
+            name="mgr-notice"
+            checked={mgrMode === "daily"}
+            disabled={pending}
+            onChange={() => {
+              setMgrMode("daily");
+              save({ mgrNoticeMode: "daily" });
+            }}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          Quotidienne à
+          <input
+            type="number"
+            min={0}
+            max={23}
+            value={mgrHour}
+            disabled={pending || mgrMode !== "daily"}
+            onChange={(e) => {
+              const v = Math.max(0, Math.min(23, Number(e.target.value) || 0));
+              setMgrHour(v);
+              setMgrMode("daily");
+              save({ mgrNoticeMode: "daily", mgrNoticeHour: v });
+            }}
+            style={numStyle}
+          />
+          h
+        </label>
+
+        <label style={radioRow}>
+          <input
+            type="radio"
+            name="mgr-notice"
+            checked={mgrMode === "weekly"}
+            disabled={pending}
+            onChange={() => {
+              setMgrMode("weekly");
+              save({ mgrNoticeMode: "weekly" });
+            }}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          Hebdomadaire le
+          <select
+            value={mgrWeekday}
+            disabled={pending || mgrMode !== "weekly"}
+            onChange={(e) => {
+              setMgrWeekday(e.target.value);
+              setMgrMode("weekly");
+              save({ mgrNoticeMode: "weekly", mgrNoticeWeekday: e.target.value });
+            }}
+            style={selectStyle}
+          >
+            {WEEKDAY_LABELS.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+          à
+          <input
+            type="number"
+            min={0}
+            max={23}
+            value={mgrHour}
+            disabled={pending || mgrMode !== "weekly"}
+            onChange={(e) => {
+              const v = Math.max(0, Math.min(23, Number(e.target.value) || 0));
+              setMgrHour(v);
+              setMgrMode("weekly");
+              save({ mgrNoticeMode: "weekly", mgrNoticeHour: v });
+            }}
+            style={numStyle}
+          />
+          h
+        </label>
+      </div>
 
       <div style={{ minHeight: "1.4rem", marginTop: ".75rem" }}>
         {error ? (

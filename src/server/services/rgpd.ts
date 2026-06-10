@@ -406,3 +406,36 @@ export async function anonymizeInactive(
 
   return anonymized;
 }
+
+/**
+ * Tâche planifiée de rétention RGPD (cf. /api/cron/rgpd-retention). Automatise ce
+ * que l'écran « Administration > RGPD » fait manuellement :
+ *   1. envoie le préavis aux comptes inactifs ≥ seuil et sans préavis ;
+ *   2. anonymise ceux dont le préavis date d'au moins GRACE_DAYS et qui sont
+ *      toujours inactifs.
+ * `markDeletionNotice` et `anonymizeInactive` re-vérifient l'éligibilité côté
+ * serveur ; on leur passe donc simplement les candidats issus du scan. Acteur
+ * `null` = système. Renvoie le nombre de préavis envoyés et de comptes anonymisés.
+ */
+export async function runRgpdRetention(): Promise<{ notified: number; anonymized: number }> {
+  const scan = await listInactiveScan();
+  const minDays = thresholdDays(await getRetentionYears());
+  const now = Date.now();
+
+  const noticeIds = scan
+    .filter((u) => u.daysInactive >= minDays && !u.deletionNoticeSentAt)
+    .map((u) => u.id);
+  const notified = await markDeletionNotice(noticeIds);
+
+  const anonIds = scan
+    .filter(
+      (u) =>
+        u.deletionNoticeSentAt != null &&
+        u.daysInactive >= minDays &&
+        Math.floor((now - u.deletionNoticeSentAt.getTime()) / MS_PER_DAY) >= GRACE_DAYS,
+    )
+    .map((u) => u.id);
+  const anonymized = await anonymizeInactive(anonIds, null);
+
+  return { notified, anonymized };
+}

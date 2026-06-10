@@ -7,7 +7,13 @@ import {
   type BookingConfirmationParams,
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
-import { BookingError, cancelUserBooking, createUniqueBooking } from "@/server/services/bookings";
+import {
+  BookingError,
+  assertBookingUnlocked,
+  cancelUserBooking,
+  createUniqueBooking,
+} from "@/server/services/bookings";
+import { syncRecurringChildren } from "@/server/services/recurring-children";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
@@ -97,7 +103,7 @@ export async function reserveRecurringAction(
             })
           : null;
         const validated = !(setting?.validation ?? false);
-        await tx.booking.create({
+        const created = await tx.booking.create({
           data: {
             bookingType: "recurring",
             userId: session.user.id,
@@ -111,6 +117,19 @@ export async function reserveRecurringAction(
             validated,
             autoValidateFrom: new Date(),
           },
+        });
+        // Matérialise les réservations-enfants datées (une par occurrence).
+        await syncRecurringChildren(tx, {
+          id: created.id,
+          userId: session.user.id,
+          serviceId,
+          slotId,
+          periodId,
+          week: wk,
+          themeLabel: theme,
+          enfants: myEnfants,
+          accompagnants: myAcc,
+          validated,
         });
         mailParams = {
           userId: session.user.id,
@@ -214,7 +233,19 @@ export async function reservePonctuelAction(
 /** Annule une réservation appartenant à l'usager. */
 export async function cancelMyBookingAction(serviceId: string, bookingId: number): Promise<Result> {
   const session = await requireUser();
-  await cancelUserBooking(session.user.id, bookingId);
+  try {
+    const booking = await prisma.booking.findFirst({
+      where: { id: bookingId, userId: session.user.id, serviceId },
+      select: { serviceId: true, validated: true },
+    });
+    if (!booking) return { ok: false, error: "Réservation introuvable." };
+    // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
+    await assertBookingUnlocked(prisma, session.user.id, booking);
+    await cancelUserBooking(session.user.id, bookingId);
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    throw e;
+  }
   revalidate(serviceId);
   return { ok: true };
 }
@@ -238,6 +269,8 @@ export async function moveMyBookingAction(
           where: { id: bookingId, userId: session.user.id, serviceId },
         });
         if (!booking) throw new BookingError("Réservation introuvable.");
+        // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
+        await assertBookingUnlocked(tx, session.user.id, booking);
         const slot = await tx.slot.findUnique({
           where: { id: target.slotId },
           include: { service: true, demandeurs: { select: { demandeurId: true } } },
@@ -314,6 +347,24 @@ export async function moveMyBookingAction(
             autoValidateFrom: new Date(),
           },
         });
+        if (target.ponctuel) {
+          // Devient ponctuelle : plus d'occurrences → on retire d'éventuels enfants.
+          await tx.booking.deleteMany({ where: { parentBookingId: bookingId } });
+        } else {
+          // Récurrente : régénère les enfants sur les nouveaux miroirs.
+          await syncRecurringChildren(tx, {
+            id: bookingId,
+            userId: session.user.id,
+            serviceId,
+            slotId: target.slotId,
+            periodId: target.periodId ?? 0,
+            week: wk,
+            themeLabel: booking.themeLabel,
+            enfants: booking.enfants,
+            accompagnants: booking.accompagnants,
+            validated,
+          });
+        }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -340,13 +391,34 @@ export async function updateMyBookingAction(
   theme = "",
 ): Promise<Result> {
   const session = await requireUser();
-  await prisma.booking.updateMany({
-    where: { id: bookingId, userId: session.user.id },
-    data: {
-      enfants: Math.max(0, enfants),
-      accompagnants: Math.max(0, accompagnants),
-      themeLabel: theme,
-    },
+  await prisma.$transaction(async (tx) => {
+    const res = await tx.booking.updateMany({
+      where: { id: bookingId, userId: session.user.id },
+      data: {
+        enfants: Math.max(0, enfants),
+        accompagnants: Math.max(0, accompagnants),
+        themeLabel: theme,
+      },
+    });
+    if (res.count === 0) return;
+    const b = await tx.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        bookingType: true,
+        userId: true,
+        serviceId: true,
+        slotId: true,
+        periodId: true,
+        week: true,
+        themeLabel: true,
+        enfants: true,
+        accompagnants: true,
+        validated: true,
+      },
+    });
+    // Récurrente : propage counts/thème aux réservations-enfants.
+    if (b && b.bookingType === "recurring") await syncRecurringChildren(tx, b);
   });
   revalidate(serviceId);
   return { ok: true };

@@ -1,5 +1,6 @@
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import { PASSWORD_POLICY_MESSAGE, isPasswordValid } from "@/lib/password";
+import { verifyCaptcha } from "@/server/captcha";
 import { prisma } from "@/server/db";
 import { sendMail } from "@/server/mailer";
 import {
@@ -102,11 +103,27 @@ export const auth = betterAuth({
     },
   },
 
-  // Enforcement serveur de la politique de mot de passe (complexité), en plus du
-  // minPasswordLength ci-dessus. Rejette tout mot de passe non conforme, y compris
-  // une requête qui contournerait la validation côté formulaire.
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // CAPTCHA image auto-hébergé sur l'inscription (port de captcha_img.php du
+      // legacy) : on vérifie le token signé + la saisie, transmis par en-têtes,
+      // AVANT toute création de compte. Désactivable via CAPTCHA_DISABLED=true
+      // (utile en tests/seed). Cf. src/server/captcha.ts.
+      if (ctx.path === "/sign-up/email" && process.env.CAPTCHA_DISABLED !== "true") {
+        const ok = verifyCaptcha(
+          ctx.headers?.get("x-captcha-token"),
+          ctx.headers?.get("x-captcha-answer"),
+        );
+        if (!ok) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Code de vérification invalide ou expiré. Merci de recommencer.",
+          });
+        }
+      }
+
+      // Enforcement serveur de la politique de mot de passe (complexité), en plus du
+      // minPasswordLength. Rejette tout mot de passe non conforme, y compris une
+      // requête qui contournerait la validation côté formulaire.
       if (!PASSWORD_ENDPOINTS.has(ctx.path)) return;
       const body = (ctx.body ?? {}) as { password?: unknown; newPassword?: unknown };
       const pw = typeof body.password === "string" ? body.password : body.newPassword;
@@ -115,6 +132,25 @@ export const auth = betterAuth({
         throw new APIError("BAD_REQUEST", { message: PASSWORD_POLICY_MESSAGE });
       }
     }),
+  },
+
+  // Met à jour `lastLoginAt` à chaque création de session (= chaque connexion,
+  // tous flux confondus). Alimente la détection d'inactivité RGPD (cf. rgpd.ts).
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          try {
+            await prisma.user.update({
+              where: { id: session.userId },
+              data: { lastLoginAt: new Date() },
+            });
+          } catch (e) {
+            console.error("[auth] maj lastLoginAt échouée:", e);
+          }
+        },
+      },
+    },
   },
 
   // Limitation du débit des requêtes d'auth (anti-bruteforce).

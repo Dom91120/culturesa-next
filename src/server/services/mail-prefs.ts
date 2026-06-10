@@ -9,6 +9,7 @@ export const MAIL_KINDS = [
   "booking_pending",
   "booking_cancelled",
   "booking_refused",
+  "booking_reminder",
 ] as const;
 
 export type MailKind = (typeof MAIL_KINDS)[number];
@@ -18,6 +19,7 @@ const KEY_BY_KIND: Record<MailKind, string> = {
   booking_pending: "mail.send.booking_pending",
   booking_cancelled: "mail.send.booking_cancelled",
   booking_refused: "mail.send.booking_refused",
+  booking_reminder: "mail.send.booking_reminder",
 };
 
 /** Un type d'e-mail est activé par défaut ; désactivé seulement si la valeur = "0". */

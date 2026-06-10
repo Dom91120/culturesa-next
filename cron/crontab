@@ -7,3 +7,6 @@
 
 # Rétention RGPD (préavis + anonymisation des comptes inactifs) — tous les jours à 03h00
 0 3 * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/rgpd-retention >/dev/null 2>&1
+
+# Rappels de réservation (J-7 et J-1) — tous les jours à 07h00
+0 7 * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/booking-reminder >/dev/null 2>&1

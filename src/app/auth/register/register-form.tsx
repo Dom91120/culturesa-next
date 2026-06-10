@@ -4,7 +4,8 @@ import { signUp } from "@/lib/auth-client";
 import { PWD_RULES } from "@/lib/password";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type CaptchaHandle, CaptchaImage } from "../captcha-image";
 
 type Structure = { id: number; label: string };
 type Demandeur = { id: number; label: string; structures: Structure[] };
@@ -50,6 +51,10 @@ export function RegisterForm({
   const [pwd, setPwd] = useState("");
   const pwdValid = PWD_RULES.every((r) => r.test(pwd));
 
+  const [captcha, setCaptcha] = useState({ token: "", answer: "" });
+  const captchaRef = useRef<CaptchaHandle>(null);
+  const onCaptchaChange = useCallback((s: { token: string; answer: string }) => setCaptcha(s), []);
+
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (comboRef.current && !comboRef.current.contains(e.target as Node)) setNiveauOpen(false);
@@ -80,6 +85,10 @@ export function RegisterForm({
       setError("Vous devez accepter l'utilisation de vos données (RGPD).");
       return;
     }
+    if (!captcha.token || !captcha.answer.trim()) {
+      setError("Merci de recopier le code de l'image.");
+      return;
+    }
 
     setPending(true);
     const res = await signUp.email({
@@ -94,10 +103,21 @@ export function RegisterForm({
       accompagnants: Number(form.get("accompagnants") || 0),
       ...(demandeurId ? { demandeurId: Number(demandeurId) } : {}),
       ...(structureId ? { structureId: Number(structureId) } : {}),
+      // Le défi captcha (token signé + saisie) est transmis au middleware serveur
+      // via des en-têtes, hors du corps validé par Better Auth.
+      fetchOptions: {
+        headers: {
+          "x-captcha-token": captcha.token,
+          "x-captcha-answer": captcha.answer,
+        },
+      },
     });
     setPending(false);
 
     if (res.error) {
+      // Le défi captcha est consommé/expiré après une tentative : on en charge un
+      // nouveau pour permettre une nouvelle saisie.
+      captchaRef.current?.refresh();
       setError(
         res.error.status === 422
           ? "Un compte existe déjà avec cette adresse e-mail."
@@ -355,6 +375,8 @@ export function RegisterForm({
           </span>
         </div>
       </div>
+
+      <CaptchaImage ref={captchaRef} onChange={onCaptchaChange} />
 
       {error && (
         <p className="field-error" style={{ display: "block", marginBottom: ".5rem" }}>

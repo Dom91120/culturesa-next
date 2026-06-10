@@ -92,7 +92,7 @@ On garde sur le `User` les champs métier (`prenom`, `nom`, `tel`, `niveau`,
 | `export.php` | `app/api/export/route.ts` | CSV (compat Excel, BOM UTF-8) |
 | `rgpd.php` / `rgpd_log.php` / `rgpd_export.php` | `server/services/rgpd.ts` | anonymisation, export, audit, rétention |
 | `settings.php` | `app/(admin)/settings` | `AppConfig` clé/valeur |
-| `captcha_img.php` | Cloudflare Turnstile | sur register/login |
+| `captcha_img.php` | CAPTCHA image auto-hébergé (svg-captcha + token HMAC) | sur l'inscription (`/sign-up/email`) |
 
 ---
 
@@ -134,7 +134,7 @@ On garde sur le `User` les champs métier (`prenom`, `nom`, `tel`, `niveau`,
 2. **Prisma** : `schema.prisma` complet + 1ère migration + seed (données de démo
    identiques à l'actuel : demandeurs, niveaux, périodes, services, admin).
 3. **Auth** : Better Auth (email/password, vérification email, reset, rôles,
-   Turnstile) + guards.
+   CAPTCHA image auto-hébergé) + guards.
 4. **Référentiels** (CRUD simples) : demandeurs, structures, niveaux, exercices.
 5. **Cœur métier** : services → périodes → slots → settings service×demandeur.
 6. **Réservation** : tunnel usager + jauges + validation + pointage.

@@ -1,3 +1,4 @@
+import { earliestBookableISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import type { BookingCreateInput } from "@/schemas/booking";
@@ -49,60 +50,59 @@ export async function listBookableServices() {
   });
 }
 
-export type SlotAvailability = {
-  id: string;
-  slotDate: Date | null;
-  startTime: string;
-  endTime: string;
-  capacity: number;
-  booked: number;
-  remaining: number;
-  mine: boolean;
-};
-
 /**
- * Service + ses créneaux ponctuels à venir, avec la jauge (places restantes)
- * et l'indication des créneaux déjà réservés par l'usager.
+ * Garantit qu'un créneau a la place pour une réservation (anti-surbooking), avec la
+ * MÊME règle que la création usager : mode jauge → enfants + adultes (selon
+ * `gaugeAccompagnants`) ; hors jauge → 1 par réservation. Lève
+ * `BookingError("Ce créneau est complet.")` si la capacité serait dépassée.
+ * `excludeBookingId` exclut la réservation en cours (déplacement / édition de
+ * compteurs) du décompte. `db` accepte le client global ou un client transactionnel.
+ *
+ * NB : pour un récurrent, le décompte est scopé par {service, slot, période} — pas par
+ * semaine A/B (même périmètre que la création usager ; l'écart A/B est un point distinct).
  */
-export async function getServiceWithAvailability(serviceId: string, userId: string) {
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
-  if (!service) return null;
-
-  const slots = await prisma.slot.findMany({
-    where: {
-      serviceId,
-      state: "actif",
-      slotType: "unique",
-      slotDate: { gte: startOfToday() },
-    },
-    orderBy: [{ slotDate: "asc" }, { startTime: "asc" }],
+export async function assertSlotCapacity(
+  db: Prisma.TransactionClient,
+  params: {
+    serviceId: string;
+    slotId: string;
+    bookingType: "recurring" | "unique";
+    periodId: number;
+    enfants: number;
+    accompagnants: number;
+    excludeBookingId?: number;
+  },
+) {
+  const slot = await db.slot.findUnique({
+    where: { id: params.slotId },
+    select: { capacity: true, service: { select: { capacity: true, gaugeAccompagnants: true } } },
   });
-
-  const ids = slots.map((s) => s.id);
-  const [counts, mine] = await Promise.all([
-    prisma.booking.groupBy({ by: ["slotId"], where: { slotId: { in: ids } }, _count: true }),
-    prisma.booking.findMany({ where: { userId, slotId: { in: ids } }, select: { slotId: true } }),
-  ]);
-
-  const countBySlot = new Map(counts.map((c) => [c.slotId, c._count]));
-  const mineSet = new Set(mine.map((b) => b.slotId));
-
-  const availability: SlotAvailability[] = slots.map((s) => {
-    const capacity = s.capacity ?? service.capacity;
-    const booked = countBySlot.get(s.id) ?? 0;
-    return {
-      id: s.id,
-      slotDate: s.slotDate,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      capacity,
-      booked,
-      remaining: Math.max(0, capacity - booked),
-      mine: mineSet.has(s.id),
-    };
-  });
-
-  return { service, availability };
+  if (!slot) throw new BookingError("Créneau introuvable.");
+  const capacity = slot.capacity ?? slot.service.capacity;
+  const gaugeOn = !!(await db.serviceDemandeurSettings.findFirst({
+    where: { serviceId: params.serviceId, jauge: true },
+    select: { serviceId: true },
+  }));
+  const occWhere: Prisma.BookingWhereInput =
+    params.bookingType === "unique"
+      ? { slotId: params.slotId, bookingType: "unique" }
+      : { slotId: params.slotId, periodId: params.periodId, bookingType: "recurring" };
+  if (params.excludeBookingId != null) occWhere.id = { not: params.excludeBookingId };
+  let used: number;
+  let mine: number;
+  if (gaugeOn) {
+    const countAcc = slot.service.gaugeAccompagnants;
+    const agg = await db.booking.aggregate({
+      where: occWhere,
+      _sum: { enfants: true, accompagnants: true },
+    });
+    used = gaugeUnits(agg._sum.enfants ?? 0, agg._sum.accompagnants ?? 0, countAcc);
+    mine = gaugeUnits(params.enfants, params.accompagnants, countAcc);
+  } else {
+    used = await db.booking.count({ where: occWhere });
+    mine = 1;
+  }
+  if (used + mine > capacity) throw new BookingError("Ce créneau est complet.");
 }
 
 /**
@@ -127,6 +127,19 @@ export async function createUniqueBooking(
         }
         if (!slot.slotDate || slot.slotDate < startOfToday()) {
           throw new BookingError("Ce créneau est passé.");
+        }
+        // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai.
+        const earliest = earliestBookableISO(
+          slot.service.bookingDelay,
+          slot.service.activeDays
+            .split(",")
+            .map((d) => d.trim())
+            .filter(Boolean),
+        );
+        if (slot.slotDate.toISOString().slice(0, 10) < earliest) {
+          throw new BookingError(
+            "Le délai de réservation pour ce créneau n'est pas encore atteint.",
+          );
         }
 
         const capacity = slot.capacity ?? slot.service.capacity;
@@ -198,10 +211,56 @@ export function listUserBookings(userId: string) {
   });
 }
 
-/** Annule une réservation appartenant à l'usager. Renvoie true si supprimée. */
+/**
+ * Annule une réservation appartenant à l'usager. Renvoie true si supprimée.
+ * Verrou pointage : une réservation pointée, ou une récurrente dont un miroir est
+ * pointé, n'est plus annulable.
+ */
 export async function cancelUserBooking(userId: string, bookingId: number) {
+  const b = await prisma.booking.findFirst({
+    where: { id: bookingId, userId },
+    select: { pointage: true },
+  });
+  if (!b) return false;
+  if (b.pointage != null) return false;
+  const pointedChildren = await prisma.booking.count({
+    where: { parentBookingId: bookingId, pointage: { not: null } },
+  });
+  if (pointedChildren > 0) return false;
   const res = await prisma.booking.deleteMany({ where: { id: bookingId, userId } });
   return res.count > 0;
+}
+
+/**
+ * Validation bloquante (port du legacy `_blockedDelete = validationMode && validated &&
+ * validationBloquante`) : une réservation VALIDÉE est verrouillée — ni annulation ni
+ * déplacement possible — lorsque le service est en `validationBloquante` ET que le
+ * demandeur de l'usager est en mode validation. Lève `BookingError` si verrouillée.
+ * `db` accepte le client global ou un client transactionnel.
+ */
+export async function assertBookingUnlocked(
+  db: Prisma.TransactionClient,
+  userId: string,
+  booking: { serviceId: string; validated: boolean },
+) {
+  if (!booking.validated) return;
+  const service = await db.service.findUnique({
+    where: { id: booking.serviceId },
+    select: { validationBloquante: true },
+  });
+  if (!service?.validationBloquante) return;
+  const u = await db.user.findUnique({
+    where: { id: userId },
+    select: { demandeurId: true },
+  });
+  if (u?.demandeurId == null) return; // sans demandeur (admin) → pas de mode validation
+  const setting = await db.serviceDemandeurSettings.findFirst({
+    where: { serviceId: booking.serviceId, demandeurId: u.demandeurId },
+    select: { validation: true },
+  });
+  if (setting?.validation) {
+    throw new BookingError("Réservation validée — modification impossible.");
+  }
 }
 
 // ─── Agenda usager (onglet « Réservations ») ───────────────────────────────
@@ -218,6 +277,8 @@ export type UserAgendaBooking = {
   slotId: string;
   periodId: number;
   week: string;
+  bookingType: string;
+  parentBookingId: number | null;
   enfants: number;
   accompagnants: number;
   theme: string;
@@ -298,9 +359,12 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         slotId: true,
         periodId: true,
         week: true,
+        bookingType: true,
+        parentBookingId: true,
         enfants: true,
         accompagnants: true,
         validated: true,
+        pointage: true,
         themeLabel: true,
         userId: true,
       },
@@ -362,6 +426,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       id: service.id,
       label: service.label,
       activeDays: service.activeDays,
+      bookingDelay: service.bookingDelay,
       morningStart: service.morningStart,
       morningEnd: service.morningEnd,
       afternoonStart: service.afternoonStart,
@@ -374,6 +439,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       openOnHolidays: service.openOnHolidays,
       showPreviousExercices: service.showPreviousExercices,
       gaugeAccompagnants: service.gaugeAccompagnants,
+      validationBloquante: service.validationBloquante,
     },
     periods: periods.map((p) => ({
       id: p.id,
@@ -398,12 +464,14 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         slotId: b.slotId,
         periodId: b.periodId,
         week: b.week,
+        bookingType: b.bookingType,
+        parentBookingId: b.parentBookingId,
         enfants: b.enfants,
         accompagnants: b.accompagnants,
         // Thème réel seulement pour MES réservations (les autres restent anonymes).
         theme: b.userId === userId ? (b.themeLabel ?? "") : "",
         validated: b.validated,
-        pointage: null,
+        pointage: b.pointage,
         name: "",
         demandeur: "",
         structure: "",
