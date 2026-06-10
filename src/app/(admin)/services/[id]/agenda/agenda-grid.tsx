@@ -1059,12 +1059,17 @@ export function AgendaGrid({
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
       const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
-      // Jauge = enfants (+ accompagnants si le service les compte), comme la modale
-      // pile et le legacy _renderCsmCapInfo.
-      const used = list.reduce(
-        (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
-        0,
-      );
+      // Places occupées, conditionnées au mode jauge DE CE CRÉNEAU (ponctuel → gaugePonct,
+      // récurrent → gaugeRec, comme l'agenda usager) : en jauge = somme (enfants + adultes
+      // si comptés) ; hors jauge = nombre de réservations. Gater ici rend `used`/`full`
+      // cohérents pour TOUS les consommateurs (libellé, barre, flag « complet », modale pile).
+      const gaugeForSlot = uniqueIdSet.has(slotId) ? modes.gaugePonct : modes.gaugeRec;
+      const used = gaugeForSlot
+        ? list.reduce(
+            (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
+            0,
+          )
+        : list.length;
       // Un bloc vide (used=0) n'est jamais "complet".
       const full = used >= capacity && used > 0;
       // biome-ignore lint/suspicious/noAssignInExpressions: init-or-push concis sur la map par jour
@@ -1123,6 +1128,8 @@ export function AgendaGrid({
     gridStartMin,
     service.capacity,
     service.gaugeAccompagnants,
+    modes.gaugeRec,
+    modes.gaugePonct,
   ]);
 
   // Blocs affichés pour un jour : AUCUN sur un jour fermé (hors période active ou
@@ -2622,10 +2629,10 @@ export function AgendaGrid({
               );
             })}
         </div>
-        {/* Mode jauge ON → barre + used/cap ; mode jauge OFF → simple
-          compteur places occupées/total (format 1/15). */}
+        {/* Jauge DE CE CRÉNEAU (ponctuel → gaugePonct, récurrent → gaugeRec) ON → barre
+          + used/cap ; OFF → simple compteur réservations/total (format 1/15). */}
         {b.bookings.length > 0 &&
-          (modes.gaugeRec ? (
+          (gaugeForCell ? (
             <div
               className="agenda-block-meta is-gauge"
               style={{
