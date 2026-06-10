@@ -690,22 +690,11 @@ type Booking = {
   // Réservation de l'usager courant (agenda usager) → badge ✅/⏳ + annulation.
   mine: boolean;
 };
-type UserOpt = { id: string; label: string };
-
 // badgeStyle : partagé via lib/agenda-core (fond « en attente » harmonisé sur
 // #ffe6a7, aligné sur la grille admin — décision 2026-06).
 
 // Bloc = UN créneau un jour donné (modèle partagé, cf. lib/agenda-core).
 type Block = AgendaBlockBase<Booking>;
-
-type Detail = { booking: Booking } | null;
-type CreateCtx = {
-  dayKey: string;
-  slotId: string;
-  // Créneau ponctuel : réservation ponctuelle (pas de période / jour) + date affichée.
-  ponctuel?: boolean;
-  slotDate?: string;
-} | null;
 
 // Modèle « brouillon » de l'agenda usager (legacy pendingSelection/pendingCancellations) :
 // on accumule des AJOUTS (créneaux à réserver) et des SUPPRESSIONS (mes résas à
@@ -807,10 +796,9 @@ export function UserAgendaGrid({
   );
   const [periodIdx, setPeriodIdx] = useState(0);
   // Vue verrouillée sur le type du demandeur de l'usager : récurrent → « Modèle de
-  // période » ; non-récurrent (ponctuel) → « Semaine réelle » (dates).
-  const [mode, setMode] = useState<"model" | "realweek">(
-    modes.recurringMode ? "model" : "realweek",
-  );
+  // période » ; non-récurrent (ponctuel) → « Semaine réelle » (dates). Figée à
+  // l'initialisation (pas de bascule côté usager).
+  const [mode] = useState<"model" | "realweek">(modes.recurringMode ? "model" : "realweek");
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
   // Mode "Semaine réelle" : période active verrouillée. Sans ce verrou, on
   // re-dérive la période depuis la semaine à chaque ◀/▶ — et quand une semaine
@@ -822,9 +810,6 @@ export function UserAgendaGrid({
   // créneau. Préférence utilisateur (coché par défaut). Sur mobile, toujours forcée à
   // true (case masquée) — voir la valeur effective `hideNoSlot` dérivée plus bas.
   const [hideNoSlotPref, setHideNoSlotPref] = useState(true);
-  const [validation, setValidation] = useState(false);
-  const [pointageMode, setPointageMode] = useState(false);
-  const [detail, setDetail] = useState<Detail>(null);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
   const [stackKey, setStackKey] = useState<{ slotId: string; dayKey: string } | null>(null);
@@ -1480,21 +1465,10 @@ export function UserAgendaGrid({
   const dayBlocks = (d: string): Block[] => (isDayDisabled(d) ? [] : (blocksByDay[d] ?? []));
 
   function run(p: Promise<unknown>) {
-    setDetail(null);
     startTransition(async () => {
       await p;
       router.refresh();
     });
-  }
-
-  // "Mode validation" et "Mode pointage" sont mutuellement exclusifs (comme legacy).
-  function toggleValidation(on: boolean) {
-    setValidation(on);
-    if (on) setPointageMode(false);
-  }
-  function togglePointageMode(on: boolean) {
-    setPointageMode(on);
-    if (on) setValidation(false);
   }
 
   // Validation bloquante (port legacy `_blockedDelete = validationMode && validated &&
@@ -1600,12 +1574,6 @@ export function UserAgendaGrid({
       );
     } catch {}
   }, [service.id, currentExerciceId, periodIdx, anchorMonday, weekAB]);
-
-  // Le mode pointage n'a de sens qu'en semaine réelle : on le désactive si on
-  // repasse en "modèle de période" (cohérent avec le legacy).
-  useEffect(() => {
-    if (mode !== "realweek" && pointageMode) setPointageMode(false);
-  }, [mode, pointageMode]);
 
   // Verrouille la période active en semaine réelle : dès qu'une période est
   // dérivée pour la semaine courante, on la fige dans rwPeriodId. La nav ◀/▶

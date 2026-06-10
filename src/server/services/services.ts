@@ -1,4 +1,3 @@
-import type { ServiceUpdateInput } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 import type { Role } from "@prisma/client";
@@ -45,10 +44,6 @@ export async function createService(label: string, position: number) {
   }, 0);
   const id = `svc_${String(maxN + 1).padStart(3, "0")}`;
   return prisma.service.create({ data: { id, label, position } });
-}
-
-export function updateService(id: string, data: ServiceUpdateInput) {
-  return prisma.service.update({ where: { id }, data });
 }
 
 /** Mise à jour partielle (nom + icône) — utilisée par la modale de l'écran liste. */

@@ -2,12 +2,6 @@ import { z } from "zod";
 
 /** Schémas de validation des référentiels (partagés serveur ↔ client). */
 
-export const demandeurSchema = z.object({
-  label: z.string().trim().min(1, "Le libellé est obligatoire").max(100),
-  openOnSchoolHolidays: z.boolean().default(true),
-});
-export type DemandeurInput = z.infer<typeof demandeurSchema>;
-
 export const structureSchema = z.object({
   demandeurId: z.coerce.number().int().positive("Demandeur invalide"),
   label: z.string().trim().min(1, "Le libellé est obligatoire").max(150),

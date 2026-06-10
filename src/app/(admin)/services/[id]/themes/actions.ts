@@ -12,7 +12,7 @@ const saveThemesSchema = z.object({
   themes: z.array(z.string()).max(500),
 });
 
-export type SaveThemesInput = z.infer<typeof saveThemesSchema>;
+type SaveThemesInput = z.infer<typeof saveThemesSchema>;
 
 /** Enregistre le mode + la liste de thèmes d'un service (sous-onglet Paramètres → Thèmes). */
 export async function saveThemesAction(input: SaveThemesInput): Promise<ActionState> {

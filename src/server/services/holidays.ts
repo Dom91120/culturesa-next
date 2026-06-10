@@ -5,18 +5,6 @@ export function countSchoolHolidays(zone: string) {
   return prisma.schoolHoliday.count({ where: { zone } });
 }
 
-/**
- * Une date tombe-t-elle dans une période de vacances scolaires de la zone ?
- * Convention : `dateStart` = dernier jour d'école → borne gauche STRICTE (les vacances
- * commencent le lendemain) ; `dateEnd` inclus. Cf. lib/school-holidays.
- */
-export async function isSchoolHoliday(date: Date, zone: string): Promise<boolean> {
-  const n = await prisma.schoolHoliday.count({
-    where: { zone, dateStart: { lt: date }, dateEnd: { gte: date } },
-  });
-  return n > 0;
-}
-
 type GovRow = {
   description?: string;
   start_date?: string;

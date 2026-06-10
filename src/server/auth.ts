@@ -176,5 +176,3 @@ export const auth = betterAuth({
   // Doit rester en dernier : branche la gestion des cookies sur Next.js.
   plugins: [nextCookies()],
 });
-
-export type Session = typeof auth.$Infer.Session;

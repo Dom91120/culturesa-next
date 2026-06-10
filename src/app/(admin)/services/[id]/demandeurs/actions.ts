@@ -23,7 +23,7 @@ const saveSchema = z.object({
   rows: z.array(rowSchema).max(500),
 });
 
-export type SaveDemandeurSettingsInput = {
+type SaveDemandeurSettingsInput = {
   serviceId: string;
   rows: DemandeurSettingRow[];
 };

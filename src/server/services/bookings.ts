@@ -266,18 +266,6 @@ export async function createUniqueBooking(
   }
 }
 
-/** Réservations de l'usager (à venir d'abord). */
-export function listUserBookings(userId: string) {
-  return prisma.booking.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      service: { select: { label: true } },
-      slot: { select: { slotDate: true, startTime: true, endTime: true, slotType: true } },
-    },
-  });
-}
-
 /**
  * Annule une réservation appartenant à l'usager. Renvoie true si supprimée.
  * Verrou pointage : une réservation pointée, ou une récurrente dont un miroir est

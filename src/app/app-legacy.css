@@ -253,32 +253,6 @@ header {
   color: var(--accent);
 }
 
-/* ── Onglet Configuration (Divers) : taille de texte réduite (sauf titre) ── */
-#tab-content-admin-divers label {
-  font-size: .72rem !important;
-}
-#tab-content-admin-divers select,
-#tab-content-admin-divers input[type="text"],
-#tab-content-admin-divers input[type="email"],
-#tab-content-admin-divers input[type="number"] {
-  font-size: .72rem !important;
-}
-#tab-content-admin-divers .btn {
-  font-size: .68rem;
-  padding: .2rem .55rem;
-}
-#tab-content-admin-divers #cfg-school-info {
-  font-size: .66rem;
-}
-
-/* ── En-tête des onglets Planning (titre + options + boutons) ── */
-.planning-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
 /* ── Options des onglets Planning (cases à cocher) ─────── */
 .planning-options {
   display: flex;
@@ -359,10 +333,6 @@ header {
 .tab-nav-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-}
-.nav-locked {
-  opacity: 0.35 !important;
-  cursor: not-allowed !important;
 }
 .tab-icon {
   font-size: .85rem;
@@ -611,13 +581,6 @@ main {
   align-items: center;
   gap: .5rem;
 }
-
-/* ── Params sub-tabs ────────────────────────────────────── */
-#params-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
 #params-subnav {
   display: flex;
   flex-direction: row;
@@ -626,15 +589,6 @@ main {
   justify-content: flex-end;
   margin-top: 0.75rem;
   padding: 0 1rem;
-}
-#params-content {
-  width: 100%;
-}
-.params-pane {
-  display: none;
-}
-.params-pane.active {
-  display: block;
 }
 .params-tab {
   position: relative;
@@ -660,47 +614,6 @@ main {
   color: var(--text);
 }
 .params-tab.active {
-  color: var(--warn);
-  background: var(--surface1);
-  border-color: var(--border);
-  border-bottom: none;
-}
-
-/* ── Créneaux sub-tabs ──────────────────────────────────── */
-.cren-pane {
-  display: none;
-}
-.cren-pane.active {
-  display: block;
-  background: var(--surface1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  margin-bottom: .85rem;
-}
-.cren-tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: .3rem;
-  padding: .3rem .8rem .3rem;
-  font-family: inherit;
-  font-size: .78rem;
-  font-weight: 500;
-  background: var(--surface2);
-  border: 1px solid var(--surface);
-  border-bottom: 1px solid var(--border);
-  border-top-left-radius: var(--rad-sm);
-  border-top-right-radius: var(--rad-sm);
-  cursor: pointer;
-  color: var(--muted);
-  transition: color .15s, background .15s, border-color .15s;
-  white-space: nowrap;
-}
-.cren-tab:hover {
-  color: var(--text);
-}
-.cren-tab.active {
   color: var(--warn);
   background: var(--surface1);
   border-color: var(--border);
@@ -988,26 +901,6 @@ textarea {
   opacity: 0.35;
   cursor: not-allowed;
 }
-.btn-admin-export {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  color: var(--accent);
-  padding: .3rem .7rem;
-  border-radius: var(--rad-sm);
-  font-family: inherit;
-  font-size: .72rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: .35rem;
-  transition: .2s;
-  white-space: nowrap;
-}
-.btn-admin-export:hover {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  transform: translateY(-1px);
-}
 
 /* ── Period tabs ─────────────────────────────────────── */
 .period-tabs {
@@ -1048,73 +941,14 @@ textarea {
   background: var(--accent);
   display: none;
 }
-.period-btn.has-booking .period-badge {
-  display: block;
-}
 #cap-period-tabs-2 .period-badge,
 #planning-period-tabs .period-badge,
 #planning-rec-period-tabs .period-badge,
 #period-tabs .period-badge {
   display: block;
 }
-
-/* ── Schedule table ─────────────────────────────────────── */
-.schedule-wrap {
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-}
-.period-tabs-wrap {
-  display: flex;
-  align-items: center;
-  margin: 0 0 1.3rem;
-}
-.schedule-table {
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-.schedule-footer {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0 0 1rem;
-}
-.schedule-footer-actions {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  gap: .5rem;
-  align-items: center;
-}
-.schedule-table th {
-  padding: .6rem .5rem .5rem;
-  font-size: .7rem;
-  font-weight: 600;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--text);
-  text-align: center;
-  background: var(--accent);
-}
-.schedule-table td {
-  padding: 0.02rem 0;
-  vertical-align: middle;
-}
-.schedule-table td:first-child {
-  text-align: left;
-}
 .unique td:first-child {
   padding-left: 2.1rem;
-}
-.schedule-table tbody tr:nth-child(odd) {
-  background: var(--surface);
-}
-.schedule-table tbody tr:nth-child(even) {
-  background: var(--surface2);
 }
 /* ── Slot button ─────────────────────────────────────────── */
 .slot-btn {
@@ -1134,35 +968,10 @@ textarea {
   transition: all .2s;
   position: relative;
 }
-/* Hover sur créneau vide : halo "soleil" très atténué (radial jaune doux), bordure inchangée.
-   Les badges "my-booking" / "my-booking-pending" gardent leur propre hover (cf. règles ci-dessous). */
-.slot-btn:hover:not(:disabled):not(.my-booking):not(.my-booking-pending) {
-  background: radial-gradient(circle at center, rgba(220, 225, 70, 0.28), transparent 70%);
-}
 .slot-btn.selected {
   border-color: var(--accent);
   background: var(--accent);
   color: #0f1117;
-}
-.slot-btn.my-booking {
-  background: #c8e8b8;
-  border-color: var(--accent);
-  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.28);
-  color: var(--badge-text);
-}
-.slot-btn.my-booking:hover {
-  background: #b3dec2;
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-}
-.slot-btn.my-booking-pending {
-  background: #f3dfbb;
-  border-color: rgba(232, 164, 90, 0.45);
-  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.28);
-  color: var(--badge-text);
-}
-.slot-btn.my-booking-pending:hover {
-  background: #ead0a3;
-  border-color: rgba(232, 164, 90, 0.65);
 }
 .slot-btn:disabled {
   opacity: 0.8;
@@ -1248,19 +1057,6 @@ textarea.theme-pending:focus::placeholder {
   -webkit-text-fill-color: #b2a478 !important;
   opacity: 1;
 }
-.spots-ok {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--accent);
-}
-/* Sur un badge "en attente" (orange), le spots-ok hérite de la teinte orange */
-.slot-btn.my-booking-pending .spots-ok {
-  background: rgba(232, 164, 90, 0.15);
-  color: rgb(232, 164, 90);
-}
-.spots-full {
-  background: rgba(224, 107, 107, 0.12);
-  color: var(--danger);
-}
 .slot-btn.selected .slot-spots {
   background: rgba(0, 0, 0, 0.2);
   color: #0f1117;
@@ -1289,18 +1085,6 @@ textarea.theme-pending:focus::placeholder {
 }
 .slot-btn[draggable="true"]:active {
   cursor: grabbing;
-}
-.slot-btn-dragging {
-  opacity: 0.3;
-}
-#tab-content-reservation td.slot-user-drop-target {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  outline: 2px dashed var(--accent);
-  outline-offset: -3px;
-}
-#tab-content-reservation td.slot-user-drop-target .slot-btn {
-  border-color: var(--accent);
-  background: var(--accent-dim);
 }
 
 /* ── Recap ───────────────────────────────────────────────── */
@@ -1378,18 +1162,6 @@ textarea.theme-pending:focus::placeholder {
 .hidden {
   display: none !important;
 }
-.info-note {
-  display: flex;
-  align-items: flex-start;
-  gap: .4rem 6.4px;
-  font-size: .75rem;
-  color: var(--muted);
-  line-height: 1.6;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--rad-sm);
-  margin-top: 1rem;
-}
 .toast {
   position: fixed;
   bottom: 1.5rem;
@@ -1412,78 +1184,9 @@ textarea.theme-pending:focus::placeholder {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-.toast--error {
-  background: rgb(220, 53, 69);
-  color: #fff;
-}
 .toast--warn {
   background: var(--warn);
   color: #fff;
-}
-.toast--top {
-  bottom: auto;
-  top: 5rem;
-  transform: translateX(-50%) translateY(-20px);
-}
-.toast--top.show {
-  transform: translateX(-50%) translateY(0);
-}
-
-/* ── Admin table ─────────────────────────────────────────── */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: .75rem;
-  margin-bottom: 1.25rem;
-}
-@media (max-width: 600px) {
-  .stats-row {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.1rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: .25rem;
-}
-.stat-val {
-  font-size: 2rem;
-  font-weight: 300;
-  line-height: 1;
-  color: var(--text);
-}
-.stat-label {
-  font-size: .7rem;
-  font-weight: 600;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.stat-card.accent .stat-val {
-  color: var(--accent);
-}
-.stat-card.warn .stat-val {
-  color: var(--warn);
-}
-
-.admin-filters {
-  display: flex;
-  gap: .6rem;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 1.1rem;
-}
-.admin-filters select,
-.admin-filters input {
-  padding: .45rem .75rem;
-  font-size: .82rem;
-  border-radius: var(--rad-sm);
-  flex: 1;
-  min-width: 140px;
 }
 
 .admin-table-wrap {
@@ -1618,14 +1321,6 @@ textarea.theme-pending:focus::placeholder {
   gap: .5rem;
   margin-top: .5rem;
 }
-/* Verrou visuel quand on consulte un exercice ancien — appliqué soit sur le pane entier
-   (Créneaux, Réservations, Demandeurs), soit sur des éléments ciblés (Périodes : éditeur,
-   jours d'ouverture, barre d'actions) pour préserver la navigation .periode-nav. */
-.exercice-locked {
-  pointer-events: none;
-  opacity: 0.45;
-  filter: grayscale(0.3);
-}
 
 /* Barre de navigation entre exercices : ◀ label ▶ — réutilisée par périodes, planning rec et planning ponctuel */
 .periode-nav {
@@ -1757,50 +1452,6 @@ textarea.theme-pending:focus::placeholder {
     min-width: 140px;
   }
 }
-.cycle-opt {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  font-size: .82rem;
-  color: var(--text);
-  cursor: pointer;
-  user-select: none;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-}
-.cycle-opt input[type="checkbox"] {
-  cursor: pointer;
-  accent-color: var(--accent);
-}
-#pc-undo-label {
-  font-weight: 700;
-  color: var(--danger);
-  font-size: .78rem;
-  margin: 0 0 .35rem 0;
-}
-#pc-undo-section {
-  border: 1px solid var(--border);
-  border-radius: var(--rad-sm);
-  padding: .75rem 1rem;
-  background: var(--surface2);
-}
-/* Mise en page deux colonnes du pane "Changement d'exercice" */
-#exercice-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  align-items: center;
-  margin: 2rem 1rem 1.1rem;
-}
-#exercice-cols .exercice-col {
-  min-width: 0;
-}
-@media (max-width: 900px) {
-  #exercice-cols {
-    grid-template-columns: 1fr;
-  }
-}
 .sort-arrow {
   margin-left: .25rem;
   opacity: 0.5;
@@ -1812,81 +1463,6 @@ textarea.theme-pending:focus::placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cap-editor-table td {
-  padding: .15rem .35rem;
-}
-.cap-editor-table input[type="text"],
-.cap-editor-table input[type="number"],
-.cap-editor-table input[type="date"] {
-  padding: 1px 4px;
-  height: 20px;
-  line-height: 1;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--surface2);
-  color: var(--text);
-}
-.cap-editor-table input[type="date"] {
-  width: 120px;
-  font-size: .78rem;
-}
-/* Garder les flèches haut/bas natives pour les inputs capacités (utiles quand la ligne est activée) */
-.cap-editor-table input[type="number"] {
-  -moz-appearance: auto;
-}
-.cap-editor-table input[type="number"]::-webkit-inner-spin-button,
-.cap-editor-table input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: auto;
-  opacity: 1;
-}
-.cap-editor-table input:disabled {
-  background: var(--surface);
-  color: var(--muted);
-  cursor: default;
-  opacity: 0.65;
-}
-.cell-input-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-.cell-clear-btn {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: .85rem;
-  line-height: 1;
-  padding: 0 2px;
-  height: 18px;
-  border-radius: 3px;
-  transition: color .12s, background .12s;
-}
-.cell-clear-btn:hover:not(:disabled) {
-  color: var(--danger);
-  background: var(--danger-dim);
-}
-.cell-clear-btn:disabled {
-  display: none;
-}
-.cell-add-btn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: .65rem;
-  line-height: 1;
-  padding: 0 3px;
-  height: 14px;
-  border-radius: 3px;
-  transition: background .12s;
-}
-.cell-add-btn:hover {
-  background: var(--accent-dim);
-}
-#services-config-table td {
-  height: 2.5rem;
-}
 .admin-table tr:hover td {
   background: rgba(255, 255, 255, 0.02);
 }
@@ -1895,11 +1471,6 @@ textarea.theme-pending:focus::placeholder {
 }
 .admin-table tr.role-break td {
   border-top: 1px dotted lightgray;
-}
-#uc-search-admin {
-  padding: .25rem .6rem .25rem 1.8rem;
-  text-align: left;
-  font-size: .78rem;
 }
 .search-wrap {
   position: relative;
@@ -1921,13 +1492,6 @@ textarea.theme-pending:focus::placeholder {
   pointer-events: none;
 }
 
-.admin-empty {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--muted);
-  font-size: .9rem;
-}
-
 .col-check {
   width: 36px;
   text-align: left;
@@ -1942,59 +1506,6 @@ textarea.theme-pending:focus::placeholder {
   height: 15px;
   accent-color: var(--danger);
   cursor: pointer;
-}
-
-/* ── Planning grid ───────────────────────────────────────── */
-.planning-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: .82rem;
-  table-layout: fixed;
-  line-height: 1;
-}
-.planning-table th {
-  padding: .6rem 0 .5rem;
-  font-size: .65rem;
-  font-weight: 700;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
-  text-align: center;
-  background: var(--accent);
-  min-width: 160px;
-  vertical-align: middle;
-  white-space: nowrap;
-  user-select: none;
-}
-.planning-table th:first-child {
-  text-align: center;
-  width: 62px;
-}
-.planning-table tbody tr:nth-child(odd) td {
-  background: var(--surface);
-}
-.planning-table tbody tr:nth-child(even) td {
-  background: var(--surface2);
-}
-.planning-table td {
-  border: 1px solid var(--border);
-  vertical-align: top;
-  padding: .2rem .6rem .8rem .6rem;
-  cursor: cell;
-  position: relative;
-  height: 78px;
-}
-.planning-table td:first-child {
-  background: var(--surface2);
-  font-size: .7rem;
-  font-weight: 700;
-  letter-spacing: .04em;
-  width: 62px;
-  min-width: 62px;
-  vertical-align: middle;
-  text-align: center;
-  padding: .4rem;
 }
 .planning-name-tag {
   background: var(--accent);
@@ -2014,107 +1525,9 @@ textarea.theme-pending:focus::placeholder {
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.28);
   transform: translate(-1px, -1px);
 }
-.planning-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-size: .72rem;
-  font-style: italic;
-  height: 44px;
-}
-.planning-cell-inner {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 100%;
-}
-.planning-cell-badges {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  padding-bottom: 3px;
-  max-width: 160px;
-  width: stretch;
-}
-/* Planning récurrent (.planning-table) → contenu centré */
-.planning-table .planning-cell-inner {
-  align-items: center;
-  text-align: center;
-}
-.planning-table .planning-cell-badges {
-  justify-content: center;
-  margin-left: auto;
-  margin-right: auto;
-  text-align: left;
-}
-.planning-cap {
-  font-size: .65rem;
-  color: var(--muted);
-  position: absolute;
-  bottom: 0rem;
-  left: .6rem;
-  font-weight: 500;
-}
-.planning-cap.full {
-  color: var(--danger);
-}
-.planning-cap.low {
-  color: var(--warn);
-}
 .planning-wrap {
   overflow-x: auto;
   border-radius: 6px;
-}
-.planning-uniq-table {
-  table-layout: auto;
-}
-.planning-uniq-table tbody tr:nth-child(odd) td {
-  background: var(--surface);
-}
-.planning-uniq-table tbody tr:nth-child(even) td {
-  background: var(--surface2);
-}
-.planning-uniq-table td {
-  padding: 0 .6rem;
-}
-.planning-uniq-table td {
-  vertical-align: middle;
-}
-.planning-uniq-table td:nth-child(1),
-.planning-uniq-table td:nth-child(2),
-.planning-uniq-table td:nth-child(3) {
-  white-space: nowrap;
-  width: 1%;
-  color: var(--text) !important;
-  font-weight: 300 !important;
-}
-.planning-uniq-table .planning-name-tag {
-  width: 160px;
-  flex-shrink: 0;
-}
-.planning-uniq-table td:nth-child(4) {
-  width: auto;
-}
-/* Planning général / ponctuel (.planning-uniq-table) → contenu aligné à gauche */
-.planning-uniq-table .planning-cell-inner {
-  padding: .25rem 0 0 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-start;
-  text-align: left;
-}
-.planning-uniq-table .planning-cell-badges {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: .35rem;
-  align-items: flex-start;
-  justify-content: flex-start;
-  max-width: none;
 }
 /* ── Mode toggle ─────────────────────────────────────────── */
 .mode-toggle {
@@ -2135,102 +1548,6 @@ textarea.theme-pending:focus::placeholder {
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
-}
-
-/* ── Menu contextuel slot ────────────────────────────────── */
-.slot-ctx-menu {
-  position: fixed;
-  z-index: 9999;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--rad-sm);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  padding: .3rem 0;
-  min-width: 150px;
-}
-.slot-ctx-menu button {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  width: 100%;
-  padding: .45rem .9rem;
-  background: none;
-  border: none;
-  color: var(--fg);
-  font-family: inherit;
-  font-size: .83rem;
-  cursor: pointer;
-  text-align: left;
-  transition: background .12s;
-}
-.slot-ctx-menu button:hover {
-  background: var(--surface3, rgba(255, 255, 255, 0.06));
-}
-.slot-ctx-menu .slot-ctx-danger {
-  color: #e05c5c;
-}
-.slot-ctx-menu .slot-ctx-danger:hover {
-  background: rgba(224, 92, 92, 0.1);
-}
-.slot-ctx-sep {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: .25rem 0;
-}
-
-/* ── Pagination tableau réservation ─────────────────────── */
-.schedule-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: .5rem;
-}
-/* État visuel quand on glisse un slot au-dessus du bouton prev/next
-   (auto-nav après 700ms). Sélecteur générique car les boutons sont
-   maintenant .btn .btn-ghost (mêmes classes que les autres paginations). */
-.schedule-pagination .btn.pg-drag-hover {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  transform: scale(1.2);
-  transition: transform .15s;
-}
-
-/* ── Onglet réservation compact ─────────────────────────── */
-#tab-content-reservation .panel {
-  padding: 0;
-}
-#tab-content-reservation .schedule-wrap {
-  width: calc(100% - 2.5rem);
-  margin: 0 auto;
-}
-#tab-content-reservation .schedule-table {
-  min-width: 100%;
-}
-#tab-content-reservation .info-note {
-  background: none;
-  border: none;
-  margin-top: 0;
-  padding-left: 0;
-  padding-right: 0;
-  justify-content: flex-end;
-}
-#tab-content-reservation .slot-btn {
-  font-size: .68rem;
-}
-#tab-content-reservation .slot-spots {
-  font-size: .62rem;
-  background: none;
-}
-#tab-content-reservation .period-btn,
-#tab-content-planning .period-btn,
-#tab-content-planning-rec .period-btn {
-  padding: .25rem .6rem;
-  font-size: .7rem;
-}
-/* Onglets périodes des créneaux récurrents : plus compacts. */
-#cap-period-tabs-2 .period-btn {
-  padding: .12rem .5rem;
-  font-size: .64rem;
 }
 
 /* ── Role pills ──────────────────────────────────────────── */
@@ -2273,43 +1590,6 @@ textarea.theme-pending:focus::placeholder {
 .modal-overlay.open {
   display: flex;
 }
-/* Création réservation : doit passer au-dessus de la modale multi-badges
-   (cell-stack-modal), qui est plus tard dans le DOM et l'emporterait sinon. */
-#planning-create-modal {
-  z-index: 10005;
-}
-.schedule-tooltip {
-  display: none;
-  position: fixed;
-  background: var(--surface1);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: .4rem .6rem;
-  font-size: .6rem;
-  color: var(--muted);
-  line-height: 1.15;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  z-index: 10000;
-  max-width: 480px;
-}
-.schedule-tooltip.is-visible {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: .05rem .8rem;
-}
-.schedule-tooltip-title {
-  grid-column: 1 / -1;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: .2rem;
-}
-/* Variante mono-ligne (mode ponctuel) : surcharge la grille en bloc simple.
-   Hérite font-size .6rem de .schedule-tooltip (cohérent avec le mode récurrent). */
-.schedule-tooltip.is-visible.is-line {
-  display: block;
-  color: var(--text);
-}
 .modal-box {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2323,17 +1603,6 @@ textarea.theme-pending:focus::placeholder {
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 1rem;
-}
-/* Bandeau d'en-tête de modale : titre à gauche + actions à droite (ex. case à cocher) */
-.modal-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  padding-right: 1rem;
-}
-.modal-title-row .modal-title {
-  margin-bottom: 0;
 }
 .modal-close {
   position: absolute;
@@ -2382,18 +1651,6 @@ textarea.theme-pending:focus::placeholder {
   cursor: not-allowed;
   pointer-events: none;
 }
-.ctx-separator {
-  height: 1px;
-  background: var(--border);
-  margin: .3rem 0;
-}
-.planning-name-tag.is-cut {
-  opacity: 0.35;
-  border-style: dashed !important;
-}
-.planning-name-tag.is-dragging {
-  opacity: 0.3;
-}
 .planning-name-tag.is-locked {
   cursor: default;
 }
@@ -2432,11 +1689,6 @@ textarea.theme-pending:focus::placeholder {
   opacity: 0.4;
   cursor: not-allowed;
   pointer-events: none;
-}
-.badge-ctx-menu .ctx-separator {
-  height: 1px;
-  background: var(--border);
-  margin: 0.3rem 0;
 }
 
 /* Croix de suppression rapide sur les badges planning, visible au survol */
@@ -2480,11 +1732,6 @@ textarea.theme-pending:focus::placeholder {
   padding: 0;
   transition: transform .12s;
   width: 100%;
-}
-/* Centrer verticalement le badge isolé dans la cellule (mais pas la pile, qui reste en haut).
-   Le centrage horizontal est déjà assuré par .planning-table .planning-cell-badges (margin auto). */
-.planning-cell-inner:not(:has(.planning-stack-wrap)) .planning-cell-badges {
-  flex: 1;
 }
 .planning-stack-wrap:hover {
   transform: translate(-6px, -1px);
@@ -2632,22 +1879,6 @@ textarea.theme-pending:focus::placeholder {
 .cell-stack-list .planning-name-tag {
   padding-right: 20px;
 }
-/* Memes ajustements compacts sur les badges du planning recurrent : font-size,
-   padding, border-radius, overflow et line-height des spans alignes sur l'agenda. */
-#planning-rec-grid .planning-name-tag {
-  font-size: .66rem;
-  padding: 2px 6px;
-  border-radius: 6px;
-  overflow: hidden;
-}
-#planning-rec-grid .planning-name-tag > span {
-  line-height: 1.15;
-}
-#planning-rec-grid .planning-stack-wrap .stack-back,
-#planning-rec-grid .planning-stack-wrap .stack-back2,
-#planning-rec-grid .planning-stack-wrap .stack-front {
-  border-radius: 6px;
-}
 .csm-gauge-info {
   display: inline-flex;
   align-items: center;
@@ -2762,17 +1993,6 @@ textarea.theme-pending:focus::placeholder {
   color: var(--muted);
   font-style: italic;
 }
-.niveau-combo-list-create {
-  padding: .4rem .65rem;
-  font-size: .78rem;
-  color: var(--accent);
-  font-weight: 600;
-  cursor: pointer;
-  border-top: 1px dashed var(--border);
-}
-.niveau-combo-list-create:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
 
 /* ── Modal "Nouvelle réservation" : compteurs Enfants / Adultes ── */
 .pcm-counters {
@@ -2806,21 +2026,6 @@ textarea.theme-pending:focus::placeholder {
   font-weight: 500;
   min-width: 3.5em;
 }
-#uc-modal-overlay input,
-#uc-modal-overlay select {
-  font-size: .7rem;
-}
-#uc-modal-overlay select {
-  padding-top: .1rem;
-  padding-bottom: .1rem;
-}
-#uc-modal-overlay .field-hint {
-  font-size: .62rem;
-  margin-top: -.1rem;
-}
-#uc-modal-overlay .modal-title {
-  font-size: .9rem;
-}
 .indic_r,
 .indic_v,
 .indic_e,
@@ -2834,20 +2039,6 @@ textarea.theme-pending:focus::placeholder {
   padding: 2px 3px;
   line-height: 1;
   white-space: nowrap;
-}
-@media screen {
-  .indic_v {
-    display: none !important;
-  }
-}
-.indic_r {
-  background: rgba(120, 120, 120, 0.75);
-}
-.indic_v {
-  background: color-mix(in srgb, var(--accent) 90%, transparent);
-}
-.indic_e {
-  background: rgba(232, 164, 90, 0.9);
 }
 .indic_p {
   background: rgba(30, 120, 80, 0.9);
@@ -2867,27 +2058,6 @@ textarea.theme-pending:focus::placeholder {
 }
 .planning-name-tag:active {
   cursor: grabbing;
-}
-.planning-table td.drag-over {
-  background: color-mix(in srgb, var(--accent) 10%, transparent) !important;
-  outline: 2px dashed var(--accent);
-  outline-offset: -3px;
-}
-/* Onglet période survolé pendant un glisser */
-.period-btn.drag-hover-tab {
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
-  position: relative;
-  overflow: hidden;
-}
-.period-btn.drag-hover-tab::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background: var(--accent);
-  animation: drag-tab-fill 0.65s linear forwards;
 }
 @keyframes drag-tab-fill {
   from {
@@ -2957,14 +2127,6 @@ textarea.theme-pending:focus::placeholder {
   background: var(--accent-dim);
   color: var(--accent);
   font-weight: 600;
-}
-
-.agenda-wrap {
-  position: relative;
-  border: 1px solid var(--border);
-  border-radius: var(--rad-sm);
-  background: var(--surface);
-  overflow: hidden;
 }
 .agenda-grid {
   display: grid;
@@ -3111,10 +2273,6 @@ textarea.theme-pending:focus::placeholder {
   outline: 2px solid transparent;
   outline-offset: -2px;
 }
-.agenda-block.drag-over {
-  outline-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
 .agenda-block:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
@@ -3123,9 +2281,6 @@ textarea.theme-pending:focus::placeholder {
 .agenda-block.is-uniq {
   --agenda-block-color: var(--slot-uniq-color);
   background: color-mix(in srgb, var(--slot-uniq-color) 25%, transparent);
-}
-.agenda-block.is-long {
-  justify-content: center;
 }
 
 /* Légende récurrent / ponctuel affichée en haut à gauche de l'agenda en mode semaine réelle */
@@ -3155,14 +2310,6 @@ textarea.theme-pending:focus::placeholder {
 .agenda-legend-swatch.is-uniq {
   --legend-color: var(--slot-uniq-color);
   background: color-mix(in srgb, var(--legend-color) 25%, transparent);
-}
-.agenda-block.is-warn {
-  background: color-mix(in srgb, #e8a45a 28%, transparent);
-  border-left-color: #e8a45a;
-}
-.agenda-block.is-full {
-  background: color-mix(in srgb, var(--danger) 26%, transparent);
-  border-left-color: var(--danger);
 }
 /* Compteur places/jauge colle en bas-gauche du bloc (position absolue).
    Sorti du flux pour ne pas reserver de hauteur dans le flex column : les
@@ -3424,26 +2571,6 @@ textarea.theme-pending:focus::placeholder {
   background: #ffe6a7;
   border: none;
 }
-/* Sur badge en attente, hérite la teinte orange comme .slot-btn.my-booking-pending .spots-ok. */
-.user-agenda-mine-badge.is-pending .spots-ok {
-  background: rgba(232, 164, 90, 0.15);
-  color: rgb(232, 164, 90);
-}
-.drag-hover-page {
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
-  position: relative;
-  overflow: hidden;
-}
-.drag-hover-page::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background: var(--accent);
-  animation: drag-tab-fill 0.65s linear forwards;
-}
 
 /* ── Fiche réservation ───────────────────────────────────── */
 .bdet-readonly {
@@ -3456,15 +2583,6 @@ textarea.theme-pending:focus::placeholder {
   min-height: 1.25rem;
   word-break: break-word;
 }
-
-/* ── Créneaux (onglet dédié) — barre d'outils + modale demandeurs ── */
-.cap-tool-label {
-  font-size: .62rem;
-  font-weight: 700;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 .cap-input {
   width: 42px;
   font-size: .78rem;
@@ -3473,43 +2591,6 @@ textarea.theme-pending:focus::placeholder {
   border: 1.5px solid var(--border);
   border-radius: var(--rad-sm);
   background: var(--surface2);
-  color: var(--text);
-}
-.btn-add-slot {
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-  color: var(--accent);
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-size: .7rem;
-  padding: .2rem .6rem;
-  border-radius: var(--rad-sm);
-  letter-spacing: .04em;
-}
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: .5rem;
-  margin-top: 1rem;
-}
-.dem-modal-list {
-  list-style: none;
-  margin: .5rem 0;
-  padding: 0;
-  max-height: 50vh;
-  overflow: auto;
-}
-.dem-modal-list li {
-  padding: .15rem 0;
-}
-.day-chk {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  cursor: pointer;
-  font-size: .82rem;
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
   color: var(--text);
 }
 .muted {
