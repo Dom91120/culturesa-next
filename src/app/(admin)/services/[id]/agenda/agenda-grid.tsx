@@ -39,6 +39,7 @@ type Service = {
   semaineAb: boolean;
   themesMode: "libre" | "liste";
   openOnHolidays: boolean;
+  openOnSchoolHolidays: boolean;
   gaugeAccompagnants: boolean;
 };
 type Period = {
@@ -756,8 +757,9 @@ export function AgendaGrid({
       weekDateByDay[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
   }
   // Jour fermé : uniquement en semaine réelle, pour un jour hors de la période
-  // active OU férié quand le service ferme les fériés. Contrairement au legacy
-  // (grisage purement visuel), on bloque ici aussi toutes les interactions.
+  // active, férié quand le service ferme les fériés, OU en vacances scolaires quand
+  // le service ferme les vacances. Contrairement au legacy (grisage purement visuel),
+  // on bloque ici aussi toutes les interactions.
   const isDayDisabled = (dayKey: string): boolean => {
     if (mode !== "realweek" || !mondayStr) return false;
     const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
@@ -768,18 +770,24 @@ export function AgendaGrid({
     ) {
       return true;
     }
-    return !service.openOnHolidays && isFrenchHoliday(dayYmd);
+    if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
+    return !service.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays);
   };
   // Jour férié (service fermé les fériés), en semaine réelle.
   const isHolidayDay = (dayKey: string): boolean => {
     if (mode !== "realweek" || !mondayStr || service.openOnHolidays) return false;
     return isFrenchHoliday(ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)));
   };
-  // Classe de grisage : jour férié → hachis de la pause méridienne (is-holiday) ;
+  // Jour de vacances scolaires (service fermé les vacances), en semaine réelle.
+  const isSchoolHolidayDay = (dayKey: string): boolean => {
+    if (mode !== "realweek" || !mondayStr || service.openOnSchoolHolidays) return false;
+    return inSchoolHolidayRange(ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)), schoolHolidays);
+  };
+  // Classe de grisage : jour férié ou vacances scolaires → hachis (is-holiday) ;
   // hors période → hachis dédié (is-out-of-period).
   const outOfPeriodCls = (dayKey: string): string => {
     if (!isDayDisabled(dayKey)) return "";
-    return isHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
+    return isHolidayDay(dayKey) || isSchoolHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
   };
 
   // ── Semaines A/B ── (dérivé de la matrice demandeurs, pas de la colonne service)
@@ -4172,11 +4180,12 @@ export function AgendaGrid({
                     // « Créneaux concernés » = occurrences qui seront EFFECTIVEMENT créées :
                     // miroirs du slot ≥ aujourd'hui (le gestionnaire ne crée pas le passé),
                     // de la semaine A/B effective (en mode A/B), et hors vacances scolaires
-                    // si le demandeur sélectionné est fermé pendant les vacances.
+                    // si le SERVICE ferme les vacances ou si le demandeur sélectionné est fermé.
                     dates={(() => {
                       const todayISO = ymd(new Date());
                       const selUser = users.find((u) => u.id === cUser);
-                      const closedOnSchool = selUser?.openOnSchoolHolidays === false;
+                      const closedOnSchool =
+                        !service.openOnSchoolHolidays || selUser?.openOnSchoolHolidays === false;
                       return uniqueSlots
                         .filter((u) => u.parentSlotId === createCtx.slotId && u.slotDate)
                         .map((u) => u.slotDate as string)

@@ -403,6 +403,7 @@ export async function reactivatePeriod(id: number): Promise<PeriodRow> {
 export type ServiceOpeningConfig = {
   activeDays: string[];
   openOnHolidays: boolean;
+  openOnSchoolHolidays: boolean;
   morningStart: string;
   morningEnd: string;
   afternoonStart: string;
@@ -430,6 +431,7 @@ export async function getServiceOpeningConfig(
     select: {
       activeDays: true,
       openOnHolidays: true,
+      openOnSchoolHolidays: true,
       morningStart: true,
       morningEnd: true,
       afternoonStart: true,
@@ -440,6 +442,7 @@ export async function getServiceOpeningConfig(
   return {
     activeDays: parseActiveDays(s.activeDays),
     openOnHolidays: s.openOnHolidays,
+    openOnSchoolHolidays: s.openOnSchoolHolidays,
     morningStart: s.morningStart,
     morningEnd: s.morningEnd,
     afternoonStart: s.afternoonStart,
@@ -458,6 +461,7 @@ export async function saveServiceOpeningConfig(
     data: {
       activeDays,
       openOnHolidays: config.openOnHolidays,
+      openOnSchoolHolidays: config.openOnSchoolHolidays,
       morningStart: config.morningStart,
       morningEnd: config.morningEnd,
       afternoonStart: config.afternoonStart,

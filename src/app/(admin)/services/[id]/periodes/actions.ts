@@ -63,6 +63,7 @@ const openingSchema = z.object({
   serviceId: z.string().trim().min(1),
   activeDays: z.array(z.enum(["lun", "mar", "mer", "jeu", "ven", "sam", "dim"])).max(7),
   openOnHolidays: z.boolean(),
+  openOnSchoolHolidays: z.boolean(),
   morningStart: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide."),
   morningEnd: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide."),
   afternoonStart: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide."),

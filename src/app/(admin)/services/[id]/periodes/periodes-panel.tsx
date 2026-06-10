@@ -28,6 +28,7 @@ type Exercice = { id: number; label: string };
 type Opening = {
   activeDays: string[];
   openOnHolidays: boolean;
+  openOnSchoolHolidays: boolean;
   morningStart: string;
   morningEnd: string;
   afternoonStart: string;
@@ -264,6 +265,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   // ── Jours d'ouverture + fériés + plages horaires. ───────────────────────────
   const [activeDays, setActiveDays] = useState<string[]>(opening.activeDays);
   const [openOnHolidays, setOpenOnHolidays] = useState(opening.openOnHolidays);
+  const [openOnSchoolHolidays, setOpenOnSchoolHolidays] = useState(opening.openOnSchoolHolidays);
   const [morningStart, setMorningStart] = useState(opening.morningStart);
   const [morningEnd, setMorningEnd] = useState(opening.morningEnd);
   const [afternoonStart, setAfternoonStart] = useState(opening.afternoonStart);
@@ -281,6 +283,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   type OpeningOverrides = Partial<{
     activeDays: string[];
     openOnHolidays: boolean;
+    openOnSchoolHolidays: boolean;
     morningStart: string;
     morningEnd: string;
     afternoonStart: string;
@@ -301,6 +304,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
           | "dim"
         )[],
         openOnHolidays: overrides.openOnHolidays ?? openOnHolidays,
+        openOnSchoolHolidays: overrides.openOnSchoolHolidays ?? openOnSchoolHolidays,
         morningStart: overrides.morningStart ?? morningStart,
         morningEnd: overrides.morningEnd ?? morningEnd,
         afternoonStart: overrides.afternoonStart ?? afternoonStart,
@@ -567,6 +571,29 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
           />
           Jours fériés
+        </label>
+        <label
+          title="Décoché : les jours de vacances scolaires sont hachurés et non réservables (agenda + réservations)."
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: ".3rem",
+            cursor: "pointer",
+            fontSize: ".75rem",
+            fontWeight: 500,
+          }}
+        >
+          <input
+            type="checkbox"
+            className="admin-cb"
+            checked={openOnSchoolHolidays}
+            onChange={(e) => {
+              setOpenOnSchoolHolidays(e.target.checked);
+              persistOpening({ openOnSchoolHolidays: e.target.checked });
+            }}
+            style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+          />
+          Vacances scolaires
         </label>
       </div>
 

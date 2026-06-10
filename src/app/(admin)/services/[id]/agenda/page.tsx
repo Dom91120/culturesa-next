@@ -23,6 +23,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       semaineAb: true,
       themesMode: true,
       openOnHolidays: true,
+      openOnSchoolHolidays: true,
       showPreviousExercices: true,
       gaugeAccompagnants: true,
     },

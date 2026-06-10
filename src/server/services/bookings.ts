@@ -143,21 +143,23 @@ export async function assertSlotCapacity(
 }
 
 /**
- * Vacances scolaires : si le demandeur de l'usager FERME pendant les vacances, refuse un
- * créneau ponctuel daté tombant en vacances scolaires de la zone configurée (port legacy
- * `bk_user_school_block`). No-op si l'usager n'a pas de demandeur (ex. admin) ou s'il est
- * ouvert en vacances. `db` accepte le client global ou un client transactionnel.
+ * Vacances scolaires : refuse un créneau ponctuel daté tombant en vacances scolaires de la
+ * zone configurée (port legacy `bk_user_school_block`) dès lors que le SERVICE ferme pendant
+ * les vacances (`serviceOpenOnSchoolHolidays` = false) OU que le demandeur de l'usager ferme.
+ * No-op si les deux acceptent les vacances. `db` accepte le client global ou transactionnel.
  */
 export async function assertNotSchoolHolidayForUser(
   db: Prisma.TransactionClient,
   userId: string,
   slotDate: Date,
+  serviceOpenOnSchoolHolidays: boolean,
 ) {
   const u = await db.user.findUnique({
     where: { id: userId },
     select: { demandeur: { select: { openOnSchoolHolidays: true } } },
   });
-  if (!u?.demandeur || u.demandeur.openOnSchoolHolidays) return;
+  const demandeurOpen = u?.demandeur?.openOnSchoolHolidays ?? true;
+  if (serviceOpenOnSchoolHolidays && demandeurOpen) return;
   const zone = (await getConfigMany(["school.zone"]))["school.zone"] || "A";
   const ranges = (
     await db.schoolHoliday.findMany({
@@ -211,8 +213,13 @@ export async function createUniqueBooking(
           );
         }
 
-        // Vacances scolaires : demandeur fermé en vacances → créneau ponctuel refusé.
-        await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate);
+        // Vacances scolaires : service OU demandeur fermé en vacances → créneau ponctuel refusé.
+        await assertNotSchoolHolidayForUser(
+          tx,
+          userId,
+          slot.slotDate,
+          slot.service.openOnSchoolHolidays,
+        );
 
         const capacity = slot.capacity ?? slot.service.capacity;
         // Capacité selon le mode jauge du service (même règle que l'affichage et les
@@ -512,6 +519,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       maxReservations: service.maxReservations,
       maxReservationsPeriod: service.maxReservationsPeriod,
       openOnHolidays: service.openOnHolidays,
+      openOnSchoolHolidays: service.openOnSchoolHolidays,
       showPreviousExercices: service.showPreviousExercices,
       gaugeAccompagnants: service.gaugeAccompagnants,
       validationBloquante: service.validationBloquante,
@@ -558,9 +566,11 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     themes: themeRows.map((t) => t.label),
     // Libellé du demandeur de l'usager (bandeau debug, cf. legacy #dem-info).
     demandeurLabel: user?.demandeur?.label ?? null,
-    // Demandeur ouvert pendant les vacances scolaires ? (défaut true si non rattaché,
-    // comme legacy : `if (!dem || dem.open_on_school_holidays) return mirrorDates`).
-    openOnSchoolHolidays: user?.demandeur?.openOnSchoolHolidays ?? true,
+    // Ouvert pendant les vacances scolaires ? Combinaison SERVICE ∧ DEMANDEUR : il faut que
+    // les deux acceptent les vacances pour que les jours de vacances restent réservables.
+    // (Demandeur : défaut true si non rattaché, comme legacy. Service : défaut false.)
+    openOnSchoolHolidays:
+      service.openOnSchoolHolidays && (user?.demandeur?.openOnSchoolHolidays ?? true),
     // Plages de vacances scolaires (YYYY-MM-DD) de la zone configurée.
     schoolHolidays,
     // Infos usager pour le récapitulatif de la modale de confirmation (legacy).

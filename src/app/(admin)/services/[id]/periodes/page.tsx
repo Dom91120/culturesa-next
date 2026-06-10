@@ -45,6 +45,7 @@ export default async function PeriodesPage({
           opening ?? {
             activeDays: [],
             openOnHolidays: false,
+            openOnSchoolHolidays: false,
             morningStart: "09:00",
             morningEnd: "12:00",
             afternoonStart: "14:00",

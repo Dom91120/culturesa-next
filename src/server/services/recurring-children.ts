@@ -55,12 +55,20 @@ export async function syncRecurringChildren(
     return { created: 0, updated: 0, deleted: del.count };
   }
 
-  // Politique vacances scolaires du demandeur de l'usager (spécifique usager).
-  const user = await tx.user.findUnique({
-    where: { id: parent.userId },
-    select: { demandeur: { select: { openOnSchoolHolidays: true } } },
-  });
-  const openOnSchool = user?.demandeur?.openOnSchoolHolidays ?? true;
+  // Politique vacances scolaires = combinaison SERVICE ∧ DEMANDEUR : on ne matérialise une
+  // occurrence en vacances que si le service ET le demandeur acceptent les vacances.
+  const [user, svc] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: parent.userId },
+      select: { demandeur: { select: { openOnSchoolHolidays: true } } },
+    }),
+    tx.service.findUnique({
+      where: { id: parent.serviceId },
+      select: { openOnSchoolHolidays: true },
+    }),
+  ]);
+  const openOnSchool =
+    (svc?.openOnSchoolHolidays ?? false) && (user?.demandeur?.openOnSchoolHolidays ?? true);
   let schoolRanges: { dateStart: string; dateEnd: string }[] = [];
   if (!openOnSchool) {
     const zone = opts?.schoolZone ?? (await getSchoolZone());
