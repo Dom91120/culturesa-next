@@ -1,4 +1,5 @@
 import { auth } from "@/server/auth";
+import { prisma } from "@/server/db";
 import type { Role } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -27,5 +28,23 @@ export async function requireRole(min: Role) {
   const session = await requireUser();
   const role = (session.user as { role?: Role }).role ?? "utilisateur";
   if (RANK[role] < RANK[min]) redirect("/");
+  return session;
+}
+
+/**
+ * Exige que l'usager puisse ADMINISTRER ce service : administrateur (tous les services)
+ * ou gestionnaire dont la liste `ServiceManager` contient ce service. Liste vide =
+ * aucun accès (deny par défaut, cf. legacy `require_manager_service`). Redirige vers la
+ * liste des services si l'accès est refusé (même logique que `requireRole`).
+ */
+export async function requireServiceManager(serviceId: string) {
+  const session = await requireRole("gestionnaire");
+  const role = (session.user as { role?: Role }).role ?? "utilisateur";
+  if (role === "administrateur") return session;
+  const mgr = await prisma.serviceManager.findUnique({
+    where: { userId_serviceId: { userId: session.user.id, serviceId } },
+    select: { serviceId: true },
+  });
+  if (!mgr) redirect("/services");
   return session;
 }

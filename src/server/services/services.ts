@@ -1,10 +1,30 @@
 import type { ServiceUpdateInput } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import { getSession } from "@/server/guards";
+import type { Role } from "@prisma/client";
 
 export function listServices() {
   return prisma.service.findMany({
     orderBy: [{ position: "asc" }, { label: "asc" }],
     include: { _count: { select: { slots: true, periods: true, bookings: true } } },
+  });
+}
+
+/**
+ * Services administrables par l'usager courant (liste + nav admin) : TOUS pour un
+ * administrateur ; uniquement ceux gérés (relation ServiceManager) pour un gestionnaire
+ * — liste vide = aucun (deny par défaut, cf. requireServiceManager).
+ */
+export async function listServicesForCurrentAdmin() {
+  const session = await getSession();
+  const role = (session?.user as { role?: Role } | undefined)?.role ?? "utilisateur";
+  const userId = session?.user?.id;
+  const where =
+    role === "administrateur" || !userId ? undefined : { managers: { some: { userId } } };
+  return prisma.service.findMany({
+    where,
+    orderBy: [{ position: "asc" }, { label: "asc" }],
+    select: { id: true, label: true, icon: true },
   });
 }
 

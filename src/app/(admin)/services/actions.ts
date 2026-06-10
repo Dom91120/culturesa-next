@@ -2,7 +2,7 @@
 
 import type { ActionState } from "@/lib/action-state";
 import { serviceCreateSchema, serviceUpdateSchema, stringIdSchema } from "@/schemas/config";
-import { requireRole } from "@/server/guards";
+import { requireRole, requireServiceManager } from "@/server/guards";
 import * as svc from "@/server/services/services";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -15,7 +15,11 @@ export async function saveServiceFromModalAction(input: {
   label: string;
   icon: string | null;
 }): Promise<ActionState> {
-  await requireRole("gestionnaire");
+  // Édition d'un service existant → réservé à ses gestionnaires (ou admin) ; création
+  // d'un nouveau service → tout gestionnaire (il ne pourra toutefois pas l'administrer
+  // tant qu'un admin ne l'a pas rattaché à sa liste).
+  if (input.id) await requireServiceManager(input.id);
+  else await requireRole("gestionnaire");
   const parsed = serviceCreateSchema.safeParse({ label: input.label });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message };
   const icon = input.icon?.trim() ? input.icon.trim().slice(0, 16) : null;
@@ -35,10 +39,12 @@ export async function saveServiceFromModalAction(input: {
 // Suppression groupée depuis la barre d'actions (la sélection est unique dans
 // l'UI, mais on accepte une liste pour coller au flux « cocher → Supprimer »).
 export async function deleteServicesAction(ids: string[]): Promise<ActionState> {
-  await requireRole("gestionnaire");
   for (const raw of ids) {
     const id = stringIdSchema.safeParse(raw);
-    if (id.success) await svc.deleteService(id.data);
+    if (!id.success) continue;
+    // Chaque service supprimé doit être géré par l'usager (ou admin).
+    await requireServiceManager(id.data);
+    await svc.deleteService(id.data);
   }
   revalidatePath("/services");
   return { ok: true };
@@ -48,9 +54,9 @@ export async function updateServiceAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireRole("gestionnaire");
   const id = stringIdSchema.safeParse(formData.get("id"));
   if (!id.success) return { ok: false, error: "Service introuvable" };
+  await requireServiceManager(id.data);
 
   const parsed = serviceUpdateSchema.safeParse({
     label: formData.get("label"),
@@ -81,9 +87,9 @@ export async function updateServiceAction(
 }
 
 export async function deleteServiceAction(formData: FormData) {
-  await requireRole("gestionnaire");
   const id = stringIdSchema.safeParse(formData.get("id"));
   if (!id.success) return;
+  await requireServiceManager(id.data);
   await svc.deleteService(id.data);
   revalidatePath("/services");
   redirect("/services");
