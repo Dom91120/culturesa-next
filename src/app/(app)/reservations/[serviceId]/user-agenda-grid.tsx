@@ -1885,19 +1885,54 @@ export function UserAgendaGrid({
   }, [router, autoRefreshSeconds]);
 
   // « Enregistrer → » : valide le brouillon (crée les ajouts, annule les retraits).
+  // Chaque opération RÉUSSIE est retirée du brouillon au fil de l'eau : en cas
+  // d'échec au milieu du lot, le panier restant ne contient que ce qui n'a PAS été
+  // appliqué — re-cliquer « Enregistrer » ne rejoue plus les annulations déjà
+  // faites (« Réservation introuvable ») et le brouillon reste récupérable.
   function commitPending() {
     setCommitting(true);
     setCommitError(null);
     startTransition(async () => {
+      const doneRemovals = new Set<number>();
+      const doneUpdates = new Set<string>();
+      const doneMoves = new Set<string>();
+      const doneAdds = new Set<string>();
+      const pruneDone = () => {
+        if (doneRemovals.size) {
+          setPendingRemovals((prev) => prev.filter((r) => !doneRemovals.has(r.bookingId)));
+        }
+        if (doneUpdates.size) {
+          setPendingUpdates((prev) =>
+            Object.fromEntries(Object.entries(prev).filter(([id]) => !doneUpdates.has(id))),
+          );
+        }
+        if (doneMoves.size) {
+          setPendingMoves((prev) =>
+            Object.fromEntries(Object.entries(prev).filter(([id]) => !doneMoves.has(id))),
+          );
+        }
+        if (doneAdds.size) {
+          setPendingAdds((prev) => prev.filter((a) => !doneAdds.has(a.key)));
+        }
+      };
       try {
         // Ordre : suppressions (libèrent des places) → modifications → déplacements
         // (capacité revérifiée côté serveur) → nouvelles réservations.
         for (const r of pendingRemovals) {
           const res = await cancelMyBookingAction(service.id, r.bookingId);
           if (!res.ok) throw new Error(res.error ?? "Échec d'une annulation.");
+          doneRemovals.add(r.bookingId);
         }
         for (const [id, u] of Object.entries(pendingUpdates)) {
-          await updateMyBookingAction(service.id, Number(id), u.enfants, u.accompagnants, u.theme);
+          const res = await updateMyBookingAction(
+            service.id,
+            Number(id),
+            u.enfants,
+            u.accompagnants,
+            u.theme,
+          );
+          if (!res.ok) throw new Error(res.error ?? "Échec d'une modification.");
+          doneUpdates.add(id);
         }
         for (const [id, m] of Object.entries(pendingMoves)) {
           const res = await moveMyBookingAction(service.id, Number(id), {
@@ -1907,6 +1942,7 @@ export function UserAgendaGrid({
             week: m.week,
           });
           if (!res.ok) throw new Error(res.error ?? "Échec d'un déplacement.");
+          doneMoves.add(id);
         }
         for (const a of pendingAdds) {
           const res = a.ponctuel
@@ -1921,13 +1957,18 @@ export function UserAgendaGrid({
                 a.accompagnants,
               );
           if (!res.ok) throw new Error(res.error ?? "Échec d'une réservation.");
+          doneAdds.add(a.key);
         }
         setCommitting(false);
         clearPending();
         router.refresh();
       } catch (e) {
+        // Échec partiel : on retire du panier ce qui a réussi et on resynchronise
+        // l'affichage avec ce qui a été réellement appliqué côté serveur.
+        pruneDone();
         setCommitting(false);
         setCommitError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
+        router.refresh();
       }
     });
   }

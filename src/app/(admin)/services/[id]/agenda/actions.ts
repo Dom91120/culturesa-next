@@ -70,10 +70,10 @@ export async function setBookingValidatedAction(
   bookingId: number,
   serviceId: string,
   validated: boolean,
-) {
+): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
-  if (!id.success) return;
+  if (!id.success) return { ok: false, error: "Données invalides." };
   // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
   const b = await prisma.booking.findFirst({
     where: { id: id.data, serviceId },
@@ -92,9 +92,11 @@ export async function setBookingValidatedAction(
       slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
     },
   });
-  if (!b) return;
+  if (!b) return { ok: false, error: "Réservation introuvable." };
   // Miroir non validable ; parent/​autonome verrouillé par un pointage non plus.
-  if (await bookingLocked(b)) return;
+  if (await bookingLocked(b)) {
+    return { ok: false, error: "Réservation verrouillée (séance pointée ou miroir)." };
+  }
   const changed = b.validated !== validated;
   // Validation au niveau de la SÉRIE : le parent + propagation à tous ses miroirs.
   await prisma.$transaction([
@@ -118,16 +120,17 @@ export async function setBookingValidatedAction(
       theme: b.themeLabel ?? "",
     });
   }
+  return { ok: true };
 }
 
 export async function setBookingPointageAction(
   bookingId: number,
   serviceId: string,
   pointage: "present" | "absent" | null,
-) {
+): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
-  if (!id.success) return;
+  if (!id.success) return { ok: false, error: "Données invalides." };
   // Les parents (récurrents) NE sont PAS pointables : seuls les miroirs (et les
   // ponctuelles autonomes) le sont.
   // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
@@ -135,9 +138,13 @@ export async function setBookingPointageAction(
     where: { id: id.data, serviceId },
     select: { bookingType: true },
   });
-  if (!b || b.bookingType === "recurring") return;
+  if (!b) return { ok: false, error: "Réservation introuvable." };
+  if (b.bookingType === "recurring") {
+    return { ok: false, error: "Une récurrente se pointe sur ses séances datées." };
+  }
   await prisma.booking.update({ where: { id: id.data }, data: { pointage } });
   revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true };
 }
 
 /**
@@ -380,10 +387,10 @@ export async function deleteBookingAdminAction(
   bookingId: number,
   serviceId: string,
   motif?: string,
-) {
+): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
-  if (!id.success) return;
+  if (!id.success) return { ok: false, error: "Données invalides." };
   // Infos nécessaires au mail + verrou, lues AVANT la suppression.
   // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
   const booking = await prisma.booking.findFirst({
@@ -399,7 +406,7 @@ export async function deleteBookingAdminAction(
       slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
     },
   });
-  if (!booking) return;
+  if (!booking) return { ok: false, error: "Réservation introuvable." };
   // Miroir immuable, ou réservation/​parent verrouillé par un pointage → pas de suppression.
   if (
     await bookingLocked({
@@ -409,17 +416,20 @@ export async function deleteBookingAdminAction(
       pointage: booking.pointage,
     })
   ) {
-    return;
+    return { ok: false, error: "Réservation verrouillée (séance pointée ou miroir)." };
   }
   await prisma.booking.delete({ where: { id: id.data } });
   revalidatePath(`/services/${serviceId}/agenda`);
 
-  // Notification usager (best-effort) : n'interrompt pas le flux en cas d'échec.
+  // Notification usager (best-effort) : n'interrompt pas le flux en cas d'échec —
+  // la suppression est déjà committée, tous les chemins ci-dessous sont un succès.
   const email = booking?.user?.email?.trim();
   if (booking && email?.includes("@")) {
     const wasValidated = booking.validated;
     // Préférence « Échanges » : ce type d'e-mail est-il activé ?
-    if (!(await isMailEnabled(wasValidated ? "booking_cancelled" : "booking_refused"))) return;
+    if (!(await isMailEnabled(wasValidated ? "booking_cancelled" : "booking_refused"))) {
+      return { ok: true };
+    }
     const serviceLabel = booking.service?.label ?? "";
     const slotLabel = booking.slot ? formatSlotLabel(booking.slot) : "";
     // Période : par id (récurrent) ou par date couverte (ponctuel).
@@ -449,6 +459,7 @@ export async function deleteBookingAdminAction(
       text: htmlToText(inner),
     });
   }
+  return { ok: true };
 }
 
 const detailSchema = z.object({

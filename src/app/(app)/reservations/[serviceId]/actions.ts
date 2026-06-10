@@ -18,6 +18,7 @@ import {
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 function revalidate(serviceId: string) {
   revalidatePath(`/reservations/${serviceId}`);
@@ -25,16 +26,36 @@ function revalidate(serviceId: string) {
 
 type Result = { ok: boolean; error?: string };
 
+// Validation runtime des entrées de réservation récurrente (bornes compteurs,
+// thème ≤ 255) : ces server actions sont appelables avec des valeurs arbitraires,
+// le type TypeScript seul ne protège pas (audit architecture).
+const reserveRecurringSchema = z.object({
+  slotId: z.string().trim().min(1),
+  periodId: z.coerce.number().int().positive(),
+  theme: z.string().trim().max(255).default(""),
+  enfants: z.coerce.number().int().min(0).max(999).default(0),
+  accompagnants: z.coerce.number().int().min(0).max(999).default(0),
+});
+
 /** Réserve un créneau RÉCURRENT pour l'usager (jauge anti-surbooking, sérialisable). */
 export async function reserveRecurringAction(
   serviceId: string,
-  slotId: string,
-  periodId: number,
+  rawSlotId: string,
+  rawPeriodId: number,
   week = "",
-  theme = "",
-  enfants = 0,
-  accompagnants = 0,
+  rawTheme = "",
+  rawEnfants = 0,
+  rawAccompagnants = 0,
 ): Promise<Result> {
+  const parsed = reserveRecurringSchema.safeParse({
+    slotId: rawSlotId,
+    periodId: rawPeriodId,
+    theme: rawTheme,
+    enfants: rawEnfants,
+    accompagnants: rawAccompagnants,
+  });
+  if (!parsed.success) return { ok: false, error: "Données invalides." };
+  const { slotId, periodId, theme, enfants, accompagnants } = parsed.data;
   const session = await requireUser();
   const wk = week === "A" || week === "B" ? week : "";
   // Données pour l'e-mail de confirmation, capturées dans la transaction (envoi après commit).

@@ -2,7 +2,7 @@ import { earliestBookableISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
-import type { BookingCreateInput } from "@/schemas/booking";
+import { type BookingCreateInput, bookingCreateSchema } from "@/schemas/booking";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
@@ -181,9 +181,14 @@ export async function assertNotSchoolHolidayForUser(
  */
 export async function createUniqueBooking(
   userId: string,
-  input: BookingCreateInput,
+  rawInput: BookingCreateInput,
   validated = false,
 ) {
+  // Validation runtime (bornes compteurs, thème ≤ 255) : le type seul ne protège
+  // pas une server action des entrées hors bornes (audit architecture).
+  const parsedInput = bookingCreateSchema.safeParse(rawInput);
+  if (!parsedInput.success) throw new BookingError("Données invalides.");
+  const input = parsedInput.data;
   try {
     return await prisma.$transaction(
       async (tx) => {

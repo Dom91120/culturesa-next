@@ -212,6 +212,15 @@ export function AgendaGrid({
   const [capSaved, setCapSaved] = useState(false);
   const capSaveTimer = useRef<number | null>(null);
   const capFlashTimer = useRef<number | null>(null);
+  // Au démontage : annule les timers en attente (sinon l'autosave débounce part
+  // après navigation et le flash « ✓ » fait un setState sur composant démonté).
+  useEffect(
+    () => () => {
+      if (capSaveTimer.current) window.clearTimeout(capSaveTimer.current);
+      if (capFlashTimer.current) window.clearTimeout(capFlashTimer.current);
+    },
+    [],
+  );
   // Édition du champ Capacité : met à jour l'état et autosauvegarde (débounce 500 ms)
   // la capacité par défaut du service.
   function onCapChange(v: string) {
@@ -938,17 +947,9 @@ export function AgendaGrid({
   // un jour appartenant à une autre période (semaine à cheval) ou sur un férié.
   const dayBlocks = (d: string): Block[] => (isDayDisabled(d) ? [] : (blocksByDay[d] ?? []));
 
-  function run(p: Promise<unknown>) {
-    setDetail(null);
-    startTransition(async () => {
-      await p;
-      router.refresh();
-    });
-  }
-
-  // Variante de `run` pour les actions qui renvoient { ok, error } : en cas d'échec
-  // (ex. créneau complet / jauge atteinte sur un déplacement ou copier/couper), on
-  // affiche l'erreur via le toast d'avertissement au lieu de l'ignorer silencieusement.
+  // Exécuteur UNIQUE des actions serveur (contrat { ok, error } homogène) : en cas
+  // d'échec (créneau complet, réservation verrouillée, donnée invalide…), l'erreur
+  // est affichée via le toast d'avertissement — plus aucun échec silencieux.
   function runResult(p: Promise<{ ok: boolean; error?: string }>) {
     setDetail(null);
     startTransition(async () => {
@@ -957,6 +958,17 @@ export function AgendaGrid({
         showWarnToast(res.error ?? "Action impossible.");
         return;
       }
+      router.refresh();
+    });
+  }
+  // Variante pour un LOT d'actions (Promise.all) : première erreur affichée ;
+  // l'écran est rafraîchi même en cas d'échec partiel (certaines ont pu réussir).
+  function runResults(p: Promise<{ ok: boolean; error?: string }[]>) {
+    setDetail(null);
+    startTransition(async () => {
+      const results = await p;
+      const failed = results.find((r) => !r.ok);
+      if (failed) showWarnToast(failed.error ?? "Action impossible.");
       router.refresh();
     });
   }
@@ -1082,7 +1094,7 @@ export function AgendaGrid({
       setCopyConfirm(null);
       return;
     }
-    run(
+    runResult(
       copyWeekSlotsAction({
         serviceId: service.id,
         periodId: effectivePeriodId,
@@ -1160,7 +1172,7 @@ export function AgendaGrid({
     if (mode === "model") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
       const weeks = abMode && effectiveWeek ? effectiveWeek : "";
-      run(
+      runResults(
         Promise.all(
           targets.flatMap((dayKey) =>
             segments.map(([s, e]) =>
@@ -1180,7 +1192,7 @@ export function AgendaGrid({
       );
     } else {
       if (!mondayStr) return;
-      run(
+      runResults(
         Promise.all(
           targets.flatMap((dayKey) =>
             segments.map(([s, e]) =>
@@ -1257,7 +1269,7 @@ export function AgendaGrid({
     if (mode === "model") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
       const weeks = abMode && effectiveWeek ? effectiveWeek : "";
-      run(
+      runResults(
         Promise.all(
           targets.map((dayKey) =>
             createRecurringSlotAction({
@@ -1275,7 +1287,7 @@ export function AgendaGrid({
       );
     } else {
       if (!mondayStr) return;
-      run(
+      runResults(
         Promise.all(
           targets.map((dayKey) =>
             createUniqueSlotAction({
@@ -1336,7 +1348,7 @@ export function AgendaGrid({
 
   function confirmDeleteSlot() {
     if (!slotDeleteTarget) return;
-    run(deleteSlotAction(service.id, slotDeleteTarget));
+    runResult(deleteSlotAction(service.id, slotDeleteTarget));
     setSlotDeleteTarget(null);
   }
 
@@ -1406,7 +1418,7 @@ export function AgendaGrid({
     const id = deleteTarget.id;
     setDeleteTarget(null);
     setDetail(null);
-    run(deleteBookingAdminAction(id, service.id, motif));
+    runResult(deleteBookingAdminAction(id, service.id, motif));
   }
 
   // Ouvre la modale de configuration d'un créneau (capacité + demandeurs autorisés),
@@ -1493,7 +1505,7 @@ export function AgendaGrid({
     const endTime = minToHHMM(endMin);
     if (md.isUnique) {
       if (!mondayStr) return;
-      run(
+      runResult(
         moveUniqueSlotAction({
           serviceId: service.id,
           slotId: md.slotId,
@@ -1503,7 +1515,7 @@ export function AgendaGrid({
         }),
       );
     } else {
-      run(
+      runResult(
         moveRecurringSlotAction({
           serviceId: service.id,
           slotId: md.slotId,
@@ -1592,7 +1604,7 @@ export function AgendaGrid({
     const endTime = minToHHMM(rd.curEnd);
     if (rd.isUnique) {
       if (!mondayStr) return;
-      run(
+      runResult(
         moveUniqueSlotAction({
           serviceId: service.id,
           slotId: rd.slotId,
@@ -1602,7 +1614,7 @@ export function AgendaGrid({
         }),
       );
     } else {
-      run(
+      runResult(
         moveRecurringSlotAction({
           serviceId: service.id,
           slotId: rd.slotId,
@@ -1685,7 +1697,7 @@ export function AgendaGrid({
     const endTime = minToHHMM(hd.endMin);
     if (hd.isUnique) {
       if (!mondayStr) return;
-      run(
+      runResults(
         Promise.all(
           targets.map((dayKey) =>
             createUniqueSlotAction({
@@ -1702,7 +1714,7 @@ export function AgendaGrid({
     } else {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
       const weeks = abMode && effectiveWeek ? effectiveWeek : "";
-      run(
+      runResults(
         Promise.all(
           targets.map((dayKey) =>
             createRecurringSlotAction({
@@ -1768,13 +1780,13 @@ export function AgendaGrid({
       // On laisse le clic ouvrir la fiche plutôt que d'agir silencieusement.
       if (lockedByPointage(bk)) return false;
       // Bascule validé ↔ en attente (legacy _quickValidate togglait dans les deux sens).
-      run(setBookingValidatedAction(bk.id, service.id, !bk.validated));
+      runResult(setBookingValidatedAction(bk.id, service.id, !bk.validated));
       return true;
     }
     if (pointageMode && mode === "realweek") {
       // Cycle présent → absent → effacé.
       const next: Pointage = !bk.pointage ? "present" : bk.pointage === "present" ? "absent" : null;
-      run(setBookingPointageAction(bk.id, service.id, next));
+      runResult(setBookingPointageAction(bk.id, service.id, next));
       return true;
     }
     return false;
@@ -3745,7 +3757,7 @@ export function AgendaGrid({
                 setDetail(null);
                 router.refresh();
               }}
-              run={run}
+              run={runResult}
             />
           );
         })()}
@@ -4573,7 +4585,8 @@ function BookingDetailModal({
   readOnly: boolean;
   onClose: () => void;
   onSaved: () => void;
-  run: (p: Promise<unknown>) => void;
+  // Exécuteur d'action du parent (contrat { ok, error } : un échec affiche un toast).
+  run: (p: Promise<{ ok: boolean; error?: string }>) => void;
 }) {
   const [, startTransition] = useTransition();
   const [enfants, setEnfants] = useState(String(booking.enfants));
