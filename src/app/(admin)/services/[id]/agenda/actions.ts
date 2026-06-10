@@ -71,17 +71,47 @@ export async function setBookingValidatedAction(
   if (!id.success) return;
   const b = await prisma.booking.findUnique({
     where: { id: id.data },
-    select: { id: true, bookingType: true, parentBookingId: true, pointage: true },
+    select: {
+      id: true,
+      bookingType: true,
+      parentBookingId: true,
+      pointage: true,
+      validated: true,
+      userId: true,
+      periodId: true,
+      enfants: true,
+      accompagnants: true,
+      themeLabel: true,
+      service: { select: { label: true } },
+      slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
+    },
   });
   if (!b) return;
   // Miroir non validable ; parent/​autonome verrouillé par un pointage non plus.
   if (await bookingLocked(b)) return;
+  const changed = b.validated !== validated;
   // Validation au niveau de la SÉRIE : le parent + propagation à tous ses miroirs.
   await prisma.$transaction([
     prisma.booking.update({ where: { id: id.data }, data: { validated } }),
     prisma.booking.updateMany({ where: { parentBookingId: id.data }, data: { validated } }),
   ]);
   revalidatePath(`/services/${serviceId}/agenda`);
+
+  // Notifie l'usager d'une (dé)validation MANUELLE par le gestionnaire (best-effort,
+  // uniquement sur transition réelle) : e-mail « validée » ou « en attente » (port legacy).
+  if (changed && b.slot) {
+    await sendBookingConfirmationMail({
+      userId: b.userId,
+      serviceId,
+      serviceLabel: b.service?.label ?? "",
+      validated,
+      slot: b.slot,
+      periodId: b.periodId,
+      enfants: b.enfants,
+      accompagnants: b.accompagnants,
+      theme: b.themeLabel ?? "",
+    });
+  }
 }
 
 export async function setBookingPointageAction(
