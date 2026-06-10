@@ -1,4 +1,5 @@
 import { wrapEmailHtml } from "@/lib/email-theme";
+import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabel } from "@/server/services/booking-mail";
@@ -47,6 +48,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
   if (!(await isMailEnabled("booking_reminder"))) return result;
 
   const tpl = await getMailTemplate("booking_reminder");
+  const appUrl = await getAppUrl();
   const todayMidnight = fromISO(toISO(now));
 
   for (const [kind, offset] of OFFSETS) {
@@ -129,7 +131,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
         await sendMailOrQueue({
           to: email,
           subject,
-          html: wrapEmailHtml(inner, { preheader: subject }),
+          html: wrapEmailHtml(inner, { preheader: subject, appUrl }),
           text: htmlToText(inner),
         });
         // Journalise l'envoi (best-effort déjà géré par la file). La contrainte

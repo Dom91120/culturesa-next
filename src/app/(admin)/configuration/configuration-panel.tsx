@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   refreshSchoolHolidaysAction,
   setAgendaRefreshAction,
+  setAppUrlAction,
   setDebugModeAction,
   setReservationsRefreshAction,
   setSchoolZoneAction,
@@ -15,6 +16,7 @@ type Props = {
   refreshSeconds: number;
   agendaRefreshSeconds: number;
   debugMode: boolean;
+  appUrl: string;
 };
 
 // Choix proposés pour l'auto-rafraîchissement de la page Réservations (en secondes).
@@ -33,6 +35,7 @@ export function ConfigurationPanel({
   refreshSeconds: initialRefresh,
   agendaRefreshSeconds: initialAgendaRefresh,
   debugMode: initialDebug,
+  appUrl: initialAppUrl,
 }: Props) {
   const [zone, setZone] = useState(initialZone === "B" || initialZone === "C" ? initialZone : "A");
   const [count, setCount] = useState(holidayCount);
@@ -41,7 +44,20 @@ export function ConfigurationPanel({
   const [agendaRefresh, setAgendaRefresh] = useState(initialAgendaRefresh);
   const [agendaRefreshSaved, setAgendaRefreshSaved] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+  const [appUrl, setAppUrl] = useState(initialAppUrl);
+  const [appUrlSaved, setAppUrlSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  // URL de l'application (lien « Portail CultuRésa » des e-mails) — enregistrée à la
+  // perte de focus.
+  function saveAppUrl() {
+    if (appUrl.trim() === initialAppUrl.trim()) return;
+    setAppUrlSaved(false);
+    startTransition(async () => {
+      const res = await setAppUrlAction(appUrl.trim());
+      if (res?.ok) setAppUrlSaved(true);
+    });
+  }
 
   function onRefreshChange(value: number) {
     setRefreshSeconds(value);
@@ -151,6 +167,45 @@ export function ConfigurationPanel({
         </button>
         <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
           {info ?? `${count} période(s) en base`}
+        </span>
+      </label>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: ".5rem",
+          fontSize: ".85rem",
+          flexWrap: "wrap",
+          marginTop: ".75rem",
+        }}
+      >
+        URL de l'application
+        <input
+          type="url"
+          value={appUrl}
+          placeholder="https://culturesa.exemple.fr"
+          onChange={(e) => {
+            setAppUrl(e.target.value);
+            setAppUrlSaved(false);
+          }}
+          onBlur={saveAppUrl}
+          disabled={pending}
+          style={{
+            fontSize: ".85rem",
+            padding: ".25rem .45rem",
+            borderRadius: "var(--rad-sm)",
+            border: "1px solid var(--border)",
+            background: "var(--surface2)",
+            color: "var(--text)",
+            minWidth: 260,
+          }}
+        />
+        {appUrlSaved && (
+          <span style={{ fontSize: ".72rem", color: "var(--accent)" }}>✅ Enregistré</span>
+        )}
+        <span style={{ fontSize: ".72rem", color: "var(--muted)", flexBasis: "100%" }}>
+          Lien « Portail CultuRésa » des e-mails. Laisser vide pour ne pas afficher de lien.
         </span>
       </label>
 

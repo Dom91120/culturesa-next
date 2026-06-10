@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
+import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import {
@@ -95,7 +96,7 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
   await sendMailOrQueue({
     to: email,
     subject,
-    html: wrapEmailHtml(inner, { preheader: subject }),
+    html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
     text: htmlToText(inner),
   });
 }

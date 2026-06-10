@@ -9,6 +9,21 @@ export async function getConfigMany(keys: string[]): Promise<Record<string, stri
   return out;
 }
 
+/** Clé app_config de l'URL publique de l'application (saisie en Administration › Configuration). */
+export const APP_URL_KEY = "app.url";
+
+/**
+ * URL publique de l'application (pour les liens dans les e-mails). Priorité à la valeur
+ * saisie en Administration › Configuration (`app.url`), repli sur les variables
+ * d'environnement. Sans slash final ; "" si rien n'est configuré.
+ */
+export async function getAppUrl(): Promise<string> {
+  const cfg = (await getConfigMany([APP_URL_KEY]))[APP_URL_KEY]?.trim();
+  const fromEnv =
+    process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? "";
+  return (cfg || fromEnv).replace(/\/$/, "");
+}
+
 /** Écrit une clé de configuration applicative. */
 export async function setConfig(key: string, value: string): Promise<void> {
   await prisma.appConfig.upsert({

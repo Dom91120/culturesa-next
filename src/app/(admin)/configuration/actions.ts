@@ -1,7 +1,7 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
-import { setConfig } from "@/server/config";
+import { APP_URL_KEY, setConfig } from "@/server/config";
 import { requireRole } from "@/server/guards";
 import { countSchoolHolidays, refreshSchoolHolidaysFromGov } from "@/server/services/holidays";
 import { revalidatePath } from "next/cache";
@@ -45,6 +45,22 @@ export async function setAgendaRefreshAction(seconds: number): Promise<ActionSta
   const parsed = refreshSecondsSchema.safeParse(seconds);
   if (!parsed.success) return { ok: false, error: "Valeur invalide." };
   await setConfig("agenda.autoRefreshSeconds", String(parsed.data));
+  revalidatePath("/configuration");
+  return { ok: true };
+}
+
+const appUrlSchema = z.string().trim().max(300);
+
+/**
+ * Enregistre l'URL publique de l'application (clé app_config `app.url`), utilisée pour le
+ * lien « Portail CultuRésa » des e-mails. Vide = pas de lien (repli sur les variables
+ * d'environnement). Le slash final est retiré.
+ */
+export async function setAppUrlAction(url: string): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = appUrlSchema.safeParse(url);
+  if (!parsed.success) return { ok: false, error: "URL invalide." };
+  await setConfig(APP_URL_KEY, parsed.data.replace(/\/$/, ""));
   revalidatePath("/configuration");
   return { ok: true };
 }

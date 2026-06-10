@@ -1,4 +1,5 @@
 import { wrapEmailHtml } from "@/lib/email-theme";
+import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabel } from "@/server/services/booking-mail";
@@ -115,6 +116,7 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
     },
   });
 
+  const appUrl = await getAppUrl();
   let notified = 0;
   let emails = 0;
 
@@ -166,7 +168,7 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
 <ul style="padding-left:1.2em">${items.join("")}</ul>
 <p>Vous pouvez les consulter dans l'agenda du service sur CultuRésa.</p>`;
       const subject = `Auto-validations — ${svc.label}`;
-      const html = wrapEmailHtml(inner, { preheader: subject });
+      const html = wrapEmailHtml(inner, { preheader: subject, appUrl });
       const text = htmlToText(inner);
       for (const to of managers) {
         await sendMailOrQueue({ to, subject, html, text });

@@ -1,6 +1,7 @@
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import { PASSWORD_POLICY_MESSAGE, isPasswordValid } from "@/lib/password";
 import { verifyCaptcha } from "@/server/captcha";
+import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMail } from "@/server/mailer";
 import {
@@ -40,7 +41,7 @@ async function sendAccountMail(
   await sendMail({
     to: email,
     subject,
-    html: wrapEmailHtml(inner, { preheader: subject }),
+    html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
     text: htmlToText(inner),
   });
 }

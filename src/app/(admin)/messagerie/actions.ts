@@ -2,7 +2,7 @@
 
 import type { ActionState } from "@/lib/action-state";
 import { wrapEmailHtml } from "@/lib/email-theme";
-import { setConfigMany } from "@/server/config";
+import { getAppUrl, setConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { sendMail } from "@/server/mailer";
@@ -74,7 +74,7 @@ export async function sendTestMailAction(to: string): Promise<ActionState> {
     await sendMail({
       to: parsed.data,
       subject,
-      html: wrapEmailHtml(inner, { preheader: subject }),
+      html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
       text: htmlToText(inner),
     });
   } catch (e) {

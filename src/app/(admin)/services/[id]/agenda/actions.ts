@@ -2,6 +2,7 @@
 
 import { todayParisISO } from "@/lib/booking-delay";
 import { wrapEmailHtml } from "@/lib/email-theme";
+import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import { sendMailOrQueue } from "@/server/mailer";
@@ -436,7 +437,7 @@ export async function deleteBookingAdminAction(
     await sendMailOrQueue({
       to: email,
       subject,
-      html: wrapEmailHtml(inner, { preheader: subject }),
+      html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
       text: htmlToText(inner),
     });
   }

@@ -1,5 +1,5 @@
 import { wrapEmailHtml } from "@/lib/email-theme";
-import { getConfigMany } from "@/server/config";
+import { getAppUrl, getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMail } from "@/server/mailer";
 import {
@@ -364,7 +364,7 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
       await sendMail({
         to: u.email,
         subject,
-        html: wrapEmailHtml(inner, { preheader: subject }),
+        html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
         text: htmlToText(inner),
       });
     } catch {

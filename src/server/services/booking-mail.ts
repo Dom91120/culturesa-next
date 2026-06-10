@@ -1,4 +1,5 @@
 import { wrapEmailHtml } from "@/lib/email-theme";
+import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { isMailEnabled } from "@/server/services/mail-prefs";
@@ -144,7 +145,7 @@ export async function sendBookingConfirmationMail(
     await sendMailOrQueue({
       to: email,
       subject,
-      html: wrapEmailHtml(inner, { preheader: subject }),
+      html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
       text: htmlToText(inner),
     });
   } catch (e) {

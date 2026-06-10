@@ -23,9 +23,15 @@ export function emailButton(href: string, label: string): string {
 
 export function wrapEmailHtml(
   innerHtml: string,
-  opts?: { preheader?: string; logoSrc?: string },
+  opts?: { preheader?: string; logoSrc?: string; appUrl?: string },
 ): string {
   const t = THEME;
+  // « Portail CultuRésa » : lien vers l'application si l'URL est configurée (Administration
+  // › Configuration), sinon simple texte. Couleur forcée (le pied est sur fond vert foncé).
+  const appUrl = opts?.appUrl?.trim();
+  const portail = appUrl
+    ? `<a href="${appUrl.replace(/"/g, "%22")}" style="color:#ffffff;text-decoration:underline;">Portail CultuRésa</a>`
+    : "Portail CultuRésa";
   // Source du logo : par défaut la pièce jointe inline CID (e-mails réels) ; l'aperçu
   // de l'éditeur passe l'URL publique "/email-logo.png".
   const logoSrc = opts?.logoSrc ?? "cid:culturesa-logo";
@@ -67,7 +73,7 @@ ${preheader}
 ${innerHtml}
       </td></tr>
       <tr><td style="background:${t.green};padding:16px 28px;color:${t.headerBg};font-size:12px;line-height:1.5;font-family:Arial,Helvetica,sans-serif;">
-        Ville de Châtillon — service CultuRésa<br>
+        Ville de Châtillon — ${portail}<br>
         Message automatique, merci de ne pas répondre à cet e-mail.
       </td></tr>
     </table>
