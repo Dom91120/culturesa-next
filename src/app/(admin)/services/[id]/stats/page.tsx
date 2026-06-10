@@ -2,6 +2,7 @@ import { prisma } from "@/server/db";
 import { type StatsType, getServiceStats } from "@/server/services/stats";
 import { notFound } from "next/navigation";
 import { StatsFilters } from "./stats-filters";
+import { StatsToolbar } from "./stats-toolbar";
 
 function StatCard({
   value,
@@ -202,12 +203,30 @@ export default async function StatsPage({
   const monthMax = Math.max(1, ...stats.byMonth.map((r) => r.value));
   const structMax = Math.max(1, ...stats.topStructures.map((r) => r.value));
   const niveauMax = Math.max(1, ...stats.topNiveaux.map((r) => r.value));
+  const effMax = Math.max(1, ...stats.effectifsByExercice.map((r) => r.value));
+
+  const eqs = new URLSearchParams();
+  if (type !== "all") eqs.set("type", type);
+  if (dateFrom) eqs.set("from", dateFrom);
+  if (dateTo) eqs.set("to", dateTo);
+  const exportHref = `/services/${id}/stats/export${eqs.toString() ? `?${eqs}` : ""}`;
 
   return (
     <div>
-      <div className="panel-title">
-        <span className="dot" />
-        Statistiques — {service.label}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: ".75rem",
+          flexWrap: "wrap",
+        }}
+      >
+        <div className="panel-title" style={{ marginBottom: 0 }}>
+          <span className="dot" />
+          Statistiques — {service.label}
+        </div>
+        <StatsToolbar exportHref={exportHref} />
       </div>
 
       <StatsFilters
@@ -312,6 +331,15 @@ export default async function StatsPage({
               color="#a07dd4"
               suffix="%"
             />
+          ))}
+        </Panel>
+
+        <Panel
+          title="Effectifs (enfants) par exercice"
+          empty={stats.effectifsByExercice.length === 0}
+        >
+          {stats.effectifsByExercice.map((r) => (
+            <BarRow key={r.label} label={r.label} value={r.value} max={effMax} color="#6dceaa" />
           ))}
         </Panel>
       </div>

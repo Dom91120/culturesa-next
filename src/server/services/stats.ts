@@ -40,6 +40,9 @@ export type ServiceStats = {
   topNiveaux: LabeledCount[];
   // Taux de remplissage moyen (%, unités de jauge) des créneaux réservés, par structure.
   fillByStructure: LabeledCount[];
+  // Effectifs (enfants) par exercice — TOUS exercices (ignore la plage de dates), pour
+  // suivre l'évolution d'une année scolaire à l'autre. Respecte le filtre de type.
+  effectifsByExercice: LabeledCount[];
 };
 
 /** Date UTC → 'YYYY-MM-DD'. */
@@ -84,6 +87,13 @@ function dayKeyOf(slotDay: string | null, slotDate: Date | null): string | null 
   return null;
 }
 
+/** Libellé d'exercice « année scolaire » Y-Y+1 d'une date (mois ≥ août → Y, sinon Y-1). */
+function schoolYearLabel(d: Date): string {
+  const y = d.getUTCFullYear();
+  const ssy = d.getUTCMonth() + 1 >= 8 ? y : y - 1;
+  return `${ssy}-${ssy + 1}`;
+}
+
 function topN(map: Map<string, number>, n: number): LabeledCount[] {
   return [...map.entries()]
     .map(([label, value]) => ({ label, value }))
@@ -100,13 +110,16 @@ export async function getServiceStats(
 
   // Dates des périodes du service (Booking n'a pas de relation `period` : periodId peut
   // valoir 0 pour un ponctuel). Sert à dater les réservations récurrentes (sans slotDate).
+  const periodRows = await prisma.period.findMany({
+    where: { serviceId },
+    select: { id: true, dateStart: true, dateEnd: true, exercice: { select: { label: true } } },
+  });
   const periodsById = new Map<number, { dateStart: Date | null; dateEnd: Date | null }>(
-    (
-      await prisma.period.findMany({
-        where: { serviceId },
-        select: { id: true, dateStart: true, dateEnd: true },
-      })
-    ).map((p) => [p.id, { dateStart: p.dateStart, dateEnd: p.dateEnd }]),
+    periodRows.map((p) => [p.id, { dateStart: p.dateStart, dateEnd: p.dateEnd }]),
+  );
+  // periodId → libellé d'exercice (pour l'évolution des effectifs par exercice).
+  const exoByPeriod = new Map<number, string>(
+    periodRows.filter((p) => p.exercice?.label).map((p) => [p.id, p.exercice?.label ?? ""]),
   );
 
   // ── Population VOLUME (hors miroirs) ──────────────────────────────────────────
@@ -210,6 +223,21 @@ export async function getServiceStats(
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
 
+  // Effectifs (enfants) par exercice — TOUS exercices (pas de filtre de dates), filtre type.
+  const exoMap = new Map<string, number>();
+  for (const b of volumeRows) {
+    if (type === "rec" && b.bookingType !== "recurring") continue;
+    if (type === "uniq" && b.bookingType !== "unique") continue;
+    const label = b.slot.slotDate
+      ? schoolYearLabel(b.slot.slotDate)
+      : (exoByPeriod.get(b.periodId) ?? null);
+    if (!label) continue;
+    exoMap.set(label, (exoMap.get(label) ?? 0) + b.enfants);
+  }
+  const effectifsByExercice = [...exoMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, value]) => ({ label, value }));
+
   // ── Population PRÉVU/RÉALISÉ (occurrences datées passées, validées) ────────────
   const occRows = await prisma.booking.findMany({
     where: { serviceId, validated: true, slot: { slotDate: { not: null } } },
@@ -248,5 +276,6 @@ export async function getServiceStats(
     topStructures: topN(structMap, 10),
     topNiveaux: topN(niveauMap, 10),
     fillByStructure,
+    effectifsByExercice,
   };
 }
