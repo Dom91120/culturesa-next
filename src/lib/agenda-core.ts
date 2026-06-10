@@ -1,0 +1,209 @@
+// Socle PARTAGÉ des deux grilles agenda (admin `agenda-grid.tsx` et usager
+// `user-agenda-grid.tsx`) : helpers PURS de dates, créneaux et layout, extraits
+// à l'identique des deux copies locales (audit duplication 2026-06). Toute
+// correction ici profite aux deux écrans — ne pas re-dupliquer dans les grilles.
+
+import { slotWeekTag } from "@/lib/iso-week";
+import type { CSSProperties } from "react";
+
+// Parité A/B : convention unique de l'app (lib/iso-week) — ré-exportée pour que
+// les grilles n'aient qu'un seul point d'import du socle.
+export { slotWeekTag };
+
+export const DAY_OFFSET: Record<string, number> = {
+  lun: 0,
+  mar: 1,
+  mer: 2,
+  jeu: 3,
+  ven: 4,
+  sam: 5,
+  dim: 6,
+};
+
+export const DAY_NAMES: Record<string, string> = {
+  lun: "Lundi",
+  mar: "Mardi",
+  mer: "Mercredi",
+  jeu: "Jeudi",
+  ven: "Vendredi",
+  sam: "Samedi",
+  dim: "Dimanche",
+};
+
+export function ymd(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+export function mondayOf(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = (x.getDay() + 6) % 7; // 0 = lundi
+  x.setDate(x.getDate() - day);
+  return x;
+}
+
+export function addDays(iso: string, n: number): Date {
+  const x = new Date(`${iso}T00:00:00`);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+export const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+// Clé jour (lun..dim) d'une date "YYYY-MM-DD" — pour projeter un créneau ponctuel
+// daté sur la bonne colonne jour de l'agenda (legacy _agendaDayKeyFromYmd).
+const YMD_DAY_KEYS = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+export function dayKeyFromYmd(ymdStr: string): string {
+  return YMD_DAY_KEYS[new Date(`${ymdStr}T00:00:00`).getDay()] ?? "";
+}
+
+// ─── Créneaux ────────────────────────────────────────────────────────────────
+
+export type Slot = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  capacity: number | null;
+  // Jour de la semaine du créneau récurrent (modèle « un slot = un jour »).
+  slotDay: string | null;
+  periodId: number | null;
+  weeks: string | null;
+  // Renseigné uniquement pour les créneaux ponctuels projetés (slots virtuels).
+  slotDate?: string | null;
+};
+
+// Créneau ponctuel (daté) tel que chargé pour l'agenda.
+// parentSlotId non nul = créneau "miroir" (matérialisation d'un récurrent) ; null =
+// ponctuel autonome (affiché en vert dans le legacy).
+export type UniqueSlot = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  capacity: number | null;
+  slotDate: string;
+  parentSlotId: string | null;
+};
+
+export type Pointage = "present" | "absent" | null;
+
+// Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.
+export function parseWeeks(weeks: string | null): ("A" | "B")[] {
+  if (!weeks) return ["A", "B"];
+  const set = new Set(
+    weeks
+      .split(",")
+      .map((w) => w.trim().toUpperCase())
+      .filter((w) => w === "A" || w === "B"),
+  );
+  return set.size ? (Array.from(set) as ("A" | "B")[]) : ["A", "B"];
+}
+
+// Modèle « un slot = un jour » : la capacité d'un jour n'existe que si c'est LE jour
+// du créneau (slot.slotDay). Les slots ponctuels projetés portent leur slotDay = jour
+// de leur date, ce qui les fait passer ici aussi.
+export function dayCap(slot: Slot, dayKey: string): number | null {
+  return slot.slotDay === dayKey ? slot.capacity : null;
+}
+
+export function toMinutes(t: string, fallback: number): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
+  if (!m) return fallback;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+// Couleurs de base des badges, reprises de `_badgeStyle(bk)` du legacy (app.js) :
+// validé = fond vert clair + bordure accent ; en attente = fond orange clair +
+// bordure orange. Le texte reste lisible via --badge-text (fallback inline).
+// (Les deux grilles avaient divergé sur le fond « en attente » — harmonisé
+// sur #ffe6a7, décision 2026-06.)
+export function badgeStyle(validated: boolean): CSSProperties {
+  return validated
+    ? {
+        background: "#c8e8b8",
+        borderColor: "var(--accent)",
+        color: "var(--badge-text, #1a1f2e)",
+      }
+    : {
+        background: "#ffe6a7",
+        borderColor: "rgba(232, 164, 90, .45)",
+        color: "var(--badge-text, #1a1f2e)",
+      };
+}
+
+// ─── Blocs & layout ──────────────────────────────────────────────────────────
+
+// Bloc = UN créneau (slot) un jour donné, regroupant toutes ses réservations.
+// Générique sur le type de réservation : les deux grilles ont des champs Booking
+// différents (admin : tel/email ; usager : mine).
+export type AgendaBlockBase<TBooking> = {
+  slotId: string;
+  dayKey: string;
+  bookings: TBooking[];
+  // Minutes brutes du créneau : top/height (px) sont dérivés AU RENDU via mapMinToY
+  // (qui dépend du compactage pause/masquage des lignes vides, recalculé hors useMemo).
+  startMin: number;
+  endMin: number;
+  leftPct: number;
+  widthPct: number;
+  used: number;
+  capacity: number;
+  full: boolean;
+  // Créneau « journée entière » (sans horaire) : rendu dans la bande dédiée en
+  // haut de l'agenda, pas sur la grille horaire (cf. legacy alldayBlocks).
+  isAllDay: boolean;
+};
+
+// Port de `_agendaLayoutOverlaps` (app.js) : pour les créneaux d'une même colonne
+// jour qui se chevauchent dans le temps, calcule le nombre de colonnes et l'index
+// de chacun → permet de les juxtaposer horizontalement (sinon pleine largeur).
+export type LayoutItem = { startMin: number; endMin: number; col: number; colCount: number };
+export function layoutOverlaps(items: LayoutItem[]): void {
+  if (!items.length) return;
+  items.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  let cluster: LayoutItem[] = [];
+  let clusterMaxEnd = Number.NEGATIVE_INFINITY;
+  const flush = () => {
+    const n = Math.max(1, ...cluster.map((b) => b.col + 1));
+    for (const b of cluster) b.colCount = n;
+    cluster = [];
+    clusterMaxEnd = Number.NEGATIVE_INFINITY;
+  };
+  for (const b of items) {
+    if (b.startMin >= clusterMaxEnd) flush();
+    const activeCols = new Set(cluster.filter((x) => x.endMin > b.startMin).map((x) => x.col));
+    let col = 0;
+    while (activeCols.has(col)) col++;
+    b.col = col;
+    cluster.push(b);
+    clusterMaxEnd = Math.max(clusterMaxEnd, b.endMin);
+  }
+  flush();
+}
+
+// ─── Rendu / impression ──────────────────────────────────────────────────────
+
+export const ROW_H = 56;
+
+// Feuille de style autonome pour la fenêtre d'impression : ne reprend que les
+// classes nécessaires au rendu de la grille agenda (équivalent legacy printAgenda).
+export const PRINT_CSS = `
+  body{font-family:system-ui,Segoe UI,sans-serif;margin:1rem;color:#1a1a1a}
+  h1{font-size:1.1rem;margin:0 0 1rem}
+  .planning-wrap{position:relative}
+  .agenda-grid{display:grid;gap:0;border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fff}
+  .agenda-header-cell{background:#f3f3f3;padding:.4rem .3rem;font-size:.72rem;font-weight:700;text-align:center;border-bottom:1px solid #ccc;border-left:1px solid #ccc;display:flex;flex-direction:column;align-items:center;gap:1px}
+  .agenda-corner{border-left:none}
+  .agenda-day-sub{font-size:.6rem;color:#666;font-weight:600}
+  .agenda-time-col{position:relative;border-right:1px solid #ccc}
+  .agenda-time-mark{position:absolute;right:4px;font-size:.6rem;color:#666;transform:translateY(-50%)}
+  .agenda-day-col{position:relative;border-left:1px solid #ccc;min-height:40px}
+  .agenda-grid-line{position:absolute;left:0;right:0;border-top:1px solid #e2e2e2}
+  .agenda-grid-line.is-hour{border-top-color:#bbb}
+  .agenda-block{position:absolute;border-radius:6px;padding:2px 4px;overflow:hidden;display:flex;flex-direction:column;gap:2px;font-size:.62rem;background:#f0c14b;border:1px solid #b89020;color:#3a2f00}
+  .agenda-block-chips{display:flex;flex-direction:column;gap:1px;overflow:hidden;flex:1}
+  .agenda-block-meta{font-size:.58rem;font-weight:700;display:flex;align-items:center;gap:3px}
+  .agenda-block-gauge-bar{flex:1;height:4px;border-radius:2px;background:rgba(0,0,0,.15);overflow:hidden;display:inline-block;min-width:24px}
+  .agenda-block-gauge-bar>span{display:block;height:100%;background:#b89020}
+  .planning-name-tag{display:inline-flex;flex-direction:column;font-size:.62rem;font-weight:700}
+  @media print{@page{size:landscape;margin:1cm}}
+`;

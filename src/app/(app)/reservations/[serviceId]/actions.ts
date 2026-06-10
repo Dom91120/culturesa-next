@@ -1,6 +1,5 @@
 "use server";
 
-import { gaugeUnits } from "@/lib/gauge";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import {
@@ -72,35 +71,17 @@ export async function reserveRecurringAction(
         ) {
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
         }
-        const capacity = slot.capacity ?? slot.service.capacity;
-        // Capacité selon le mode jauge du service (même règle que l'affichage) : jauge =
+        // Anti-surbooking : règle canonique partagée (assertSlotCapacity) — jauge =
         // enfants + adultes ; hors jauge = 1 par réservation. Sinon les enfants du PROFIL
         // de l'usager « remplissent » à tort un créneau (faux « complet »).
-        const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
-          where: { serviceId, jauge: true },
-          select: { serviceId: true },
-        }));
-        const occWhere = {
+        await assertSlotCapacity(tx, {
           serviceId,
           slotId,
+          bookingType: "recurring",
           periodId,
-          bookingType: "recurring" as const,
-        };
-        let used: number;
-        let mine: number;
-        if (gaugeOn) {
-          const countAcc = slot.service.gaugeAccompagnants;
-          const agg = await tx.booking.aggregate({
-            where: occWhere,
-            _sum: { enfants: true, accompagnants: true },
-          });
-          used = gaugeUnits(agg._sum.enfants ?? 0, agg._sum.accompagnants ?? 0, countAcc);
-          mine = gaugeUnits(myEnfants, myAcc, countAcc);
-        } else {
-          used = await tx.booking.count({ where: occWhere });
-          mine = 1;
-        }
-        if (used + mine > capacity) throw new BookingError("Ce créneau est complet.");
+          enfants: myEnfants,
+          accompagnants: myAcc,
+        });
         // Validation : si le demandeur de l'usager n'est pas en mode « validation »,
         // la réservation est validée d'emblée ; sinon elle reste en attente.
         const setting = user?.demandeurId
@@ -311,42 +292,17 @@ export async function moveMyBookingAction(
             slot.service.openOnSchoolHolidays,
           );
         }
-        const capacity = slot.capacity ?? slot.service.capacity;
-        // Capacité selon le mode jauge (même règle que l'affichage et que la création) :
-        // jauge = enfants + adultes ; hors jauge = 1 par réservation.
-        const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
-          where: { serviceId, jauge: true },
-          select: { serviceId: true },
-        }));
-        const occWhere = target.ponctuel
-          ? {
-              serviceId,
-              slotId: target.slotId,
-              bookingType: "unique" as const,
-              id: { not: bookingId },
-            }
-          : {
-              serviceId,
-              slotId: target.slotId,
-              periodId: target.periodId ?? 0,
-              bookingType: "recurring" as const,
-              id: { not: bookingId },
-            };
-        let used: number;
-        let mine: number;
-        if (gaugeOn) {
-          const countAcc = slot.service.gaugeAccompagnants;
-          const agg = await tx.booking.aggregate({
-            where: occWhere,
-            _sum: { enfants: true, accompagnants: true },
-          });
-          used = gaugeUnits(agg._sum.enfants ?? 0, agg._sum.accompagnants ?? 0, countAcc);
-          mine = gaugeUnits(booking.enfants, booking.accompagnants, countAcc);
-        } else {
-          used = await tx.booking.count({ where: occWhere });
-          mine = 1;
-        }
-        if (used + mine > capacity) throw new BookingError("Ce créneau est complet.");
+        // Anti-surbooking : règle canonique partagée (assertSlotCapacity), la
+        // réservation déplacée étant exclue du décompte.
+        await assertSlotCapacity(tx, {
+          serviceId,
+          slotId: target.slotId,
+          bookingType: target.ponctuel ? "unique" : "recurring",
+          periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
+          enfants: booking.enfants,
+          accompagnants: booking.accompagnants,
+          excludeBookingId: bookingId,
+        });
         const setting = user?.demandeurId
           ? await tx.serviceDemandeurSettings.findFirst({
               where: { serviceId, demandeurId: user.demandeurId },

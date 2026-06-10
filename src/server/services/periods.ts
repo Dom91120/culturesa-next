@@ -1,7 +1,7 @@
+import { holidaysInRange } from "@/lib/french-holidays";
 import type { PeriodInput } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import type { EntityState, Prisma } from "@prisma/client";
-import { holidaysInRange } from "./exercice";
 
 /** Format UTC 'YYYY-MM-DD' (cohérent avec toISO/fromISO de slots.ts). */
 function ymdUtc(d: Date): string {

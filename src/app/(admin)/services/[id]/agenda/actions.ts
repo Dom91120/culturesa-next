@@ -6,7 +6,11 @@ import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import { sendMailOrQueue } from "@/server/mailer";
-import { resolvePeriodLabel, sendBookingConfirmationMail } from "@/server/services/booking-mail";
+import {
+  formatSlotLabel,
+  resolvePeriodLabel,
+  sendBookingConfirmationMail,
+} from "@/server/services/booking-mail";
 import { BookingError, assertSlotCapacity } from "@/server/services/bookings";
 import { isMailEnabled } from "@/server/services/mail-prefs";
 import {
@@ -330,41 +334,6 @@ export async function deleteSlotAction(
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
-const DAY_LABELS: Record<string, string> = {
-  lun: "Lundi",
-  mar: "Mardi",
-  mer: "Mercredi",
-  jeu: "Jeudi",
-  ven: "Vendredi",
-  sam: "Samedi",
-  dim: "Dimanche",
-};
-
-/** Libellé « créneau » lisible pour le mail : date+heure (ponctuel) ou jour+heure (récurrent). */
-function slotMailLabel(slot: {
-  startTime: string;
-  endTime: string;
-  slotDate: Date | null;
-  slotDay: string | null;
-}): string {
-  const s = (slot.startTime || "").slice(0, 5);
-  const e = (slot.endTime || "").slice(0, 5);
-  const time = s && e ? `${s} – ${e}` : "Journée entière";
-  if (slot.slotDate) {
-    // slotDate stocké à minuit UTC → on formate en UTC pour éviter tout décalage de jour.
-    const d = slot.slotDate.toLocaleDateString("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: "UTC",
-    });
-    return `${d} · ${time}`;
-  }
-  const day = slot.slotDay ? (DAY_LABELS[slot.slotDay] ?? slot.slotDay) : "";
-  return [day, time].filter(Boolean).join(" · ");
-}
-
 /**
  * Supprime une réservation depuis l'agenda + notifie l'usager par e-mail.
  * Le mail informe que la réservation « a été supprimée » (si elle était validée) ou
@@ -416,7 +385,7 @@ export async function deleteBookingAdminAction(
     // Préférence « Échanges » : ce type d'e-mail est-il activé ?
     if (!(await isMailEnabled(wasValidated ? "booking_cancelled" : "booking_refused"))) return;
     const serviceLabel = booking.service?.label ?? "";
-    const slotLabel = booking.slot ? slotMailLabel(booking.slot) : "";
+    const slotLabel = booking.slot ? formatSlotLabel(booking.slot) : "";
     // Période : par id (récurrent) ou par date couverte (ponctuel).
     const periodLabel = await resolvePeriodLabel({
       serviceId,

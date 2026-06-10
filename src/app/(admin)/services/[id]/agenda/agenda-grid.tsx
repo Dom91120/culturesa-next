@@ -1,7 +1,31 @@
 "use client";
 
+import { ModalOverlay, PointagePill } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
-import { gaugeUnits } from "@/lib/gauge";
+import {
+  type AgendaBlockBase,
+  DAY_NAMES,
+  DAY_OFFSET,
+  type LayoutItem,
+  PRINT_CSS,
+  type Pointage,
+  ROW_H,
+  type Slot,
+  type UniqueSlot,
+  addDays,
+  badgeStyle,
+  dayCap,
+  dayKeyFromYmd,
+  layoutOverlaps,
+  mondayOf,
+  parseWeeks,
+  shortDateFmt,
+  slotWeekTag,
+  toMinutes,
+  ymd,
+} from "@/lib/agenda-core";
+import { isFrenchHoliday } from "@/lib/french-holidays";
+import { gaugeColor, gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
@@ -53,134 +77,6 @@ type Period = {
 };
 type Exercice = { id: number; label: string };
 
-const DAY_OFFSET: Record<string, number> = {
-  lun: 0,
-  mar: 1,
-  mer: 2,
-  jeu: 3,
-  ven: 4,
-  sam: 5,
-  dim: 6,
-};
-
-function ymd(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-function mondayOf(d: Date): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = (x.getDay() + 6) % 7; // 0 = lundi
-  x.setDate(x.getDate() - day);
-  return x;
-}
-function addDays(iso: string, n: number): Date {
-  const x = new Date(`${iso}T00:00:00`);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
-
-// Calcul de Pâques (algorithme de Gauss/Butcher) — port exact du legacy _easterDate.
-function easterDate(year: number): Date {
-  const a = year % 19;
-  const b = Math.floor(year / 100);
-  const c = year % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31);
-  const day = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(Date.UTC(year, month - 1, day));
-}
-// Jour férié français (fixes + lundi de Pâques/Ascension/Pentecôte) — port du legacy
-// _isFrenchHoliday. dateStr au format "YYYY-MM-DD".
-function isFrenchHoliday(dateStr: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const fixed = [
-    [1, 1],
-    [5, 1],
-    [5, 8],
-    [7, 14],
-    [8, 15],
-    [11, 1],
-    [11, 11],
-    [12, 25],
-  ];
-  if (fixed.some(([m, d]) => m === month && d === day)) return true;
-  const e = easterDate(year);
-  const fmt = (date: Date) => date.toISOString().slice(0, 10);
-  const dayMs = 86400000;
-  // Offsets : lundi de Pâques (+1), Ascension (+39), lundi de Pentecôte (+50).
-  return [1, 39, 50].some((off) => fmt(new Date(e.getTime() + off * dayMs)) === dateStr);
-}
-
-// Clé jour (lun..dim) d'une date "YYYY-MM-DD" — pour projeter un créneau ponctuel
-// daté sur la bonne colonne jour de l'agenda (legacy _agendaDayKeyFromYmd).
-const YMD_DAY_KEYS = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
-function dayKeyFromYmd(ymd: string): string {
-  return YMD_DAY_KEYS[new Date(`${ymd}T00:00:00`).getDay()] ?? "";
-}
-
-/** Numéro de semaine ISO (1..53) — sert à déduire la parité A/B en semaine réelle. */
-function isoWeek(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const fdn = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - fdn + 3);
-  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 24 * 3600 * 1000));
-}
-type Slot = {
-  id: string;
-  startTime: string;
-  endTime: string;
-  capacity: number | null;
-  // Jour de la semaine du créneau récurrent (modèle « un slot = un jour »).
-  slotDay: string | null;
-  periodId: number | null;
-  weeks: string | null;
-  // Renseigné uniquement pour les créneaux ponctuels projetés (slots virtuels).
-  slotDate?: string | null;
-};
-// Créneau ponctuel (daté) tel que chargé pour l'agenda.
-// parentSlotId non nul = créneau "miroir" (matérialisation d'un récurrent) ; null =
-// ponctuel autonome (affiché en vert dans le legacy).
-type UniqueSlot = {
-  id: string;
-  startTime: string;
-  endTime: string;
-  capacity: number | null;
-  slotDate: string;
-  parentSlotId: string | null;
-};
-
-// Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.
-function parseWeeks(weeks: string | null): ("A" | "B")[] {
-  if (!weeks) return ["A", "B"];
-  const set = new Set(
-    weeks
-      .split(",")
-      .map((w) => w.trim().toUpperCase())
-      .filter((w) => w === "A" || w === "B"),
-  );
-  return set.size ? (Array.from(set) as ("A" | "B")[]) : ["A", "B"];
-}
-
-// Modèle « un slot = un jour » : la capacité d'un jour n'existe que si c'est LE jour
-// du créneau (slot.slotDay). Les slots ponctuels projetés portent leur slotDay = jour
-// de leur date, ce qui les fait passer ici aussi.
-function dayCap(slot: Slot, dayKey: string): number | null {
-  return slot.slotDay === dayKey ? slot.capacity : null;
-}
-type Pointage = "present" | "absent" | null;
 type Booking = {
   id: number;
   slotId: string;
@@ -208,16 +104,6 @@ type UserOpt = {
   openOnSchoolHolidays?: boolean;
 };
 
-const DAY_NAMES: Record<string, string> = {
-  lun: "Lundi",
-  mar: "Mardi",
-  mer: "Mercredi",
-  jeu: "Jeudi",
-  ven: "Vendredi",
-  sam: "Samedi",
-  dim: "Dimanche",
-};
-
 // Info-bulle d'une réservation au survol — format du legacy _badgeTitle :
 //   Tel : <tel>      (si renseigné)
 //   <email>
@@ -234,127 +120,10 @@ function badgeTitle(bk: Booking): string {
   return lines.join("\n");
 }
 
-const ROW_H = 56;
+// badgeStyle : partagé via lib/agenda-core (harmonisé entre grilles admin/usager).
 
-// Feuille de style autonome pour la fenêtre d'impression : ne reprend que les
-// classes nécessaires au rendu de la grille agenda (équivalent legacy printAgenda).
-const PRINT_CSS = `
-  body{font-family:system-ui,Segoe UI,sans-serif;margin:1rem;color:#1a1a1a}
-  h1{font-size:1.1rem;margin:0 0 1rem}
-  .planning-wrap{position:relative}
-  .agenda-grid{display:grid;gap:0;border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fff}
-  .agenda-header-cell{background:#f3f3f3;padding:.4rem .3rem;font-size:.72rem;font-weight:700;text-align:center;border-bottom:1px solid #ccc;border-left:1px solid #ccc;display:flex;flex-direction:column;align-items:center;gap:1px}
-  .agenda-corner{border-left:none}
-  .agenda-day-sub{font-size:.6rem;color:#666;font-weight:600}
-  .agenda-time-col{position:relative;border-right:1px solid #ccc}
-  .agenda-time-mark{position:absolute;right:4px;font-size:.6rem;color:#666;transform:translateY(-50%)}
-  .agenda-day-col{position:relative;border-left:1px solid #ccc;min-height:40px}
-  .agenda-grid-line{position:absolute;left:0;right:0;border-top:1px solid #e2e2e2}
-  .agenda-grid-line.is-hour{border-top-color:#bbb}
-  .agenda-block{position:absolute;border-radius:6px;padding:2px 4px;overflow:hidden;display:flex;flex-direction:column;gap:2px;font-size:.62rem;background:#f0c14b;border:1px solid #b89020;color:#3a2f00}
-  .agenda-block-chips{display:flex;flex-direction:column;gap:1px;overflow:hidden;flex:1}
-  .agenda-block-meta{font-size:.58rem;font-weight:700;display:flex;align-items:center;gap:3px}
-  .agenda-block-gauge-bar{flex:1;height:4px;border-radius:2px;background:rgba(0,0,0,.15);overflow:hidden;display:inline-block;min-width:24px}
-  .agenda-block-gauge-bar>span{display:block;height:100%;background:#b89020}
-  .planning-name-tag{display:inline-flex;flex-direction:column;font-size:.62rem;font-weight:700}
-  @media print{@page{size:landscape;margin:1cm}}
-`;
-
-function toMinutes(t: string, fallback: number): number {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
-  if (!m) return fallback;
-  return Number(m[1]) * 60 + Number(m[2]);
-}
-
-// Couleurs de base des badges, reprises de `_badgeStyle(bk)` du legacy (app.js) :
-// validé = fond vert clair + bordure accent ; en attente = fond orange clair +
-// bordure orange. Le texte reste lisible via --badge-text (fallback inline).
-function badgeStyle(validated: boolean): React.CSSProperties {
-  return validated
-    ? {
-        background: "#c8e8b8",
-        borderColor: "var(--accent)",
-        color: "var(--badge-text, #1a1f2e)",
-      }
-    : {
-        background: "#ffe6a7",
-        borderColor: "rgba(232, 164, 90, .45)",
-        color: "var(--badge-text, #1a1f2e)",
-      };
-}
-
-// Pastille de pointage P (présent, vert) / A (absent, rouge) affichée en haut à
-// droite du badge, reprise du legacy `_badgeIndicators` (classes .indic_p /
-// .indic_a). Le pointage n'existe que sur les réservations ponctuelles datées,
-// donc cette pastille n'apparaît qu'en « Semaine réelle ». Le badge parent doit
-// être `position: relative` pour l'ancrer.
-function PointagePill({ pointage }: { pointage: Pointage }) {
-  if (!pointage) return null;
-  return (
-    <span
-      style={{
-        position: "absolute",
-        right: 3,
-        top: 3,
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        alignItems: "center",
-        zIndex: 1,
-      }}
-    >
-      <span className={pointage === "present" ? "indic_p" : "indic_a"}>
-        {pointage === "present" ? "P" : "A"}
-      </span>
-    </span>
-  );
-}
-
-// Bloc = UN créneau (slot) un jour donné, regroupant toutes ses réservations.
-type Block = {
-  slotId: string;
-  dayKey: string;
-  bookings: Booking[];
-  // Minutes brutes du créneau : top/height (px) sont dérivés AU RENDU via mapMinToY
-  // (qui dépend du compactage pause/hideEmpty, recalculé hors useMemo).
-  startMin: number;
-  endMin: number;
-  leftPct: number;
-  widthPct: number;
-  used: number;
-  capacity: number;
-  full: boolean;
-  // Créneau « journée entière » (sans horaire) : rendu dans la bande dédiée en
-  // haut de l'agenda, pas sur la grille horaire (cf. legacy alldayBlocks).
-  isAllDay: boolean;
-};
-
-// Port de `_agendaLayoutOverlaps` (app.js) : pour les créneaux d'une même colonne
-// jour qui se chevauchent dans le temps, calcule le nombre de colonnes et l'index
-// de chacun → permet de les juxtaposer horizontalement (sinon pleine largeur).
-type LayoutItem = { startMin: number; endMin: number; col: number; colCount: number };
-function layoutOverlaps(items: LayoutItem[]): void {
-  if (!items.length) return;
-  items.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-  let cluster: LayoutItem[] = [];
-  let clusterMaxEnd = Number.NEGATIVE_INFINITY;
-  const flush = () => {
-    const n = Math.max(1, ...cluster.map((b) => b.col + 1));
-    for (const b of cluster) b.colCount = n;
-    cluster = [];
-    clusterMaxEnd = Number.NEGATIVE_INFINITY;
-  };
-  for (const b of items) {
-    if (b.startMin >= clusterMaxEnd) flush();
-    const activeCols = new Set(cluster.filter((x) => x.endMin > b.startMin).map((x) => x.col));
-    let col = 0;
-    while (activeCols.has(col)) col++;
-    b.col = col;
-    cluster.push(b);
-    clusterMaxEnd = Math.max(clusterMaxEnd, b.endMin);
-  }
-  flush();
-}
+// Bloc = UN créneau un jour donné (modèle partagé, cf. lib/agenda-core).
+type Block = AgendaBlockBase<Booking>;
 
 type Detail = { booking: Booking } | null;
 type CreateCtx = {
@@ -693,8 +462,7 @@ export function AgendaGrid({
     const ab = recurAbByPeriod.get(p.id);
     if (!ab || ab.size === 0) return false;
     if (!modes.abMode) return true; // pas de distinction A/B → toute résa récurrente compte
-    const parity: "A" | "B" = isoWeek(new Date(`${monday}T00:00:00`)) % 2 === 1 ? "A" : "B";
-    return ab.has("") || ab.has(parity);
+    return ab.has("") || ab.has(slotWeekTag(monday));
   };
   // Existe-t-il une semaine non vide au-delà de `monday` dans la direction donnée,
   // sans sortir de la période active ? (pour activer/désactiver ◀/▶ en hideEmpty)
@@ -792,11 +560,7 @@ export function AgendaGrid({
 
   // ── Semaines A/B ── (dérivé de la matrice demandeurs, pas de la colonne service)
   const abMode = modes.abMode;
-  const realWeekParity: "A" | "B" | null = mondayStr
-    ? isoWeek(new Date(`${mondayStr}T00:00:00`)) % 2 === 1
-      ? "A"
-      : "B"
-    : null;
+  const realWeekParity: "A" | "B" | null = mondayStr ? slotWeekTag(mondayStr) : null;
   // Semaine effective filtrée : en modèle = choix A/B ; en réel = parité de la date.
   const effectiveWeek: "A" | "B" | null = abMode
     ? mode === "model"
@@ -2198,11 +1962,10 @@ export function AgendaGrid({
       .map((u) => u.slotDate)
       .filter((d) => {
         if (!abMode || effectiveWeek == null) return true;
-        // Convention UNIQUE de l'app : semaine ISO impaire = A (cf. realWeekParity /
-        // slotWeekTag). effectiveWeek (Modèle = weekAB, Semaine réelle = realWeekParity)
-        // est dans cette même convention → comparaison directe, le jour en cours est inclus.
-        const parity: "A" | "B" = isoWeek(new Date(`${d}T00:00:00`)) % 2 === 1 ? "A" : "B";
-        return parity === effectiveWeek;
+        // Convention UNIQUE de l'app : semaine ISO impaire = A (lib/iso-week).
+        // effectiveWeek (Modèle = weekAB, Semaine réelle = realWeekParity) est dans
+        // cette même convention → comparaison directe, le jour en cours est inclus.
+        return slotWeekTag(d) === effectiveWeek;
       })
       .sort();
 
@@ -2253,16 +2016,14 @@ export function AgendaGrid({
       (isPonctuelCell || (effectivePeriodId != null && effectivePeriodId > 0));
     const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
     // Couleur du compteur de places (barre de jauge ET texte X/Y) selon le
-    // remplissage, 3 paliers (mêmes seuils que la jauge de la modale pile) :
-    // vert < 70 %, orange ≥ 70 %, rouge à 100 %. Indépendant de la couleur du
-    // créneau (jaune/vert), qui ne varie plus.
-    const fillColor = pct >= 100 ? "var(--danger)" : pct >= 70 ? "#e8a45a" : "var(--accent)";
+    // remplissage — seuils uniques de l'app (gaugeColor). Indépendant de la
+    // couleur du créneau (jaune/vert), qui ne varie plus.
+    const fillColor = gaugeColor(pct);
     // Mode NON-jauge : le compteur reflète le NOMBRE de réservations (1 par résa),
     // indépendamment du nombre d'enfants/adultes. Couleur selon ce ratio.
     const count = b.bookings.length;
     const countPct = Math.min(100, b.capacity > 0 ? (count / b.capacity) * 100 : 0);
-    const countColor =
-      countPct >= 100 ? "var(--danger)" : countPct >= 70 ? "#e8a45a" : "var(--accent)";
+    const countColor = gaugeColor(countPct);
     const posStyle: React.CSSProperties = allday
       ? {}
       : (() => {
@@ -3590,8 +3351,7 @@ export function AgendaGrid({
             const gaugeTotal = stackBlock.capacity;
             const gaugePct =
               gaugeTotal > 0 ? Math.min(100, Math.round((gaugeSum / gaugeTotal) * 100)) : 0;
-            const gaugeColor =
-              gaugePct >= 100 ? "var(--danger)" : gaugePct >= 70 ? "#e8a45a" : "var(--accent)";
+            const gaugeFill = gaugeColor(gaugePct);
             const showGauge = isPonctuel ? modes.gaugePonct : modes.gaugeRec;
             const sMin = stackSlot ? toMinutes(stackSlot.startTime, 0) : 0;
             const eMin = stackSlot ? toMinutes(stackSlot.endTime, sMin + 60) : sMin + 60;
@@ -3737,117 +3497,119 @@ export function AgendaGrid({
                             a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
                         )
                         .map((bk) => (
-                        // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
-                        <div
-                          key={bk.id}
-                          className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
-                          // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée
-                          // ou parent à miroir pointé) ou en consultation (récurrent semaine réelle).
-                          draggable={!lockedByPointage(bk) && !stackReadOnly}
-                          style={{
-                            ...badgeStyle(bk.validated),
-                            cursor:
-                              !lockedByPointage(bk) && !stackReadOnly
-                                ? "grab"
-                                : stackReadOnly && pointageMode
-                                  ? "pointer"
-                                  : "default",
-                            position: "relative",
-                            opacity:
-                              draggingId === bk.id ||
-                              (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
-                                ? 0.4
-                                : 1,
-                          }}
-                          data-tip={badgeTitle(bk)}
-                          onDragStart={
-                            lockedByPointage(bk) || stackReadOnly
-                              ? undefined
-                              : (e) => {
-                                  // On amorce le drag, PUIS on ferme la pile au tick suivant
-                                  // pour libérer la grille comme cible de dépôt (port legacy
-                                  // _onDragStartFromStackModal).
-                                  e.stopPropagation();
-                                  setDraggingId(bk.id);
-                                  setTimeout(() => setStackKey(null), 0);
-                                }
-                          }
-                          onDragEnd={
-                            lockedByPointage(bk) || stackReadOnly
-                              ? undefined
-                              : () => setDraggingId(null)
-                          }
-                          onClick={() => {
-                            // Récurrent en semaine réelle : pas d'action rapide → la modale
-                            // détail s'ouvre en consultation (lecture seule).
-                            // Mode validation : un récurrent ne se valide pas ici.
-                            if (stackReadOnly && validation) {
-                              warnRecurringValidation();
-                              return;
+                          // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
+                          <div
+                            key={bk.id}
+                            className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
+                            // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée
+                            // ou parent à miroir pointé) ou en consultation (récurrent semaine réelle).
+                            draggable={!lockedByPointage(bk) && !stackReadOnly}
+                            style={{
+                              ...badgeStyle(bk.validated),
+                              cursor:
+                                !lockedByPointage(bk) && !stackReadOnly
+                                  ? "grab"
+                                  : stackReadOnly && pointageMode
+                                    ? "pointer"
+                                    : "default",
+                              position: "relative",
+                              opacity:
+                                draggingId === bk.id ||
+                                (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
+                                  ? 0.4
+                                  : 1,
+                            }}
+                            data-tip={badgeTitle(bk)}
+                            onDragStart={
+                              lockedByPointage(bk) || stackReadOnly
+                                ? undefined
+                                : (e) => {
+                                    // On amorce le drag, PUIS on ferme la pile au tick suivant
+                                    // pour libérer la grille comme cible de dépôt (port legacy
+                                    // _onDragStartFromStackModal).
+                                    e.stopPropagation();
+                                    setDraggingId(bk.id);
+                                    setTimeout(() => setStackKey(null), 0);
+                                  }
                             }
-                            // Pointage autorisé sur les réservations-enfants (récurrent
-                            // en semaine réelle) même si la pile est en lecture seule.
-                            if (stackReadOnly && pointageMode && onBlockQuickAction(bk)) return;
-                            if (!stackReadOnly && onBlockQuickAction(bk)) return;
-                            // On garde la pile ouverte : la modale détail s'empile
-                            // par-dessus, et sa fermeture y ramène.
-                            setDetail({ booking: bk });
-                          }}
-                          // Clic droit → menu « Copier » (pas en création/consultation, ni
-                          // sur une réservation verrouillée par un pointage).
-                          onContextMenu={(e) => {
-                            if (creationMode || stackReadOnly || lockedByPointage(bk)) return;
-                            e.preventDefault();
-                            e.stopPropagation();
-                            clearTip();
-                            setCtxMenu({
-                              x: e.clientX,
-                              y: e.clientY,
-                              kind: "booking",
-                              booking: bk,
-                            });
-                          }}
-                        >
-                          <PointagePill pointage={bk.pointage} />
-                          {/* Croix masquée si verrouillée (pointée / parent à miroir pointé)
+                            onDragEnd={
+                              lockedByPointage(bk) || stackReadOnly
+                                ? undefined
+                                : () => setDraggingId(null)
+                            }
+                            onClick={() => {
+                              // Récurrent en semaine réelle : pas d'action rapide → la modale
+                              // détail s'ouvre en consultation (lecture seule).
+                              // Mode validation : un récurrent ne se valide pas ici.
+                              if (stackReadOnly && validation) {
+                                warnRecurringValidation();
+                                return;
+                              }
+                              // Pointage autorisé sur les réservations-enfants (récurrent
+                              // en semaine réelle) même si la pile est en lecture seule.
+                              if (stackReadOnly && pointageMode && onBlockQuickAction(bk)) return;
+                              if (!stackReadOnly && onBlockQuickAction(bk)) return;
+                              // On garde la pile ouverte : la modale détail s'empile
+                              // par-dessus, et sa fermeture y ramène.
+                              setDetail({ booking: bk });
+                            }}
+                            // Clic droit → menu « Copier » (pas en création/consultation, ni
+                            // sur une réservation verrouillée par un pointage).
+                            onContextMenu={(e) => {
+                              if (creationMode || stackReadOnly || lockedByPointage(bk)) return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              clearTip();
+                              setCtxMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                kind: "booking",
+                                booking: bk,
+                              });
+                            }}
+                          >
+                            <PointagePill pointage={bk.pointage} />
+                            {/* Croix masquée si verrouillée (pointée / parent à miroir pointé)
                               ou en consultation (récurrent en semaine réelle). */}
-                          {!lockedByPointage(bk) && !stackReadOnly && (
-                            <button
-                              type="button"
-                              className="planning-name-tag-close"
-                              data-tip="Supprimer"
-                              style={{ border: "none", padding: 0 }}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteTarget(bk);
-                              }}
-                            >
-                              ×
-                            </button>
-                          )}
-                          {(bk.structure || bk.demandeur) && (
-                            <span style={{ fontWeight: 700 }}>{bk.structure || bk.demandeur}</span>
-                          )}
-                          <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>
-                            {bk.name}
-                          </span>
-                          {modes.themeMode && bk.theme && (
-                            <span
-                              style={{
-                                fontSize: ".62rem",
-                                fontWeight: 600,
-                                color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
-                              }}
-                            >
-                              {bk.theme}
+                            {!lockedByPointage(bk) && !stackReadOnly && (
+                              <button
+                                type="button"
+                                className="planning-name-tag-close"
+                                data-tip="Supprimer"
+                                style={{ border: "none", padding: 0 }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(bk);
+                                }}
+                              >
+                                ×
+                              </button>
+                            )}
+                            {(bk.structure || bk.demandeur) && (
+                              <span style={{ fontWeight: 700 }}>
+                                {bk.structure || bk.demandeur}
+                              </span>
+                            )}
+                            <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>
+                              {bk.name}
                             </span>
-                          )}
-                        </div>
-                      ))}
+                            {modes.themeMode && bk.theme && (
+                              <span
+                                style={{
+                                  fontSize: ".62rem",
+                                  fontWeight: 600,
+                                  color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
+                                }}
+                              >
+                                {bk.theme}
+                              </span>
+                            )}
+                          </div>
+                        ))}
                     </div>
                   </div>
                 </div>
@@ -3870,7 +3632,7 @@ export function AgendaGrid({
                             display: "block",
                             height: "100%",
                             width: `${gaugePct}%`,
-                            background: gaugeColor,
+                            background: gaugeFill,
                           }}
                         />
                       </span>
@@ -4207,8 +3969,7 @@ export function AgendaGrid({
                           if (closedOnSchool && inSchoolHolidayRange(d, schoolHolidays))
                             return false;
                           if (!abMode || effectiveWeek == null) return true;
-                          const parity = isoWeek(new Date(`${d}T00:00:00`)) % 2 === 1 ? "A" : "B";
-                          return parity === effectiveWeek;
+                          return slotWeekTag(d) === effectiveWeek;
                         })
                         .sort();
                     })()}
@@ -4574,33 +4335,6 @@ export function AgendaGrid({
           </output>,
           document.body,
         )}
-    </div>
-  );
-}
-
-/**
- * Overlay de modale : clic sur le fond ou touche Échap = fermeture. Encapsule les
- * handlers clavier/souris pour rester accessible (et éviter de dupliquer les ignores).
- */
-function ModalOverlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div
-      className="modal-overlay open"
-      role="presentation"
-      onClick={onClose}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
-    >
-      <dialog
-        open
-        className="modal-box"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        {children}
-      </dialog>
     </div>
   );
 }

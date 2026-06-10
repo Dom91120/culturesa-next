@@ -223,30 +223,16 @@ export async function createUniqueBooking(
           slot.service.openOnSchoolHolidays,
         );
 
-        const capacity = slot.capacity ?? slot.service.capacity;
-        // Capacité selon le mode jauge du service (même règle que l'affichage et les
-        // créneaux récurrents) : jauge = enfants + adultes ; hors jauge = 1 par réservation.
-        const gaugeOn = !!(await tx.serviceDemandeurSettings.findFirst({
-          where: { serviceId: slot.serviceId, jauge: true },
-          select: { serviceId: true },
-        }));
-        let used: number;
-        let mine: number;
-        if (gaugeOn) {
-          const countAcc = slot.service.gaugeAccompagnants;
-          const agg = await tx.booking.aggregate({
-            where: { slotId: slot.id },
-            _sum: { enfants: true, accompagnants: true },
-          });
-          used = gaugeUnits(agg._sum.enfants ?? 0, agg._sum.accompagnants ?? 0, countAcc);
-          mine = gaugeUnits(input.enfants, input.accompagnants, countAcc);
-        } else {
-          used = await tx.booking.count({ where: { slotId: slot.id } });
-          mine = 1;
-        }
-        if (used + mine > capacity) {
-          throw new BookingError("Ce créneau est complet.");
-        }
+        // Anti-surbooking : règle canonique partagée (jauge/capacité) — une seule
+        // implémentation pour création usager, édition et déplacement admin.
+        await assertSlotCapacity(tx, {
+          serviceId: slot.serviceId,
+          slotId: slot.id,
+          bookingType: "unique",
+          periodId: 0,
+          enfants: input.enfants,
+          accompagnants: input.accompagnants,
+        });
 
         return await tx.booking.create({
           data: {
