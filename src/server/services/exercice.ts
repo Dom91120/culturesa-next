@@ -311,7 +311,10 @@ async function generateMirrorSlots(
 // =====================================================================================
 
 export async function cycleService(serviceId: string, opts: CycleOptions): Promise<CycleResult> {
-  const { recreateSlots } = opts;
+  const { recreatePeriods, recreateSlots } = opts;
+  // Legacy (api/periods.php) : si « Recréer les périodes » est décoché, la bascule ne
+  // fait rien (no-op). `recreateSlots` ne gate, lui, que le clonage des créneaux.
+  if (!recreatePeriods) return { created: 0, slotsCreated: 0 };
 
   return prisma.$transaction(async (tx) => {
     const service = await tx.service.findUnique({ where: { id: serviceId } });
