@@ -6,11 +6,13 @@ import { DEFAULT_TEMPLATES } from "@/server/services/mail-templates";
 // défaut → surcharges éditables via Administration › Échanges. Passer les types en
 // arguments ; sans argument, les deux modèles de réservation.
 //   tsx scripts/seed-mail-templates.ts email_verification booking_confirmed ...
+//   tsx scripts/seed-mail-templates.ts --all   (tous les modèles)
 
 async function main() {
   const all = Object.keys(DEFAULT_TEMPLATES);
+  const flagAll = process.argv.includes("--all");
   const args = process.argv.slice(2).filter((a) => !a.startsWith("-"));
-  const kinds = args.length > 0 ? args : ["booking_confirmed", "booking_pending"];
+  const kinds = flagAll ? all : args.length > 0 ? args : ["booking_confirmed", "booking_pending"];
 
   const invalid = kinds.filter((k) => !all.includes(k));
   if (invalid.length > 0) {
