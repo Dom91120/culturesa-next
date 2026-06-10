@@ -146,7 +146,7 @@ ${DETAILS_CONFIRMATION}
     html: `<p>{{salutation}}</p>
 <p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous (lien valable 1&nbsp;h) :</p>
 <p>{{bouton}}</p>
-<p style="font-size:13px;color:#5a7a4f;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.<br>Adresse de secours : {{url}}</p>`,
+<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.<br>Adresse de secours : {{url}}</p>`,
   },
   account_deletion_request: {
     subject: "Confirmez la suppression de votre compte — CultuRésa",
