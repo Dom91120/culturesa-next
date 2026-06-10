@@ -87,7 +87,8 @@ const DETAILS_CONFIRMATION = `<p><strong>Détail de votre réservation :</strong
 {{#if periode}}<li><strong>Période :</strong> {{periode}}</li>{{/if}}
 {{#if participants}}<li><strong>Participants :</strong> {{participants}}</li>{{/if}}
 {{#if theme}}<li><strong>Thème :</strong> {{theme}}</li>{{/if}}
-</ul>`;
+</ul>
+<br>`;
 
 export const DEFAULT_TEMPLATES: Record<TemplateKind, MailTemplate> = {
   booking_confirmed: {
