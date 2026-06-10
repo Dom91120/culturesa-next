@@ -2,6 +2,7 @@
 
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import { gaugeUnits } from "@/lib/gauge";
+import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -160,7 +161,7 @@ type UniqueSlot = {
   parentSlotId: string | null;
 };
 
-// Semaines où le créneau "tourne" (port de la colonne weeks). null / "A,B" = toutes.
+// Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.
 function parseWeeks(weeks: string | null): ("A" | "B")[] {
   if (!weeks) return ["A", "B"];
   const set = new Set(
@@ -205,15 +206,6 @@ type UserOpt = {
   structure?: string;
   openOnSchoolHolidays?: boolean;
 };
-
-// Une date 'YYYY-MM-DD' tombe-t-elle en vacances scolaires ? (convention identique à
-// la grille usager : dateStart exclusif, dateEnd inclus).
-function inSchoolHolidayRange(
-  date: string,
-  ranges: { dateStart: string; dateEnd: string }[],
-): boolean {
-  return ranges.some((p) => date > p.dateStart && date <= p.dateEnd);
-}
 
 const DAY_NAMES: Record<string, string> = {
   lun: "Lundi",
@@ -1359,7 +1351,7 @@ export function AgendaGrid({
     if (!targets.length) return;
     if (mode === "model") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
-      const weeks = abMode && effectiveWeek ? effectiveWeek : "A,B";
+      const weeks = abMode && effectiveWeek ? effectiveWeek : "";
       run(
         Promise.all(
           targets.flatMap((dayKey) =>
@@ -1456,7 +1448,7 @@ export function AgendaGrid({
     if (!targets.length) return;
     if (mode === "model") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
-      const weeks = abMode && effectiveWeek ? effectiveWeek : "A,B";
+      const weeks = abMode && effectiveWeek ? effectiveWeek : "";
       run(
         Promise.all(
           targets.map((dayKey) =>
@@ -1901,7 +1893,7 @@ export function AgendaGrid({
       );
     } else {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
-      const weeks = abMode && effectiveWeek ? effectiveWeek : "A,B";
+      const weeks = abMode && effectiveWeek ? effectiveWeek : "";
       run(
         Promise.all(
           targets.map((dayKey) =>

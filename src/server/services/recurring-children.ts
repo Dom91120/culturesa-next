@@ -1,5 +1,6 @@
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { slotWeekTag } from "@/lib/iso-week";
+import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { getConfigMany } from "@/server/config";
 import type { Prisma } from "@prisma/client";
 
@@ -60,7 +61,7 @@ export async function syncRecurringChildren(
     select: { demandeur: { select: { openOnSchoolHolidays: true } } },
   });
   const openOnSchool = user?.demandeur?.openOnSchoolHolidays ?? true;
-  let schoolRanges: { start: string; end: string }[] = [];
+  let schoolRanges: { dateStart: string; dateEnd: string }[] = [];
   if (!openOnSchool) {
     const zone = opts?.schoolZone ?? (await getSchoolZone());
     schoolRanges = (
@@ -68,9 +69,12 @@ export async function syncRecurringChildren(
         where: { zone },
         select: { dateStart: true, dateEnd: true },
       })
-    ).map((r) => ({ start: toISO(r.dateStart), end: toISO(r.dateEnd) }));
+    ).map((r) => ({ dateStart: toISO(r.dateStart), dateEnd: toISO(r.dateEnd) }));
   }
-  const inSchool = (d: string) => schoolRanges.some((r) => d >= r.start && d <= r.end);
+  // Convention vacances scolaires : dateStart = dernier jour d'école → borne gauche
+  // stricte (cf. lib/school-holidays). Corrige un off-by-one qui excluait à tort une
+  // occurrence tombant le dernier jour d'école.
+  const inSchool = (d: string) => isInSchoolHolidayRange(d, schoolRanges);
 
   // Délai de réservation : on ne CRÉE pas d'enfant pour une occurrence antérieure à
   // aujourd'hui + le délai du service (cf. lib/booking-delay). On ne SUPPRIME jamais

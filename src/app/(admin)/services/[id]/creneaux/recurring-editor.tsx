@@ -94,7 +94,7 @@ export function RecurringEditor({
         id: s.id,
         startTime: s.startTime,
         endTime: s.endTime,
-        weeks: s.weeks ?? "A,B",
+        weeks: s.weeks ?? "",
         slotDay: s.slotDay,
         capacity: s.capacity ?? capacity,
         demandeurIds: [...s.demandeurIds],
@@ -263,7 +263,9 @@ export function RecurringEditor({
       id: newClientSlotId(),
       startTime: start,
       endTime,
-      weeks: "A,B",
+      // Modèle « 1 créneau = 1 semaine » : en mode A/B, par défaut semaine A (jamais
+      // « A & B ») ; hors A/B, "" = toutes les semaines.
+      weeks: abMode ? "A" : "",
       slotDay: day,
       capacity: capacity,
       demandeurIds: [],
@@ -490,7 +492,6 @@ export function RecurringEditor({
                                 onChange={(e) => setWeeks(row, e.target.value)}
                                 style={{ fontSize: ".72rem", padding: "1px 3px" }}
                               >
-                                <option value="A,B">Semaines A &amp; B</option>
                                 <option value="A">Semaine A</option>
                                 <option value="B">Semaine B</option>
                               </select>

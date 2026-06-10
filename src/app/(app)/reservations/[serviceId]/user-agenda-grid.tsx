@@ -3,6 +3,7 @@
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { gaugeUnits } from "@/lib/gauge";
+import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -721,18 +722,6 @@ function dayKeyFromYmd(ymd: string): string {
   return YMD_DAY_KEYS[new Date(`${ymd}T00:00:00`).getDay()] ?? "";
 }
 
-// Une date 'YYYY-MM-DD' tombe-t-elle dans une plage de vacances scolaires ?
-// Convention data.education.gouv.fr : dateStart = soir du dernier jour d'école →
-// 1er jour de vacances = dateStart + 1 (borne gauche stricte, droite incluse).
-// Port legacy _isSchoolVacance. Vacances = par demandeur (pas par service), donc
-// filtré côté user selon openOnSchoolHolidays du demandeur de l'usager.
-function inSchoolHolidayRange(
-  date: string,
-  ranges: { dateStart: string; dateEnd: string }[],
-): boolean {
-  return ranges.some((p) => date > p.dateStart && date <= p.dateEnd);
-}
-
 /** Numéro de semaine ISO (1..53) — sert à déduire la parité A/B en semaine réelle. */
 function isoWeek(d: Date): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -767,7 +756,7 @@ type UniqueSlot = {
   parentSlotId: string | null;
 };
 
-// Semaines où le créneau "tourne" (port de la colonne weeks). null / "A,B" = toutes.
+// Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.
 function parseWeeks(weeks: string | null): ("A" | "B")[] {
   if (!weeks) return ["A", "B"];
   const set = new Set(

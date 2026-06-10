@@ -85,6 +85,39 @@ function newRecurId(): string {
   return `sl_${crypto.randomUUID().slice(0, 8)}`;
 }
 
+/** Un service est-il en mode semaine A/B ? (au moins un demandeur avec semaineAb). */
+async function serviceHasAbMode(serviceId: string): Promise<boolean> {
+  return (
+    (await prisma.serviceDemandeurSettings.count({ where: { serviceId, semaineAb: true } })) > 0
+  );
+}
+
+/**
+ * Modèle « 1 créneau = 1 semaine » en mode A/B : un créneau récurrent doit porter la
+ * semaine A OU B (jamais « A & B »). On évite ainsi qu'un même créneau cumule les
+ * réservations des deux semaines dans un seul seau de capacité. (Hors mode A/B, `weeks`
+ * vaut « A,B » = toutes les semaines, ce qui reste valide.) Renvoie un message d'erreur
+ * si la valeur est invalide pour un service A/B, sinon null.
+ */
+function abWeekError(weeks: string | null | undefined): string | null {
+  const w = (weeks ?? "").trim();
+  return w === "A" || w === "B"
+    ? null
+    : "En mode A/B, un créneau doit être sur la semaine A ou la semaine B (pas « A & B »).";
+}
+
+/**
+ * Valeur `weeks` à PERSISTER, normalisée selon la convention :
+ *   - "A" ou "B" → mode A/B, semaine unique ;
+ *   - "" → aucune distinction A/B = TOUTES les semaines (services non A/B).
+ * Toute autre valeur ("A,B", null, "B,A"…) est ramenée à "" : « A,B » n'est JAMAIS
+ * persisté. `parseWeeks("")` renvoie ["A","B"], donc "" tourne bien chaque semaine.
+ */
+function normalizeWeeks(weeks: string | null | undefined): string {
+  const w = (weeks ?? "").trim();
+  return w === "A" || w === "B" ? w : "";
+}
+
 function mirrorId(slotId: string, dateStr: string): string {
   return `u_${slotId}_${dateStr}`;
 }
@@ -266,6 +299,13 @@ export async function saveRecurringSlots(
   if (!period.dateStart || !period.dateEnd) {
     return { ok: false, error: "La période n'a pas de dates définies" };
   }
+  // Modèle « 1 créneau = 1 semaine » : en mode A/B, chaque créneau doit être A ou B.
+  if (await serviceHasAbMode(serviceId)) {
+    for (const sl of slots) {
+      const err = abWeekError(sl.weeks);
+      if (err) return { ok: false, error: err };
+    }
+  }
 
   const activeDays = service.activeDays
     .split(",")
@@ -297,7 +337,7 @@ export async function saveRecurringSlots(
     for (const sl of slots) {
       const slId = sl.id || newRecurId();
       keepIds.push(slId);
-      const weeks = sl.weeks || "A,B";
+      const weeks = normalizeWeeks(sl.weeks);
 
       // upsert (preserve bookings)
       await tx.slot.upsert({
@@ -505,10 +545,14 @@ export async function addRecurringSlot(
   if (!period?.dateStart || !period?.dateEnd) {
     return { ok: false, error: "Période introuvable ou sans dates" };
   }
+  if (await serviceHasAbMode(serviceId)) {
+    const err = abWeekError(input.weeks);
+    if (err) return { ok: false, error: err };
+  }
   const activeDays = service.activeDays
     .split(",")
     .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
-  const weeks = input.weeks || "A,B";
+  const weeks = normalizeWeeks(input.weeks);
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId },
     select: { date: true },
@@ -761,7 +805,7 @@ export async function moveRecurringSlot(
   }
 
   const capVal = slot.capacity ?? service.capacity;
-  const weeks = slot.weeks || "A,B";
+  const weeks = normalizeWeeks(slot.weeks);
   const activeDays = service.activeDays
     .split(",")
     .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
