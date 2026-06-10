@@ -106,7 +106,12 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
       mgrNoticeHour: true,
       mgrNoticeWeekday: true,
       mgrNoticeLastSentAt: true,
-      managers: { select: { user: { select: { email: true } } } },
+      // Sécurité : seuls les comptes gestionnaire reçoivent le digest (au cas où la
+      // relation ServiceManager serait un jour réutilisée pour d'autres rôles).
+      managers: {
+        where: { user: { role: "gestionnaire" } },
+        select: { user: { select: { email: true } } },
+      },
     },
   });
 
