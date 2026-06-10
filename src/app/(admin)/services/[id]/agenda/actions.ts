@@ -70,8 +70,9 @@ export async function setBookingValidatedAction(
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
-  const b = await prisma.booking.findUnique({
-    where: { id: id.data },
+  // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
+  const b = await prisma.booking.findFirst({
+    where: { id: id.data, serviceId },
     select: {
       id: true,
       bookingType: true,
@@ -125,8 +126,9 @@ export async function setBookingPointageAction(
   if (!id.success) return;
   // Les parents (récurrents) NE sont PAS pointables : seuls les miroirs (et les
   // ponctuelles autonomes) le sont.
-  const b = await prisma.booking.findUnique({
-    where: { id: id.data },
+  // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
+  const b = await prisma.booking.findFirst({
+    where: { id: id.data, serviceId },
     select: { bookingType: true },
   });
   if (!b || b.bookingType === "recurring") return;
@@ -378,8 +380,9 @@ export async function deleteBookingAdminAction(
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return;
   // Infos nécessaires au mail + verrou, lues AVANT la suppression.
-  const booking = await prisma.booking.findUnique({
-    where: { id: id.data },
+  // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
+  const booking = await prisma.booking.findFirst({
+    where: { id: id.data, serviceId },
     select: {
       validated: true,
       periodId: true,
@@ -467,8 +470,9 @@ export async function updateBookingDetailAction(input: {
   const parsed = detailSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
   const d = parsed.data;
-  const current = await prisma.booking.findUnique({
-    where: { id: d.bookingId },
+  // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
+  const current = await prisma.booking.findFirst({
+    where: { id: d.bookingId, serviceId: d.serviceId },
     select: {
       bookingType: true,
       parentBookingId: true,
@@ -548,8 +552,9 @@ export async function moveBookingAction(
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
   // Miroir immuable / réservation verrouillée par un pointage → pas de déplacement.
-  const lk = await prisma.booking.findUnique({
-    where: { id: id.data },
+  // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
+  const lk = await prisma.booking.findFirst({
+    where: { id: id.data, serviceId },
     select: {
       id: true,
       bookingType: true,

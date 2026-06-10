@@ -110,8 +110,10 @@ export async function assertSlotCapacity(
     excludeBookingId?: number;
   },
 ) {
-  const slot = await db.slot.findUnique({
-    where: { id: params.slotId },
+  // Anti-IDOR : le créneau doit appartenir au service annoncé (refuse un slotId
+  // pointant vers un autre service que celui couvert par le guard de l'appelant).
+  const slot = await db.slot.findFirst({
+    where: { id: params.slotId, serviceId: params.serviceId },
     select: { capacity: true, service: { select: { capacity: true, gaugeAccompagnants: true } } },
   });
   if (!slot) throw new BookingError("Créneau introuvable.");

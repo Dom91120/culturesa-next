@@ -289,6 +289,37 @@ export async function listServiceRgpdUsers(serviceId: string): Promise<ServiceRg
   return list;
 }
 
+/**
+ * Vérifie qu'un usager relève du périmètre RGPD d'AU MOINS UN des services donnés
+ * (anti-IDOR des actions RGPD service : anonymisation, export). Mêmes critères que
+ * `listServiceRgpdUsers` : rôle `utilisateur`, non anonymisé, et demandeur effectif
+ * (direct, sinon celui de la structure) configuré pour le service
+ * (`ServiceDemandeurSettings`). Liste de services vide → refus.
+ */
+export async function isUserInServicesRgpdScope(
+  serviceIds: string[],
+  userId: string,
+): Promise<boolean> {
+  if (serviceIds.length === 0 || !userId) return false;
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      role: true,
+      anonymizedAt: true,
+      demandeurId: true,
+      structure: { select: { demandeurId: true } },
+    },
+  });
+  if (!u || u.role !== "utilisateur" || u.anonymizedAt) return false;
+  const effectiveDemandeurId = u.demandeurId ?? u.structure?.demandeurId ?? null;
+  if (effectiveDemandeurId == null) return false;
+  const setting = await prisma.serviceDemandeurSettings.findFirst({
+    where: { serviceId: { in: serviceIds }, demandeurId: effectiveDemandeurId },
+    select: { serviceId: true },
+  });
+  return setting != null;
+}
+
 /** Lit la durée de rétention configurée (années), bornée 0–50, défaut 2. */
 export async function getRetentionYears(): Promise<number> {
   const cfg = await getConfigMany([RETENTION_YEARS_KEY]);

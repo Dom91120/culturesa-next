@@ -1,14 +1,31 @@
 import { prisma } from "@/server/db";
-import { getSession, requireRole } from "@/server/guards";
+import { requireRole } from "@/server/guards";
+import { isUserInServicesRgpdScope } from "@/server/services/rgpd";
+import type { Role } from "@prisma/client";
 import { headers } from "next/headers";
 
 export async function GET(req: Request) {
-  await requireRole("gestionnaire");
-  const session = await getSession();
+  const session = await requireRole("gestionnaire");
 
   const url = new URL(req.url);
   const userId = url.searchParams.get("userId");
   if (!userId) return new Response("userId manquant", { status: 400 });
+
+  // Anti-IDOR : un administrateur peut exporter tout compte ; un gestionnaire
+  // uniquement les usagers relevant du périmètre RGPD d'un service qu'il gère
+  // (même critère que la liste du panneau Paramètres › RGPD).
+  const role = (session.user as { role?: Role }).role ?? "utilisateur";
+  if (role !== "administrateur") {
+    const managed = await prisma.serviceManager.findMany({
+      where: { userId: session.user.id },
+      select: { serviceId: true },
+    });
+    const inScope = await isUserInServicesRgpdScope(
+      managed.map((m) => m.serviceId),
+      userId,
+    );
+    if (!inScope) return new Response("Accès refusé", { status: 403 });
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

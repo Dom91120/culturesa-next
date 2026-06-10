@@ -11,6 +11,7 @@ import {
   BookingError,
   assertBookingUnlocked,
   assertNotSchoolHolidayForUser,
+  assertSlotCapacity,
   cancelUserBooking,
   createUniqueBooking,
   userCanAccessService,
@@ -398,7 +399,13 @@ export async function moveMyBookingAction(
   return { ok: true };
 }
 
-/** Met à jour les compteurs / le thème d'une réservation appartenant à l'usager. */
+/**
+ * Met à jour les compteurs / le thème d'une réservation appartenant à l'usager.
+ * Mêmes garde-fous que l'équivalent admin (`updateBookingDetailAction`) : bornes
+ * 0–99 / thème 255, miroir non modifiable, réservation pointée refusée, verrou
+ * « validation bloquante », et re-vérification de la jauge (anti-surbooking,
+ * transaction sérialisable — gonfler les compteurs ne contourne pas la capacité).
+ */
 export async function updateMyBookingAction(
   serviceId: string,
   bookingId: number,
@@ -407,35 +414,87 @@ export async function updateMyBookingAction(
   theme = "",
 ): Promise<Result> {
   const session = await requireUser();
-  await prisma.$transaction(async (tx) => {
-    const res = await tx.booking.updateMany({
-      where: { id: bookingId, userId: session.user.id },
-      data: {
-        enfants: Math.max(0, enfants),
-        accompagnants: Math.max(0, accompagnants),
-        themeLabel: theme,
+  const enf = Math.floor(enfants);
+  const acc = Math.floor(accompagnants);
+  if (!Number.isInteger(enf) || enf < 0 || enf > 99) {
+    return { ok: false, error: "Données invalides." };
+  }
+  if (!Number.isInteger(acc) || acc < 0 || acc > 99) {
+    return { ok: false, error: "Données invalides." };
+  }
+  const themeLabel = (theme ?? "").trim().slice(0, 255);
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        const b = await tx.booking.findFirst({
+          where: { id: bookingId, userId: session.user.id, serviceId },
+          select: {
+            id: true,
+            bookingType: true,
+            parentBookingId: true,
+            pointage: true,
+            userId: true,
+            serviceId: true,
+            slotId: true,
+            periodId: true,
+            week: true,
+            validated: true,
+          },
+        });
+        if (!b) throw new BookingError("Réservation introuvable.");
+        if (b.parentBookingId != null) {
+          throw new BookingError("Une séance (miroir) n'est pas modifiable.");
+        }
+        // Pointée (elle-même ou une de ses séances) → figée, comme l'annulation.
+        if (b.pointage != null) throw new BookingError("Réservation pointée, non modifiable.");
+        const pointedChildren = await tx.booking.count({
+          where: { parentBookingId: b.id, pointage: { not: null } },
+        });
+        if (pointedChildren > 0) {
+          throw new BookingError("Réservation pointée, non modifiable.");
+        }
+        // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
+        await assertBookingUnlocked(tx, session.user.id, b);
+        // Anti-surbooking : augmenter les compteurs ne doit pas dépasser la jauge/capacité
+        // (la réservation courante est exclue du décompte).
+        await assertSlotCapacity(tx, {
+          serviceId,
+          slotId: b.slotId,
+          bookingType: b.bookingType === "recurring" ? "recurring" : "unique",
+          periodId: b.periodId,
+          enfants: enf,
+          accompagnants: acc,
+          excludeBookingId: b.id,
+        });
+        await tx.booking.update({
+          where: { id: b.id },
+          data: { enfants: enf, accompagnants: acc, themeLabel },
+        });
+        // Récurrente : propage counts/thème aux réservations-enfants.
+        if (b.bookingType === "recurring") {
+          await syncRecurringChildren(tx, {
+            id: b.id,
+            userId: b.userId,
+            serviceId: b.serviceId,
+            slotId: b.slotId,
+            periodId: b.periodId,
+            week: b.week,
+            themeLabel,
+            enfants: enf,
+            accompagnants: acc,
+            validated: b.validated,
+          });
+        }
       },
-    });
-    if (res.count === 0) return;
-    const b = await tx.booking.findUnique({
-      where: { id: bookingId },
-      select: {
-        id: true,
-        bookingType: true,
-        userId: true,
-        serviceId: true,
-        slotId: true,
-        periodId: true,
-        week: true,
-        themeLabel: true,
-        enfants: true,
-        accompagnants: true,
-        validated: true,
-      },
-    });
-    // Récurrente : propage counts/thème aux réservations-enfants.
-    if (b && b.bookingType === "recurring") await syncRecurringChildren(tx, b);
-  });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Modification simultanée détectée, réessayez." };
+    }
+    throw e;
+  }
   revalidate(serviceId);
   return { ok: true };
 }

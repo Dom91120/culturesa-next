@@ -2,7 +2,7 @@
 
 import type { ActionState } from "@/lib/action-state";
 import { requireServiceManager } from "@/server/guards";
-import { RgpdError, anonymizeUser } from "@/server/services/rgpd";
+import { RgpdError, anonymizeUser, isUserInServicesRgpdScope } from "@/server/services/rgpd";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -18,6 +18,13 @@ export async function anonymizeServiceUserAction(
 ): Promise<ActionState> {
   await requireServiceManager(serviceId);
   if (!userId) return { ok: false, error: "Usager cible manquant." };
+
+  // Anti-IDOR : la cible doit relever du périmètre RGPD de CE service (rôle
+  // utilisateur, demandeur effectif configuré pour le service) — un gestionnaire
+  // ne peut pas anonymiser un compte hors de son périmètre via un userId arbitraire.
+  if (!(await isUserInServicesRgpdScope([serviceId], userId))) {
+    return { ok: false, error: "Usager hors du périmètre de ce service." };
+  }
 
   try {
     await anonymizeUser(userId, "admin");
