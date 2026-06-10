@@ -18,17 +18,26 @@ const dateFmt = new Intl.DateTimeFormat("fr-FR", {
 
 export type EditionRow = {
   id: number;
-  periode: string;
-  jour: string;
-  debut: string;
-  fin: string;
-  demandeur: string;
+  type: string; // Récurrente / Ponctuelle
+  structure: string; // structure de l'usager (repli sur le demandeur)
+  niveau: string;
+  demandeur: string; // libellé du demandeur (colonne de la PAGE)
+  email: string;
+  tel: string;
   nom: string;
   prenom: string;
-  theme: string;
   enfants: number;
+  accompagnants: number;
+  periode: string;
+  creneau: string; // « HH:MM – HH:MM » ou « Journée entière »
+  debut: string;
+  fin: string;
+  jour: string; // jour (récurrent) ou date (ponctuel) — colonne de la PAGE
+  jourDate: string; // « Lundi 18/06/2026 » (ponctuel) ou jour (récurrent) — colonne CSV legacy
+  theme: string;
   statut: string;
   pointage: string;
+  createdAt: string; // date de réservation (YYYY-MM-DD HH:MM)
 };
 
 export type SessionAttendee = {
@@ -128,22 +137,46 @@ export async function listDatedSessions(
   return sessions;
 }
 
-/** Lignes de réservation d'un service, prêtes pour l'affichage et l'export CSV. */
-export async function listEditionRows(serviceId: string): Promise<EditionRow[]> {
+/** « Lundi 18/06/2026 » pour un ponctuel daté ; jour de semaine pour un récurrent. */
+function jourDateOf(bookingType: string, slotDate: Date | null, slotDay: string | null): string {
+  if (bookingType === "unique") {
+    if (!slotDate) return "—";
+    const day = DAY_NAMES[ISO_DAYKEY[slotDate.getUTCDay()]] ?? "";
+    return `${day} ${dateFmt.format(slotDate)}`.trim();
+  }
+  return DAY_NAMES[slotDay ?? ""] ?? slotDay ?? "—";
+}
+
+/**
+ * Lignes de réservation d'un service, prêtes pour l'affichage et l'export CSV.
+ * `userId` fourni → restreint aux réservations de CET usager (export « mes réservations »),
+ * en excluant les miroirs (une ligne par réservation, pas par occurrence).
+ */
+export async function listEditionRows(serviceId: string, userId?: string): Promise<EditionRow[]> {
   const bookings = await prisma.booking.findMany({
-    where: { serviceId },
+    where: { serviceId, ...(userId ? { userId, parentBookingId: null } : {}) },
     orderBy: [{ periodId: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       bookingType: true,
       themeLabel: true,
       enfants: true,
+      accompagnants: true,
       validated: true,
       pointage: true,
-      // Le jour est porté par le créneau (slotDay) ; date pour un ponctuel.
+      createdAt: true,
       slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
-      user: { select: { nom: true, prenom: true, demandeur: { select: { label: true } } } },
-      // Pas de relation period sur Booking : on récupère le libellé séparément.
+      user: {
+        select: {
+          nom: true,
+          prenom: true,
+          email: true,
+          tel: true,
+          niveau: true,
+          structure: { select: { label: true } },
+          demandeur: { select: { label: true } },
+        },
+      },
       periodId: true,
     },
   });
@@ -155,23 +188,33 @@ export async function listEditionRows(serviceId: string): Promise<EditionRow[]> 
   });
   const periodLabel = new Map(periods.map((p) => [p.id, p.label]));
 
-  return bookings.map((b) => ({
-    id: b.id,
-    periode: periodLabel.get(b.periodId) ?? "—",
-    jour:
-      b.bookingType === "unique"
-        ? b.slot.slotDate
-          ? dateFmt.format(b.slot.slotDate)
-          : "—"
-        : (DAY_NAMES[b.slot.slotDay ?? ""] ?? b.slot.slotDay ?? "—"),
-    debut: b.slot.startTime,
-    fin: b.slot.endTime,
-    demandeur: b.user.demandeur?.label ?? "",
-    nom: b.user.nom,
-    prenom: b.user.prenom,
-    theme: b.themeLabel,
-    enfants: b.enfants,
-    statut: b.validated ? "Validée" : "En attente",
-    pointage: b.pointage === "present" ? "Présent" : b.pointage === "absent" ? "Absent" : "",
-  }));
+  return bookings.map((b) => {
+    const s = b.slot.startTime ? b.slot.startTime.slice(0, 5) : "";
+    const e = b.slot.endTime ? b.slot.endTime.slice(0, 5) : "";
+    const demandeurLabel = b.user.demandeur?.label ?? "";
+    return {
+      id: b.id,
+      type: b.bookingType === "recurring" ? "Récurrente" : "Ponctuelle",
+      // Structure de l'usager, repli sur le demandeur (cohérent avec le legacy).
+      structure: b.user.structure?.label || demandeurLabel,
+      niveau: b.user.niveau ?? "",
+      demandeur: demandeurLabel,
+      email: b.user.email ?? "",
+      tel: b.user.tel ?? "",
+      nom: b.user.nom,
+      prenom: b.user.prenom,
+      enfants: b.enfants,
+      accompagnants: b.accompagnants,
+      periode: periodLabel.get(b.periodId) ?? "—",
+      creneau: s && e ? `${s} – ${e}` : "Journée entière",
+      debut: b.slot.startTime,
+      fin: b.slot.endTime,
+      jour: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),
+      jourDate: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),
+      theme: b.themeLabel,
+      statut: b.validated ? "Validée" : "En attente",
+      pointage: b.pointage === "present" ? "Présent" : b.pointage === "absent" ? "Absent" : "",
+      createdAt: b.createdAt.toISOString().slice(0, 16).replace("T", " "),
+    };
+  });
 }

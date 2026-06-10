@@ -2838,6 +2838,52 @@ export function UserAgendaGrid({
                 <rect x="6" y="14" width="12" height="8" rx="1" />
               </svg>
             </button>
+            <a
+              href={`/reservations/${service.id}/export`}
+              data-tip="Exporter mes réservations (CSV)"
+              aria-label="Exporter mes réservations (CSV)"
+              style={{
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--rad-sm)",
+                padding: ".28rem .38rem",
+                cursor: "pointer",
+                color: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                lineHeight: 1,
+                textDecoration: "none",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  width: 1,
+                  height: 1,
+                  overflow: "hidden",
+                  clip: "rect(0 0 0 0)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Exporter mes réservations (CSV)
+              </span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </a>
           </div>
         </div>
       </div>

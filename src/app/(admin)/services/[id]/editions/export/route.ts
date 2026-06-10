@@ -6,17 +6,24 @@ function csvCell(v: string | number): string {
   return `"${String(v).replace(/"/g, '""')}"`;
 }
 
+// Schéma aligné sur le legacy (api/export.php) : 14 colonnes, même ordre. « Demandeur »
+// = Nom Prénom de l'usager ; « Structure » = structure (repli demandeur). On conserve en
+// plus la colonne « Pointage » (apport Next, sans équivalent legacy).
 const HEADER = [
-  "Période",
-  "Jour / Date",
-  "Début",
-  "Fin",
+  "Type",
+  "Structure",
+  "Niveau",
   "Demandeur",
-  "Nom",
-  "Prénom",
-  "Thème",
+  "Email",
+  "Téléphone",
   "Enfants",
+  "Adultes",
+  "Période",
+  "Créneau",
+  "Jour / Date",
+  "Thème",
   "Statut",
+  "Date de réservation",
   "Pointage",
 ];
 
@@ -31,16 +38,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const lines = [
     HEADER,
     ...rows.map((r) => [
-      r.periode,
-      r.jour,
-      r.debut,
-      r.fin,
-      r.demandeur,
-      r.nom,
-      r.prenom,
-      r.theme,
+      r.type,
+      r.structure,
+      r.niveau,
+      `${r.nom} ${r.prenom}`.trim(),
+      r.email,
+      r.tel,
       r.enfants,
+      r.accompagnants,
+      r.periode,
+      r.creneau,
+      r.jourDate,
+      r.theme,
       r.statut,
+      r.createdAt,
       r.pointage,
     ]),
   ];
