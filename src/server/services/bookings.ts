@@ -1,6 +1,7 @@
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
+import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import type { BookingCreateInput } from "@/schemas/booking";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -106,6 +107,34 @@ export async function assertSlotCapacity(
 }
 
 /**
+ * Vacances scolaires : si le demandeur de l'usager FERME pendant les vacances, refuse un
+ * créneau ponctuel daté tombant en vacances scolaires de la zone configurée (port legacy
+ * `bk_user_school_block`). No-op si l'usager n'a pas de demandeur (ex. admin) ou s'il est
+ * ouvert en vacances. `db` accepte le client global ou un client transactionnel.
+ */
+export async function assertNotSchoolHolidayForUser(
+  db: Prisma.TransactionClient,
+  userId: string,
+  slotDate: Date,
+) {
+  const u = await db.user.findUnique({
+    where: { id: userId },
+    select: { demandeur: { select: { openOnSchoolHolidays: true } } },
+  });
+  if (!u?.demandeur || u.demandeur.openOnSchoolHolidays) return;
+  const zone = (await getConfigMany(["school.zone"]))["school.zone"] || "A";
+  const ranges = (
+    await db.schoolHoliday.findMany({
+      where: { zone },
+      select: { dateStart: true, dateEnd: true },
+    })
+  ).map((r) => ({ dateStart: toDateInput(r.dateStart), dateEnd: toDateInput(r.dateEnd) }));
+  if (isInSchoolHolidayRange(toDateInput(slotDate), ranges)) {
+    throw new BookingError("Ce créneau tombe en vacances scolaires.");
+  }
+}
+
+/**
  * Crée une réservation pour un créneau ponctuel, en garantissant l'absence de
  * surbooking. La transaction est SÉRIALISABLE : deux réservations concurrentes
  * sur la dernière place en feront échouer une (à réessayer), jamais les deux.
@@ -141,6 +170,9 @@ export async function createUniqueBooking(
             "Le délai de réservation pour ce créneau n'est pas encore atteint.",
           );
         }
+
+        // Vacances scolaires : demandeur fermé en vacances → créneau ponctuel refusé.
+        await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate);
 
         const capacity = slot.capacity ?? slot.service.capacity;
         // Capacité selon le mode jauge du service (même règle que l'affichage et les

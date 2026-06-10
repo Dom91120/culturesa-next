@@ -10,6 +10,7 @@ import {
 import {
   BookingError,
   assertBookingUnlocked,
+  assertNotSchoolHolidayForUser,
   cancelUserBooking,
   createUniqueBooking,
 } from "@/server/services/bookings";
@@ -293,6 +294,11 @@ export async function moveMyBookingAction(
           !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
         ) {
           throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+        }
+        // Vacances scolaires : déplacement vers un créneau PONCTUEL daté en vacances refusé
+        // si le demandeur de l'usager ferme pendant les vacances (cohérent avec la création).
+        if (target.ponctuel && slot.slotDate) {
+          await assertNotSchoolHolidayForUser(tx, session.user.id, slot.slotDate);
         }
         const capacity = slot.capacity ?? slot.service.capacity;
         // Capacité selon le mode jauge (même règle que l'affichage et que la création) :
