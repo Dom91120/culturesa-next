@@ -1,22 +1,19 @@
 import { prisma } from "@/server/db";
+import { type StatsType, getServiceStats } from "@/server/services/stats";
 import { notFound } from "next/navigation";
-
-const DAY_ORDER = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
-const DAY_NAMES: Record<string, string> = {
-  lun: "Lundi",
-  mar: "Mardi",
-  mer: "Mercredi",
-  jeu: "Jeudi",
-  ven: "Vendredi",
-  sam: "Samedi",
-  dim: "Dimanche",
-};
+import { StatsFilters } from "./stats-filters";
 
 function StatCard({
   value,
   label,
   color,
-}: { value: number | string; label: string; color?: string }) {
+  hint,
+}: {
+  value: number | string;
+  label: string;
+  color?: string;
+  hint?: string;
+}) {
   return (
     <div
       style={{
@@ -49,17 +46,25 @@ function StatCard({
       >
         {label}
       </div>
+      {hint && (
+        <div style={{ fontSize: ".68rem", color: "var(--muted)", marginTop: ".15rem" }}>{hint}</div>
+      )}
     </div>
   );
 }
 
-function BarRow({ label, value, max }: { label: string; value: number; max: number }) {
+function BarRow({
+  label,
+  value,
+  max,
+  color,
+}: { label: string; value: number; max: number; color?: string }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: ".5rem" }}>
       <div
         style={{
-          width: 110,
+          width: 120,
           fontSize: ".75rem",
           color: "var(--muted)",
           flexShrink: 0,
@@ -78,7 +83,12 @@ function BarRow({ label, value, max }: { label: string; value: number; max: numb
         }}
       >
         <div
-          style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }}
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: color ?? "var(--accent)",
+            borderRadius: 4,
+          }}
         />
       </div>
       <div
@@ -90,49 +100,106 @@ function BarRow({ label, value, max }: { label: string; value: number; max: numb
   );
 }
 
-export default async function StatsPage({ params }: { params: Promise<{ id: string }> }) {
+function Panel({
+  title,
+  empty,
+  children,
+}: { title: string; empty: boolean; children: React.ReactNode }) {
+  return (
+    <div className="panel">
+      <div className="panel-title" style={{ fontSize: ".82rem" }}>
+        <span className="dot" />
+        {title}
+      </div>
+      {empty ? (
+        <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune donnée.</p>
+      ) : (
+        children
+      )}
+    </div>
+  );
+}
+
+/** Barre empilée présents / absents / non pointés (prévu = total). */
+function SegmentBar({ present, absent, none }: { present: number; absent: number; none: number }) {
+  const tot = present + absent + none;
+  if (tot === 0) return null;
+  const pc = (n: number) => `${(100 * n) / tot}%`;
+  return (
+    <div
+      style={{
+        display: "flex",
+        height: 20,
+        borderRadius: 5,
+        overflow: "hidden",
+        marginTop: ".4rem",
+      }}
+    >
+      {present > 0 && (
+        <div
+          title={`Présents : ${present}`}
+          style={{ width: pc(present), background: "var(--accent)" }}
+        />
+      )}
+      {absent > 0 && (
+        <div
+          title={`Absents : ${absent}`}
+          style={{ width: pc(absent), background: "var(--danger)" }}
+        />
+      )}
+      {none > 0 && (
+        <div
+          title={`Non pointés : ${none}`}
+          style={{ width: pc(none), background: "rgba(127,127,127,.3)" }}
+        />
+      )}
+    </div>
+  );
+}
+
+function parseType(v: string | undefined): StatsType {
+  return v === "rec" || v === "uniq" ? v : "all";
+}
+function parseDate(v: string | undefined): string | null {
+  return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+export default async function StatsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ type?: string; from?: string; to?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
   if (!service) notFound();
 
-  const bookings = await prisma.booking.findMany({
-    where: { serviceId: id },
-    select: {
-      enfants: true,
-      validated: true,
-      // Le jour est porté par le créneau : slotDay (récurrent) ou jour de la date (ponctuel).
-      slot: { select: { slotDay: true, slotDate: true } },
-      user: { select: { demandeur: { select: { label: true } } } },
-    },
-  });
+  const type = parseType(sp.type);
+  const dateFrom = parseDate(sp.from);
+  const dateTo = parseDate(sp.to);
 
-  const total = bookings.length;
-  const enfantsTotal = bookings.reduce((s, b) => s + b.enfants, 0);
-  const validated = bookings.filter((b) => b.validated).length;
-  const pending = total - validated;
+  const [stats, periodRows] = await Promise.all([
+    getServiceStats(id, { type, dateFrom, dateTo }),
+    prisma.period.findMany({
+      where: { serviceId: id, state: "actif" },
+      orderBy: [{ dateStart: "asc" }, { id: "asc" }],
+      select: { id: true, label: true, dateStart: true, dateEnd: true },
+    }),
+  ]);
 
-  const ISO_KEY = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
-  const byDay = new Map<string, number>();
-  for (const b of bookings) {
-    const dk = b.slot.slotDay ?? (b.slot.slotDate ? ISO_KEY[b.slot.slotDate.getUTCDay()] : null);
-    if (!dk) continue;
-    byDay.set(dk, (byDay.get(dk) ?? 0) + 1);
-  }
-  const dayRows = DAY_ORDER.filter((d) => byDay.has(d)).map((d) => ({
-    label: DAY_NAMES[d],
-    value: byDay.get(d) ?? 0,
+  const periods = periodRows.map((p) => ({
+    id: p.id,
+    label: p.label,
+    dateStart: p.dateStart ? p.dateStart.toISOString().slice(0, 10) : null,
+    dateEnd: p.dateEnd ? p.dateEnd.toISOString().slice(0, 10) : null,
   }));
-  const dayMax = Math.max(1, ...dayRows.map((r) => r.value));
 
-  const byDem = new Map<string, number>();
-  for (const b of bookings) {
-    const label = b.user.demandeur?.label ?? "(sans demandeur)";
-    byDem.set(label, (byDem.get(label) ?? 0) + b.enfants);
-  }
-  const demRows = [...byDem.entries()]
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value);
-  const demMax = Math.max(1, ...demRows.map((r) => r.value));
+  const dayMax = Math.max(1, ...stats.byDay.map((r) => r.value));
+  const monthMax = Math.max(1, ...stats.byMonth.map((r) => r.value));
+  const structMax = Math.max(1, ...stats.topStructures.map((r) => r.value));
+  const niveauMax = Math.max(1, ...stats.topNiveaux.map((r) => r.value));
 
   return (
     <div>
@@ -141,49 +208,94 @@ export default async function StatsPage({ params }: { params: Promise<{ id: stri
         Statistiques — {service.label}
       </div>
 
+      <StatsFilters
+        type={type === "all" ? "" : type}
+        dateFrom={dateFrom ?? ""}
+        dateTo={dateTo ?? ""}
+        periods={periods}
+      />
+
+      {/* KPIs généraux */}
       <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-        <StatCard value={total} label="Réservations" />
-        <StatCard value={enfantsTotal} label="Enfants inscrits" />
-        <StatCard value={validated} label="Validées" color="var(--accent)" />
-        <StatCard value={pending} label="En attente" color="var(--warn)" />
+        <StatCard value={stats.total} label="Réservations" />
+        <StatCard value={stats.distinctUsers} label="Usagers distincts" />
+        {stats.pending > 0 && (
+          <StatCard value={stats.pending} label="En attente" color="var(--warn)" />
+        )}
+        <StatCard value={stats.enfants} label="Enfants" />
+        {stats.accompagnants > 0 && <StatCard value={stats.accompagnants} label="Accompagnants" />}
       </div>
 
+      {/* Prévu / Réalisé (pointage) */}
+      <div className="panel" style={{ marginBottom: "1rem" }}>
+        <div className="panel-title" style={{ fontSize: ".82rem" }}>
+          <span className="dot" />
+          Prévu / Réalisé — séances passées
+        </div>
+        {stats.prevu === 0 ? (
+          <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>
+            Aucune séance datée passée sur le périmètre sélectionné.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap" }}>
+              <StatCard value={stats.prevu} label="Prévu (séances)" />
+              <StatCard value={stats.presents} label="Réalisé (présents)" color="var(--accent)" />
+              <StatCard value={stats.absents} label="Absents" color="var(--danger)" />
+              <StatCard value={stats.nonPointes} label="Non pointés" color="var(--muted)" />
+              <StatCard
+                value={stats.tauxPresence != null ? `${stats.tauxPresence}%` : "—"}
+                label="Taux de présence"
+                color="var(--accent)"
+                hint="présents / (présents + absents)"
+              />
+              <StatCard
+                value={stats.tauxRealisation != null ? `${stats.tauxRealisation}%` : "—"}
+                label="Taux de réalisation"
+                hint="présents / prévu"
+              />
+            </div>
+            <SegmentBar present={stats.presents} absent={stats.absents} none={stats.nonPointes} />
+            <div style={{ fontSize: ".7rem", color: "var(--muted)", marginTop: ".35rem" }}>
+              <span style={{ color: "var(--accent)" }}>■</span> Présents&nbsp;&nbsp;
+              <span style={{ color: "var(--danger)" }}>■</span> Absents&nbsp;&nbsp;
+              <span style={{ color: "rgba(127,127,127,.6)" }}>■</span> Non pointés
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Graphes */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: ".85rem",
         }}
       >
-        <div className="panel">
-          <div className="panel-title" style={{ fontSize: ".82rem" }}>
-            <span className="dot" />
-            Réservations par jour
-          </div>
-          {dayRows.length === 0 ? (
-            <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>
-              Aucune réservation récurrente.
-            </p>
-          ) : (
-            dayRows.map((r) => (
-              <BarRow key={r.label} label={r.label} value={r.value} max={dayMax} />
-            ))
-          )}
-        </div>
+        <Panel title="Réservations par jour" empty={stats.byDay.length === 0}>
+          {stats.byDay.map((r) => (
+            <BarRow key={r.label} label={r.label} value={r.value} max={dayMax} />
+          ))}
+        </Panel>
 
-        <div className="panel">
-          <div className="panel-title" style={{ fontSize: ".82rem" }}>
-            <span className="dot" />
-            Enfants par demandeur
-          </div>
-          {demRows.length === 0 ? (
-            <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune donnée.</p>
-          ) : (
-            demRows.map((r) => (
-              <BarRow key={r.label} label={r.label} value={r.value} max={demMax} />
-            ))
-          )}
-        </div>
+        <Panel title="Évolution mensuelle" empty={stats.byMonth.length === 0}>
+          {stats.byMonth.map((r) => (
+            <BarRow key={r.label} label={r.label} value={r.value} max={monthMax} color="#e8a45a" />
+          ))}
+        </Panel>
+
+        <Panel title="Top structures" empty={stats.topStructures.length === 0}>
+          {stats.topStructures.map((r) => (
+            <BarRow key={r.label} label={r.label} value={r.value} max={structMax} color="#e06b6b" />
+          ))}
+        </Panel>
+
+        <Panel title="Top niveaux" empty={stats.topNiveaux.length === 0}>
+          {stats.topNiveaux.map((r) => (
+            <BarRow key={r.label} label={r.label} value={r.value} max={niveauMax} color="#5ab4e8" />
+          ))}
+        </Panel>
       </div>
     </div>
   );
