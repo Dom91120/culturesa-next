@@ -35,13 +35,15 @@ export default async function PlanningPage({
 }) {
   const { id } = await params;
   const { week } = await searchParams;
-  const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
-  if (!service) notFound();
-
   const ref = week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? new Date(`${week}T00:00:00Z`) : new Date();
   const monday = mondayOf(ref);
   const sunday = addDays(monday, 6);
-  const sessions = await listDatedSessions(id, ymd(monday), ymd(sunday));
+  // Libellé du service et sessions datées : indépendants → chargés en parallèle.
+  const [service, sessions] = await Promise.all([
+    prisma.service.findUnique({ where: { id }, select: { label: true } }),
+    listDatedSessions(id, ymd(monday), ymd(sunday)),
+  ]);
+  if (!service) notFound();
 
   const byDay = new Map<string, typeof sessions>();
   for (const s of sessions) {

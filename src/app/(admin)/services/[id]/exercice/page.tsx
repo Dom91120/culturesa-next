@@ -10,10 +10,9 @@ export default async function ExercicePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const service = await getService(id);
+  // Service et données de l'onglet : indépendants → chargés en parallèle.
+  const [service, data] = await Promise.all([getService(id), getExercicePaneData(id)]);
   if (!service) notFound();
-
-  const data = await getExercicePaneData(id);
 
   return (
     <div>

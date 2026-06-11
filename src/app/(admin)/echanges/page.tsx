@@ -55,8 +55,11 @@ const META: Record<TemplateKind, { label: string; description: string }> = {
 };
 
 export default async function EchangesPage() {
-  const prefs = await getMailPrefs();
-  const templates = await Promise.all(TEMPLATE_KINDS.map((k) => getMailTemplate(k)));
+  // Préférences et templates : indépendants → chargés en parallèle.
+  const [prefs, templates] = await Promise.all([
+    getMailPrefs(),
+    Promise.all(TEMPLATE_KINDS.map((k) => getMailTemplate(k))),
+  ]);
   const toggleable = new Set<string>(MAIL_KINDS);
 
   const rows: KindData[] = TEMPLATE_KINDS.map((kind, i) => {
