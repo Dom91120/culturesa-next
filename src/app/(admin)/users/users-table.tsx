@@ -24,7 +24,6 @@ export type UserRow = {
   demandeurLabel: string | null;
   structureLabel: string | null;
   anonymized: boolean;
-  bookingCount: number;
   serviceIds: string[];
   serviceLabels: string[];
 };

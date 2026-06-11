@@ -25,7 +25,6 @@ export default async function UsersPage() {
         anonymizedAt: true,
         demandeur: { select: { label: true } },
         structure: { select: { label: true } },
-        _count: { select: { bookings: true } },
         managedServices: {
           select: { serviceId: true, service: { select: { label: true } } },
         },
@@ -60,7 +59,6 @@ export default async function UsersPage() {
     demandeurLabel: u.demandeur?.label ?? null,
     structureLabel: u.structure?.label ?? null,
     anonymized: u.anonymizedAt != null,
-    bookingCount: u._count.bookings,
     serviceIds: u.managedServices.map((m) => m.serviceId),
     serviceLabels: u.managedServices.map((m) => m.service.label),
   }));

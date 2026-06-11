@@ -12,14 +12,26 @@ const dtFmt = new Intl.DateTimeFormat("fr-FR", {
 });
 
 export default async function RgpdAdminPage() {
-  const [logs, users, scan, retentionYears] = await Promise.all([
+  const [logs, scan, retentionYears] = await Promise.all([
     prisma.rgpdLog.findMany({ orderBy: { createdAt: "desc" }, take: 500 }),
-    prisma.user.findMany({
-      select: { id: true, nom: true, prenom: true, email: true, anonymizedAt: true },
-    }),
     listInactiveScan(),
     getRetentionYears(),
   ]);
+
+  // Seuls les usagers cités (cible/acteur) par les logs chargés sont nécessaires à la
+  // résolution — pas toute la table. RgpdLog n'a pas de FK : un id peut ne plus exister,
+  // resolveParty gère ce cas (repli).
+  const referencedIds = [
+    ...new Set(
+      logs.flatMap((l) => [l.targetUserId, l.actorUserId]).filter((id): id is string => !!id),
+    ),
+  ];
+  const users = referencedIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: referencedIds } },
+        select: { id: true, nom: true, prenom: true, email: true, anonymizedAt: true },
+      })
+    : [];
 
   // Sérialisation Date → ISO pour le composant client.
   const scanRows: InactiveRow[] = scan.map((u) => ({
