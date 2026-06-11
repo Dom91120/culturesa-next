@@ -249,6 +249,11 @@ model Slot {
   period      Period?         @relation(fields: [periodId], references: [id], onDelete: Cascade)
   demandeurs  SlotDemandeur[]
   bookings    Booking[]
+  // Self-FK : un créneau MIROIR (slotType=unique, daté) référence son créneau
+  // récurrent parent. Supprimer le parent supprime ses miroirs (cascade DB) — la
+  // suppression manuelle dans slots.ts reste un no-op idempotent.
+  parent      Slot?           @relation("SlotMirrors", fields: [parentSlotId], references: [id], onDelete: Cascade)
+  mirrors     Slot[]          @relation("SlotMirrors")
 
   @@index([serviceId])
   @@index([parentSlotId])
