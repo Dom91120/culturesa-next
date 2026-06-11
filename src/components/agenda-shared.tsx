@@ -5,6 +5,121 @@
 
 import type { Pointage } from "@/lib/agenda-core";
 
+// Colonne d'axe horaire de la grille (port legacy renderAgendaWeekly). En mode
+// « masquer les horaires sans créneau », la grille est compactée : on n'affiche
+// que les heures RÉELLEMENT visibles et on marque la fin réelle de chaque plage
+// (rupture) avec son horaire exact. Logique 100 % dérivée de la géométrie — pure,
+// identique entre les deux grilles.
+export function AgendaTimeColumn({
+  quarters,
+  qIdx,
+  gridStartMin,
+  gridEndMin,
+  totalH,
+  hasLunch,
+  lunchSkipFrom,
+  lunchEnd,
+  mapMinToY,
+}: {
+  quarters: number[];
+  qIdx: Map<number, number>;
+  gridStartMin: number;
+  gridEndMin: number;
+  totalH: number;
+  hasLunch: boolean;
+  lunchSkipFrom: number | null;
+  lunchEnd: number;
+  mapMinToY: (min: number) => number;
+}) {
+  const minLabel = (m: number) =>
+    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  // Fin réelle de la grille = fin du dernier quart visible (≠ gridEndMin si compacté).
+  const effectiveEnd = quarters.length ? quarters[quarters.length - 1] + 15 : gridEndMin;
+  // La rupture de la pause méridienne est déjà signalée par sa bande grise :
+  // on ne l'annote pas comme une rupture de plage.
+  const isLunchBreak = (i: number) =>
+    hasLunch &&
+    lunchSkipFrom !== null &&
+    quarters[i + 1] === lunchEnd &&
+    quarters[i] + 15 >= lunchSkipFrom;
+  const breakStarts = new Set<number>();
+  for (let i = 0; i < quarters.length - 1; i++) {
+    if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
+      breakStarts.add(quarters[i + 1]);
+    }
+  }
+
+  const marks: { key: string; top: number; cls: string; label: string }[] = [];
+  // Heures pleines visibles + borne de fin réelle.
+  let first = true;
+  for (let m = Math.ceil(gridStartMin / 60) * 60; m <= effectiveEnd; m += 60) {
+    if (m < gridStartMin) continue;
+    if (m < effectiveEnd && !qIdx.has(m)) continue;
+    let cls = "agenda-time-mark";
+    if (m === effectiveEnd) cls += " is-break-end";
+    else if (first || breakStarts.has(m)) cls += " is-break-start";
+    marks.push({ key: `h-${m}`, top: mapMinToY(m), cls, label: minLabel(m) });
+    first = false;
+  }
+  // Fin de chaque plage précédant une rupture (hors pause) : l'heure de fin réelle
+  // du dernier créneau de la plage, remontée au-dessus de sa ligne.
+  for (let i = 0; i < quarters.length - 1; i++) {
+    if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
+      const endOfPlage = quarters[i] + 15;
+      marks.push({
+        key: `e-${endOfPlage}`,
+        top: mapMinToY(endOfPlage),
+        cls: "agenda-time-mark is-break-end",
+        label: minLabel(endOfPlage),
+      });
+    }
+  }
+  return (
+    <div className="agenda-time-col" style={{ height: totalH }}>
+      {marks.map((mk) => (
+        <div key={mk.key} className={mk.cls} style={{ top: mk.top }}>
+          {mk.label}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Fond statique d'une colonne de jour : lignes de grille sur les quarts visibles
+// (pointillé fin par quart, trait plein sur l'heure pleine) + bande grise de la
+// pause méridienne. Pur, identique entre les deux grilles ; rendu en premiers
+// enfants de la colonne, avant les blocs-créneaux.
+export function AgendaDayBackground({
+  quarters,
+  hasLunch,
+  lunchStart,
+  lunchEnd,
+  mapMinToY,
+}: {
+  quarters: number[];
+  hasLunch: boolean;
+  lunchStart: number;
+  lunchEnd: number;
+  mapMinToY: (min: number) => number;
+}) {
+  const ltop = hasLunch ? mapMinToY(lunchStart) : 0;
+  const lh = hasLunch ? mapMinToY(lunchEnd) - ltop : 0;
+  return (
+    <>
+      {quarters.map((min) => (
+        <div
+          key={min}
+          className={`agenda-grid-line${min % 60 === 0 ? " is-hour" : ""}`}
+          style={{ top: mapMinToY(min) }}
+        />
+      ))}
+      {hasLunch && lh > 0 && (
+        <div className="agenda-lunch-band" style={{ top: ltop, height: lh }} />
+      )}
+    </>
+  );
+}
+
 // Pastille de pointage P (présent, vert) / A (absent, rouge) affichée en haut à
 // droite du badge, reprise du legacy `_badgeIndicators` (classes .indic_p /
 // .indic_a). Le pointage n'existe que sur les réservations ponctuelles datées,

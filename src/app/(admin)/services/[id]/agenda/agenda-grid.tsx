@@ -1,6 +1,11 @@
 "use client";
 
-import { ModalOverlay, PointagePill } from "@/components/agenda-shared";
+import {
+  AgendaDayBackground,
+  AgendaTimeColumn,
+  ModalOverlay,
+  PointagePill,
+} from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
@@ -3003,65 +3008,17 @@ export function AgendaGrid({
             </>
           )}
 
-          <div className="agenda-time-col" style={{ height: totalH }}>
-            {(() => {
-              // Colonne d'heures (port legacy renderAgendaWeekly). En mode « masquer les
-              // horaires sans créneau », la grille est compactée : la colonne ne doit
-              // afficher que les heures RÉELLEMENT visibles et se terminer sur la fin du
-              // dernier créneau affiché — PAS sur la borne de la plage/journée. On marque
-              // donc aussi la fin réelle de chaque plage (rupture) avec son horaire exact.
-              const minLabel = (m: number) =>
-                `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-              // Fin réelle de la grille = fin du dernier quart visible (≠ gridEndMin si compacté).
-              const effectiveEnd = quarters.length
-                ? quarters[quarters.length - 1] + 15
-                : gridEndMin;
-              // La rupture de la pause méridienne est déjà signalée par sa bande grise :
-              // on ne l'annote pas comme une rupture de plage.
-              const isLunchBreak = (i: number) =>
-                hasLunch &&
-                lunchSkipFrom !== null &&
-                quarters[i + 1] === lunchEnd &&
-                quarters[i] + 15 >= lunchSkipFrom;
-              const breakStarts = new Set<number>();
-              for (let i = 0; i < quarters.length - 1; i++) {
-                if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
-                  breakStarts.add(quarters[i + 1]);
-                }
-              }
-
-              const marks: { key: string; top: number; cls: string; label: string }[] = [];
-              // Heures pleines visibles + borne de fin réelle.
-              let first = true;
-              for (let m = Math.ceil(gridStartMin / 60) * 60; m <= effectiveEnd; m += 60) {
-                if (m < gridStartMin) continue;
-                if (m < effectiveEnd && !qIdx.has(m)) continue;
-                let cls = "agenda-time-mark";
-                if (m === effectiveEnd) cls += " is-break-end";
-                else if (first || breakStarts.has(m)) cls += " is-break-start";
-                marks.push({ key: `h-${m}`, top: mapMinToY(m), cls, label: minLabel(m) });
-                first = false;
-              }
-              // Fin de chaque plage précédant une rupture (hors pause) : l'heure de fin
-              // réelle du dernier créneau de la plage, remontée au-dessus de sa ligne.
-              for (let i = 0; i < quarters.length - 1; i++) {
-                if (quarters[i + 1] - quarters[i] > 15 && !isLunchBreak(i)) {
-                  const endOfPlage = quarters[i] + 15;
-                  marks.push({
-                    key: `e-${endOfPlage}`,
-                    top: mapMinToY(endOfPlage),
-                    cls: "agenda-time-mark is-break-end",
-                    label: minLabel(endOfPlage),
-                  });
-                }
-              }
-              return marks.map((mk) => (
-                <div key={mk.key} className={mk.cls} style={{ top: mk.top }}>
-                  {mk.label}
-                </div>
-              ));
-            })()}
-          </div>
+          <AgendaTimeColumn
+            quarters={quarters}
+            qIdx={qIdx}
+            gridStartMin={gridStartMin}
+            gridEndMin={gridEndMin}
+            totalH={totalH}
+            hasLunch={hasLunch}
+            lunchSkipFrom={lunchSkipFrom}
+            lunchEnd={lunchEnd}
+            mapMinToY={mapMinToY}
+          />
 
           {days.map((d) => (
             <div
@@ -3095,28 +3052,13 @@ export function AgendaGrid({
                   runResult(moveBookingAction(id, service.id, d, slot.id));
               }}
             >
-              {/* Lignes de grille sur les quarts VISIBLES (compactage pause) :
-                  pointillé fin par quart, trait plein (is-hour) sur l'heure pleine. */}
-              {quarters.map((min) => {
-                const isHour = min % 60 === 0;
-                return (
-                  <div
-                    key={min}
-                    className={`agenda-grid-line${isHour ? " is-hour" : ""}`}
-                    style={{ top: mapMinToY(min) }}
-                  />
-                );
-              })}
-              {/* Bande grise « pause méridienne » (top/height via le mapping ;
-                  disparaît si la pause tombe entièrement dans une zone masquée). */}
-              {hasLunch &&
-                (() => {
-                  const ltop = mapMinToY(lunchStart);
-                  const lh = mapMinToY(lunchEnd) - ltop;
-                  return lh > 0 ? (
-                    <div className="agenda-lunch-band" style={{ top: ltop, height: lh }} />
-                  ) : null;
-                })()}
+              <AgendaDayBackground
+                quarters={quarters}
+                hasLunch={hasLunch}
+                lunchStart={lunchStart}
+                lunchEnd={lunchEnd}
+                mapMinToY={mapMinToY}
+              />
               {dayBlocks(d)
                 // Grille horaire : uniquement les créneaux datés (les « journée
                 // entière » sont rendus dans la bande dédiée en haut). hideEmpty
