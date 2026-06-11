@@ -1,3 +1,4 @@
+import { DAY_NAMES } from "@/lib/agenda-core";
 import { wrapEmailHtml } from "@/lib/email-theme";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -13,15 +14,7 @@ import {
 // Notification e-mail envoyée à l'usager lors de la création d'une réservation.
 // Best-effort : ne lève jamais (les échecs d'envoi partent en file via sendMailOrQueue).
 
-const DAY_LABELS: Record<string, string> = {
-  lun: "Lundi",
-  mar: "Mardi",
-  mer: "Mercredi",
-  jeu: "Jeudi",
-  ven: "Vendredi",
-  sam: "Samedi",
-  dim: "Dimanche",
-};
+// Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
 
 /** Libellé « créneau » lisible : date+heure (ponctuel) ou jour+heure (récurrent). */
 export function formatSlotLabel(slot: {
@@ -44,7 +37,7 @@ export function formatSlotLabel(slot: {
     });
     return `${d} · ${time}`;
   }
-  const day = slot.slotDay ? (DAY_LABELS[slot.slotDay] ?? slot.slotDay) : "";
+  const day = slot.slotDay ? (DAY_NAMES[slot.slotDay] ?? slot.slotDay) : "";
   return [day, time].filter(Boolean).join(" · ");
 }
 

@@ -1,3 +1,4 @@
+import { DAY_NAMES } from "@/lib/agenda-core";
 import { gaugeUnits } from "@/lib/gauge";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
@@ -52,15 +53,7 @@ function ymd(d: Date): string {
 }
 
 const ISO_DAYKEY = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
-const DAY_NAMES: Record<string, string> = {
-  lun: "Lundi",
-  mar: "Mardi",
-  mer: "Mercredi",
-  jeu: "Jeudi",
-  ven: "Vendredi",
-  sam: "Samedi",
-  dim: "Dimanche",
-};
+// Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
 const MONTH_NAMES = [
   "Janv.",
   "Févr.",
