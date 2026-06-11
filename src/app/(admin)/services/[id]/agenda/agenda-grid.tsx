@@ -37,7 +37,7 @@ import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-hol
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   copyBookingAction,
@@ -410,10 +410,16 @@ export function AgendaGrid({
     suppressed: () => ctxMenu !== null,
   });
 
-  const days = service.activeDays
-    .split(",")
-    .map((d) => d.trim())
-    .filter(Boolean);
+  // Mémoïsé : `days` est une dép de blocksByDay et de la mémo des blocs ; un nouveau
+  // tableau à chaque rendu invaliderait toute la chaîne de mémoïsation (perf).
+  const days = useMemo(
+    () =>
+      service.activeDays
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean),
+    [service.activeDays],
+  );
   // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
   // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00 pour « fermé l'après-midi »)
   // est ignorée — sinon afternoonEnd=00:00 ramenait la fin de grille à minuit et
@@ -587,19 +593,24 @@ export function AgendaGrid({
   // active, férié quand le service ferme les fériés, OU en vacances scolaires quand
   // le service ferme les vacances. Contrairement au legacy (grisage purement visuel),
   // on bloque ici aussi toutes les interactions.
-  const isDayDisabled = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr) return false;
-    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
-    if (
-      coveringPeriod?.dateStart &&
-      coveringPeriod.dateEnd &&
-      (dayYmd < coveringPeriod.dateStart || dayYmd > coveringPeriod.dateEnd)
-    ) {
-      return true;
-    }
-    if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
-    return !service.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays);
-  };
+  // Mémoïsé (useCallback) : stable d'un rendu à l'autre tant que période/mode ne
+  // changent pas → permet la mémo des blocs par jour (cf. dayBlockEls).
+  const isDayDisabled = useCallback(
+    (dayKey: string): boolean => {
+      if (mode !== "realweek" || !mondayStr) return false;
+      const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+      if (
+        coveringPeriod?.dateStart &&
+        coveringPeriod.dateEnd &&
+        (dayYmd < coveringPeriod.dateStart || dayYmd > coveringPeriod.dateEnd)
+      ) {
+        return true;
+      }
+      if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
+      return !service.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays);
+    },
+    [mode, mondayStr, coveringPeriod, service, schoolHolidays],
+  );
   // Jour férié (service fermé les fériés), en semaine réelle.
   const isHolidayDay = (dayKey: string): boolean => {
     if (mode !== "realweek" || !mondayStr || service.openOnHolidays) return false;
@@ -676,8 +687,11 @@ export function AgendaGrid({
   // OCCUPÉS (granularité HEURE : dès qu'un créneau avec ≥1 réservation visible
   // touche une heure, ses 4 quarts sont conservés pour garder le repère "heure").
   // Les quarts non occupés sont ensuite sautés dans `quarters`.
-  const occupiedQ = new Set<number>();
-  if (hideEmpty) {
+  // Mémoïsé : recalculé seulement quand ses entrées changent (et pas, p.ex., pendant
+  // un glisser-créer) — clé pour la stabilité de la géométrie et la mémo des blocs.
+  const occupiedQ = useMemo(() => {
+    const set = new Set<number>();
+    if (!hideEmpty) return set;
     const occupiedHours = new Set<number>();
     // Ids des créneaux récurrents ayant une réservation visible (période + semaine A/B).
     const recBookedSlotIds = new Set<string>();
@@ -716,20 +730,39 @@ export function AgendaGrid({
     // Étend chaque heure occupée à ses 4 quarts (dans [gridStartMin, gridEndMin]).
     for (const h of occupiedHours) {
       for (let q = h; q < h + 60; q += 15) {
-        if (q >= gridStartMin && q < gridEndMin) occupiedQ.add(q);
+        if (q >= gridStartMin && q < gridEndMin) set.add(q);
       }
     }
-  }
-
-  // Géométrie de la grille (quarts visibles + mapping minute↔pixel) mutualisée.
-  // `occupiedQ` (compactage hideEmpty) est construit ci-dessus côté admin.
-  const { quarters, qIdx, totalH, mapMinToY, yToMin } = gridGeometry({
+    return set;
+  }, [
+    hideEmpty,
+    bookings,
+    uniqueIdSet,
+    slots,
+    uniqueSlots,
+    mode,
+    mondayStr,
+    sundayStr,
+    effectivePeriodId,
+    effectiveWeek,
     gridStartMin,
     gridEndMin,
-    lunchStart,
-    lunchEnd,
-    occupiedQ: hideEmpty ? occupiedQ : null,
-  });
+  ]);
+
+  // Géométrie de la grille (quarts visibles + mapping minute↔pixel) mutualisée.
+  // Mémoïsée : `mapMinToY` doit rester stable d'un rendu à l'autre pour que la mémo
+  // des blocs par jour tienne (sinon recréée à chaque rendu = mémo invalide).
+  const { quarters, qIdx, totalH, mapMinToY, yToMin } = useMemo(
+    () =>
+      gridGeometry({
+        gridStartMin,
+        gridEndMin,
+        lunchStart,
+        lunchEnd,
+        occupiedQ: hideEmpty ? occupiedQ : null,
+      }),
+    [gridStartMin, gridEndMin, lunchStart, lunchEnd, hideEmpty, occupiedQ],
+  );
 
   const slotsParsed = useMemo(
     () =>
@@ -1908,439 +1941,520 @@ export function AgendaGrid({
     return { capacity, demandeurs, recurInfo };
   };
 
-  const renderBlock = (b: Block, allday: boolean) => {
-    // Info-bulle de survol du créneau (capacité + demandeurs autorisés, et pour les
-    // Créneau COMPLET (mode-aware) → pas de création possible. Jauge = enfants[+adultes] ;
-    // sinon = nombre de réservations (1/résa).
-    const isPonctuelCell = uniqueIdSet.has(b.slotId);
-    // Créneau récurrent en semaine réelle : non éditable (ni déplacement, ni
-    // redimension, ni config, ni suppression) — cf. vue Modèle de période.
-    const realWeekRecurring = mode === "realweek" && !isPonctuelCell;
-    const gaugeForCell = isPonctuelCell ? modes.gaugePonct : modes.gaugeRec;
-    const cellFull = (gaugeForCell ? b.used : b.bookings.length) >= b.capacity;
-    // Le créneau est cliquable pour créer une réservation (hors mode création).
-    const cellCreatable =
-      !creationMode &&
-      !cellFull &&
-      !realWeekRecurring &&
-      (isPonctuelCell || (effectivePeriodId != null && effectivePeriodId > 0));
-    const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
-    // Couleur du compteur de places (barre de jauge ET texte X/Y) selon le
-    // remplissage — seuils uniques de l'app (gaugeColor). Indépendant de la
-    // couleur du créneau (jaune/vert), qui ne varie plus.
-    const fillColor = gaugeColor(pct);
-    // Mode NON-jauge : le compteur reflète le NOMBRE de réservations (1 par résa),
-    // indépendamment du nombre d'enfants/adultes. Couleur selon ce ratio.
-    const count = b.bookings.length;
-    const countPct = Math.min(100, b.capacity > 0 ? (count / b.capacity) * 100 : 0);
-    const countColor = gaugeColor(countPct);
-    const posStyle: React.CSSProperties = allday
-      ? {}
-      : (() => {
-          // top/height dérivés des minutes via mapMinToY (compactage pause).
-          // Bornage à la plage visible + 2px de gap haut/bas (cf. legacy).
-          const ys = mapMinToY(Math.max(b.startMin, gridStartMin));
-          const ye = mapMinToY(Math.min(b.endMin, gridEndMin));
-          return {
-            top: ys + 2,
-            height: Math.max(28, ye - ys - 4),
-            left: `calc(${b.leftPct}% + 2px)`,
-            width: `calc(${b.widthPct}% - 4px)`,
-          };
-        })();
-    return (
-      // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
-      <div
-        key={`${b.dayKey}|${b.slotId}`}
-        // data-* pour l'info-bulle déléguée (capacité + demandeurs, et dates pour un
-        // récurrent). Active sur tous les créneaux, y compris « journée entière ».
-        data-slot-tip=""
-        data-slotid={b.slotId}
-        data-daykey={b.dayKey}
-        // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
-        // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
-        // et leurs miroirs (cf. légende Récurrent/Ponctuel).
-        className={`agenda-block${allday ? " is-allday" : ""}`}
-        style={{
-          ...posStyle,
-          // Centrage vertical des badges dans le créneau (inline = priorité
-          // sur les feuilles concurrentes GRID_CSS / app-legacy.css).
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          // Ponctuel autonome (non miroir) → couleur distinctive pilotée par
-          // --slot-uniq-color (cf. .agenda-block.is-uniq) : fond = color-mix 25 %,
-          // bordure = couleur pleine.
-          ...(uniqueIdSet.has(b.slotId)
-            ? {
-                background: "color-mix(in srgb, var(--slot-uniq-color) 25%, transparent)",
-                borderColor: "var(--slot-uniq-color)",
-              }
-            : {}),
-          // Mode création : créneau vide déplaçable (curseur move) ; bloc en cours
-          // de déplacement estompé. Hors création : pointer si on peut y créer une résa.
-          ...(creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring
-            ? { cursor: "move" }
-            : cellCreatable
-              ? { cursor: "pointer" }
+  // Handlers de renderBlock via un ref STABLE : réassignés à chaque rendu (toujours
+  // frais) mais HORS des déps du useCallback de renderBlock → évite la cascade virale
+  // de useCallback et permet la mémo des blocs par jour (perf, audit grilles).
+  const blockApi = {
+    onMoveSlotMouseDown,
+    clearTip,
+    openCapModal,
+    openCreate,
+    runResult,
+    onResizeSlotMouseDown,
+    onResizeSlotMouseDownH,
+    onDeleteEmptySlot,
+    onBlockQuickAction,
+    warnRecurringValidation,
+    lockedByPointage,
+  };
+  const blockApiRef = useRef(blockApi);
+  blockApiRef.current = blockApi;
+
+  const renderBlock = useCallback(
+    (b: Block, allday: boolean) => {
+      const {
+        onMoveSlotMouseDown,
+        clearTip,
+        openCapModal,
+        openCreate,
+        runResult,
+        onResizeSlotMouseDown,
+        onResizeSlotMouseDownH,
+        onDeleteEmptySlot,
+        onBlockQuickAction,
+        warnRecurringValidation,
+        lockedByPointage,
+      } = blockApiRef.current;
+      // Info-bulle de survol du créneau (capacité + demandeurs autorisés, et pour les
+      // Créneau COMPLET (mode-aware) → pas de création possible. Jauge = enfants[+adultes] ;
+      // sinon = nombre de réservations (1/résa).
+      const isPonctuelCell = uniqueIdSet.has(b.slotId);
+      // Créneau récurrent en semaine réelle : non éditable (ni déplacement, ni
+      // redimension, ni config, ni suppression) — cf. vue Modèle de période.
+      const realWeekRecurring = mode === "realweek" && !isPonctuelCell;
+      const gaugeForCell = isPonctuelCell ? modes.gaugePonct : modes.gaugeRec;
+      const cellFull = (gaugeForCell ? b.used : b.bookings.length) >= b.capacity;
+      // Le créneau est cliquable pour créer une réservation (hors mode création).
+      const cellCreatable =
+        !creationMode &&
+        !cellFull &&
+        !realWeekRecurring &&
+        (isPonctuelCell || (effectivePeriodId != null && effectivePeriodId > 0));
+      const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
+      // Couleur du compteur de places (barre de jauge ET texte X/Y) selon le
+      // remplissage — seuils uniques de l'app (gaugeColor). Indépendant de la
+      // couleur du créneau (jaune/vert), qui ne varie plus.
+      const fillColor = gaugeColor(pct);
+      // Mode NON-jauge : le compteur reflète le NOMBRE de réservations (1 par résa),
+      // indépendamment du nombre d'enfants/adultes. Couleur selon ce ratio.
+      const count = b.bookings.length;
+      const countPct = Math.min(100, b.capacity > 0 ? (count / b.capacity) * 100 : 0);
+      const countColor = gaugeColor(countPct);
+      const posStyle: React.CSSProperties = allday
+        ? {}
+        : (() => {
+            // top/height dérivés des minutes via mapMinToY (compactage pause).
+            // Bornage à la plage visible + 2px de gap haut/bas (cf. legacy).
+            const ys = mapMinToY(Math.max(b.startMin, gridStartMin));
+            const ye = mapMinToY(Math.min(b.endMin, gridEndMin));
+            return {
+              top: ys + 2,
+              height: Math.max(28, ye - ys - 4),
+              left: `calc(${b.leftPct}% + 2px)`,
+              width: `calc(${b.widthPct}% - 4px)`,
+            };
+          })();
+      return (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
+        <div
+          key={`${b.dayKey}|${b.slotId}`}
+          // data-* pour l'info-bulle déléguée (capacité + demandeurs, et dates pour un
+          // récurrent). Active sur tous les créneaux, y compris « journée entière ».
+          data-slot-tip=""
+          data-slotid={b.slotId}
+          data-daykey={b.dayKey}
+          // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
+          // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
+          // et leurs miroirs (cf. légende Récurrent/Ponctuel).
+          className={`agenda-block${allday ? " is-allday" : ""}`}
+          style={{
+            ...posStyle,
+            // Centrage vertical des badges dans le créneau (inline = priorité
+            // sur les feuilles concurrentes GRID_CSS / app-legacy.css).
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            // Ponctuel autonome (non miroir) → couleur distinctive pilotée par
+            // --slot-uniq-color (cf. .agenda-block.is-uniq) : fond = color-mix 25 %,
+            // bordure = couleur pleine.
+            ...(uniqueIdSet.has(b.slotId)
+              ? {
+                  background: "color-mix(in srgb, var(--slot-uniq-color) 25%, transparent)",
+                  borderColor: "var(--slot-uniq-color)",
+                }
               : {}),
-          ...(moveDrag?.slotId === b.slotId || resizeDrag?.slotId === b.slotId
-            ? { opacity: 0.35 }
-            : {}),
-        }}
-        onMouseDown={(e) => onMoveSlotMouseDown(e, b)}
-        // Clic droit sur la zone vide d'un créneau → menu « Coller » (si presse-papier actif).
-        // Pas de menu en mode création ni sur un récurrent en semaine réelle (consultation).
-        onContextMenu={(e) => {
-          if (creationMode || realWeekRecurring) return;
-          e.preventDefault();
-          clearTip(); // ferme l'info-bulle
-          if (!copiedBooking) return;
-          setCtxMenu({ x: e.clientX, y: e.clientY, kind: "cell", block: b });
-        }}
-        onClick={(e) => {
-          // Clic sur la zone vide du créneau → nouvelle réservation.
-          e.stopPropagation();
-          // Mode création : le bloc ne crée pas de réservation (× = supprimer). Un clic
-          // (pas un glisser-déplacer) ouvre la modale de configuration du créneau.
-          if (creationMode) {
-            if (justMovedRef.current) {
-              justMovedRef.current = false;
+            // Mode création : créneau vide déplaçable (curseur move) ; bloc en cours
+            // de déplacement estompé. Hors création : pointer si on peut y créer une résa.
+            ...(creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring
+              ? { cursor: "move" }
+              : cellCreatable
+                ? { cursor: "pointer" }
+                : {}),
+            ...(moveDrag?.slotId === b.slotId || resizeDrag?.slotId === b.slotId
+              ? { opacity: 0.35 }
+              : {}),
+          }}
+          onMouseDown={(e) => onMoveSlotMouseDown(e, b)}
+          // Clic droit sur la zone vide d'un créneau → menu « Coller » (si presse-papier actif).
+          // Pas de menu en mode création ni sur un récurrent en semaine réelle (consultation).
+          onContextMenu={(e) => {
+            if (creationMode || realWeekRecurring) return;
+            e.preventDefault();
+            clearTip(); // ferme l'info-bulle
+            if (!copiedBooking) return;
+            setCtxMenu({ x: e.clientX, y: e.clientY, kind: "cell", block: b });
+          }}
+          onClick={(e) => {
+            // Clic sur la zone vide du créneau → nouvelle réservation.
+            e.stopPropagation();
+            // Mode création : le bloc ne crée pas de réservation (× = supprimer). Un clic
+            // (pas un glisser-déplacer) ouvre la modale de configuration du créneau.
+            if (creationMode) {
+              if (justMovedRef.current) {
+                justMovedRef.current = false;
+                return;
+              }
+              // En semaine réelle, un créneau récurrent n'est pas configurable (cf. vue Modèle).
+              if (realWeekRecurring) return;
+              openCapModal(b.slotId);
               return;
             }
-            // En semaine réelle, un créneau récurrent n'est pas configurable (cf. vue Modèle).
-            if (realWeekRecurring) return;
-            openCapModal(b.slotId);
-            return;
-          }
-          // Pas de création si le créneau est COMPLET (plus de place restante)
-          // ou verrouillé (récurrent en semaine réelle) — cf. cellCreatable.
-          if (!cellCreatable) return;
-          // Créneau ponctuel : ouvre la création d'une réservation ponctuelle.
-          if (isPonctuelCell) {
-            const u = uniqueSlots.find((s) => s.id === b.slotId);
-            openCreate(b.dayKey, b.slotId, true, u?.slotDate);
-            return;
-          }
-          openCreate(b.dayKey, b.slotId);
-        }}
-        onDragOver={(e) => {
-          if (draggingId == null) return;
-          const dragged = bookings.find((bk) => bk.id === draggingId);
-          if (!dragged) return;
-          // Cible valide = MÊME type que la source (récurrent↔récurrent ou
-          // ponctuel↔ponctuel) et pas un récurrent en semaine réelle (consultation).
-          if (uniqueIdSet.has(dragged.slotId) === isPonctuelCell && !realWeekRecurring)
+            // Pas de création si le créneau est COMPLET (plus de place restante)
+            // ou verrouillé (récurrent en semaine réelle) — cf. cellCreatable.
+            if (!cellCreatable) return;
+            // Créneau ponctuel : ouvre la création d'une réservation ponctuelle.
+            if (isPonctuelCell) {
+              const u = uniqueSlots.find((s) => s.id === b.slotId);
+              openCreate(b.dayKey, b.slotId, true, u?.slotDate);
+              return;
+            }
+            openCreate(b.dayKey, b.slotId);
+          }}
+          onDragOver={(e) => {
+            if (draggingId == null) return;
+            const dragged = bookings.find((bk) => bk.id === draggingId);
+            if (!dragged) return;
+            // Cible valide = MÊME type que la source (récurrent↔récurrent ou
+            // ponctuel↔ponctuel) et pas un récurrent en semaine réelle (consultation).
+            if (uniqueIdSet.has(dragged.slotId) === isPonctuelCell && !realWeekRecurring)
+              e.preventDefault();
+          }}
+          onDrop={(e) => {
+            // Le créneau est la cible de drop : déplace la résa glissée ici.
             e.preventDefault();
-        }}
-        onDrop={(e) => {
-          // Le créneau est la cible de drop : déplace la résa glissée ici.
-          e.preventDefault();
-          e.stopPropagation();
-          if (draggingId == null) return;
-          const id = draggingId;
-          const dragged = bookings.find((bk) => bk.id === id);
-          setDraggingId(null);
-          if (!dragged) return;
-          // Refus : changement de type (récurrent↔ponctuel) ou récurrent en semaine réelle.
-          if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell || realWeekRecurring) return;
-          runResult(moveBookingAction(id, service.id, b.dayKey, b.slotId));
-        }}
-      >
-        {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
+            e.stopPropagation();
+            if (draggingId == null) return;
+            const id = draggingId;
+            const dragged = bookings.find((bk) => bk.id === id);
+            setDraggingId(null);
+            if (!dragged) return;
+            // Refus : changement de type (récurrent↔ponctuel) ou récurrent en semaine réelle.
+            if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell || realWeekRecurring) return;
+            runResult(moveBookingAction(id, service.id, b.dayKey, b.slotId));
+          }}
+        >
+          {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
           vide. Curseur ns-resize au survol ; le mousedown amorce le glisser-étirer
           (stopPropagation → n'amorce ni déplacer ni créer). En semaine réelle, les
           créneaux récurrents ne sont pas redimensionnables (pas de poignées). */}
-        {creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring && (
-          <>
-            <div
-              data-tip="Étirer le créneau"
-              onMouseDown={(e) => onResizeSlotMouseDown(e, b, "top")}
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: 0,
-                height: 7,
-                cursor: "ns-resize",
-                zIndex: 3,
-              }}
-            />
-            <div
-              data-tip="Étirer le créneau"
-              onMouseDown={(e) => onResizeSlotMouseDown(e, b, "bottom")}
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 7,
-                cursor: "ns-resize",
-                zIndex: 3,
-              }}
-            />
-            {/* Poignées gauche/droite : étendre le créneau aux colonnes voisines (un
+          {creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring && (
+            <>
+              <div
+                data-tip="Étirer le créneau"
+                onMouseDown={(e) => onResizeSlotMouseDown(e, b, "top")}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 7,
+                  cursor: "ns-resize",
+                  zIndex: 3,
+                }}
+              />
+              <div
+                data-tip="Étirer le créneau"
+                onMouseDown={(e) => onResizeSlotMouseDown(e, b, "bottom")}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 7,
+                  cursor: "ns-resize",
+                  zIndex: 3,
+                }}
+              />
+              {/* Poignées gauche/droite : étendre le créneau aux colonnes voisines (un
               créneau par jour couvert). Bande centrale (top/bottom 7px) pour laisser
               les coins aux poignées verticales. */}
-            <div
-              data-tip="Étendre aux jours voisins"
-              onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "left")}
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 7,
-                bottom: 7,
-                width: 7,
-                cursor: "ew-resize",
-                zIndex: 3,
-              }}
-            />
-            <div
-              data-tip="Étendre aux jours voisins"
-              onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "right")}
-              style={{
-                position: "absolute",
-                right: 0,
-                top: 7,
-                bottom: 7,
-                width: 7,
-                cursor: "ew-resize",
-                zIndex: 3,
-              }}
-            />
-          </>
-        )}
-        {/* Badges centrés via le parent .agenda-block (justify-content:center).
+              <div
+                data-tip="Étendre aux jours voisins"
+                onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "left")}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 7,
+                  bottom: 7,
+                  width: 7,
+                  cursor: "ew-resize",
+                  zIndex: 3,
+                }}
+              />
+              <div
+                data-tip="Étendre aux jours voisins"
+                onMouseDown={(e) => onResizeSlotMouseDownH(e, b, "right")}
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: 7,
+                  bottom: 7,
+                  width: 7,
+                  cursor: "ew-resize",
+                  zIndex: 3,
+                }}
+              />
+            </>
+          )}
+          {/* Badges centrés via le parent .agenda-block (justify-content:center).
           Le chips ne grandit pas pour que le centrage opère ; la jauge est
           sortie du flux (position absolue en bas). */}
-        <div
-          className="agenda-block-chips"
-          style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", gap: 2 }}
-        >
-          {/* Mode création : croix de suppression sur les créneaux vides (confirmation).
+          <div
+            className="agenda-block-chips"
+            style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", gap: 2 }}
+          >
+            {/* Mode création : croix de suppression sur les créneaux vides (confirmation).
               Même style que la croix des badges colorés (planning-name-tag-close).
               En SEMAINE RÉELLE, les créneaux récurrents ne sont pas supprimables (pas de croix) :
               leur suppression se fait en vue « Modèle de période ». */}
-          {creationMode && b.bookings.length === 0 && !realWeekRecurring && (
-            <button
-              type="button"
-              className="planning-name-tag-close"
-              data-tip="Supprimer ce créneau"
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteEmptySlot(b.slotId);
-              }}
-            >
-              ×
-            </button>
-          )}
-          {/* ≥2 réservations → pile de badges (legacy .planning-stack-wrap) :
+            {creationMode && b.bookings.length === 0 && !realWeekRecurring && (
+              <button
+                type="button"
+                className="planning-name-tag-close"
+                data-tip="Supprimer ce créneau"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteEmptySlot(b.slotId);
+                }}
+              >
+                ×
+              </button>
+            )}
+            {/* ≥2 réservations → pile de badges (legacy .planning-stack-wrap) :
             jusqu'à 3 badges superposés + compteur ; clic = modale liste. */}
-          {b.bookings.length >= 2 && (
-            // biome-ignore lint/a11y/useKeyWithClickEvents: pile (clic = liste des réservations)
-            <div
-              className="planning-stack-wrap"
-              data-tip={`${b.bookings.length} réservations — cliquer pour voir la liste`}
-              style={{
-                // La pile a une hauteur de mise en page d'un seul badge (44px), mais
-                // l'empilement déborde dessous : badge le plus profond décalé de +8px
-                // (3+ résas, .stack-back2) ou +4px (2 résas, .stack-back), plus son ombre
-                // (offset 2 + blur 4 ≈ 6px). On réserve ce débordement sous la pile pour
-                // que le centrage vertical tienne compte de la pile entière (pastille
-                // exclue, son débordement en haut n'est volontairement pas compensé).
-                marginBottom: (b.bookings.length >= 3 ? 8 : 4) + 6,
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setStackKey({ slotId: b.slotId, dayKey: b.dayKey });
-              }}
-            >
-              {(
-                [
-                  ...(b.bookings[2] ? [{ bk: b.bookings[2], cls: "stack-back2" }] : []),
-                  ...(b.bookings[1] ? [{ bk: b.bookings[1], cls: "stack-back" }] : []),
-                  { bk: b.bookings[0], cls: "stack-front" },
-                ] as { bk: Booking; cls: string }[]
-              ).map(({ bk, cls }) => (
-                <div key={cls} className={cls}>
-                  <div
-                    className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}`}
-                    style={{ ...badgeStyle(bk.validated), position: "relative" }}
-                    data-tip={badgeTitle(bk)}
-                  >
-                    {/* La pastille P/A doit aussi apparaître sur les badges
+            {b.bookings.length >= 2 && (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: pile (clic = liste des réservations)
+              <div
+                className="planning-stack-wrap"
+                data-tip={`${b.bookings.length} réservations — cliquer pour voir la liste`}
+                style={{
+                  // La pile a une hauteur de mise en page d'un seul badge (44px), mais
+                  // l'empilement déborde dessous : badge le plus profond décalé de +8px
+                  // (3+ résas, .stack-back2) ou +4px (2 résas, .stack-back), plus son ombre
+                  // (offset 2 + blur 4 ≈ 6px). On réserve ce débordement sous la pile pour
+                  // que le centrage vertical tienne compte de la pile entière (pastille
+                  // exclue, son débordement en haut n'est volontairement pas compensé).
+                  marginBottom: (b.bookings.length >= 3 ? 8 : 4) + 6,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStackKey({ slotId: b.slotId, dayKey: b.dayKey });
+                }}
+              >
+                {(
+                  [
+                    ...(b.bookings[2] ? [{ bk: b.bookings[2], cls: "stack-back2" }] : []),
+                    ...(b.bookings[1] ? [{ bk: b.bookings[1], cls: "stack-back" }] : []),
+                    { bk: b.bookings[0], cls: "stack-front" },
+                  ] as { bk: Booking; cls: string }[]
+                ).map(({ bk, cls }) => (
+                  <div key={cls} className={cls}>
+                    <div
+                      className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}`}
+                      style={{ ...badgeStyle(bk.validated), position: "relative" }}
+                      data-tip={badgeTitle(bk)}
+                    >
+                      {/* La pastille P/A doit aussi apparaître sur les badges
                         de la pile (cf. legacy), pas seulement dans la modale. */}
+                      <PointagePill pointage={bk.pointage} />
+                      {(bk.structure || bk.demandeur) && (
+                        <span style={{ fontSize: ".62rem", fontWeight: 700 }}>
+                          {bk.structure || bk.demandeur}
+                        </span>
+                      )}
+                      <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>{bk.name}</span>
+                      {modes.themeMode && bk.theme && (
+                        <span
+                          style={{
+                            fontSize: ".62rem",
+                            fontWeight: 600,
+                            color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
+                          }}
+                        >
+                          {bk.theme}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <span className="planning-stack-count">{b.bookings.length}</span>
+              </div>
+            )}
+            {b.bookings.length < 2 &&
+              b.bookings.map((bk) => {
+                const pendingValidation = validation && !bk.validated;
+                const quickActive = pendingValidation || (pointageMode && mode === "realweek");
+                // Legacy : ligne1 = structure sinon catégorie (demandeur),
+                // ligne2 = NOM Prénom, ligne3 = thème (si présent).
+                const primaryLabel = bk.structure || bk.demandeur;
+                const accentColor = bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)";
+                // Verrouillée (pointée, ou parent à miroir pointé) → ni déplacement, ni
+                // suppression, ni copie (cf. règles métier).
+                const locked = lockedByPointage(bk);
+                return (
+                  // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic = valider/pointer/éditer)
+                  <div
+                    key={bk.id}
+                    className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${locked ? " is-locked" : ""}`}
+                    // Récurrent en semaine réelle (consultation) → non déplaçable.
+                    draggable={!locked && !realWeekRecurring}
+                    style={{
+                      ...badgeStyle(bk.validated),
+                      position: "relative",
+                      opacity:
+                        draggingId === bk.id ||
+                        (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
+                          ? 0.4
+                          : 1,
+                      cursor:
+                        quickActive && (!realWeekRecurring || pointageMode)
+                          ? "pointer"
+                          : locked || realWeekRecurring
+                            ? "default"
+                            : "grab",
+                      // L'ombre portée (box-shadow 2px 2px 4px) déborde sous le badge sans
+                      // occuper de hauteur en flux : on réserve l'extent de l'ombre (offset 2
+                      // + blur 4 = 6px) afin que le centrage vertical (justify-content du
+                      // créneau) tienne compte de l'ombre, plutôt que de centrer la seule boîte.
+                      marginBottom: 6,
+                    }}
+                    data-tip={badgeTitle(bk)}
+                    // Clic droit → menu « Copier » (pas en mode création ni sur un
+                    // récurrent en semaine réelle).
+                    onContextMenu={(e) => {
+                      // Verrouillée (pointée / parent à miroir pointé) → pas de copier/couper.
+                      if (creationMode || realWeekRecurring || locked) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      clearTip();
+                      setCtxMenu({ x: e.clientX, y: e.clientY, kind: "booking", booking: bk });
+                    }}
+                    onDragStart={
+                      locked || realWeekRecurring
+                        ? undefined
+                        : (e) => {
+                            e.stopPropagation();
+                            setDraggingId(bk.id);
+                          }
+                    }
+                    onDragEnd={locked || realWeekRecurring ? undefined : () => setDraggingId(null)}
+                    onClick={(e) => {
+                      // Le badge porte les actions sur la réservation (cf. legacy).
+                      // Validation/pointage ON = clic rapide ; sinon = modale d'édition.
+                      // En semaine réelle sur un récurrent : consultation seule (pas d'action
+                      // rapide), la modale s'ouvre en lecture seule.
+                      e.stopPropagation();
+                      // Semaine réelle + mode validation : un récurrent ne se valide pas ici.
+                      if (realWeekRecurring && validation) {
+                        warnRecurringValidation();
+                        return;
+                      }
+                      // Pointage autorisé sur les réservations-enfants (cellule récurrente
+                      // en semaine réelle) même si le reste de la cellule est en lecture seule.
+                      if (realWeekRecurring && pointageMode && onBlockQuickAction(bk)) return;
+                      if (!realWeekRecurring && onBlockQuickAction(bk)) return;
+                      setDetail({ booking: bk });
+                    }}
+                  >
+                    {/* Croix de suppression (survol) — masquée si la résa est pointée
+                      (verrouillée) ou en semaine réelle sur un récurrent (consultation). */}
+                    {!locked && !realWeekRecurring && (
+                      <button
+                        type="button"
+                        className="planning-name-tag-close"
+                        data-tip="Supprimer"
+                        style={{ border: "none", padding: 0 }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(bk);
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
                     <PointagePill pointage={bk.pointage} />
-                    {(bk.structure || bk.demandeur) && (
-                      <span style={{ fontSize: ".62rem", fontWeight: 700 }}>
-                        {bk.structure || bk.demandeur}
-                      </span>
+                    {primaryLabel && (
+                      <span style={{ fontSize: ".62rem", fontWeight: 700 }}>{primaryLabel}</span>
                     )}
                     <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>{bk.name}</span>
                     {modes.themeMode && bk.theme && (
-                      <span
-                        style={{
-                          fontSize: ".62rem",
-                          fontWeight: 600,
-                          color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
-                        }}
-                      >
+                      <span style={{ fontSize: ".62rem", fontWeight: 600, color: accentColor }}>
                         {bk.theme}
                       </span>
                     )}
                   </div>
-                </div>
-              ))}
-              <span className="planning-stack-count">{b.bookings.length}</span>
-            </div>
-          )}
-          {b.bookings.length < 2 &&
-            b.bookings.map((bk) => {
-              const pendingValidation = validation && !bk.validated;
-              const quickActive = pendingValidation || (pointageMode && mode === "realweek");
-              // Legacy : ligne1 = structure sinon catégorie (demandeur),
-              // ligne2 = NOM Prénom, ligne3 = thème (si présent).
-              const primaryLabel = bk.structure || bk.demandeur;
-              const accentColor = bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)";
-              // Verrouillée (pointée, ou parent à miroir pointé) → ni déplacement, ni
-              // suppression, ni copie (cf. règles métier).
-              const locked = lockedByPointage(bk);
-              return (
-                // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic = valider/pointer/éditer)
-                <div
-                  key={bk.id}
-                  className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${locked ? " is-locked" : ""}`}
-                  // Récurrent en semaine réelle (consultation) → non déplaçable.
-                  draggable={!locked && !realWeekRecurring}
-                  style={{
-                    ...badgeStyle(bk.validated),
-                    position: "relative",
-                    opacity:
-                      draggingId === bk.id ||
-                      (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
-                        ? 0.4
-                        : 1,
-                    cursor:
-                      quickActive && (!realWeekRecurring || pointageMode)
-                        ? "pointer"
-                        : locked || realWeekRecurring
-                          ? "default"
-                          : "grab",
-                    // L'ombre portée (box-shadow 2px 2px 4px) déborde sous le badge sans
-                    // occuper de hauteur en flux : on réserve l'extent de l'ombre (offset 2
-                    // + blur 4 = 6px) afin que le centrage vertical (justify-content du
-                    // créneau) tienne compte de l'ombre, plutôt que de centrer la seule boîte.
-                    marginBottom: 6,
-                  }}
-                  data-tip={badgeTitle(bk)}
-                  // Clic droit → menu « Copier » (pas en mode création ni sur un
-                  // récurrent en semaine réelle).
-                  onContextMenu={(e) => {
-                    // Verrouillée (pointée / parent à miroir pointé) → pas de copier/couper.
-                    if (creationMode || realWeekRecurring || locked) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    clearTip();
-                    setCtxMenu({ x: e.clientX, y: e.clientY, kind: "booking", booking: bk });
-                  }}
-                  onDragStart={
-                    locked || realWeekRecurring
-                      ? undefined
-                      : (e) => {
-                          e.stopPropagation();
-                          setDraggingId(bk.id);
-                        }
-                  }
-                  onDragEnd={locked || realWeekRecurring ? undefined : () => setDraggingId(null)}
-                  onClick={(e) => {
-                    // Le badge porte les actions sur la réservation (cf. legacy).
-                    // Validation/pointage ON = clic rapide ; sinon = modale d'édition.
-                    // En semaine réelle sur un récurrent : consultation seule (pas d'action
-                    // rapide), la modale s'ouvre en lecture seule.
-                    e.stopPropagation();
-                    // Semaine réelle + mode validation : un récurrent ne se valide pas ici.
-                    if (realWeekRecurring && validation) {
-                      warnRecurringValidation();
-                      return;
-                    }
-                    // Pointage autorisé sur les réservations-enfants (cellule récurrente
-                    // en semaine réelle) même si le reste de la cellule est en lecture seule.
-                    if (realWeekRecurring && pointageMode && onBlockQuickAction(bk)) return;
-                    if (!realWeekRecurring && onBlockQuickAction(bk)) return;
-                    setDetail({ booking: bk });
-                  }}
-                >
-                  {/* Croix de suppression (survol) — masquée si la résa est pointée
-                      (verrouillée) ou en semaine réelle sur un récurrent (consultation). */}
-                  {!locked && !realWeekRecurring && (
-                    <button
-                      type="button"
-                      className="planning-name-tag-close"
-                      data-tip="Supprimer"
-                      style={{ border: "none", padding: 0 }}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(bk);
-                      }}
-                    >
-                      ×
-                    </button>
-                  )}
-                  <PointagePill pointage={bk.pointage} />
-                  {primaryLabel && (
-                    <span style={{ fontSize: ".62rem", fontWeight: 700 }}>{primaryLabel}</span>
-                  )}
-                  <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>{bk.name}</span>
-                  {modes.themeMode && bk.theme && (
-                    <span style={{ fontSize: ".62rem", fontWeight: 600, color: accentColor }}>
-                      {bk.theme}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-        </div>
-        {/* Jauge DE CE CRÉNEAU (ponctuel → gaugePonct, récurrent → gaugeRec) ON → barre
+                );
+              })}
+          </div>
+          {/* Jauge DE CE CRÉNEAU (ponctuel → gaugePonct, récurrent → gaugeRec) ON → barre
           + used/cap ; OFF → simple compteur réservations/total (format 1/15). */}
-        {b.bookings.length > 0 &&
-          (gaugeForCell ? (
-            <div
-              className="agenda-block-meta is-gauge"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: 4,
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-                // Barre + texte X/Y colorés selon le remplissage (rouge si complet).
-                color: fillColor,
-              }}
-            >
-              <span className="agenda-block-gauge-bar">
-                <span style={{ width: `${pct}%`, background: fillColor }} />
-              </span>
-              {b.used}/{b.capacity}
-            </div>
-          ) : (
-            <div
-              className="agenda-block-meta"
-              style={{ position: "absolute", bottom: 0, left: 4, color: countColor }}
-            >
-              {count}/{b.capacity}
-            </div>
-          ))}
-      </div>
-    );
-  };
+          {b.bookings.length > 0 &&
+            (gaugeForCell ? (
+              <div
+                className="agenda-block-meta is-gauge"
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                  // Barre + texte X/Y colorés selon le remplissage (rouge si complet).
+                  color: fillColor,
+                }}
+              >
+                <span className="agenda-block-gauge-bar">
+                  <span style={{ width: `${pct}%`, background: fillColor }} />
+                </span>
+                {b.used}/{b.capacity}
+              </div>
+            ) : (
+              <div
+                className="agenda-block-meta"
+                style={{ position: "absolute", bottom: 0, left: 4, color: countColor }}
+              >
+                {count}/{b.capacity}
+              </div>
+            ))}
+        </div>
+      );
+      // Déps = lectures réactives de renderBlock UNIQUEMENT (handlers via blockApiRef,
+      // donc exclus). Énumérées à la main (Biome ne couvre pas ce useCallback) +
+      // vérifiées au runtime. Une omission ⇒ badge figé : revérifier si on en ajoute.
+    },
+    [
+      uniqueIdSet,
+      mode,
+      modes,
+      creationMode,
+      effectivePeriodId,
+      mapMinToY,
+      gridStartMin,
+      gridEndMin,
+      moveDrag,
+      resizeDrag,
+      copiedBooking,
+      draggingId,
+      bookings,
+      uniqueSlots,
+      service,
+      validation,
+      pointageMode,
+    ],
+  );
+
+  // Éléments JSX des blocs par jour, mémoïsés : renderBlock/isDayDisabled/blocksByDay
+  // étant stables, ces éléments gardent la MÊME référence d'un rendu à l'autre tant que
+  // données et mode ne changent pas → React bypasse la reconciliation des ~100 blocs
+  // pendant un glisser-créer / ouverture de modale / survol (perf, audit grilles).
+  const dayBlockEls = useMemo(() => {
+    const timed = new Map<string, React.ReactNode[]>();
+    const allday = new Map<string, React.ReactNode[]>();
+    for (const d of days) {
+      const bl: Block[] = isDayDisabled(d) ? [] : (blocksByDay[d] ?? []);
+      timed.set(
+        d,
+        bl
+          .filter((b) => !b.isAllDay && (!hideEmpty || b.bookings.length > 0))
+          .map((b) => renderBlock(b, false)),
+      );
+      allday.set(
+        d,
+        bl
+          .filter((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0))
+          .map((b) => renderBlock(b, true)),
+      );
+    }
+    return { timed, allday };
+  }, [days, isDayDisabled, blocksByDay, renderBlock, hideEmpty]);
 
   return (
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
@@ -2855,9 +2969,7 @@ export function AgendaGrid({
                     // Mode création : amorce le glisser-créer « journée entière » (horizontal).
                     onMouseDown={(e) => onAllDayCreateMouseDown(e, d)}
                   >
-                    {dayBlocks(d)
-                      .filter((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0))
-                      .map((b) => renderBlock(b, true))}
+                    {dayBlockEls.allday.get(d)}
                     {/* Aperçu du créneau « journée entière » qui va être créé (clic ou
                         glisser horizontal), à la façon de l'aperçu de création horaire. */}
                     {inAllDayDrag && (
@@ -2939,12 +3051,10 @@ export function AgendaGrid({
                 lunchEnd={lunchEnd}
                 mapMinToY={mapMinToY}
               />
-              {dayBlocks(d)
-                // Grille horaire : uniquement les créneaux datés (les « journée
-                // entière » sont rendus dans la bande dédiée en haut). hideEmpty
-                // masque les créneaux vides pour ne pas écraser la grille (cf. legacy).
-                .filter((b) => !b.isAllDay && (!hideEmpty || b.bookings.length > 0))
-                .map((b) => renderBlock(b, false))}
+              {/* Grille horaire : créneaux datés mémoïsés (les « journée entière » sont
+                  dans la bande dédiée). Réf. stable d'un rendu à l'autre → pas de
+                  reconciliation des blocs pendant les interactions (cf. dayBlockEls). */}
+              {dayBlockEls.timed.get(d)}
               {/* Aperçu du/des créneau(x) en cours de création (glisser-créer). La pause
                   méridienne découpe l'aperçu en 1 ou 2 blocs hors pause. */}
               {createDrag &&
