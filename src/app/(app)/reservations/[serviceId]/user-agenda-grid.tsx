@@ -39,13 +39,7 @@ import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import {
-  cancelMyBookingAction,
-  moveMyBookingAction,
-  reservePonctuelAction,
-  reserveRecurringAction,
-  updateMyBookingAction,
-} from "./actions";
+import { cancelMyBookingAction, commitDraft } from "./actions";
 
 type Service = {
   id: string;
@@ -1876,81 +1870,41 @@ export function UserAgendaGrid({
     setCommitting(true);
     setCommitError(null);
     startTransition(async () => {
-      const doneRemovals = new Set<number>();
-      const doneUpdates = new Set<string>();
-      const doneMoves = new Set<string>();
-      const doneAdds = new Set<string>();
-      const pruneDone = () => {
-        if (doneRemovals.size) {
-          setPendingRemovals((prev) => prev.filter((r) => !doneRemovals.has(r.bookingId)));
-        }
-        if (doneUpdates.size) {
-          setPendingUpdates((prev) =>
-            Object.fromEntries(Object.entries(prev).filter(([id]) => !doneUpdates.has(id))),
-          );
-        }
-        if (doneMoves.size) {
-          setPendingMoves((prev) =>
-            Object.fromEntries(Object.entries(prev).filter(([id]) => !doneMoves.has(id))),
-          );
-        }
-        if (doneAdds.size) {
-          setPendingAdds((prev) => prev.filter((a) => !doneAdds.has(a.key)));
-        }
+      // Tout le brouillon part en UNE action atomique (commitDraft) : suppressions →
+      // modifications → déplacements → ajouts dans une seule transaction serveur.
+      const draft = {
+        removals: pendingRemovals.map((r) => r.bookingId),
+        updates: Object.entries(pendingUpdates).map(([id, u]) => ({
+          bookingId: Number(id),
+          enfants: u.enfants,
+          accompagnants: u.accompagnants,
+          theme: u.theme,
+        })),
+        moves: Object.entries(pendingMoves).map(([id, m]) => ({
+          bookingId: Number(id),
+          slotId: m.slotId,
+          ponctuel: m.ponctuel,
+          periodId: m.periodId,
+          week: m.week,
+        })),
+        adds: pendingAdds.map((a) => ({
+          ponctuel: a.ponctuel,
+          slotId: a.slotId,
+          periodId: a.periodId,
+          week: a.week,
+          theme: a.theme,
+          enfants: a.enfants,
+          accompagnants: a.accompagnants,
+        })),
       };
-      try {
-        // Ordre : suppressions (libèrent des places) → modifications → déplacements
-        // (capacité revérifiée côté serveur) → nouvelles réservations.
-        for (const r of pendingRemovals) {
-          const res = await cancelMyBookingAction(service.id, r.bookingId);
-          if (!res.ok) throw new Error(res.error ?? "Échec d'une annulation.");
-          doneRemovals.add(r.bookingId);
-        }
-        for (const [id, u] of Object.entries(pendingUpdates)) {
-          const res = await updateMyBookingAction(
-            service.id,
-            Number(id),
-            u.enfants,
-            u.accompagnants,
-            u.theme,
-          );
-          if (!res.ok) throw new Error(res.error ?? "Échec d'une modification.");
-          doneUpdates.add(id);
-        }
-        for (const [id, m] of Object.entries(pendingMoves)) {
-          const res = await moveMyBookingAction(service.id, Number(id), {
-            slotId: m.slotId,
-            ponctuel: m.ponctuel,
-            periodId: m.periodId,
-            week: m.week,
-          });
-          if (!res.ok) throw new Error(res.error ?? "Échec d'un déplacement.");
-          doneMoves.add(id);
-        }
-        for (const a of pendingAdds) {
-          const res = a.ponctuel
-            ? await reservePonctuelAction(service.id, a.slotId, a.theme, a.enfants, a.accompagnants)
-            : await reserveRecurringAction(
-                service.id,
-                a.slotId,
-                a.periodId,
-                a.week,
-                a.theme,
-                a.enfants,
-                a.accompagnants,
-              );
-          if (!res.ok) throw new Error(res.error ?? "Échec d'une réservation.");
-          doneAdds.add(a.key);
-        }
-        setCommitting(false);
+      const res = await commitDraft(service.id, draft);
+      setCommitting(false);
+      if (res.ok) {
         clearPending();
         router.refresh();
-      } catch (e) {
-        // Échec partiel : on retire du panier ce qui a réussi et on resynchronise
-        // l'affichage avec ce qui a été réellement appliqué côté serveur.
-        pruneDone();
-        setCommitting(false);
-        setCommitError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
+      } else {
+        // Atomique : rien n'a été appliqué → on garde le panier intact pour correction.
+        setCommitError(res.error ?? "Échec de l'enregistrement.");
         router.refresh();
       }
     });

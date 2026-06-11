@@ -256,6 +256,82 @@ export async function assertNotSchoolHolidayForUser(
  * surbooking. La transaction est SÉRIALISABLE : deux réservations concurrentes
  * sur la dernière place en feront échouer une (à réessayer), jamais les deux.
  */
+/**
+ * Cœur transactionnel de la création ponctuelle (validation + anti-surbooking +
+ * limites + create), exécuté dans un `tx` fourni. Permet de composer cette opération
+ * avec d'autres dans UNE seule transaction (panier atomique `commitDraft`). L'input
+ * doit être DÉJÀ validé (cf. `createUniqueBooking`).
+ */
+export async function createUniqueBookingInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  input: BookingCreateInput,
+  validated: boolean,
+) {
+  const slot = await tx.slot.findUnique({
+    where: { id: input.slotId },
+    include: { service: true },
+  });
+  if (!slot || slot.slotType !== "unique" || slot.state !== "actif") {
+    throw new BookingError("Ce créneau n'est pas disponible.");
+  }
+  // Accès service : le demandeur effectif de l'usager doit accepter ce service.
+  if (!(await userCanAccessService(tx, userId, slot.serviceId))) {
+    throw new BookingError("Vous n'avez pas accès à ce service.");
+  }
+  if (!slot.slotDate || slot.slotDate < startOfToday()) {
+    throw new BookingError("Ce créneau est passé.");
+  }
+  // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai.
+  const earliest = earliestBookableISO(
+    slot.service.bookingDelay,
+    slot.service.activeDays
+      .split(",")
+      .map((d) => d.trim())
+      .filter(Boolean),
+  );
+  if (slot.slotDate.toISOString().slice(0, 10) < earliest) {
+    throw new BookingError("Le délai de réservation pour ce créneau n'est pas encore atteint.");
+  }
+  // Vacances scolaires : service OU demandeur fermé en vacances → créneau ponctuel refusé.
+  await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate, slot.service.openOnSchoolHolidays);
+  // Anti-surbooking : règle canonique partagée (jauge/capacité) — une seule
+  // implémentation pour création usager, édition et déplacement admin.
+  await assertSlotCapacity(tx, {
+    serviceId: slot.serviceId,
+    slotId: slot.id,
+    bookingType: "unique",
+    periodId: 0,
+    enfants: input.enfants,
+    accompagnants: input.accompagnants,
+  });
+  // Limites de réservation de l'usager (max par période + max annuel). La période est
+  // portée par le SLOT (la réservation ponctuelle stocke periodId=0).
+  await assertReservationLimits(tx, {
+    serviceId: slot.serviceId,
+    userId,
+    bookingType: "unique",
+    periodId: slot.periodId ?? 0,
+    maxReservations: slot.service.maxReservations,
+    maxReservationsPeriod: slot.service.maxReservationsPeriod,
+  });
+  return await tx.booking.create({
+    data: {
+      bookingType: "unique",
+      userId,
+      serviceId: slot.serviceId,
+      slotId: slot.id,
+      periodId: 0,
+      week: "",
+      enfants: input.enfants,
+      accompagnants: input.accompagnants,
+      themeLabel: input.themeLabel,
+      validated,
+      autoValidateFrom: new Date(),
+    },
+  });
+}
+
 export async function createUniqueBooking(
   userId: string,
   rawInput: BookingCreateInput,
@@ -268,82 +344,7 @@ export async function createUniqueBooking(
   const input = parsedInput.data;
   try {
     return await prisma.$transaction(
-      async (tx) => {
-        const slot = await tx.slot.findUnique({
-          where: { id: input.slotId },
-          include: { service: true },
-        });
-        if (!slot || slot.slotType !== "unique" || slot.state !== "actif") {
-          throw new BookingError("Ce créneau n'est pas disponible.");
-        }
-        // Accès service : le demandeur effectif de l'usager doit accepter ce service.
-        if (!(await userCanAccessService(tx, userId, slot.serviceId))) {
-          throw new BookingError("Vous n'avez pas accès à ce service.");
-        }
-        if (!slot.slotDate || slot.slotDate < startOfToday()) {
-          throw new BookingError("Ce créneau est passé.");
-        }
-        // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai.
-        const earliest = earliestBookableISO(
-          slot.service.bookingDelay,
-          slot.service.activeDays
-            .split(",")
-            .map((d) => d.trim())
-            .filter(Boolean),
-        );
-        if (slot.slotDate.toISOString().slice(0, 10) < earliest) {
-          throw new BookingError(
-            "Le délai de réservation pour ce créneau n'est pas encore atteint.",
-          );
-        }
-
-        // Vacances scolaires : service OU demandeur fermé en vacances → créneau ponctuel refusé.
-        await assertNotSchoolHolidayForUser(
-          tx,
-          userId,
-          slot.slotDate,
-          slot.service.openOnSchoolHolidays,
-        );
-
-        // Anti-surbooking : règle canonique partagée (jauge/capacité) — une seule
-        // implémentation pour création usager, édition et déplacement admin.
-        await assertSlotCapacity(tx, {
-          serviceId: slot.serviceId,
-          slotId: slot.id,
-          bookingType: "unique",
-          periodId: 0,
-          enfants: input.enfants,
-          accompagnants: input.accompagnants,
-        });
-        // Limites de réservation de l'usager (max par période + max annuel). Chemin
-        // USAGER uniquement (createUniqueBooking n'est appelé que par reservePonctuelAction ;
-        // l'admin passe par createUniqueBookingAction, sans limite — override de gestion).
-        // La période est portée par le SLOT (la réservation ponctuelle stocke periodId=0).
-        await assertReservationLimits(tx, {
-          serviceId: slot.serviceId,
-          userId,
-          bookingType: "unique",
-          periodId: slot.periodId ?? 0,
-          maxReservations: slot.service.maxReservations,
-          maxReservationsPeriod: slot.service.maxReservationsPeriod,
-        });
-
-        return await tx.booking.create({
-          data: {
-            bookingType: "unique",
-            userId,
-            serviceId: slot.serviceId,
-            slotId: slot.id,
-            periodId: 0,
-            week: "",
-            enfants: input.enfants,
-            accompagnants: input.accompagnants,
-            themeLabel: input.themeLabel,
-            validated,
-            autoValidateFrom: new Date(),
-          },
-        });
-      },
+      (tx) => createUniqueBookingInTx(tx, userId, input, validated),
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
@@ -361,23 +362,31 @@ export async function createUniqueBooking(
 }
 
 /**
- * Annule une réservation appartenant à l'usager. Renvoie true si supprimée.
- * Verrou pointage : une réservation pointée, ou une récurrente dont un miroir est
- * pointé, n'est plus annulable.
+ * Annule une réservation de l'usager dans un `tx` fourni (composable, panier atomique).
+ * Renvoie true si supprimée. Verrou pointage : une réservation pointée, ou une
+ * récurrente dont un miroir est pointé, n'est plus annulable.
  */
-export async function cancelUserBooking(userId: string, bookingId: number) {
-  const b = await prisma.booking.findFirst({
+export async function cancelUserBookingInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  bookingId: number,
+) {
+  const b = await tx.booking.findFirst({
     where: { id: bookingId, userId },
     select: { pointage: true },
   });
   if (!b) return false;
   if (b.pointage != null) return false;
-  const pointedChildren = await prisma.booking.count({
+  const pointedChildren = await tx.booking.count({
     where: { parentBookingId: bookingId, pointage: { not: null } },
   });
   if (pointedChildren > 0) return false;
-  const res = await prisma.booking.deleteMany({ where: { id: bookingId, userId } });
+  const res = await tx.booking.deleteMany({ where: { id: bookingId, userId } });
   return res.count > 0;
+}
+
+export async function cancelUserBooking(userId: string, bookingId: number) {
+  return prisma.$transaction((tx) => cancelUserBookingInTx(tx, userId, bookingId));
 }
 
 /**

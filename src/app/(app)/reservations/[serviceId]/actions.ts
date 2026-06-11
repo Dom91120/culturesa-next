@@ -1,5 +1,6 @@
 "use server";
 
+import { bookingCreateSchema } from "@/schemas/booking";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import {
@@ -12,8 +13,8 @@ import {
   assertNotSchoolHolidayForUser,
   assertReservationLimits,
   assertSlotCapacity,
-  cancelUserBooking,
-  createUniqueBooking,
+  cancelUserBookingInTx,
+  createUniqueBookingInTx,
   userCanAccessService,
 } from "@/server/services/bookings";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
@@ -38,6 +39,140 @@ const reserveRecurringSchema = z.object({
   accompagnants: z.coerce.number().int().min(0).max(999).default(0),
 });
 
+/** Mappe une erreur d'opération de réservation vers un `Result` (BookingError +
+ * collisions Prisma P2002/P2034). Réutilisé par les actions mono-op et commitDraft. */
+function mapBookingError(e: unknown): Result {
+  if (e instanceof BookingError) return { ok: false, error: e.message };
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    return { ok: false, error: "Vous avez déjà réservé ce créneau." };
+  }
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+    return { ok: false, error: "Réservation simultanée détectée, réessayez." };
+  }
+  throw e;
+}
+
+// ── Cœurs transactionnels (composables dans UNE tx — panier atomique commitDraft) ──
+// Chaque helper exécute validation + écritures d'UNE opération dans le `tx` fourni et
+// lève BookingError en cas de refus. Les ADD renvoient les paramètres d'e-mail de
+// confirmation (envoyés APRÈS le commit, best-effort).
+
+async function reserveRecurringInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+  args: {
+    slotId: string;
+    periodId: number;
+    theme: string;
+    enfants: number;
+    accompagnants: number;
+    wk: "A" | "B" | "";
+  },
+): Promise<BookingConfirmationParams> {
+  const { slotId, periodId, theme, enfants, accompagnants, wk } = args;
+  const slot = await tx.slot.findUnique({
+    where: { id: slotId },
+    include: { service: true, demandeurs: { select: { demandeurId: true } } },
+  });
+  if (
+    !slot ||
+    slot.serviceId !== serviceId ||
+    slot.slotType !== "recurring" ||
+    slot.state !== "actif"
+  ) {
+    throw new BookingError("Ce créneau n'est pas disponible.");
+  }
+  // Accès service : le demandeur effectif de l'usager doit accepter ce service.
+  if (!(await userCanAccessService(tx, userId, serviceId))) {
+    throw new BookingError("Vous n'avez pas accès à ce service.");
+  }
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { enfants: true, demandeurId: true },
+  });
+  // Compteurs : valeurs saisies (jauge) si fournies, sinon profil.
+  const myEnfants = enfants > 0 ? enfants : (user?.enfants ?? 0);
+  const myAcc = accompagnants > 0 ? accompagnants : 0;
+  if (
+    slot.demandeurs.length > 0 &&
+    !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
+  ) {
+    throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+  }
+  // Anti-surbooking : règle canonique partagée (assertSlotCapacity) — jauge =
+  // enfants + adultes ; hors jauge = 1 par réservation.
+  await assertSlotCapacity(tx, {
+    serviceId,
+    slotId,
+    bookingType: "recurring",
+    periodId,
+    enfants: myEnfants,
+    accompagnants: myAcc,
+  });
+  // Limites de réservation de l'usager (max par période + max annuel du service).
+  await assertReservationLimits(tx, {
+    serviceId,
+    userId,
+    bookingType: "recurring",
+    periodId,
+    maxReservations: slot.service.maxReservations,
+    maxReservationsPeriod: slot.service.maxReservationsPeriod,
+  });
+  // Validation : validée d'emblée sauf si le demandeur est en mode « validation ».
+  const setting = user?.demandeurId
+    ? await tx.serviceDemandeurSettings.findFirst({
+        where: { serviceId, demandeurId: user.demandeurId },
+        select: { validation: true },
+      })
+    : null;
+  const validated = !(setting?.validation ?? false);
+  const created = await tx.booking.create({
+    data: {
+      bookingType: "recurring",
+      userId,
+      serviceId,
+      slotId,
+      periodId,
+      week: wk,
+      enfants: myEnfants,
+      accompagnants: myAcc,
+      themeLabel: theme,
+      validated,
+      autoValidateFrom: new Date(),
+    },
+  });
+  // Matérialise les réservations-enfants datées (une par occurrence).
+  await syncRecurringChildren(tx, {
+    id: created.id,
+    userId,
+    serviceId,
+    slotId,
+    periodId,
+    week: wk,
+    themeLabel: theme,
+    enfants: myEnfants,
+    accompagnants: myAcc,
+    validated,
+  });
+  return {
+    userId,
+    serviceId,
+    serviceLabel: slot.service.label,
+    validated,
+    slot: {
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      slotDate: null,
+      slotDay: slot.slotDay,
+    },
+    periodId,
+    enfants: myEnfants,
+    accompagnants: myAcc,
+    theme,
+  };
+}
+
 /** Réserve un créneau RÉCURRENT pour l'usager (jauge anti-surbooking, sérialisable). */
 export async function reserveRecurringAction(
   serviceId: string,
@@ -59,130 +194,83 @@ export async function reserveRecurringAction(
   const { slotId, periodId, theme, enfants, accompagnants } = parsed.data;
   const session = await requireUser();
   const wk = week === "A" || week === "B" ? week : "";
-  // Données pour l'e-mail de confirmation, capturées dans la transaction (envoi après commit).
   let mailParams: BookingConfirmationParams | null = null;
   try {
     await prisma.$transaction(
       async (tx) => {
-        const slot = await tx.slot.findUnique({
-          where: { id: slotId },
-          include: { service: true, demandeurs: { select: { demandeurId: true } } },
-        });
-        if (
-          !slot ||
-          slot.serviceId !== serviceId ||
-          slot.slotType !== "recurring" ||
-          slot.state !== "actif"
-        ) {
-          throw new BookingError("Ce créneau n'est pas disponible.");
-        }
-        // Accès service : le demandeur effectif de l'usager doit accepter ce service.
-        if (!(await userCanAccessService(tx, session.user.id, serviceId))) {
-          throw new BookingError("Vous n'avez pas accès à ce service.");
-        }
-        const user = await tx.user.findUnique({
-          where: { id: session.user.id },
-          select: { enfants: true, demandeurId: true },
-        });
-        // Compteurs : valeurs saisies (jauge) si fournies, sinon profil.
-        const myEnfants = enfants > 0 ? enfants : (user?.enfants ?? 0);
-        const myAcc = accompagnants > 0 ? accompagnants : 0;
-        if (
-          slot.demandeurs.length > 0 &&
-          !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
-        ) {
-          throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
-        }
-        // Anti-surbooking : règle canonique partagée (assertSlotCapacity) — jauge =
-        // enfants + adultes ; hors jauge = 1 par réservation. Sinon les enfants du PROFIL
-        // de l'usager « remplissent » à tort un créneau (faux « complet »).
-        await assertSlotCapacity(tx, {
-          serviceId,
-          slotId,
-          bookingType: "recurring",
-          periodId,
-          enfants: myEnfants,
-          accompagnants: myAcc,
-        });
-        // Limites de réservation de l'usager (max par période + max annuel du service).
-        await assertReservationLimits(tx, {
-          serviceId,
-          userId: session.user.id,
-          bookingType: "recurring",
-          periodId,
-          maxReservations: slot.service.maxReservations,
-          maxReservationsPeriod: slot.service.maxReservationsPeriod,
-        });
-        // Validation : si le demandeur de l'usager n'est pas en mode « validation »,
-        // la réservation est validée d'emblée ; sinon elle reste en attente.
-        const setting = user?.demandeurId
-          ? await tx.serviceDemandeurSettings.findFirst({
-              where: { serviceId, demandeurId: user.demandeurId },
-              select: { validation: true },
-            })
-          : null;
-        const validated = !(setting?.validation ?? false);
-        const created = await tx.booking.create({
-          data: {
-            bookingType: "recurring",
-            userId: session.user.id,
-            serviceId,
-            slotId,
-            periodId,
-            week: wk,
-            enfants: myEnfants,
-            accompagnants: myAcc,
-            themeLabel: theme,
-            validated,
-            autoValidateFrom: new Date(),
-          },
-        });
-        // Matérialise les réservations-enfants datées (une par occurrence).
-        await syncRecurringChildren(tx, {
-          id: created.id,
-          userId: session.user.id,
-          serviceId,
+        mailParams = await reserveRecurringInTx(tx, session.user.id, serviceId, {
           slotId,
           periodId,
-          week: wk,
-          themeLabel: theme,
-          enfants: myEnfants,
-          accompagnants: myAcc,
-          validated,
-        });
-        mailParams = {
-          userId: session.user.id,
-          serviceId,
-          serviceLabel: slot.service.label,
-          validated,
-          slot: {
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            slotDate: null,
-            slotDay: slot.slotDay,
-          },
-          periodId,
-          enfants: myEnfants,
-          accompagnants: myAcc,
           theme,
-        };
+          enfants,
+          accompagnants,
+          wk,
+        });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { ok: false, error: "Vous avez déjà réservé ce créneau." };
-    }
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e);
   }
-  // Confirmation à l'usager (best-effort, après commit).
   if (mailParams) await sendBookingConfirmationMail(mailParams);
   revalidate(serviceId);
   return { ok: true };
+}
+
+async function reservePonctuelInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+  args: { slotId: string; theme: string; enfants: number; accompagnants: number },
+): Promise<BookingConfirmationParams | null> {
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { enfants: true, demandeurId: true },
+  });
+  const setting = user?.demandeurId
+    ? await tx.serviceDemandeurSettings.findFirst({
+        where: { serviceId, demandeurId: user.demandeurId },
+        select: { validation: true },
+      })
+    : null;
+  const validated = !(setting?.validation ?? false);
+  const myEnfants = args.enfants > 0 ? args.enfants : (user?.enfants ?? 0);
+  const myAcc = args.accompagnants > 0 ? args.accompagnants : 0;
+  const parsed = bookingCreateSchema.safeParse({
+    slotId: args.slotId,
+    enfants: myEnfants,
+    accompagnants: myAcc,
+    themeLabel: args.theme,
+  });
+  if (!parsed.success) throw new BookingError("Données invalides.");
+  await createUniqueBookingInTx(tx, userId, parsed.data, validated);
+  // Slot pour l'e-mail de confirmation (lu dans la même transaction).
+  const slot = await tx.slot.findUnique({
+    where: { id: args.slotId },
+    select: {
+      startTime: true,
+      endTime: true,
+      slotDate: true,
+      slotDay: true,
+      service: { select: { label: true } },
+    },
+  });
+  if (!slot) return null;
+  return {
+    userId,
+    serviceId,
+    serviceLabel: slot.service.label,
+    validated,
+    slot: {
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      slotDate: slot.slotDate,
+      slotDay: slot.slotDay,
+    },
+    enfants: myEnfants,
+    accompagnants: myAcc,
+    theme: args.theme,
+  };
 }
 
 /** Réserve un créneau PONCTUEL (daté) pour l'usager. */
@@ -194,76 +282,50 @@ export async function reservePonctuelAction(
   accompagnants = 0,
 ): Promise<Result> {
   const session = await requireUser();
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { enfants: true, demandeurId: true },
-  });
-  const setting = user?.demandeurId
-    ? await prisma.serviceDemandeurSettings.findFirst({
-        where: { serviceId, demandeurId: user.demandeurId },
-        select: { validation: true },
-      })
-    : null;
-  const validated = !(setting?.validation ?? false);
-  const myEnfants = enfants > 0 ? enfants : (user?.enfants ?? 0);
-  const myAcc = accompagnants > 0 ? accompagnants : 0;
+  let mailParams: BookingConfirmationParams | null = null;
   try {
-    await createUniqueBooking(
-      session.user.id,
-      { slotId, enfants: myEnfants, accompagnants: myAcc, themeLabel: theme },
-      validated,
+    await prisma.$transaction(
+      async (tx) => {
+        mailParams = await reservePonctuelInTx(tx, session.user.id, serviceId, {
+          slotId,
+          theme,
+          enfants,
+          accompagnants,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    throw e;
+    return mapBookingError(e);
   }
-  // Confirmation à l'usager (best-effort, après création).
-  const slot = await prisma.slot.findUnique({
-    where: { id: slotId },
-    select: {
-      startTime: true,
-      endTime: true,
-      slotDate: true,
-      slotDay: true,
-      service: { select: { label: true } },
-    },
-  });
-  if (slot) {
-    await sendBookingConfirmationMail({
-      userId: session.user.id,
-      serviceId,
-      serviceLabel: slot.service.label,
-      validated,
-      slot: {
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        slotDate: slot.slotDate,
-        slotDay: slot.slotDay,
-      },
-      enfants: myEnfants,
-      accompagnants: myAcc,
-      theme,
-    });
-  }
+  if (mailParams) await sendBookingConfirmationMail(mailParams);
   revalidate(serviceId);
   return { ok: true };
 }
 
 /** Annule une réservation appartenant à l'usager. */
+async function cancelInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+  bookingId: number,
+): Promise<void> {
+  const booking = await tx.booking.findFirst({
+    where: { id: bookingId, userId, serviceId },
+    select: { serviceId: true, validated: true },
+  });
+  if (!booking) throw new BookingError("Réservation introuvable.");
+  // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
+  await assertBookingUnlocked(tx, userId, booking);
+  await cancelUserBookingInTx(tx, userId, bookingId);
+}
+
 export async function cancelMyBookingAction(serviceId: string, bookingId: number): Promise<Result> {
   const session = await requireUser();
   try {
-    const booking = await prisma.booking.findFirst({
-      where: { id: bookingId, userId: session.user.id, serviceId },
-      select: { serviceId: true, validated: true },
-    });
-    if (!booking) return { ok: false, error: "Réservation introuvable." };
-    // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
-    await assertBookingUnlocked(prisma, session.user.id, booking);
-    await cancelUserBooking(session.user.id, bookingId);
+    await prisma.$transaction((tx) => cancelInTx(tx, session.user.id, serviceId, bookingId));
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    throw e;
+    return mapBookingError(e);
   }
   revalidate(serviceId);
   return { ok: true };
@@ -274,113 +336,113 @@ export async function cancelMyBookingAction(serviceId: string, bookingId: number
  * (récurrent→récurrent, ponctuel→ponctuel), en conservant son id. La validation repasse
  * « en attente » selon le mode du demandeur (port du legacy `_userOnDrop` + `entry.moved`).
  */
+async function moveInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+  bookingId: number,
+  target: { slotId: string; ponctuel: boolean; periodId?: number; week?: string },
+): Promise<void> {
+  const wk = target.week === "A" || target.week === "B" ? target.week : "";
+  const booking = await tx.booking.findFirst({
+    where: { id: bookingId, userId, serviceId },
+  });
+  if (!booking) throw new BookingError("Réservation introuvable.");
+  // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
+  await assertBookingUnlocked(tx, userId, booking);
+  const slot = await tx.slot.findUnique({
+    where: { id: target.slotId },
+    include: { service: true, demandeurs: { select: { demandeurId: true } } },
+  });
+  const wantType = target.ponctuel ? "unique" : "recurring";
+  if (
+    !slot ||
+    slot.serviceId !== serviceId ||
+    slot.slotType !== wantType ||
+    slot.state !== "actif"
+  ) {
+    throw new BookingError("Ce créneau n'est pas disponible.");
+  }
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { demandeurId: true },
+  });
+  if (
+    slot.demandeurs.length > 0 &&
+    !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
+  ) {
+    throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+  }
+  // Vacances scolaires : déplacement vers un créneau PONCTUEL daté en vacances refusé
+  // si le service OU le demandeur ferme pendant les vacances (cohérent avec la création).
+  if (target.ponctuel && slot.slotDate) {
+    await assertNotSchoolHolidayForUser(
+      tx,
+      userId,
+      slot.slotDate,
+      slot.service.openOnSchoolHolidays,
+    );
+  }
+  // Anti-surbooking : règle canonique partagée (assertSlotCapacity), la réservation
+  // déplacée étant exclue du décompte.
+  await assertSlotCapacity(tx, {
+    serviceId,
+    slotId: target.slotId,
+    bookingType: target.ponctuel ? "unique" : "recurring",
+    periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
+    enfants: booking.enfants,
+    accompagnants: booking.accompagnants,
+    excludeBookingId: bookingId,
+  });
+  const setting = user?.demandeurId
+    ? await tx.serviceDemandeurSettings.findFirst({
+        where: { serviceId, demandeurId: user.demandeurId },
+        select: { validation: true },
+      })
+    : null;
+  const validated = !(setting?.validation ?? false);
+  await tx.booking.update({
+    where: { id: bookingId },
+    data: {
+      slotId: target.slotId,
+      periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
+      week: target.ponctuel ? "" : wk,
+      validated,
+      autoValidateFrom: new Date(),
+    },
+  });
+  if (target.ponctuel) {
+    // Devient ponctuelle : plus d'occurrences → on retire d'éventuels enfants.
+    await tx.booking.deleteMany({ where: { parentBookingId: bookingId } });
+  } else {
+    // Récurrente : régénère les enfants sur les nouveaux miroirs.
+    await syncRecurringChildren(tx, {
+      id: bookingId,
+      userId,
+      serviceId,
+      slotId: target.slotId,
+      periodId: target.periodId ?? 0,
+      week: wk,
+      themeLabel: booking.themeLabel,
+      enfants: booking.enfants,
+      accompagnants: booking.accompagnants,
+      validated,
+    });
+  }
+}
+
 export async function moveMyBookingAction(
   serviceId: string,
   bookingId: number,
   target: { slotId: string; ponctuel: boolean; periodId?: number; week?: string },
 ): Promise<Result> {
   const session = await requireUser();
-  const wk = target.week === "A" || target.week === "B" ? target.week : "";
   try {
-    await prisma.$transaction(
-      async (tx) => {
-        const booking = await tx.booking.findFirst({
-          where: { id: bookingId, userId: session.user.id, serviceId },
-        });
-        if (!booking) throw new BookingError("Réservation introuvable.");
-        // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
-        await assertBookingUnlocked(tx, session.user.id, booking);
-        const slot = await tx.slot.findUnique({
-          where: { id: target.slotId },
-          include: { service: true, demandeurs: { select: { demandeurId: true } } },
-        });
-        const wantType = target.ponctuel ? "unique" : "recurring";
-        if (
-          !slot ||
-          slot.serviceId !== serviceId ||
-          slot.slotType !== wantType ||
-          slot.state !== "actif"
-        ) {
-          throw new BookingError("Ce créneau n'est pas disponible.");
-        }
-        const user = await tx.user.findUnique({
-          where: { id: session.user.id },
-          select: { demandeurId: true },
-        });
-        if (
-          slot.demandeurs.length > 0 &&
-          !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
-        ) {
-          throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
-        }
-        // Vacances scolaires : déplacement vers un créneau PONCTUEL daté en vacances refusé
-        // si le service OU le demandeur ferme pendant les vacances (cohérent avec la création).
-        if (target.ponctuel && slot.slotDate) {
-          await assertNotSchoolHolidayForUser(
-            tx,
-            session.user.id,
-            slot.slotDate,
-            slot.service.openOnSchoolHolidays,
-          );
-        }
-        // Anti-surbooking : règle canonique partagée (assertSlotCapacity), la
-        // réservation déplacée étant exclue du décompte.
-        await assertSlotCapacity(tx, {
-          serviceId,
-          slotId: target.slotId,
-          bookingType: target.ponctuel ? "unique" : "recurring",
-          periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
-          enfants: booking.enfants,
-          accompagnants: booking.accompagnants,
-          excludeBookingId: bookingId,
-        });
-        const setting = user?.demandeurId
-          ? await tx.serviceDemandeurSettings.findFirst({
-              where: { serviceId, demandeurId: user.demandeurId },
-              select: { validation: true },
-            })
-          : null;
-        const validated = !(setting?.validation ?? false);
-        await tx.booking.update({
-          where: { id: bookingId },
-          data: {
-            slotId: target.slotId,
-            periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
-            week: target.ponctuel ? "" : wk,
-            validated,
-            autoValidateFrom: new Date(),
-          },
-        });
-        if (target.ponctuel) {
-          // Devient ponctuelle : plus d'occurrences → on retire d'éventuels enfants.
-          await tx.booking.deleteMany({ where: { parentBookingId: bookingId } });
-        } else {
-          // Récurrente : régénère les enfants sur les nouveaux miroirs.
-          await syncRecurringChildren(tx, {
-            id: bookingId,
-            userId: session.user.id,
-            serviceId,
-            slotId: target.slotId,
-            periodId: target.periodId ?? 0,
-            week: wk,
-            themeLabel: booking.themeLabel,
-            enfants: booking.enfants,
-            accompagnants: booking.accompagnants,
-            validated,
-          });
-        }
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+    await prisma.$transaction((tx) => moveInTx(tx, session.user.id, serviceId, bookingId, target), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { ok: false, error: "Vous avez déjà réservé ce créneau." };
-    }
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e);
   }
   revalidate(serviceId);
   return { ok: true };
@@ -393,6 +455,81 @@ export async function moveMyBookingAction(
  * « validation bloquante », et re-vérification de la jauge (anti-surbooking,
  * transaction sérialisable — gonfler les compteurs ne contourne pas la capacité).
  */
+async function updateInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+  bookingId: number,
+  rawEnfants: number,
+  rawAccompagnants: number,
+  rawTheme: string,
+): Promise<void> {
+  const enf = Math.floor(rawEnfants);
+  const acc = Math.floor(rawAccompagnants);
+  if (!Number.isInteger(enf) || enf < 0 || enf > 99) throw new BookingError("Données invalides.");
+  if (!Number.isInteger(acc) || acc < 0 || acc > 99) throw new BookingError("Données invalides.");
+  const themeLabel = (rawTheme ?? "").trim().slice(0, 255);
+  const b = await tx.booking.findFirst({
+    where: { id: bookingId, userId, serviceId },
+    select: {
+      id: true,
+      bookingType: true,
+      parentBookingId: true,
+      pointage: true,
+      userId: true,
+      serviceId: true,
+      slotId: true,
+      periodId: true,
+      week: true,
+      validated: true,
+    },
+  });
+  if (!b) throw new BookingError("Réservation introuvable.");
+  if (b.parentBookingId != null) {
+    throw new BookingError("Une séance (miroir) n'est pas modifiable.");
+  }
+  // Pointée (elle-même ou une de ses séances) → figée, comme l'annulation.
+  if (b.pointage != null) throw new BookingError("Réservation pointée, non modifiable.");
+  const pointedChildren = await tx.booking.count({
+    where: { parentBookingId: b.id, pointage: { not: null } },
+  });
+  if (pointedChildren > 0) {
+    throw new BookingError("Réservation pointée, non modifiable.");
+  }
+  // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
+  await assertBookingUnlocked(tx, userId, b);
+  // Anti-surbooking : augmenter les compteurs ne doit pas dépasser la jauge/capacité
+  // (la réservation courante est exclue du décompte).
+  await assertSlotCapacity(tx, {
+    serviceId,
+    slotId: b.slotId,
+    bookingType: b.bookingType === "recurring" ? "recurring" : "unique",
+    periodId: b.periodId,
+    enfants: enf,
+    accompagnants: acc,
+    excludeBookingId: b.id,
+  });
+  await tx.booking.update({
+    where: { id: b.id },
+    data: { enfants: enf, accompagnants: acc, themeLabel },
+  });
+  // Récurrente : propage counts/thème aux réservations-enfants.
+  if (b.bookingType === "recurring") {
+    await syncRecurringChildren(tx, {
+      id: b.id,
+      userId: b.userId,
+      serviceId: b.serviceId,
+      slotId: b.slotId,
+      periodId: b.periodId,
+      week: b.week,
+      themeLabel,
+      enfants: enf,
+      accompagnants: acc,
+      validated: b.validated,
+    });
+  }
+}
+
 export async function updateMyBookingAction(
   serviceId: string,
   bookingId: number,
@@ -401,87 +538,133 @@ export async function updateMyBookingAction(
   theme = "",
 ): Promise<Result> {
   const session = await requireUser();
-  const enf = Math.floor(enfants);
-  const acc = Math.floor(accompagnants);
-  if (!Number.isInteger(enf) || enf < 0 || enf > 99) {
-    return { ok: false, error: "Données invalides." };
+  try {
+    await prisma.$transaction(
+      (tx) => updateInTx(tx, session.user.id, serviceId, bookingId, enfants, accompagnants, theme),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    return mapBookingError(e);
   }
-  if (!Number.isInteger(acc) || acc < 0 || acc > 99) {
-    return { ok: false, error: "Données invalides." };
+  revalidate(serviceId);
+  return { ok: true };
+}
+
+// ── Panier ATOMIQUE : valide tout le brouillon en UNE transaction (tout ou rien) ──
+const draftSchema = z.object({
+  removals: z.array(z.coerce.number().int().positive()).default([]),
+  updates: z
+    .array(
+      z.object({
+        bookingId: z.coerce.number().int().positive(),
+        enfants: z.coerce.number().int(),
+        accompagnants: z.coerce.number().int(),
+        theme: z.string().default(""),
+      }),
+    )
+    .default([]),
+  moves: z
+    .array(
+      z.object({
+        bookingId: z.coerce.number().int().positive(),
+        slotId: z.string().trim().min(1),
+        ponctuel: z.boolean(),
+        periodId: z.coerce.number().int().optional(),
+        week: z.string().optional(),
+      }),
+    )
+    .default([]),
+  adds: z
+    .array(
+      z.object({
+        ponctuel: z.boolean(),
+        slotId: z.string().trim().min(1),
+        periodId: z.coerce.number().int().optional(),
+        week: z.string().optional(),
+        theme: z.string().default(""),
+        enfants: z.coerce.number().int().min(0).max(999).default(0),
+        accompagnants: z.coerce.number().int().min(0).max(999).default(0),
+      }),
+    )
+    .default([]),
+});
+
+/**
+ * Enregistre TOUT le brouillon du panier en UNE seule transaction sérialisable :
+ * suppressions → modifications → déplacements → ajouts (l'ordre libère des places
+ * avant les ajouts). Tout ou rien : si une opération échoue, l'ensemble est annulé
+ * et rien n'est appliqué. Les e-mails de confirmation des ajouts partent APRÈS le
+ * commit (best-effort), comme pour les actions mono-op.
+ */
+type ParsedDraft = z.infer<typeof draftSchema>;
+
+/**
+ * Cœur transactionnel du panier (composable / testable hors auth) : applique tout le
+ * brouillon dans le `tx` fourni, dans l'ordre suppressions → modifications →
+ * déplacements → ajouts. Lève à la première erreur (→ rollback de toute la tx).
+ * Renvoie les e-mails de confirmation à envoyer après le commit.
+ */
+export async function commitDraftInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+  draft: ParsedDraft,
+): Promise<BookingConfirmationParams[]> {
+  const mails: BookingConfirmationParams[] = [];
+  for (const id of draft.removals) await cancelInTx(tx, userId, serviceId, id);
+  for (const u of draft.updates) {
+    await updateInTx(tx, userId, serviceId, u.bookingId, u.enfants, u.accompagnants, u.theme);
   }
-  const themeLabel = (theme ?? "").trim().slice(0, 255);
+  for (const m of draft.moves) {
+    await moveInTx(tx, userId, serviceId, m.bookingId, {
+      slotId: m.slotId,
+      ponctuel: m.ponctuel,
+      periodId: m.periodId,
+      week: m.week,
+    });
+  }
+  for (const a of draft.adds) {
+    if (a.ponctuel) {
+      const mp = await reservePonctuelInTx(tx, userId, serviceId, {
+        slotId: a.slotId,
+        theme: a.theme,
+        enfants: a.enfants,
+        accompagnants: a.accompagnants,
+      });
+      if (mp) mails.push(mp);
+    } else {
+      mails.push(
+        await reserveRecurringInTx(tx, userId, serviceId, {
+          slotId: a.slotId,
+          periodId: a.periodId ?? 0,
+          theme: a.theme,
+          enfants: a.enfants,
+          accompagnants: a.accompagnants,
+          wk: a.week === "A" || a.week === "B" ? a.week : "",
+        }),
+      );
+    }
+  }
+  return mails;
+}
+
+export async function commitDraft(serviceId: string, rawDraft: unknown): Promise<Result> {
+  const session = await requireUser();
+  const parsed = draftSchema.safeParse(rawDraft);
+  if (!parsed.success) return { ok: false, error: "Brouillon invalide." };
+  let mails: BookingConfirmationParams[] = [];
   try {
     await prisma.$transaction(
       async (tx) => {
-        const b = await tx.booking.findFirst({
-          where: { id: bookingId, userId: session.user.id, serviceId },
-          select: {
-            id: true,
-            bookingType: true,
-            parentBookingId: true,
-            pointage: true,
-            userId: true,
-            serviceId: true,
-            slotId: true,
-            periodId: true,
-            week: true,
-            validated: true,
-          },
-        });
-        if (!b) throw new BookingError("Réservation introuvable.");
-        if (b.parentBookingId != null) {
-          throw new BookingError("Une séance (miroir) n'est pas modifiable.");
-        }
-        // Pointée (elle-même ou une de ses séances) → figée, comme l'annulation.
-        if (b.pointage != null) throw new BookingError("Réservation pointée, non modifiable.");
-        const pointedChildren = await tx.booking.count({
-          where: { parentBookingId: b.id, pointage: { not: null } },
-        });
-        if (pointedChildren > 0) {
-          throw new BookingError("Réservation pointée, non modifiable.");
-        }
-        // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
-        await assertBookingUnlocked(tx, session.user.id, b);
-        // Anti-surbooking : augmenter les compteurs ne doit pas dépasser la jauge/capacité
-        // (la réservation courante est exclue du décompte).
-        await assertSlotCapacity(tx, {
-          serviceId,
-          slotId: b.slotId,
-          bookingType: b.bookingType === "recurring" ? "recurring" : "unique",
-          periodId: b.periodId,
-          enfants: enf,
-          accompagnants: acc,
-          excludeBookingId: b.id,
-        });
-        await tx.booking.update({
-          where: { id: b.id },
-          data: { enfants: enf, accompagnants: acc, themeLabel },
-        });
-        // Récurrente : propage counts/thème aux réservations-enfants.
-        if (b.bookingType === "recurring") {
-          await syncRecurringChildren(tx, {
-            id: b.id,
-            userId: b.userId,
-            serviceId: b.serviceId,
-            slotId: b.slotId,
-            periodId: b.periodId,
-            week: b.week,
-            themeLabel,
-            enfants: enf,
-            accompagnants: acc,
-            validated: b.validated,
-          });
-        }
+        mails = await commitDraftInTx(tx, session.user.id, serviceId, parsed.data);
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Modification simultanée détectée, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e);
   }
+  // Confirmations (best-effort, après commit).
+  for (const m of mails) await sendBookingConfirmationMail(m);
   revalidate(serviceId);
   return { ok: true };
 }
