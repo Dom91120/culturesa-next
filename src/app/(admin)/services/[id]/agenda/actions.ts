@@ -261,15 +261,6 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
   }));
 }
 
-/** Pose la liste de demandeurs autorisés sur un créneau (vide = ouvert à tous). */
-async function setSlotDemandeurs(slotId: string, demandeurIds: number[] | undefined) {
-  const ids = [...new Set((demandeurIds ?? []).filter((d) => Number.isInteger(d) && d > 0))];
-  if (ids.length === 0) return;
-  await prisma.slotDemandeur.createMany({
-    data: ids.map((demandeurId) => ({ slotId, demandeurId })),
-  });
-}
-
 /** Crée un créneau récurrent (vue Modèle de période). */
 export async function createRecurringSlotAction(input: {
   serviceId: string;
@@ -291,8 +282,8 @@ export async function createRecurringSlotAction(input: {
     weeks: input.weeks,
     dayKey: input.dayKey as DayKeyT,
     capacity: input.capacity,
+    demandeurIds: input.demandeurIds,
   });
-  if (res.ok) await setSlotDemandeurs(res.id, input.demandeurIds);
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
@@ -312,8 +303,8 @@ export async function createUniqueSlotAction(input: {
     startTime: input.startTime,
     endTime: input.endTime,
     capacity: input.capacity,
+    demandeurIds: input.demandeurIds,
   });
-  if (res.ok) await setSlotDemandeurs(res.id, input.demandeurIds);
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }

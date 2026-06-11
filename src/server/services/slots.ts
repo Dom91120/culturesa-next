@@ -79,6 +79,11 @@ function mirrorId(slotId: string, dateStr: string): string {
   return `u_${slotId}_${dateStr}`;
 }
 
+/** Demandeurs autorisés normalisés (entiers > 0, dédupliqués). Vide = ouvert à tous. */
+function normalizeDemandeurIds(demandeurIds: number[] | undefined): number[] {
+  return [...new Set((demandeurIds ?? []).filter((d) => Number.isInteger(d) && d > 0))];
+}
+
 // ─── Mirror generation (ported from api/slots.php save_recurring) ───
 
 type WantedMirror = { date: string; cap: number };
@@ -123,7 +128,14 @@ function computeWantedMirrors(args: {
 export async function addRecurringSlot(
   serviceId: string,
   periodId: number,
-  input: { startTime: string; endTime: string; weeks: string; dayKey: DayKey; capacity: number },
+  input: {
+    startTime: string;
+    endTime: string;
+    weeks: string;
+    dayKey: DayKey;
+    capacity: number;
+    demandeurIds?: number[];
+  },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) return { ok: false, error: "Service introuvable" };
@@ -148,6 +160,7 @@ export async function addRecurringSlot(
   const startDate = toISO(period.dateStart);
   const endDate = toISO(period.dateEnd);
   const slId = newRecurId();
+  const demandeurIds = normalizeDemandeurIds(input.demandeurIds);
   try {
     await prisma.$transaction(async (tx) => {
       await tx.slot.create({
@@ -164,6 +177,13 @@ export async function addRecurringSlot(
           capacity: input.capacity,
         },
       });
+      // Demandeurs autorisés posés dans la même transaction : un échec ici annule
+      // la création du créneau (sinon créneau ouvert à tous au lieu de restreint).
+      if (demandeurIds.length > 0) {
+        await tx.slotDemandeur.createMany({
+          data: demandeurIds.map((demandeurId) => ({ slotId: slId, demandeurId })),
+        });
+      }
       const wanted = computeWantedMirrors({
         startDate,
         endDate,
@@ -324,7 +344,13 @@ export async function copyRecurringWeek(
 /** Ajoute un créneau PONCTUEL daté (période résolue depuis la date). */
 export async function addUniqueSlot(
   serviceId: string,
-  input: { slotDate: string; startTime: string; endTime: string; capacity: number },
+  input: {
+    slotDate: string;
+    startTime: string;
+    endTime: string;
+    capacity: number;
+    demandeurIds?: number[];
+  },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) return { ok: false, error: "Service introuvable" };
@@ -341,19 +367,33 @@ export async function addUniqueSlot(
     return { ok: false, error: `Aucune période active ne couvre la date ${input.slotDate}` };
   }
   const id = newRecurId();
-  await prisma.slot.create({
-    data: {
-      id,
-      serviceId,
-      slotType: "unique",
-      startTime: input.startTime,
-      endTime: input.endTime,
-      slotDate: fromISO(input.slotDate),
-      capacity: input.capacity,
-      periodId: period.id,
-      state: "actif",
-    },
-  });
+  const demandeurIds = normalizeDemandeurIds(input.demandeurIds);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.slot.create({
+        data: {
+          id,
+          serviceId,
+          slotType: "unique",
+          startTime: input.startTime,
+          endTime: input.endTime,
+          slotDate: fromISO(input.slotDate),
+          capacity: input.capacity,
+          periodId: period.id,
+          state: "actif",
+        },
+      });
+      // Demandeurs autorisés posés dans la même transaction (cf. addRecurringSlot) :
+      // un échec ici annule la création du créneau au lieu de l'ouvrir à tous.
+      if (demandeurIds.length > 0) {
+        await tx.slotDemandeur.createMany({
+          data: demandeurIds.map((demandeurId) => ({ slotId: id, demandeurId })),
+        });
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
   return { ok: true, id };
 }
 
