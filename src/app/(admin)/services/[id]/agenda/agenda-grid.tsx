@@ -34,6 +34,7 @@ import {
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
+import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -141,6 +142,15 @@ type CreateCtx = {
   ponctuel?: boolean;
   slotDate?: string;
 } | null;
+
+// États des glisser-déposer souris (mode création), pilotés par useDragInteraction.
+type CreateDrag = {
+  colTop: number;
+  startMin: number;
+  curMin: number;
+  startDay: string;
+  curDay: string;
+};
 
 export function AgendaGrid({
   service,
@@ -255,15 +265,12 @@ export function AgendaGrid({
   // Glisser-créer en cours : top des colonnes (commun), quart de départ/courant (en
   // minutes, snappés), et jour de départ/courant (le glissé horizontal sélectionne
   // toutes les colonnes entre startDay et curDay → un créneau par colonne au relâché).
-  // Miroir dans createDragRef pour que les écouteurs window lisent la valeur à jour.
-  const [createDrag, setCreateDrag] = useState<{
-    colTop: number;
-    startMin: number;
-    curMin: number;
-    startDay: string;
-    curDay: string;
-  } | null>(null);
-  const createDragRef = useRef<typeof createDrag>(null);
+  // onMove = createDragMove (plus bas) ; onUp = finalizeCreate.
+  const createDragH = useDragInteraction<CreateDrag>({
+    onMove: createDragMove,
+    onUp: finalizeCreate,
+  });
+  const createDrag = createDragH.drag;
   // Glisser-créer un créneau « JOURNÉE ENTIÈRE » (mode création, bande dédiée) :
   // sélection horizontale uniquement (startDay → curDay), aucune dimension verticale
   // (le glisser haut/bas n'a pas d'effet). Un créneau sans horaire par jour couvert au
@@ -1120,8 +1127,7 @@ export function AgendaGrid({
     const colTop = e.currentTarget.getBoundingClientRect().top;
     const startMin = quarterAtY(colTop, e.clientY);
     const cd = { colTop, startMin, curMin: startMin, startDay: dayKey, curDay: dayKey };
-    createDragRef.current = cd;
-    setCreateDrag(cd);
+    createDragH.start(cd);
   }
 
   // Colonnes (jours) couvertes par le glisser : plage contiguë de startDay à curDay
@@ -1133,14 +1139,14 @@ export function AgendaGrid({
     const [lo, hi] = j < 0 || i <= j ? [i, j < 0 ? i : j] : [j, i];
     return days.slice(lo, hi + 1).filter((d) => !isDayDisabled(d));
   }
-  function draggedDays(cd: NonNullable<typeof createDrag>): string[] {
+  function draggedDays(cd: CreateDrag): string[] {
     return daysSpan(cd.startDay, cd.curDay);
   }
 
   // Au relâché : UN créneau par colonne couverte, couvrant [start, max+15] (clic
   // simple = 1 quart, 1 colonne). Récurrent en Modèle de période (période + jour +
   // semaine A/B active), ponctuel daté en Semaine réelle. Capacité = service.capacity.
-  function finalizeCreate(cd: NonNullable<typeof createDrag>) {
+  function finalizeCreate(cd: CreateDrag) {
     const rawStart = Math.min(cd.startMin, cd.curMin);
     const rawEnd = Math.min(gridEndMin, Math.max(cd.startMin, cd.curMin) + 15);
     if (rawEnd <= rawStart) return;
@@ -1192,40 +1198,18 @@ export function AgendaGrid({
     }
   }
 
-  // Écouteurs window pendant le glisser-créer : suit le quart courant (re-render
-  // seulement quand on change de quart) puis valide au relâché, même hors colonne.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lit createDragRef (stable) ; (dé)branché sur l'activité du drag
-  useEffect(() => {
-    if (!createDrag) return;
-    const onMove = (e: MouseEvent) => {
-      const cd = createDragRef.current;
-      if (!cd) return;
-      const q = quarterAtY(cd.colTop, e.clientY);
-      // Colonne survolée → curDay (sélection horizontale multi-colonnes).
-      const colEl = document
-        .elementFromPoint(e.clientX, e.clientY)
-        ?.closest<HTMLElement>("[data-daykey]");
-      const dk = colEl?.dataset.daykey;
-      const curDay = dk && days.includes(dk) ? dk : cd.curDay;
-      if (q !== cd.curMin || curDay !== cd.curDay) {
-        const next = { ...cd, curMin: q, curDay };
-        createDragRef.current = next;
-        setCreateDrag(next);
-      }
-    };
-    const onUp = () => {
-      const cd = createDragRef.current;
-      createDragRef.current = null;
-      setCreateDrag(null);
-      if (cd) finalizeCreate(cd);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [createDrag !== null]);
+  // Suivi du glisser-créer (onMove) : quart courant + colonne (jour) survolée pour la
+  // sélection horizontale multi-colonnes. Renvoie l'état suivant si l'un a changé,
+  // sinon null. Le relâché (onUp) = finalizeCreate. (cf. useDragInteraction.)
+  function createDragMove(cd: CreateDrag, e: MouseEvent): CreateDrag | null {
+    const q = quarterAtY(cd.colTop, e.clientY);
+    const colEl = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest<HTMLElement>("[data-daykey]");
+    const dk = colEl?.dataset.daykey;
+    const curDay = dk && days.includes(dk) ? dk : cd.curDay;
+    return q !== cd.curMin || curDay !== cd.curDay ? { ...cd, curMin: q, curDay } : null;
+  }
 
   // ── Mode création : créneau « journée entière » (bande dédiée) ───────────────
   // mousedown sur une cellule de la bande « Journée entière » : démarre un glisser-
