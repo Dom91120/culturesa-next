@@ -689,6 +689,11 @@ type Booking = {
   structure: string;
   // Réservation de l'usager courant (agenda usager) → badge ✅/⏳ + annulation.
   mine: boolean;
+  // Occurrence SYNTHÉTIQUE d'une récurrente détenue par l'usager, non matérialisée
+  // pour la date affichée (semaine passée / hors délai) : badge « ma réservation »
+  // en LECTURE SEULE (ni annulation ni édition — l'action passe par une occurrence
+  // matérialisée). N'existe pas en base. Cf. blocsByDay (semaine réelle).
+  synthetic?: boolean;
 };
 // badgeStyle : partagé via lib/agenda-core (fond « en attente » harmonisé sur
 // #ffe6a7, aligné sur la grille admin — décision 2026-06).
@@ -1350,6 +1355,26 @@ export function UserAgendaGrid({
       pushGroup(`${b.dayKey}|${b.slotId}`, b);
     }
 
+    // Occurrences de MES récurrentes NON matérialisées pour la date affichée (semaine
+    // passée, ou occurrence encore dans le délai de réservation) : on les montre quand
+    // même comme « ma réservation » EN LECTURE SEULE, au lieu de laisser la cellule
+    // apparaître librement réservable (le serveur refuserait de toute façon une 2ᵉ
+    // réservation du même créneau). Les jours fermés (hors période / férié / vacances)
+    // sont écartés au rendu par dayBlocks → isDayDisabled, comme les cellules vides.
+    if (mode === "realweek" && mondayStr) {
+      for (const p of bookings) {
+        if (!p.mine || p.bookingType !== "recurring" || p.parentBookingId !== null) continue;
+        if (effectivePeriodId != null && p.periodId !== effectivePeriodId) continue;
+        if (effectiveWeek != null && p.week !== effectiveWeek && p.week !== "") continue;
+        const dk = slotById.get(p.slotId)?.slotDay;
+        if (!dk || !days.includes(dk)) continue;
+        const key = `${dk}|${p.slotId}`;
+        // Occurrence déjà présente (enfant matérialisé de moi) → ne rien synthétiser.
+        if (groups.get(key)?.some((x) => x.mine)) continue;
+        pushGroup(key, { ...p, dayKey: dk, synthetic: true, pointage: null });
+      }
+    }
+
     // === Cellules candidates ===
     // Pour chaque créneau de la période active, sur chaque jour actif du service où
     // une capacité est configurée → cellule candidate (même sans réservation). C'est
@@ -1482,6 +1507,8 @@ export function UserAgendaGrid({
   // sinon (réservation d'autrui, anonyme) → aucune action. La réservation d'un
   // créneau libre passe par la modale de confirmation (openCreate → submitCreate).
   function onBlockQuickAction(bk: Booking): boolean {
+    // Occurrence synthétique (lecture seule) → aucune action ici.
+    if (bk.synthetic) return true;
     // Résa verrouillée (validation bloquante) → aucune action.
     if (bookingLocked(bk)) return true;
     // Clic sur MA réservation → la marque (ou démarque) pour annulation (brouillon).
@@ -2143,6 +2170,39 @@ export function UserAgendaGrid({
             const pendingSel =
               !myBk &&
               pendingAdds.some((a) => a.key === pendKey(b.slotId, b.dayKey, isPonctuelCell));
+            if (myBk?.synthetic) {
+              // Occurrence d'une récurrente que je détiens, non matérialisée pour cette
+              // date : badge « ma réservation » EN LECTURE SEULE (pas de ×, d'édition ni
+              // de glisser-déposer ; l'annulation passe par une occurrence matérialisée).
+              const mb = myBk;
+              const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
+              return (
+                <MineBadge
+                  validated={mb.validated}
+                  markedRemoval={false}
+                  gaugeOn={false}
+                  themeMode={false}
+                  themesMode={service.themesMode}
+                  themes={themes}
+                  enfants={mb.enfants}
+                  accompagnants={mb.accompagnants}
+                  theme={mb.theme}
+                  remaining={0}
+                  stateLabel={mb.validated ? "Validé" : "En attente de validation"}
+                  title={`${tipTime}\n${
+                    mb.validated ? "✅ Réservé (validé)" : "⏳ Réservé (en attente)"
+                  }\n${participantsLabel(mb.enfants, mb.accompagnants)}`}
+                  closeIcon="×"
+                  locked
+                  onClose={() => {}}
+                  onBump={() => {}}
+                  onSetCount={() => {}}
+                  onSetTheme={() => {}}
+                  onBodyClick={() => {}}
+                  draggable={false}
+                />
+              );
+            }
             if (myBk) {
               const mb = myBk;
               const cur = myCounts(mb);
