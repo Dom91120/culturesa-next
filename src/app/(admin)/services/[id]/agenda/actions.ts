@@ -2,6 +2,7 @@
 
 import { todayParisISO } from "@/lib/booking-delay";
 import { wrapEmailHtml } from "@/lib/email-theme";
+import { DAYS } from "@/schemas/config";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
@@ -32,8 +33,8 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
-type DayKeyT = (typeof DAY_KEYS)[number];
+// Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
+type DayKeyT = (typeof DAYS)[number];
 
 const idSchema = z.coerce.number().int().positive();
 
@@ -273,7 +274,7 @@ export async function createRecurringSlotAction(input: {
   demandeurIds?: number[];
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
-  if (!(DAY_KEYS as readonly string[]).includes(input.dayKey)) {
+  if (!(DAYS as readonly string[]).includes(input.dayKey)) {
     return { ok: false, error: "Jour invalide." };
   }
   const res = await addRecurringSlot(input.serviceId, input.periodId, {
@@ -320,8 +321,8 @@ export async function moveRecurringSlotAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   if (
-    !(DAY_KEYS as readonly string[]).includes(input.fromDayKey) ||
-    !(DAY_KEYS as readonly string[]).includes(input.toDayKey)
+    !(DAYS as readonly string[]).includes(input.fromDayKey) ||
+    !(DAYS as readonly string[]).includes(input.toDayKey)
   ) {
     return { ok: false, error: "Jour invalide." };
   }

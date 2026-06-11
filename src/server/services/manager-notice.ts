@@ -1,4 +1,5 @@
 import { wrapEmailHtml } from "@/lib/email-theme";
+import { DAYS } from "@/schemas/config";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
@@ -21,8 +22,10 @@ import { htmlToText } from "@/server/services/mail-templates";
 // ════════════════════════════════════════════════════════════
 
 export type NoticeMode = "none" | "hours" | "daily" | "weekly";
-export const WEEKDAYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
-export type Weekday = (typeof WEEKDAYS)[number];
+// Jours : alias de la source unique DAYS (schemas/config). Réexporté car consommé
+// par reservations/actions.ts via z.enum(WEEKDAYS) (audit duplication D2).
+export const WEEKDAYS = DAYS;
+export type Weekday = (typeof DAYS)[number];
 
 export function normalizeMode(v: string): NoticeMode {
   return v === "hours" || v === "daily" || v === "weekly" ? v : "none";

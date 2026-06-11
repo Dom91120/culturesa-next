@@ -1,4 +1,5 @@
 import { slotWeekTag } from "@/lib/iso-week";
+import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 
 // Helpers de l'agenda admin (mode « Création de créneau ») : ajout/copie/déplacement/
@@ -8,8 +9,9 @@ import { prisma } from "@/server/db";
 
 // ─── Constants & helpers ───────────────────────────────────────────
 
-const DAY_KEYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
-type DayKey = (typeof DAY_KEYS)[number];
+// Jours de la semaine : source unique = DAYS (schemas/config), aussi adossée à
+// l'enum Zod. type DayKey en dérive (audit duplication D2).
+type DayKey = (typeof DAYS)[number];
 
 // ISO weekday (1=Mon..7=Sun) → day key.
 const ISO_DOW_KEY: Record<number, DayKey> = {
@@ -149,7 +151,7 @@ export async function addRecurringSlot(
   }
   const activeDays = service.activeDays
     .split(",")
-    .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
+    .filter((d): d is DayKey => DAYS.includes(d as DayKey));
   const weeks = normalizeWeeks(input.weeks);
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId },
@@ -238,7 +240,7 @@ export async function copyRecurringWeek(
   }
   const activeDays = service.activeDays
     .split(",")
-    .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
+    .filter((d): d is DayKey => DAYS.includes(d as DayKey));
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId },
     select: { date: true },
@@ -435,7 +437,7 @@ export async function moveRecurringSlot(
   const weeks = normalizeWeeks(slot.weeks);
   const activeDays = service.activeDays
     .split(",")
-    .filter((d): d is DayKey => DAY_KEYS.includes(d as DayKey));
+    .filter((d): d is DayKey => DAYS.includes(d as DayKey));
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId: period.id },
     select: { date: true },

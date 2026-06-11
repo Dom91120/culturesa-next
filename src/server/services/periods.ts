@@ -1,5 +1,5 @@
 import { holidaysInRange } from "@/lib/french-holidays";
-import type { PeriodInput } from "@/schemas/config";
+import { DAYS, type PeriodInput } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import type { EntityState, Prisma } from "@prisma/client";
 
@@ -416,8 +416,6 @@ export type ServiceOpeningConfig = {
   afternoonEnd: string;
 };
 
-const DAY_ORDER = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
-
 function parseActiveDays(raw: string): string[] {
   const set = new Set(
     raw
@@ -425,7 +423,7 @@ function parseActiveDays(raw: string): string[] {
       .map((d) => d.trim())
       .filter(Boolean),
   );
-  return DAY_ORDER.filter((d) => set.has(d));
+  return DAYS.filter((d) => set.has(d));
 }
 
 /** Lit la config d'ouverture (jours + fériés + plages horaires) d'un service. */
@@ -461,7 +459,7 @@ export async function saveServiceOpeningConfig(
   serviceId: string,
   config: ServiceOpeningConfig,
 ): Promise<void> {
-  const activeDays = DAY_ORDER.filter((d) => config.activeDays.includes(d)).join(",");
+  const activeDays = DAYS.filter((d) => config.activeDays.includes(d)).join(",");
   await prisma.service.update({
     where: { id: serviceId },
     data: {

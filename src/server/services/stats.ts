@@ -1,4 +1,5 @@
 import { gaugeUnits } from "@/lib/gauge";
+import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 
 // =====================================================================================
@@ -51,7 +52,6 @@ function ymd(d: Date): string {
 }
 
 const ISO_DAYKEY = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
-const DAY_ORDER = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
 const DAY_NAMES: Record<string, string> = {
   lun: "Lundi",
   mar: "Mardi",
@@ -195,7 +195,7 @@ export async function getServiceStats(
     niveauMap.set(niv, (niveauMap.get(niv) ?? 0) + 1);
   }
 
-  const byDay = DAY_ORDER.filter((d) => dayMap.has(d)).map((d) => ({
+  const byDay = DAYS.filter((d) => dayMap.has(d)).map((d) => ({
     label: DAY_NAMES[d],
     value: dayMap.get(d) ?? 0,
   }));
