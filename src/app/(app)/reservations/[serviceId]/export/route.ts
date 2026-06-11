@@ -1,9 +1,6 @@
+import { csvResponse } from "@/lib/csv";
 import { requireUser } from "@/server/guards";
 import { listEditionRows } from "@/server/services/editions";
-
-function csvCell(v: string | number): string {
-  return `"${String(v).replace(/"/g, '""')}"`;
-}
 
 const HEADER = ["Période", "Jour / Date", "Créneau", "Enfants", "Accompagnants", "Thème", "Statut"];
 
@@ -26,13 +23,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ service
     ]),
   ];
 
-  const body = lines.map((cols) => cols.map(csvCell).join(";")).join("\r\n");
-  const csv = String.fromCharCode(0xfeff) + body;
-
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="mes-reservations.csv"',
-    },
-  });
+  return csvResponse(lines, "mes-reservations.csv");
 }

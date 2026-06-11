@@ -1,10 +1,8 @@
+import { csvResponse } from "@/lib/csv";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import { type StatsType, getServiceStats } from "@/server/services/stats";
 
-function cell(v: string | number): string {
-  return `"${String(v).replace(/"/g, '""')}"`;
-}
 function parseType(v: string | null): StatsType {
   return v === "rec" || v === "uniq" ? v : "all";
 }
@@ -65,11 +63,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   section("Remplissage moyen par structure (%)", "%", stats.fillByStructure);
   section("Effectifs par exercice", "Enfants", stats.effectifsByExercice);
 
-  const csv = `﻿${lines.map((l) => l.map(cell).join(";")).join("\r\n")}`;
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="stats-${id}.csv"`,
-    },
-  });
+  return csvResponse(lines, `stats-${id}.csv`);
 }

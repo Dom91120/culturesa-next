@@ -1,10 +1,7 @@
+import { csvResponse } from "@/lib/csv";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import { listEditionRows } from "@/server/services/editions";
-
-function csvCell(v: string | number): string {
-  return `"${String(v).replace(/"/g, '""')}"`;
-}
 
 // Schéma aligné sur le legacy (api/export.php) : 14 colonnes, même ordre. « Demandeur »
 // = Nom Prénom de l'usager ; « Structure » = structure (repli demandeur). On conserve en
@@ -56,15 +53,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ]),
   ];
 
-  // BOM UTF-8 (﻿) + séparateur ; + fins de ligne CRLF (compatibilité Excel FR).
-  const body = lines.map((cols) => cols.map(csvCell).join(";")).join("\r\n");
-  const csv = String.fromCharCode(0xfeff) + body;
-
   const safeName = service.label.replace(/[^a-zA-Z0-9-_]+/g, "_").slice(0, 40) || "service";
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="reservations_${safeName}.csv"`,
-    },
-  });
+  return csvResponse(lines, `reservations_${safeName}.csv`);
 }
