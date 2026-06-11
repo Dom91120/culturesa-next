@@ -207,3 +207,79 @@ export const PRINT_CSS = `
   .planning-name-tag{display:inline-flex;flex-direction:column;font-size:.62rem;font-weight:700}
   @media print{@page{size:landscape;margin:1cm}}
 `;
+
+// ─── Géométrie de la grille semaine (axe horaire) ────────────────────────────
+// Mutualisée entre la grille admin et la grille usager : à partir des bornes de
+// la plage horaire, de la pause méridienne et — optionnellement — de l'ensemble
+// des quarts d'heure à conserver (compactage « masquer les horaires vides »),
+// produit la liste des quarts VISIBLES et les fonctions de mapping minute↔pixel.
+// La logique de « ce qui est occupé » diffère entre les deux modes : chaque
+// conteneur construit son propre `occupiedQ` et le passe ici (null = pas de
+// compactage). Le reste (pause compactée à 30 min, mapping linéaire intra-quart)
+// est identique partout. Port du legacy renderAgendaWeekly / mapMinToY.
+export type GridGeometry = {
+  /** Quarts d'heure visibles (minutes depuis minuit), dans l'ordre. */
+  quarters: number[];
+  /** Index d'un quart visible (minute → position dans `quarters`). */
+  qIdx: Map<number, number>;
+  /** Hauteur totale de la grille en pixels. */
+  totalH: number;
+  /** Minute réelle → y (px), linéaire intra-quart, gère la pause compactée. */
+  mapMinToY: (min: number) => number;
+  /** Inverse de mapMinToY pour le clic (y px → minute). */
+  yToMin: (y: number) => number;
+};
+
+export function gridGeometry(args: {
+  gridStartMin: number;
+  gridEndMin: number;
+  /** morningEnd en minutes (NaN accepté = pas de pause). */
+  lunchStart: number;
+  /** afternoonStart en minutes (NaN accepté = pas de pause). */
+  lunchEnd: number;
+  /** Quarts à conserver (compactage actif) ; null = tous les quarts visibles. */
+  occupiedQ: Set<number> | null;
+}): GridGeometry {
+  const { gridStartMin, gridEndMin, lunchStart, lunchEnd, occupiedQ } = args;
+  const QUARTER_H = ROW_H / 4; // px par tranche de 15 min
+  const hasLunch =
+    Number.isFinite(lunchStart) &&
+    Number.isFinite(lunchEnd) &&
+    lunchEnd > lunchStart &&
+    lunchStart >= gridStartMin &&
+    lunchEnd <= gridEndMin;
+  // Pause > 30 min → on ne garde que 2 quarts visuels (les suivants sont sautés).
+  const lunchSkipFrom = hasLunch && lunchEnd - lunchStart > 30 ? lunchStart + 30 : null;
+
+  const quarters: number[] = [];
+  for (let m = gridStartMin; m < gridEndMin; m += 15) {
+    if (occupiedQ && !occupiedQ.has(m)) continue;
+    if (lunchSkipFrom !== null && m >= lunchSkipFrom && m < lunchEnd) continue;
+    quarters.push(m);
+  }
+  const qIdx = new Map<number, number>();
+  quarters.forEach((m, i) => qIdx.set(m, i));
+  const totalH = quarters.length * QUARTER_H;
+  const mapMinToY = (min: number): number => {
+    const q = Math.floor(min / 15) * 15;
+    const offset = (min - q) / 15; // 0..1
+    const idx = qIdx.get(q);
+    if (idx !== undefined) return (idx + offset) * QUARTER_H;
+    // Quart non visible (pause compactée) : collé au dernier quart visible amont.
+    let prev = -1;
+    for (const qv of quarters) {
+      if (qv >= q) break;
+      const i = qIdx.get(qv);
+      if (i !== undefined) prev = i;
+    }
+    return (prev + 1) * QUARTER_H;
+  };
+  const yToMin = (y: number): number => {
+    const idx = Math.floor(y / QUARTER_H);
+    const clamped = Math.max(0, Math.min(quarters.length - 1, idx));
+    const base = quarters[clamped] ?? gridStartMin;
+    const offset = y - clamped * QUARTER_H; // px dans le quart
+    return base + (offset / QUARTER_H) * 15;
+  };
+  return { quarters, qIdx, totalH, mapMinToY, yToMin };
+}

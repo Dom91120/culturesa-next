@@ -16,6 +16,7 @@ import {
   badgeStyle,
   dayCap,
   dayKeyFromYmd,
+  gridGeometry,
   layoutOverlaps,
   mondayOf,
   parseWeeks,
@@ -1206,41 +1207,15 @@ export function UserAgendaGrid({
     }
   }
 
-  // Liste ordonnée des quarts d'heure visibles (minutes) : pause méridienne compactée
-  // et, si hideNoSlot, quarts sans créneau sautés.
-  const quarters: number[] = [];
-  for (let m = gridStartMin; m < gridEndMin; m += 15) {
-    if (hideNoSlot && !occupiedQ.has(m)) continue;
-    if (lunchSkipFrom !== null && m >= lunchSkipFrom && m < lunchEnd) continue;
-    quarters.push(m);
-  }
-  const qIdx = new Map<number, number>();
-  quarters.forEach((m, i) => qIdx.set(m, i));
-  const totalH = quarters.length * QUARTER_H;
-  // mapMinToY : minute réelle → y (px), linéaire intra-quart, basé sur les quarts
-  // visibles (gère le compactage de la pause). Cf. legacy mapMinToY.
-  const mapMinToY = (min: number): number => {
-    const q = Math.floor(min / 15) * 15;
-    const offset = (min - q) / 15; // 0..1
-    const idx = qIdx.get(q);
-    if (idx !== undefined) return (idx + offset) * QUARTER_H;
-    // Quart non visible (dans la pause compactée) : on colle au dernier quart visible amont.
-    let prev = -1;
-    for (const qv of quarters) {
-      if (qv >= q) break;
-      const i = qIdx.get(qv);
-      if (i !== undefined) prev = i;
-    }
-    return (prev + 1) * QUARTER_H;
-  };
-  // Inverse de mapMinToY pour le clic (y → minute). Trouve le quart visible sous y.
-  const yToMin = (y: number): number => {
-    const idx = Math.floor(y / QUARTER_H);
-    const clamped = Math.max(0, Math.min(quarters.length - 1, idx));
-    const base = quarters[clamped] ?? gridStartMin;
-    const offset = y - clamped * QUARTER_H; // px dans le quart
-    return base + (offset / QUARTER_H) * 15;
-  };
+  // Géométrie de la grille (quarts visibles + mapping minute↔pixel) mutualisée.
+  // `occupiedQ` (compactage hideNoSlot) est construit ci-dessus côté usager.
+  const { quarters, qIdx, totalH, mapMinToY, yToMin } = gridGeometry({
+    gridStartMin,
+    gridEndMin,
+    lunchStart,
+    lunchEnd,
+    occupiedQ: hideNoSlot ? occupiedQ : null,
+  });
 
   const slotsParsed = useMemo(
     () =>
