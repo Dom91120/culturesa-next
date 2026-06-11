@@ -13,7 +13,6 @@ import {
   DAY_NAMES,
   DAY_OFFSET,
   type LayoutItem,
-  PRINT_CSS,
   type Pointage,
   ROW_H,
   type Slot,
@@ -26,6 +25,7 @@ import {
   layoutOverlaps,
   mondayOf,
   parseWeeks,
+  printAgendaGrid,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
@@ -1775,38 +1775,13 @@ export function AgendaGrid({
 
   // Impression N&B (bw=true) ou couleur : ouvre une fenêtre dédiée avec la seule grille.
   function printAgenda(bw: boolean) {
-    if (typeof window === "undefined") return;
-    const grid = document.getElementById("agenda-print-grid");
-    if (!grid) {
-      window.alert("Rien à imprimer.");
-      return;
-    }
-    const titleParts = [service.label];
-    if (mode === "model") {
-      const p = periods[periodIdx];
-      if (p) titleParts.push(p.label);
-    } else if (mondayStr) {
-      titleParts.push(
-        `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`,
-      );
-    }
-    const titleStr = titleParts.filter(Boolean).join(" — ") || "Agenda";
-    const clone = grid.cloneNode(true) as HTMLElement;
-    for (const n of clone.querySelectorAll(".agenda-empty-overlay")) n.remove();
-    const win = window.open("", "_blank", "width=1100,height=800");
-    if (!win) {
-      window.alert("Veuillez autoriser les pop-ups pour imprimer.");
-      return;
-    }
-    const bwCss = bw
-      ? "*{color:#000 !important;background:#fff !important;border-color:#999 !important}.agenda-block,.planning-name-tag{border:1px solid #333 !important}"
-      : "";
-    win.document.write(
-      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${titleStr}</title><style>${PRINT_CSS}${bwCss}</style></head><body><h1>${titleStr}</h1>${clone.outerHTML}</body></html>`,
-    );
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
+    const subtitle =
+      mode === "model"
+        ? (periods[periodIdx]?.label ?? null)
+        : mondayStr
+          ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
+          : null;
+    printAgendaGrid({ bw, serviceLabel: service.label, subtitle, fallbackTitle: "Agenda" });
   }
 
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
