@@ -48,36 +48,84 @@ export function formatSlotLabel(slot: {
   return [day, time].filter(Boolean).join(" · ");
 }
 
-/**
- * Libellé de la période d'une réservation. Récurrent → résolu par `periodId` ;
- * ponctuel (periodId absent/0) → période ACTIVE du service couvrant la date du
- * créneau. Renvoie "" si rien ne correspond.
- */
-export async function resolvePeriodLabel(args: {
+export type PeriodLabelInput = {
   serviceId: string;
   periodId?: number | null;
   slotDate?: Date | null;
-}): Promise<string> {
-  if (args.periodId && args.periodId > 0) {
-    const p = await prisma.period.findUnique({
-      where: { id: args.periodId },
-      select: { label: true },
+};
+
+/**
+ * Version batch : résout les libellés de période pour une liste d'occurrences en
+ * 2 requêtes au plus (au lieu d'une par occurrence — anti-N+1 des crons). Les
+ * libellés sont renvoyés alignés sur l'index d'entrée. Mêmes règles que
+ * resolvePeriodLabel : priorité au `periodId`, repli sur la période du service
+ * couvrant la date du créneau.
+ */
+export async function resolvePeriodLabels(
+  items: ReadonlyArray<PeriodLabelInput>,
+): Promise<string[]> {
+  // 1) Libellés par periodId — une seule requête pour tous les ids distincts.
+  const periodIds = [
+    ...new Set(items.map((i) => i.periodId).filter((id): id is number => !!id && id > 0)),
+  ];
+  const byId = new Map<number, string>();
+  if (periodIds.length > 0) {
+    const rows = await prisma.period.findMany({
+      where: { id: { in: periodIds } },
+      select: { id: true, label: true },
     });
-    if (p?.label) return p.label;
+    for (const r of rows) if (r.label) byId.set(r.id, r.label);
   }
-  if (args.slotDate) {
-    const p = await prisma.period.findFirst({
-      where: {
-        serviceId: args.serviceId,
-        dateStart: { lte: args.slotDate },
-        dateEnd: { gte: args.slotDate },
-      },
-      select: { label: true },
+
+  // 2) Repli par service + date pour les occurrences non résolues par periodId.
+  //    On charge toutes les périodes des services concernés (peu nombreuses) et on
+  //    résout en mémoire — équivalent au findFirst(orderBy dateStart desc) original.
+  const needDate = items.filter(
+    (i) => !(i.periodId && i.periodId > 0 && byId.has(i.periodId)) && i.slotDate,
+  );
+  const periodsByService = new Map<
+    string,
+    Array<{ dateStart: Date | null; dateEnd: Date | null; label: string }>
+  >();
+  if (needDate.length > 0) {
+    const serviceIds = [...new Set(needDate.map((i) => i.serviceId))];
+    const rows = await prisma.period.findMany({
+      where: { serviceId: { in: serviceIds } },
+      select: { serviceId: true, dateStart: true, dateEnd: true, label: true },
       orderBy: { dateStart: "desc" },
     });
-    if (p?.label) return p.label;
+    for (const r of rows) {
+      if (!r.serviceId) continue;
+      const list = periodsByService.get(r.serviceId) ?? [];
+      list.push({ dateStart: r.dateStart, dateEnd: r.dateEnd, label: r.label });
+      periodsByService.set(r.serviceId, list);
+    }
   }
-  return "";
+
+  return items.map((i) => {
+    if (i.periodId && i.periodId > 0) {
+      const l = byId.get(i.periodId);
+      if (l) return l;
+    }
+    const d = i.slotDate;
+    if (d) {
+      // Périodes déjà triées dateStart desc → la première couvrant la date == findFirst.
+      const hit = (periodsByService.get(i.serviceId) ?? []).find(
+        (p) => p.dateStart && p.dateEnd && p.dateStart <= d && p.dateEnd >= d,
+      );
+      if (hit?.label) return hit.label;
+    }
+    return "";
+  });
+}
+
+/**
+ * Libellé de la période d'une réservation. Récurrent → résolu par `periodId` ;
+ * ponctuel (periodId absent/0) → période ACTIVE du service couvrant la date du
+ * créneau. Renvoie "" si rien ne correspond. Délègue à resolvePeriodLabels.
+ */
+export async function resolvePeriodLabel(args: PeriodLabelInput): Promise<string> {
+  return (await resolvePeriodLabels([args]))[0] ?? "";
 }
 
 export type BookingConfirmationParams = {

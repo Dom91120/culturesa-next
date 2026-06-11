@@ -2,7 +2,7 @@ import { wrapEmailHtml } from "@/lib/email-theme";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
-import { formatSlotLabel, resolvePeriodLabel } from "@/server/services/booking-mail";
+import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
 import { isMailEnabled } from "@/server/services/mail-prefs";
 import {
   getMailTemplate,
@@ -81,6 +81,13 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
     });
     if (bookings.length === 0) continue;
 
+    // Libellés de période résolus en batch (anti-N+1) : toutes les occurrences de
+    // cette échéance partagent la même date cible.
+    const periodLabels = await resolvePeriodLabels(
+      bookings.map((b) => ({ serviceId: b.serviceId, periodId: b.periodId, slotDate: targetDate })),
+    );
+    const periodByBooking = new Map(bookings.map((b, idx) => [b.id, periodLabels[idx] ?? ""]));
+
     // Rappels déjà envoyés pour cette date + échéance → on les saute (idempotence).
     const already = new Set(
       (
@@ -106,11 +113,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
       if (!email?.includes("@")) continue;
 
       const prenom = b.user?.prenom?.trim() ?? "";
-      const periode = await resolvePeriodLabel({
-        serviceId: b.serviceId,
-        periodId: b.periodId,
-        slotDate: targetDate,
-      });
+      const periode = periodByBooking.get(b.id) ?? "";
       const vars: Record<string, string> = {
         salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
         prenom,

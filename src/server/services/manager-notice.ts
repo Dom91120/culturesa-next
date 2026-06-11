@@ -2,7 +2,7 @@ import { wrapEmailHtml } from "@/lib/email-theme";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
-import { formatSlotLabel, resolvePeriodLabel } from "@/server/services/booking-mail";
+import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
 import { htmlToText } from "@/server/services/mail-templates";
 
 // ════════════════════════════════════════════════════════════
@@ -151,18 +151,20 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
     });
 
     if (managers.length > 0 && bookings.length > 0) {
-      const items = await Promise.all(
-        bookings.map(async (r) => {
-          const name = `${r.user.prenom} ${r.user.nom}`.trim() || r.user.email || "Usager";
-          const creneau = formatSlotLabel(r.slot);
-          const periode = await resolvePeriodLabel({
-            serviceId: svc.id,
-            periodId: r.periodId,
-            slotDate: r.slot.slotDate,
-          });
-          return `<li style="margin:.2rem 0">${escapeHtml(name)} — ${escapeHtml(creneau)}${periode ? ` · ${escapeHtml(periode)}` : ""}</li>`;
-        }),
+      // Libellés de période résolus en batch (anti-N+1) avant de composer la liste.
+      const periodLabels = await resolvePeriodLabels(
+        bookings.map((r) => ({
+          serviceId: svc.id,
+          periodId: r.periodId,
+          slotDate: r.slot.slotDate,
+        })),
       );
+      const items = bookings.map((r, idx) => {
+        const name = `${r.user.prenom} ${r.user.nom}`.trim() || r.user.email || "Usager";
+        const creneau = formatSlotLabel(r.slot);
+        const periode = periodLabels[idx] ?? "";
+        return `<li style="margin:.2rem 0">${escapeHtml(name)} — ${escapeHtml(creneau)}${periode ? ` · ${escapeHtml(periode)}` : ""}</li>`;
+      });
       const inner = `<p>Bonjour,</p>
 <p>${bookings.length} réservation(s) ont été <strong>validées automatiquement</strong> pour « ${escapeHtml(svc.label)} » depuis la dernière notification :</p>
 <ul style="padding-left:1.2em">${items.join("")}</ul>
