@@ -312,8 +312,10 @@ export type UpdateServicePeriodInput = {
 /**
  * Maj partielle d'une période. Si l'une des dates change, l'exerciceId est
  * recalculé à partir des nouvelles dates (en lisant l'autre date inchangée).
+ * Anti-IDOR : la période doit appartenir au service couvert par le guard appelant.
  */
 export async function updateServicePeriod(
+  serviceId: string,
   id: number,
   input: UpdateServicePeriodInput,
 ): Promise<PeriodRow> {
@@ -341,7 +343,8 @@ export async function updateServicePeriod(
       exercice: { select: { label: true } },
     },
   });
-  if (!current?.serviceId) throw new PeriodError("Période introuvable.");
+  if (!current?.serviceId || current.serviceId !== serviceId)
+    throw new PeriodError("Période introuvable.");
   const currentStartYear =
     startYearFromLabel(current.exercice?.label) ??
     (current.dateStart ? schoolStartYear(current.dateStart) : null);
@@ -383,16 +386,19 @@ async function periodStartYear(
   return { serviceId: cur.serviceId, startYear };
 }
 
-export async function deleteServicePeriod(id: number) {
+/** Anti-IDOR : la période doit appartenir au service couvert par le guard appelant. */
+export async function deleteServicePeriod(serviceId: string, id: number) {
   const cur = await periodStartYear(id);
-  if (cur?.startYear != null) await assertLatestExercice(cur.serviceId, cur.startYear);
+  if (!cur || cur.serviceId !== serviceId) throw new PeriodError("Période introuvable.");
+  if (cur.startYear != null) await assertLatestExercice(cur.serviceId, cur.startYear);
   return prisma.period.delete({ where: { id } });
 }
 
 /** Réactive une période (state → actif). Limité au dernier exercice du service. */
-export async function reactivatePeriod(id: number): Promise<PeriodRow> {
+export async function reactivatePeriod(serviceId: string, id: number): Promise<PeriodRow> {
   const cur = await periodStartYear(id);
-  if (cur?.startYear != null) await assertLatestExercice(cur.serviceId, cur.startYear);
+  if (!cur || cur.serviceId !== serviceId) throw new PeriodError("Période introuvable.");
+  if (cur.startYear != null) await assertLatestExercice(cur.serviceId, cur.startYear);
   return prisma.period.update({
     where: { id },
     data: { state: "actif" },

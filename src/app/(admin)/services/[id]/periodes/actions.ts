@@ -105,7 +105,7 @@ export async function updatePeriodAction(input: UpdatePeriodInput): Promise<Acti
   }
   const { id, serviceId, label, etiquette, dateStart, dateEnd, color } = parsed.data;
   try {
-    await updateServicePeriod(id, {
+    await updateServicePeriod(serviceId, id, {
       label,
       etiquette: etiquette ? etiquette : null,
       dateStart: toDate(dateStart),
@@ -131,7 +131,7 @@ export async function deletePeriodAction(input: {
   }
   const { serviceId, id } = parsed.data;
   try {
-    await deleteServicePeriod(id);
+    await deleteServicePeriod(serviceId, id);
   } catch (e) {
     if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la suppression." };
@@ -152,7 +152,7 @@ export async function reactivatePeriodsAction(input: {
   const { serviceId, ids } = parsed.data;
   try {
     for (const id of ids) {
-      await reactivatePeriod(id);
+      await reactivatePeriod(serviceId, id);
     }
   } catch (e) {
     if (e instanceof PeriodError) return { ok: false, error: e.message };
