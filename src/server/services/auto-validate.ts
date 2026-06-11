@@ -165,6 +165,14 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
     },
   });
 
+  // Réservations dues, accumulées sur TOUS les services : validées en UNE transaction
+  // (2 updateMany) au lieu d'une transaction par réservation (audit perf — cron
+  // séquentiel). Les e-mails (un par usager, incompressible) partent APRÈS le commit,
+  // best-effort, comme avant.
+  const dueIds: number[] = [];
+  const dueRecurringIds: number[] = [];
+  const mails: Parameters<typeof sendBookingConfirmationMail>[0][] = [];
+
   for (const svc of services) {
     stats.services += 1;
     const delay = svc.autoValidationDelay;
@@ -245,25 +253,13 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
         continue;
       }
 
-      await prisma.$transaction([
-        prisma.booking.update({
-          where: { id: c.id },
-          data: { validated: true, autoValidatedAt: now },
-        }),
-        // Validation au niveau de la série : propage aux réservations-enfants.
-        ...(c.bookingType === "recurring"
-          ? [
-              prisma.booking.updateMany({
-                where: { parentBookingId: c.id },
-                data: { validated: true },
-              }),
-            ]
-          : []),
-      ]);
+      dueIds.push(c.id);
+      // Validation au niveau de la série : les enfants des récurrents suivront.
+      if (c.bookingType === "recurring") dueRecurringIds.push(c.id);
       stats.validated += 1;
-
-      // Notification usager : réutilise l'e-mail « Réservation confirmée » (best-effort).
-      await sendBookingConfirmationMail({
+      // Notification usager : réutilise l'e-mail « Réservation confirmée » (envoyé
+      // après le commit, best-effort).
+      mails.push({
         userId: c.userId,
         serviceId: svc.id,
         serviceLabel: svc.label,
@@ -280,6 +276,21 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
         theme: c.themeLabel,
       });
     }
+  }
+
+  if (dueIds.length > 0) {
+    await prisma.$transaction([
+      prisma.booking.updateMany({
+        where: { id: { in: dueIds } },
+        data: { validated: true, autoValidatedAt: now },
+      }),
+      // Propagation aux réservations-enfants des récurrents validés.
+      prisma.booking.updateMany({
+        where: { parentBookingId: { in: dueRecurringIds } },
+        data: { validated: true },
+      }),
+    ]);
+    for (const m of mails) await sendBookingConfirmationMail(m);
   }
 
   return stats;
