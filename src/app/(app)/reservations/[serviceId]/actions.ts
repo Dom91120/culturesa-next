@@ -10,6 +10,7 @@ import {
   BookingError,
   assertBookingUnlocked,
   assertNotSchoolHolidayForUser,
+  assertReservationLimits,
   assertSlotCapacity,
   cancelUserBooking,
   createUniqueBooking,
@@ -102,6 +103,15 @@ export async function reserveRecurringAction(
           periodId,
           enfants: myEnfants,
           accompagnants: myAcc,
+        });
+        // Limites de réservation de l'usager (max par période + max annuel du service).
+        await assertReservationLimits(tx, {
+          serviceId,
+          userId: session.user.id,
+          bookingType: "recurring",
+          periodId,
+          maxReservations: slot.service.maxReservations,
+          maxReservationsPeriod: slot.service.maxReservationsPeriod,
         });
         // Validation : si le demandeur de l'usager n'est pas en mode « validation »,
         // la réservation est validée d'emblée ; sinon elle reste en attente.

@@ -145,6 +145,83 @@ export async function assertSlotCapacity(
 }
 
 /**
+ * 1er septembre de l'ANNÉE SCOLAIRE en cours (port legacy bookings.php :
+ * `date('n') >= 9 ? date('Y')-09-01 : (date('Y')-1)-09-01`). Borne de la limite
+ * annuelle de réservations.
+ */
+function schoolYearStart(now: Date): Date {
+  // getMonth() 0-indexé : septembre = 8 → mois ≥ 9 (humain) ⇔ getMonth() ≥ 8.
+  const y = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(Date.UTC(y, 8, 1));
+}
+
+/**
+ * Limites de réservation USAGER d'un service (port legacy api/bookings.php) :
+ *   - `maxReservationsPeriod` : nombre max de réservations de l'usager sur UNE période ;
+ *   - `maxReservations` : nombre max sur l'ANNÉE SCOLAIRE en cours.
+ * Comptées par TYPE : une création récurrente compte les récurrentes ; une ponctuelle
+ * compte les ponctuelles STANDALONE (miroirs/enfants exclus). Lève `BookingError` si
+ * une limite est atteinte. N'est PAS appliquée aux créations ADMIN (override de gestion).
+ * Doit tourner DANS la transaction de création (mêmes garanties que le legacy).
+ */
+export async function assertReservationLimits(
+  db: Prisma.TransactionClient,
+  params: {
+    serviceId: string;
+    userId: string;
+    bookingType: "recurring" | "unique";
+    // Récurrent : periodId de la réservation ; ponctuel : periodId du SLOT (0 = aucun).
+    periodId: number;
+    maxReservations: number;
+    maxReservationsPeriod: number;
+  },
+) {
+  const { serviceId, userId, bookingType, periodId, maxReservations, maxReservationsPeriod } =
+    params;
+  const tooManyPeriod = new BookingError("Limite de réservations atteinte pour cette période.");
+  const tooManyYear = new BookingError("Limite annuelle de réservations atteinte.");
+
+  if (bookingType === "recurring") {
+    // Par période.
+    const perPeriod = await db.booking.count({
+      where: { serviceId, userId, periodId, bookingType: "recurring" },
+    });
+    if (perPeriod >= maxReservationsPeriod) throw tooManyPeriod;
+
+    // Annuelle : récurrentes dont la période démarre dans l'année scolaire en cours
+    // (équivalent du JOIN periods + `p.date_start >= yearStart` du legacy).
+    const yearPeriods = await db.period.findMany({
+      where: { dateStart: { gte: schoolYearStart(new Date()) } },
+      select: { id: true },
+    });
+    const perYear = await db.booking.count({
+      where: {
+        serviceId,
+        userId,
+        bookingType: "recurring",
+        periodId: { in: yearPeriods.map((p) => p.id) },
+      },
+    });
+    if (perYear >= maxReservations) throw tooManyYear;
+  } else {
+    // Ponctuel : on ne compte que les réservations STANDALONE (parentBookingId null),
+    // pour ne pas inclure les miroirs/enfants des récurrentes.
+    if (periodId > 0) {
+      const perPeriod = await db.booking.count({
+        where: { serviceId, userId, periodId, bookingType: "unique", parentBookingId: null },
+      });
+      if (perPeriod >= maxReservationsPeriod) throw tooManyPeriod;
+    }
+    // Annuelle : total des ponctuelles standalone du service (le legacy ne filtre pas
+    // l'année pour ce cas — les ponctuelles n'étant pas rattachées à une période datée).
+    const perYear = await db.booking.count({
+      where: { serviceId, userId, bookingType: "unique", parentBookingId: null },
+    });
+    if (perYear >= maxReservations) throw tooManyYear;
+  }
+}
+
+/**
  * Vacances scolaires : refuse un créneau ponctuel daté tombant en vacances scolaires de la
  * zone configurée (port legacy `bk_user_school_block`) dès lors que le SERVICE ferme pendant
  * les vacances (`serviceOpenOnSchoolHolidays` = false) OU que le demandeur de l'usager ferme.
@@ -237,6 +314,18 @@ export async function createUniqueBooking(
           periodId: 0,
           enfants: input.enfants,
           accompagnants: input.accompagnants,
+        });
+        // Limites de réservation de l'usager (max par période + max annuel). Chemin
+        // USAGER uniquement (createUniqueBooking n'est appelé que par reservePonctuelAction ;
+        // l'admin passe par createUniqueBookingAction, sans limite — override de gestion).
+        // La période est portée par le SLOT (la réservation ponctuelle stocke periodId=0).
+        await assertReservationLimits(tx, {
+          serviceId: slot.serviceId,
+          userId,
+          bookingType: "unique",
+          periodId: slot.periodId ?? 0,
+          maxReservations: slot.service.maxReservations,
+          maxReservationsPeriod: slot.service.maxReservationsPeriod,
         });
 
         return await tx.booking.create({
