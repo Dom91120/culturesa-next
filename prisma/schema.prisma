@@ -439,6 +439,10 @@ model Booking {
   @@index([periodId])
   @@index([slotId])
   @@index([parentBookingId])
+  // File d'auto-validation par service (auto-validate.ts) + agrégats stats validés.
+  @@index([serviceId, validated])
+  // Digest gestionnaire : range scan des auto-validations d'un service (manager-notice.ts).
+  @@index([serviceId, autoValidatedAt])
   @@map("bookings")
 }
 
