@@ -151,6 +151,39 @@ type CreateDrag = {
   startDay: string;
   curDay: string;
 };
+type AllDayDrag = { startDay: string; curDay: string };
+type MoveDrag = {
+  slotId: string;
+  isUnique: boolean;
+  fromDay: string;
+  durationMin: number;
+  origMin: number;
+  grabOffsetMin: number;
+  colTop: number;
+  curMin: number;
+  curDay: string;
+};
+type ResizeDrag = {
+  slotId: string;
+  isUnique: boolean;
+  dayKey: string;
+  edge: "top" | "bottom";
+  fixedMin: number;
+  origStart: number;
+  origEnd: number;
+  colTop: number;
+  curStart: number;
+  curEnd: number;
+};
+type HResizeDrag = {
+  slotId: string;
+  isUnique: boolean;
+  startMin: number;
+  endMin: number;
+  edge: "left" | "right";
+  fromDay: string;
+  curDay: string;
+};
 
 export function AgendaGrid({
   service,
@@ -272,56 +305,34 @@ export function AgendaGrid({
   });
   const createDrag = createDragH.drag;
   // Glisser-créer un créneau « JOURNÉE ENTIÈRE » (mode création, bande dédiée) :
-  // sélection horizontale uniquement (startDay → curDay), aucune dimension verticale
-  // (le glisser haut/bas n'a pas d'effet). Un créneau sans horaire par jour couvert au
-  // relâché. Miroir dans allDayDragRef pour les écouteurs window.
-  const [allDayDrag, setAllDayDrag] = useState<{ startDay: string; curDay: string } | null>(null);
-  const allDayDragRef = useRef<typeof allDayDrag>(null);
+  // sélection horizontale uniquement (startDay → curDay), aucune dimension verticale.
+  // Un créneau sans horaire par jour couvert au relâché.
+  const allDayDragH = useDragInteraction<AllDayDrag>({
+    onMove: allDayDragMove,
+    onUp: finalizeAllDayCreate,
+  });
+  const allDayDrag = allDayDragH.drag;
   // Glisser-DÉPLACER un créneau vide (mode création) : id du créneau, type, jour
   // d'origine, durée (préservée), top des colonnes, et position courante (quart +
-  // jour sous le curseur). Miroir dans moveDragRef pour les écouteurs window.
-  const [moveDrag, setMoveDrag] = useState<{
-    slotId: string;
-    isUnique: boolean;
-    fromDay: string;
-    durationMin: number;
-    origMin: number; // début d'origine du créneau
-    grabOffsetMin: number; // décalage curseur ↔ début (préserve le point de saisie)
-    colTop: number;
-    curMin: number; // début courant (snappé)
-    curDay: string;
-  } | null>(null);
-  const moveDragRef = useRef<typeof moveDrag>(null);
+  // jour sous le curseur).
+  const moveDragH = useDragInteraction<MoveDrag>({ onMove: moveDragMove, onUp: moveDragUp });
+  const moveDrag = moveDragH.drag;
   // Glisser-REDIMENSIONNER un créneau vide par une poignée de bord (mode création) :
   // le bord opposé reste fixe (fixedMin), on étire le bord saisi jusqu'au quart sous
-  // le curseur (durée minimale d'un quart). Réutilise les actions de déplacement
-  // (même jour/date, horaires modifiés). Miroir dans resizeDragRef.
-  const [resizeDrag, setResizeDrag] = useState<{
-    slotId: string;
-    isUnique: boolean;
-    dayKey: string;
-    edge: "top" | "bottom";
-    fixedMin: number; // bord opposé, immobile
-    origStart: number;
-    origEnd: number;
-    colTop: number;
-    curStart: number;
-    curEnd: number;
-  } | null>(null);
-  const resizeDragRef = useRef<typeof resizeDrag>(null);
+  // le curseur (durée minimale d'un quart). Réutilise les actions de déplacement.
+  const resizeDragH = useDragInteraction<ResizeDrag>({
+    onMove: resizeDragMove,
+    onUp: resizeDragUp,
+  });
+  const resizeDrag = resizeDragH.drag;
   // Glisser-ÉTENDRE un créneau vide latéralement (mode création) : on saisit le bord
   // gauche/droit et, en traversant les colonnes, on génère un créneau par jour couvert
-  // (même plage horaire) — comme le glisser-créer. Miroir dans hResizeDragRef.
-  const [hResizeDrag, setHResizeDrag] = useState<{
-    slotId: string;
-    isUnique: boolean;
-    startMin: number;
-    endMin: number;
-    edge: "left" | "right";
-    fromDay: string;
-    curDay: string;
-  } | null>(null);
-  const hResizeDragRef = useRef<typeof hResizeDrag>(null);
+  // (même plage horaire) — comme le glisser-créer.
+  const hResizeDragH = useDragInteraction<HResizeDrag>({
+    onMove: hResizeDragMove,
+    onUp: hResizeDragUp,
+  });
+  const hResizeDrag = hResizeDragH.drag;
   const [detail, setDetail] = useState<Detail>(null);
   // Réservation en attente de confirmation de suppression (modale dédiée, port du
   // legacy booking-delete-confirm-modal : récap + avertissement « irréversible »).
@@ -1221,14 +1232,13 @@ export function AgendaGrid({
     if (mode === "realweek" && !mondayStr) return;
     e.preventDefault();
     const dd = { startDay: dayKey, curDay: dayKey };
-    allDayDragRef.current = dd;
-    setAllDayDrag(dd);
+    allDayDragH.start(dd);
   }
 
   // Au relâché : UN créneau SANS horaire (journée entière) par jour couvert (clic
   // simple = 1 jour ; glisser horizontal = plusieurs). Récurrent en Modèle, ponctuel
   // daté en Semaine réelle. startTime/endTime vides → bloc « journée entière ».
-  function finalizeAllDayCreate(dd: NonNullable<typeof allDayDrag>) {
+  function finalizeAllDayCreate(dd: AllDayDrag) {
     const targets = daysSpan(dd.startDay, dd.curDay);
     if (!targets.length) return;
     if (mode === "model") {
@@ -1269,39 +1279,17 @@ export function AgendaGrid({
     }
   }
 
-  // Écouteurs window pendant le glisser-créer « journée entière » : seul le jour sous
-  // le curseur compte (la cellule porte data-allday-daykey) ; le déplacement vertical
-  // est ignoré. Validation au relâché.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lit allDayDragRef (stable) ; (dé)branché sur l'activité du drag
-  useEffect(() => {
-    if (!allDayDrag) return;
-    const onMove = (e: MouseEvent) => {
-      const dd = allDayDragRef.current;
-      if (!dd) return;
-      const cell = document
-        .elementFromPoint(e.clientX, e.clientY)
-        ?.closest<HTMLElement>("[data-allday-daykey]");
-      const dk = cell?.dataset.alldayDaykey;
-      const curDay = dk && days.includes(dk) ? dk : dd.curDay;
-      if (curDay !== dd.curDay) {
-        const next = { ...dd, curDay };
-        allDayDragRef.current = next;
-        setAllDayDrag(next);
-      }
-    };
-    const onUp = () => {
-      const dd = allDayDragRef.current;
-      allDayDragRef.current = null;
-      setAllDayDrag(null);
-      if (dd) finalizeAllDayCreate(dd);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [allDayDrag !== null]);
+  // Suivi du glisser-créer « journée entière » : seul le jour sous le curseur compte
+  // (la cellule porte data-allday-daykey), le déplacement vertical est ignoré. Le
+  // relâché (onUp) = finalizeAllDayCreate. (cf. useDragInteraction.)
+  function allDayDragMove(dd: AllDayDrag, e: MouseEvent): AllDayDrag | null {
+    const cell = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest<HTMLElement>("[data-allday-daykey]");
+    const dk = cell?.dataset.alldayDaykey;
+    const curDay = dk && days.includes(dk) ? dk : dd.curDay;
+    return curDay !== dd.curDay ? { ...dd, curDay } : null;
+  }
 
   // Supprime un créneau existant sans réservation (× en mode création) : ouvre une
   // modale de confirmation dédiée.
@@ -1453,13 +1441,12 @@ export function AgendaGrid({
       curMin: b.startMin,
       curDay: b.dayKey,
     };
-    moveDragRef.current = md;
-    setMoveDrag(md);
+    moveDragH.start(md);
   }
 
   // Au relâché : déplace le créneau vers (curDay, curMin → curMin+durée). No-op si
   // rien ne change. Récurrent → jour + horaires ; ponctuel → date + horaires.
-  function finalizeMove(md: NonNullable<typeof moveDrag>) {
+  function finalizeMove(md: MoveDrag) {
     let startMin = md.curMin;
     let endMin = startMin + md.durationMin;
     if (endMin > gridEndMin) {
@@ -1493,45 +1480,26 @@ export function AgendaGrid({
     }
   }
 
-  // Écouteurs window pendant le glisser-déplacer (même schéma que le glisser-créer).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lit moveDragRef (stable) ; (dé)branché sur l'activité du drag
-  useEffect(() => {
-    if (!moveDrag) return;
-    const onMove = (e: MouseEvent) => {
-      const md = moveDragRef.current;
-      if (!md) return;
-      // Début = quart sous le curseur, moins le décalage de saisie, borné à la grille.
-      const raw = quarterAtY(md.colTop, e.clientY) - md.grabOffsetMin;
-      const q = Math.max(gridStartMin, Math.min(gridEndMin - md.durationMin, raw));
-      const colEl = document
-        .elementFromPoint(e.clientX, e.clientY)
-        ?.closest<HTMLElement>("[data-daykey]");
-      const dk = colEl?.dataset.daykey;
-      const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : md.curDay;
-      if (q !== md.curMin || curDay !== md.curDay) {
-        const next = { ...md, curMin: q, curDay };
-        moveDragRef.current = next;
-        setMoveDrag(next);
-      }
-    };
-    const onUp = () => {
-      const md = moveDragRef.current;
-      moveDragRef.current = null;
-      setMoveDrag(null);
-      // Pas de no-op : on ne déplace que si jour ou début a changé. Si déplacé, on
-      // marque le coup pour que le clic qui suit n'ouvre pas la modale de config.
-      if (md && (md.curDay !== md.fromDay || md.curMin !== md.origMin)) {
-        finalizeMove(md);
-        justMovedRef.current = true;
-      }
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [moveDrag !== null]);
+  // Suivi du glisser-déplacer : début = quart sous le curseur − décalage de saisie
+  // (borné à la grille) + colonne (jour) survolée. (cf. useDragInteraction.)
+  function moveDragMove(md: MoveDrag, e: MouseEvent): MoveDrag | null {
+    const raw = quarterAtY(md.colTop, e.clientY) - md.grabOffsetMin;
+    const q = Math.max(gridStartMin, Math.min(gridEndMin - md.durationMin, raw));
+    const colEl = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest<HTMLElement>("[data-daykey]");
+    const dk = colEl?.dataset.daykey;
+    const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : md.curDay;
+    return q !== md.curMin || curDay !== md.curDay ? { ...md, curMin: q, curDay } : null;
+  }
+  // Relâché : on ne déplace que si jour ou début a changé. Si déplacé, on marque le
+  // coup pour que le clic résiduel n'ouvre pas la modale de config.
+  function moveDragUp(md: MoveDrag) {
+    if (md.curDay !== md.fromDay || md.curMin !== md.origMin) {
+      finalizeMove(md);
+      justMovedRef.current = true;
+    }
+  }
 
   // ── Mode création : glisser-REDIMENSIONNER un créneau vide par un bord ───────
   // Poignée haut/bas sur un bloc vide. Le bord opposé reste fixe ; on étire jusqu'au
@@ -1558,13 +1526,12 @@ export function AgendaGrid({
       curStart: b.startMin,
       curEnd: b.endMin,
     };
-    resizeDragRef.current = rd;
-    setResizeDrag(rd);
+    resizeDragH.start(rd);
   }
 
   // Au relâché : applique les nouveaux horaires (même jour/date) via les actions de
   // déplacement. Récurrent → jour identique ; ponctuel → même date.
-  function finalizeResize(rd: NonNullable<typeof resizeDrag>) {
+  function finalizeResize(rd: ResizeDrag) {
     const startTime = minToHHMM(rd.curStart);
     const endTime = minToHHMM(rd.curEnd);
     if (rd.isUnique) {
@@ -1592,44 +1559,25 @@ export function AgendaGrid({
     }
   }
 
-  // Écouteurs window pendant le glisser-redimensionner (même schéma que déplacer).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lit resizeDragRef (stable) ; (dé)branché sur l'activité du drag
-  useEffect(() => {
-    if (!resizeDrag) return;
-    const onMove = (e: MouseEvent) => {
-      const rd = resizeDragRef.current;
-      if (!rd) return;
-      const q = quarterAtY(rd.colTop, e.clientY);
-      let curStart = rd.curStart;
-      let curEnd = rd.curEnd;
-      if (rd.edge === "top") {
-        // Bord haut : début = quart sous le curseur, au plus fixedMin − 15.
-        curStart = Math.max(gridStartMin, Math.min(q, rd.fixedMin - 15));
-        curEnd = rd.fixedMin;
-      } else {
-        // Bord bas : fin = quart sous le curseur + 15, au moins fixedMin + 15.
-        curStart = rd.fixedMin;
-        curEnd = Math.min(gridEndMin, Math.max(q + 15, rd.fixedMin + 15));
-      }
-      if (curStart !== rd.curStart || curEnd !== rd.curEnd) {
-        const next = { ...rd, curStart, curEnd };
-        resizeDragRef.current = next;
-        setResizeDrag(next);
-      }
-    };
-    const onUp = () => {
-      const rd = resizeDragRef.current;
-      resizeDragRef.current = null;
-      setResizeDrag(null);
-      if (rd && (rd.curStart !== rd.origStart || rd.curEnd !== rd.origEnd)) finalizeResize(rd);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [resizeDrag !== null]);
+  // Suivi du glisser-redimensionner : le bord opposé reste fixe (fixedMin), on étire
+  // le bord saisi jusqu'au quart sous le curseur (durée min. d'un quart). onUp ne
+  // finalise que si la plage a changé. (cf. useDragInteraction.)
+  function resizeDragMove(rd: ResizeDrag, e: MouseEvent): ResizeDrag | null {
+    const q = quarterAtY(rd.colTop, e.clientY);
+    let curStart = rd.curStart;
+    let curEnd = rd.curEnd;
+    if (rd.edge === "top") {
+      curStart = Math.max(gridStartMin, Math.min(q, rd.fixedMin - 15));
+      curEnd = rd.fixedMin;
+    } else {
+      curStart = rd.fixedMin;
+      curEnd = Math.min(gridEndMin, Math.max(q + 15, rd.fixedMin + 15));
+    }
+    return curStart !== rd.curStart || curEnd !== rd.curEnd ? { ...rd, curStart, curEnd } : null;
+  }
+  function resizeDragUp(rd: ResizeDrag) {
+    if (rd.curStart !== rd.origStart || rd.curEnd !== rd.origEnd) finalizeResize(rd);
+  }
 
   // ── Mode création : glisser-ÉTENDRE un créneau vide latéralement (gauche/droite) ──
   // Poignée gauche/droite sur un bloc vide. En traversant les colonnes, on prépare un
@@ -1649,13 +1597,12 @@ export function AgendaGrid({
       fromDay: b.dayKey,
       curDay: b.dayKey,
     };
-    hResizeDragRef.current = hd;
-    setHResizeDrag(hd);
+    hResizeDragH.start(hd);
   }
 
   // Au relâché : crée un créneau (même horaire) dans chaque colonne couverte hormis la
   // source. Récurrent en Modèle de période, ponctuel daté en Semaine réelle.
-  function finalizeHResize(hd: NonNullable<typeof hResizeDrag>) {
+  function finalizeHResize(hd: HResizeDrag) {
     const targets = daysSpan(hd.fromDay, hd.curDay).filter((d) => d !== hd.fromDay);
     if (!targets.length) return;
     const startTime = minToHHMM(hd.startMin);
@@ -1698,37 +1645,19 @@ export function AgendaGrid({
     }
   }
 
-  // Écouteurs window pendant le glisser-étendre : suit la colonne survolée puis valide.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lit hResizeDragRef (stable) ; (dé)branché sur l'activité du drag
-  useEffect(() => {
-    if (!hResizeDrag) return;
-    const onMove = (e: MouseEvent) => {
-      const hd = hResizeDragRef.current;
-      if (!hd) return;
-      const colEl = document
-        .elementFromPoint(e.clientX, e.clientY)
-        ?.closest<HTMLElement>("[data-daykey]");
-      const dk = colEl?.dataset.daykey;
-      const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : hd.curDay;
-      if (curDay !== hd.curDay) {
-        const next = { ...hd, curDay };
-        hResizeDragRef.current = next;
-        setHResizeDrag(next);
-      }
-    };
-    const onUp = () => {
-      const hd = hResizeDragRef.current;
-      hResizeDragRef.current = null;
-      setHResizeDrag(null);
-      if (hd && hd.curDay !== hd.fromDay) finalizeHResize(hd);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [hResizeDrag !== null]);
+  // Suivi du glisser-étendre latéral : seule la colonne (jour) survolée compte. onUp
+  // ne finalise (un créneau par jour couvert) que si le jour a changé. (cf. useDragInteraction.)
+  function hResizeDragMove(hd: HResizeDrag, e: MouseEvent): HResizeDrag | null {
+    const colEl = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest<HTMLElement>("[data-daykey]");
+    const dk = colEl?.dataset.daykey;
+    const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : hd.curDay;
+    return curDay !== hd.curDay ? { ...hd, curDay } : null;
+  }
+  function hResizeDragUp(hd: HResizeDrag) {
+    if (hd.curDay !== hd.fromDay) finalizeHResize(hd);
+  }
 
   // Clic rapide sur un bloc en mode validation / pointage (sinon : ouvre le menu).
   // Réservation verrouillée par le pointage : elle-même pointée (ponctuelle/miroir),
