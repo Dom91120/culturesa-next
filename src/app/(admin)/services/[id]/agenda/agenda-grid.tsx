@@ -3,6 +3,7 @@
 import {
   AgendaDayBackground,
   AgendaTimeColumn,
+  AgendaWeekHeader,
   ModalOverlay,
   PointagePill,
 } from "@/components/agenda-shared";
@@ -2919,23 +2920,14 @@ export function AgendaGrid({
           className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
           style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}
         >
-          {/* Mode A/B : grosse lettre A/B de la semaine active dans le coin haut-gauche
-              (cf. legacy cornerAB) — Semaine réelle = parité de la semaine affichée,
-              Modèle de période = semaine A/B sélectionnée. Sinon, l'horloge. */}
-          <div
-            className="agenda-header-cell agenda-corner"
-            data-tip={abMode && effectiveWeek ? `Semaine ${effectiveWeek}` : "Horaires"}
-          >
-            {abMode && effectiveWeek ? effectiveWeek : "🕘"}
-          </div>
-          {days.map((d) => (
-            <div key={d} className={`agenda-header-cell${outOfPeriodCls(d)}`}>
-              {DAY_NAMES[d] ?? d}
-              {mode === "realweek" && weekDateByDay[d] && (
-                <span className="agenda-day-sub">{weekDateByDay[d]}</span>
-              )}
-            </div>
-          ))}
+          <AgendaWeekHeader
+            days={days}
+            abMode={abMode}
+            effectiveWeek={effectiveWeek}
+            realweek={mode === "realweek"}
+            weekDateByDay={weekDateByDay}
+            outOfPeriodCls={outOfPeriodCls}
+          />
 
           {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
               grille horaire (port du legacy alldayRow). Masquée s'il n'y a aucun

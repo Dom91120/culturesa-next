@@ -3,7 +3,46 @@
 // Composants PARTAGÉS des deux grilles agenda (admin / usager), extraits à
 // l'identique des deux copies locales (audit duplication 2026-06).
 
-import type { Pointage } from "@/lib/agenda-core";
+import { DAY_NAMES, type Pointage } from "@/lib/agenda-core";
+
+// Coin haut-gauche + rangée d'en-têtes de jours de la grille (port legacy cornerAB).
+// Coin : grosse lettre A/B de la semaine active en mode A/B, sinon l'horloge.
+// En-têtes : nom du jour + (en Semaine réelle) la date sous le nom. Pur, identique
+// entre les deux grilles ; rendu en premiers enfants de `.agenda-grid`.
+export function AgendaWeekHeader({
+  days,
+  abMode,
+  effectiveWeek,
+  realweek,
+  weekDateByDay,
+  outOfPeriodCls,
+}: {
+  days: string[];
+  abMode: boolean;
+  effectiveWeek: string | null;
+  realweek: boolean;
+  weekDateByDay: Record<string, string>;
+  outOfPeriodCls: (d: string) => string;
+}) {
+  return (
+    <>
+      <div
+        className="agenda-header-cell agenda-corner"
+        data-tip={abMode && effectiveWeek ? `Semaine ${effectiveWeek}` : "Horaires"}
+      >
+        {abMode && effectiveWeek ? effectiveWeek : "🕘"}
+      </div>
+      {days.map((d) => (
+        <div key={d} className={`agenda-header-cell${outOfPeriodCls(d)}`}>
+          {DAY_NAMES[d] ?? d}
+          {realweek && weekDateByDay[d] && (
+            <span className="agenda-day-sub">{weekDateByDay[d]}</span>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
 
 // Colonne d'axe horaire de la grille (port legacy renderAgendaWeekly). En mode
 // « masquer les horaires sans créneau », la grille est compactée : on n'affiche
