@@ -3,9 +3,26 @@
 // duplication D4) : un correctif (échappement, séparateur, BOM) ne se fait plus
 // qu'à un seul endroit.
 
-/** Échappe une valeur pour une cellule CSV : guillemets doublés, valeur toujours quotée. */
+// Caractères qui, en tête de cellule, déclenchent l'évaluation d'une formule à
+// l'ouverture dans Excel / LibreOffice / Sheets (CSV/formula injection) :
+// `= + - @` plus tab (0x09) et CR (0x0D). Cf. recommandation OWASP.
+const FORMULA_TRIGGERS = /^[=+\-@\t\r]/;
+
+/**
+ * Échappe une valeur pour une cellule CSV : guillemets doublés, valeur toujours
+ * quotée. Neutralise en amont l'injection de formule en préfixant d'une
+ * apostrophe toute valeur débutant par un caractère déclencheur — le tableur
+ * affiche alors le contenu en texte brut, sans l'interpréter.
+ *
+ * Compromis assumé (sortie visible) : une valeur légitime commençant par l'un de
+ * ces caractères (téléphone « +33… », thème « => … ») reçoit ce préfixe `'`.
+ * Acceptable pour nos exports (Excel FR), où la donnée reste lisible et où le
+ * risque d'exécution (`=cmd|…`, `HYPERLINK`/`WEBSERVICE`) prime.
+ */
 export function csvCell(v: string | number): string {
-  return `"${String(v).replace(/"/g, '""')}"`;
+  const s = String(v);
+  const safe = FORMULA_TRIGGERS.test(s) ? `'${s}` : s;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 /**
