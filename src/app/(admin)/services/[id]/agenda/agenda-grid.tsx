@@ -3515,6 +3515,17 @@ export function AgendaGrid({
                   </div>
                   <div
                     className={`csm-slot-block${isPonctuel ? " is-uniq" : ""}`}
+                    // Info-bulle au survol du créneau RÉCURRENT, identique à celle de la
+                    // grille (période + jour/heures + demandeurs autorisés + capacité) :
+                    // le handler délégué onAgendaTip (sur #tab-content-agenda, qui englobe
+                    // la modale) lit ces attributs et appelle recMetaForBlock/concernedDates.
+                    {...(isPonctuel
+                      ? {}
+                      : {
+                          "data-slot-tip": "",
+                          "data-slotid": stackKey.slotId,
+                          "data-daykey": stackKey.dayKey,
+                        })}
                     style={
                       {
                         minHeight: blockMinH,
