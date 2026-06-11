@@ -1,15 +1,7 @@
 import { DAY_NAMES } from "@/lib/agenda-core";
-import { wrapEmailHtml } from "@/lib/email-theme";
-import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
-import { sendMailOrQueue } from "@/server/mailer";
 import { isMailEnabled } from "@/server/services/mail-prefs";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { sendTemplatedMail } from "@/server/services/mail-send";
 
 // Notification e-mail envoyée à l'usager lors de la création d'une réservation.
 // Best-effort : ne lève jamais (les échecs d'envoi partent en file via sendMailOrQueue).
@@ -180,15 +172,7 @@ export async function sendBookingConfirmationMail(
     };
 
     const kind = params.validated ? "booking_confirmed" : "booking_pending";
-    const tpl = await getMailTemplate(kind);
-    const inner = renderHtmlTemplate(tpl.html, vars);
-    const subject = renderSubjectTemplate(tpl.subject, vars);
-    await sendMailOrQueue({
-      to: email,
-      subject,
-      html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
-      text: htmlToText(inner),
-    });
+    await sendTemplatedMail({ to: email, kind, vars });
   } catch (e) {
     console.error("[sendBookingConfirmationMail] erreur:", e);
   }

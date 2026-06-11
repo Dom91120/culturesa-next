@@ -1,13 +1,6 @@
-import { wrapEmailHtml } from "@/lib/email-theme";
-import { getAppUrl, getConfigMany } from "@/server/config";
+import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
-import { sendMail } from "@/server/mailer";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { sendTemplatedMail } from "@/server/services/mail-send";
 import type { Prisma } from "@prisma/client";
 
 export type AnonymizeReason = "self_service" | "admin" | "retention";
@@ -389,14 +382,11 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
         annees: `${years} an(s)`,
         delai: `${GRACE_DAYS} jours`,
       };
-      const tpl = await getMailTemplate("account_deletion_notice");
-      const inner = renderHtmlTemplate(tpl.html, vars);
-      const subject = renderSubjectTemplate(tpl.subject, vars);
-      await sendMail({
+      await sendTemplatedMail({
         to: u.email,
-        subject,
-        html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
-        text: htmlToText(inner),
+        kind: "account_deletion_notice",
+        vars,
+        mode: "direct",
       });
     } catch {
       // SMTP indisponible : on ignore, le marquage du préavis reste valide.

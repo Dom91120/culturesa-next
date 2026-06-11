@@ -1,17 +1,11 @@
 "use server";
 
 import type { ActionState } from "@/lib/action-state";
-import { wrapEmailHtml } from "@/lib/email-theme";
-import { getAppUrl, setConfigMany } from "@/server/config";
+import { setConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { sendMail } from "@/server/mailer";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { sendTemplatedMail } from "@/server/services/mail-send";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -68,15 +62,7 @@ export async function sendTestMailAction(to: string): Promise<ActionState> {
   if (!parsed.success) return { ok: false, error: "Adresse destinataire invalide." };
 
   try {
-    const tpl = await getMailTemplate("email_test");
-    const inner = renderHtmlTemplate(tpl.html, {});
-    const subject = renderSubjectTemplate(tpl.subject, {});
-    await sendMail({
-      to: parsed.data,
-      subject,
-      html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
-      text: htmlToText(inner),
-    });
+    await sendTemplatedMail({ to: parsed.data, kind: "email_test", mode: "direct" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Échec de l'envoi.";
     return { ok: false, error: msg };

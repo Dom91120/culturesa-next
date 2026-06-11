@@ -1,14 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
-import { getAppUrl } from "@/server/config";
+import { emailButton } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
-import { sendMailOrQueue } from "@/server/mailer";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { sendTemplatedMail } from "@/server/services/mail-send";
 import { RgpdError, anonymizeUser, assertNotLastActiveAdmin } from "@/server/services/rgpd";
 
 // ════════════════════════════════════════════════════════════
@@ -88,16 +81,11 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
   const prenom = user.prenom?.trim() ?? "";
   const vars = { salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom, url };
 
-  const tpl = await getMailTemplate("account_deletion_request");
-  const inner = renderHtmlTemplate(tpl.html, vars, {
-    bouton: emailButton(url, "Confirmer la suppression"),
-  });
-  const subject = renderSubjectTemplate(tpl.subject, vars);
-  await sendMailOrQueue({
+  await sendTemplatedMail({
     to: email,
-    subject,
-    html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
-    text: htmlToText(inner),
+    kind: "account_deletion_request",
+    vars,
+    rawVars: { bouton: emailButton(url, "Confirmer la suppression") },
   });
 }
 

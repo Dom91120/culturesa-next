@@ -1,12 +1,9 @@
 "use server";
 
 import { todayParisISO } from "@/lib/booking-delay";
-import { wrapEmailHtml } from "@/lib/email-theme";
 import { DAYS } from "@/schemas/config";
-import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
-import { sendMailOrQueue } from "@/server/mailer";
 import {
   formatSlotLabel,
   resolvePeriodLabel,
@@ -14,12 +11,7 @@ import {
 } from "@/server/services/booking-mail";
 import { BookingError, assertSlotCapacity } from "@/server/services/bookings";
 import { isMailEnabled } from "@/server/services/mail-prefs";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { sendTemplatedMail } from "@/server/services/mail-send";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import {
   addRecurringSlot,
@@ -439,16 +431,12 @@ export async function deleteBookingAdminAction(
       periode: periodLabel,
       motif: (motif ?? "").trim().slice(0, 1000),
     };
-    const tpl = await getMailTemplate(wasValidated ? "booking_cancelled" : "booking_refused");
-    const inner = renderHtmlTemplate(tpl.html, vars);
-    const subject = renderSubjectTemplate(tpl.subject, vars);
     // Best-effort : en cas d'échec, l'e-mail est mis en file (renvoyable depuis
     // Administration > Messagerie). N'interrompt jamais la suppression.
-    await sendMailOrQueue({
+    await sendTemplatedMail({
       to: email,
-      subject,
-      html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
-      text: htmlToText(inner),
+      kind: wasValidated ? "booking_cancelled" : "booking_refused",
+      vars,
     });
   }
   return { ok: true };

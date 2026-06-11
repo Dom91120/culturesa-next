@@ -1,15 +1,8 @@
-import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
+import { emailButton } from "@/lib/email-theme";
 import { PASSWORD_POLICY_MESSAGE, isPasswordValid } from "@/lib/password";
 import { verifyCaptcha } from "@/server/captcha";
-import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
-import { sendMail } from "@/server/mailer";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { sendTemplatedMail } from "@/server/services/mail-send";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";
@@ -35,14 +28,12 @@ async function sendAccountMail(
       await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } })
     )?.prenom?.trim() ?? "";
   const vars = { salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom, url };
-  const tpl = await getMailTemplate(kind);
-  const inner = renderHtmlTemplate(tpl.html, vars, { bouton: emailButton(url, buttonLabel) });
-  const subject = renderSubjectTemplate(tpl.subject, vars);
-  await sendMail({
+  await sendTemplatedMail({
     to: email,
-    subject,
-    html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
-    text: htmlToText(inner),
+    kind,
+    vars,
+    rawVars: { bouton: emailButton(url, buttonLabel) },
+    mode: "direct",
   });
 }
 
