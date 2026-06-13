@@ -1006,6 +1006,48 @@ textarea {
 .user-agenda-mine-badge .slot-btn-close:hover {
   color: var(--danger);
 }
+/* Poignée de glissement des badges déplaçables : grille de 14 points (2 lignes × 7),
+   centrée en haut, visible au survol. Fond OPAQUE hérité du badge (background-color:
+   inherit → vert #c8e8b8 validé / orange #ffe6a7 en attente). Curseur grab : le
+   mousedown amorce le drag natif du badge (parent draggable). */
+.user-agenda-mine-badge .slot-drag-handle {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none; /* → flex au survol */
+  align-items: center;
+  padding: 3px 4px;
+  background-color: inherit;
+  border-radius: 4px;
+  cursor: grab;
+  user-select: none;
+  /* Drag « pointer events » : empêche le navigateur de scroller au lieu d'émettre les
+     pointermove quand on saisit la poignée au doigt. */
+  touch-action: none;
+  z-index: 2;
+}
+.user-agenda-mine-badge:hover .slot-drag-handle {
+  display: flex;
+}
+/* Grille de points vectorielle : largeur fixe, hauteur déduite du ratio du viewBox
+   (34×9). fill pilote la couleur des 14 cercles. */
+.user-agenda-mine-badge .slot-drag-grid {
+  display: block;
+  width: 30px;
+  height: auto;
+  fill: var(--muted);
+}
+/* Aperçu flottant du drag (clone du badge). Le clone porte .user-agenda-mine-badge, qui a
+   `pointer-events: auto` → sans ce !important, le ghost intercepterait document.elementFromPoint
+   au relâché immobile et le drop serait ignoré. On neutralise le ghost ET tous ses enfants. */
+.user-drag-ghost,
+.user-drag-ghost * {
+  pointer-events: none !important;
+}
+.user-agenda-mine-badge .slot-drag-handle:active {
+  cursor: grabbing;
+}
 .slot-spots {
   font-size: .75rem;
   letter-spacing: .04em;
@@ -1187,6 +1229,21 @@ textarea.theme-pending:focus::placeholder {
 .toast--warn {
   background: var(--warn);
   color: #fff;
+}
+/* Succès (création / modification / déplacement enregistré) : vert accent, texte blanc. */
+.toast--success {
+  background: var(--accent);
+  color: #fff;
+}
+/* Variante d'erreur (verrou « une seule action »). Message long → autorise le retour
+   à la ligne et borne la largeur (sinon white-space:nowrap déborderait). */
+.toast--danger {
+  background: var(--danger);
+  color: #fff;
+  white-space: normal;
+  max-width: min(90vw, 420px);
+  text-align: center;
+  line-height: 1.35;
 }
 
 .admin-table-wrap {
@@ -1816,8 +1873,8 @@ textarea.theme-pending:focus::placeholder {
   /* Couleur par défaut : jaune (récurrent / miroir). Surcharge en vert lime via .is-uniq. */
   --agenda-block-color: #ffff00;
   --slot-color: var(--agenda-block-color);
-  border-left: 3px dashed var(--slot-color, var(--accent));
-  border-top: 3px dashed var(--slot-color, var(--accent));
+  border-left: 2px dashed var(--slot-color, var(--accent));
+  border-top: 2px dashed var(--slot-color, var(--accent));
   border-radius: var(--rad-sm);
   background-color: color-mix(in srgb, var(--slot-color, var(--accent)) 25%, transparent);
   /* Confine les lignes horaires (background-image) à l'intérieur de la zone padding pour
@@ -2254,8 +2311,8 @@ textarea.theme-pending:focus::placeholder {
   --block-color: var(--agenda-block-color);
   border-radius: var(--rad-sm);
   background: color-mix(in srgb, var(--block-color) 25%, transparent);
-  border-left: 3px dashed var(--block-color, var(--accent));
-  border-top: 3px dashed var(--block-color);
+  border-left: 2px dashed var(--block-color, var(--accent));
+  border-top: 2px dashed var(--block-color);
   padding: 3px 7px;
   font-size: .68rem;
   color: var(--text);
@@ -2304,8 +2361,8 @@ textarea.theme-pending:focus::placeholder {
   height: 20px;
   border-radius: var(--rad-sm);
   background: color-mix(in srgb, var(--legend-color) 25%, transparent);
-  border-left: 3px dashed var(--legend-color);
-  border-top: 3px dashed var(--legend-color);
+  border-left: 2px dashed var(--legend-color);
+  border-top: 2px dashed var(--legend-color);
 }
 .agenda-legend-swatch.is-uniq {
   --legend-color: var(--slot-uniq-color);
@@ -2495,15 +2552,11 @@ textarea.theme-pending:focus::placeholder {
   height: auto;
   min-height: 38px;
 }
-/* Curseur de drag sur les blocs draggable (réservés par le user). */
-.user-agenda-block[draggable="true"] {
-  cursor: grab;
-}
-.user-agenda-block[draggable="true"]:active {
-  cursor: grabbing;
-}
-/* Highlight quand un drop est en attente sur un bloc disponible. */
-.user-agenda-block.slot-user-drop-target {
+/* Le drag s'amorce uniquement par la poignée (.slot-drag-handle) ; le corps du badge
+   n'est pas `draggable` → son curseur grab/grabbing est porté par la poignée elle-même. */
+/* Highlight quand un drop est en attente sur un créneau disponible.
+   La cellule porte la classe partagée `agenda-block` (et non `user-agenda-block`). */
+.agenda-block.slot-user-drop-target {
   outline: 2px dashed var(--accent);
   outline-offset: -3px;
 }
@@ -2878,40 +2931,7 @@ textarea.theme-pending:focus::placeholder {
     padding: .28rem .55rem;
     font-size: .72rem;
   }
-  /* Titre « Réservations » sur smartphone (compact). */
-  .res-title {
-    font-size: 1.05rem;
-  }
-  /* Navigation période/semaine (◀ label ▶ + « Aujourd'hui ») agrandie au doigt.
-     Le bouton « Aujourd'hui » porte des styles inline → !important pour les battre. */
-  .periode-nav .ex-nav-label {
-    font-size: .82rem;
-    min-width: 6rem;
-  }
-  .periode-nav .ex-arrow {
-    font-size: .82rem;
-    padding: .18rem .5rem;
-  }
-  /* La nav semaine est centrée en absolu par-dessus la ligne du titre : on la
-     remet dans le flux et en pleine largeur → elle wrappe sur SA propre ligne,
-     sous le titre. (Styles inline position/left/top/transform → !important.) */
-  .periode-nav {
-    /* relative (et non static) → sert de contexte de positionnement au bouton
-       « Aujourd'hui » placé en absolu, tout en restant dans le flux (sous le titre). */
-    position: relative !important;
-    left: auto !important;
-    top: auto !important;
-    transform: none !important;
-    flex-basis: 100%;
-    width: 100%;
-    justify-content: center;
-    margin: 0 !important;
-  }
-  /* « Aujourd'hui » : on NE touche plus à sa position. Son style inline (absolute,
-     left:100%) l'ancre désormais juste à droite du groupe .pn-main (et non du bord
-     de l'écran) → il suit le ▶ sans compter dans le centrage. On ne réduit que sa taille. */
-  .periode-nav .pn-today {
-    font-size: .7rem !important;
-    padding: .22rem .55rem !important;
-  }
+  /* La nav semaine garde son centrage ABSOLU (style inline left:50%/top:50%/translate)
+     aussi sur mobile → centrée par rapport à #tab-content-agenda, sur la ligne du titre,
+     et hors flux donc sans faire passer le titre à la ligne. (Pas d'override ici.) */
 }

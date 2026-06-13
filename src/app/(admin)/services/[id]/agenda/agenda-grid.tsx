@@ -2009,7 +2009,7 @@ export function AgendaGrid({
             const ye = mapMinToY(Math.min(b.endMin, gridEndMin));
             return {
               top: ys + 2,
-              height: Math.max(28, ye - ys - 4),
+              height: Math.max(14, ye - ys - 4),
               left: `calc(${b.leftPct}% + 2px)`,
               width: `calc(${b.widthPct}% - 4px)`,
             };

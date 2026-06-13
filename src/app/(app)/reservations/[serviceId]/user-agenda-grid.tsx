@@ -35,6 +35,7 @@ import { earliestBookableISO } from "@/lib/booking-delay";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
+import { usePointerDrag } from "@/lib/use-pointer-drag";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -77,10 +78,13 @@ function StepBtn({
   sign,
   color,
   onClick,
+  big = false,
 }: {
   sign: "+" | "−";
   color: string;
   onClick: () => void;
+  // Mobile : bouton 2× plus gros (cf. lisibilité au doigt).
+  big?: boolean;
 }) {
   const onClickRef = useRef(onClick);
   onClickRef.current = onClick;
@@ -121,17 +125,19 @@ function StepBtn({
       onMouseUp={stop}
       onMouseLeave={stop}
       style={{
-        width: 14,
-        height: 16,
-        border: "none",
+        // Mobile (big) : bouton carré entouré d'un cercle, glyphe centré.
+        width: big ? "1.8rem" : 14,
+        height: big ? "1.8rem" : 16,
+        border: big ? `1px solid ${color}` : "none",
+        borderRadius: big ? "50%" : undefined,
         background: "transparent",
         color,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
-        // Glyphe collé vers le nombre : « Diminuer » (−) à droite, « Augmenter » (+) à gauche.
-        justifyContent: sign === "−" ? "end" : "start",
-        fontSize: ".95rem",
+        // Cercle (mobile) → glyphe centré ; sinon collé vers le nombre (− à droite, + à gauche).
+        justifyContent: big ? "center" : sign === "−" ? "end" : "start",
+        fontSize: big ? "1.3rem" : ".95rem",
         fontWeight: 700,
         lineHeight: 1,
         padding: 0,
@@ -153,14 +159,19 @@ function ThemeField({
   themesMode,
   themes,
   onChange,
+  big = false,
 }: {
   value: string;
   validated: boolean;
   themesMode: "libre" | "liste";
   themes: string[];
   onChange: (v: string) => void;
+  // Mobile : champ thème 2× plus gros.
+  big?: boolean;
 }) {
   const themeColor = validated ? "#3e7e2f" : "#b2a478";
+  // Taille de police du champ thème (doublée sur mobile).
+  const themeFont = big ? "0.8rem" : ".62rem";
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -218,21 +229,24 @@ function ThemeField({
         <div
           ref={wrapRef}
           className={`slot-spots ${validated ? "theme-validated" : "theme-pending"}`}
+          // Mobile : data-tip="" masque l'info-bulle du badge au tap/survol du picker thème.
+          data-tip={big ? "" : undefined}
           style={{
             position: "relative",
-            fontSize: ".62rem",
+            fontSize: themeFont,
             color: themeColor,
             border: "none",
             background: "transparent",
             cursor: "pointer",
             maxWidth: "100%",
-            lineHeight: 1,
+            // Mobile : pas de line-height imposée (laisse le texte respirer dans le champ).
+            lineHeight: big ? undefined : 1,
             boxSizing: "border-box",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 2,
-            height: 14,
+            height: big ? "0.8rem" : 14,
             padding: "0 2px 0 4px",
             userSelect: "none",
             overflow: "hidden",
@@ -258,7 +272,14 @@ function ThemeField({
           >
             {value || "— Thème —"}
           </span>
-          <span style={{ flexShrink: 0, fontSize: "1rem", color: themeColor, lineHeight: 1 }}>
+          <span
+            style={{
+              flexShrink: 0,
+              fontSize: big ? "2rem" : "1rem",
+              color: themeColor,
+              lineHeight: 1,
+            }}
+          >
             ▾
           </span>
         </div>
@@ -276,7 +297,7 @@ function ThemeField({
                 background: "var(--surface)",
                 border: `1px solid ${themeColor}`,
                 borderRadius: 3,
-                fontSize: ".62rem",
+                fontSize: themeFont,
                 color: "var(--text)",
                 zIndex: 10000,
                 maxHeight: 200,
@@ -328,18 +349,20 @@ function ThemeField({
     <textarea
       ref={taRef}
       className={`slot-spots ${validated ? "theme-validated" : "theme-pending"}`}
+      // Mobile : data-tip="" masque l'info-bulle du badge au tap/survol du champ thème.
+      data-tip={big ? "" : undefined}
       placeholder="Saisissez un thème"
       value={value}
       rows={1}
       style={{
         color: themeColor,
         WebkitTextFillColor: themeColor,
-        fontSize: ".62rem",
+        fontSize: themeFont,
         fontWeight: 700,
       }}
       onMouseDown={(e) => e.stopPropagation()}
-      // Sans ça, le clic remonte au corps du badge (onBodyClick = action rapide) et
-      // empêche d'éditer le thème. stopPropagation → le clic ne fait que focus le champ.
+      // Sans ça, le clic remonterait au créneau parent (.agenda-block → création de résa).
+      // stopPropagation → le clic ne fait que focus le champ thème.
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
@@ -364,6 +387,8 @@ function ThemeField({
 function MineBadge({
   validated,
   markedRemoval,
+  moving = false,
+  mobile = false,
   gaugeOn,
   themeMode,
   themesMode,
@@ -378,16 +403,19 @@ function MineBadge({
   onBump,
   onSetCount,
   onSetTheme,
-  onBodyClick,
   title,
   locked = false,
   draggable = false,
   dragging = false,
-  onDragStart,
-  onDragEnd,
+  onDragPointerDown,
+  dragFullSurface = false,
 }: {
   validated: boolean;
   markedRemoval: boolean;
+  // Déplacement en attente (pendingMove) : badge atténué + libellé « Déplacement en cours… ».
+  moving?: boolean;
+  // Mobile : éléments de jauge (− chiffre +) et thème 2× plus gros.
+  mobile?: boolean;
   gaugeOn: boolean;
   themeMode: boolean;
   themesMode: "libre" | "liste";
@@ -402,7 +430,6 @@ function MineBadge({
   onBump: (field: "enfants" | "accompagnants", delta: 1 | -1) => void;
   onSetCount: (field: "enfants" | "accompagnants", value: number) => void;
   onSetTheme: (v: string) => void;
-  onBodyClick: () => void;
   // Infobulle au survol : horaire + état + participants + semaine.
   title?: string;
   // Validation bloquante : résa validée verrouillée → pas de croix de suppression
@@ -411,15 +438,19 @@ function MineBadge({
   // Glisser-déplacer : le badge devient draggable (brouillon / résa « en attente »).
   draggable?: boolean;
   dragging?: boolean;
-  onDragStart?: (e: React.DragEvent) => void;
-  onDragEnd?: (e: React.DragEvent) => void;
+  // Pointerdown sur une zone de préhension (poignée, ou tout le badge sur mobile) → amorce
+  // le drag « pointer events » (souris + tactile), cf. usePointerDrag côté parent.
+  onDragPointerDown?: (e: React.PointerEvent) => void;
+  // Mobile : tout le badge est déplaçable (pas seulement la poignée).
+  dragFullSurface?: boolean;
 }) {
   // Couleur du texte/éléments : vert foncé si validé (lisible sur le fond vert clair
   // du badge), orange sinon (jamais « inherit »).
   const gColor = validated ? "#3e7e2f" : "#b2a478";
-  const stateColor = markedRemoval ? "var(--danger)" : gColor;
+  const stateColor = markedRemoval ? "var(--danger)" : moving ? "var(--warn)" : gColor;
   const hasWidgets = gaugeOn || themeMode;
-  const editable = gaugeOn && !markedRemoval;
+  // En déplacement : on neutralise l'édition (jauge/thème) pour afficher le libellé d'état.
+  const editable = gaugeOn && !markedRemoval && !moving;
   const icon = validated ? "✔" : "⏳";
   const themeField =
     themeMode && !markedRemoval ? (
@@ -429,18 +460,21 @@ function MineBadge({
         themesMode={themesMode}
         themes={themes}
         onChange={onSetTheme}
+        big={mobile}
       />
     ) : null;
+  // Mobile : tout le badge amorce le drag ; desktop : uniquement via la poignée.
+  const bodyDraggable = draggable && dragFullSurface;
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic corps = action hors édition)
+    // biome-ignore lint/a11y/useKeyWithClickEvents: badge (onClick = stopPropagation seul)
     <div
       className={`user-agenda-mine-badge${hasWidgets ? " has-widgets" : ""} ${
         validated ? "is-validated" : "is-pending"
       }`}
       data-tip={title}
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      // Mobile (dragFullSurface) : tout le badge amorce le drag (pointer events), pas
+      // seulement la poignée. touch-action:none → le geste ne scrolle pas la page.
+      onPointerDown={bodyDraggable ? onDragPointerDown : undefined}
       style={{
         position: "relative",
         top: "auto",
@@ -450,24 +484,24 @@ function MineBadge({
         maxWidth: "100%",
         maxHeight: "none",
         boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-        cursor: editable ? "default" : draggable ? "grab" : "pointer",
+        // Curseur : `grab` quand tout le corps est déplaçable (mobile), sinon `default`
+        // (sur desktop le drag passe par la poignée ; la croix × garde son pointer).
+        cursor: bodyDraggable ? "grab" : "default",
+        touchAction: bodyDraggable ? "none" : undefined,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        // Jauge : interligne du badge (entre compteurs / thème / état).
-        gap: editable ? 3 : 2,
+        // Jauge : interligne du badge (entre compteurs / thème / état). Sur mobile, pas de
+        // gap supplémentaire en mode jauge (les éléments agrandis se suffisent).
+        gap: editable ? (mobile ? 0 : 3) : 2,
         textAlign: "center",
-        opacity: dragging ? 0.4 : markedRemoval ? 0.55 : 1,
+        opacity: dragging ? 0.4 : markedRemoval || moving ? 0.55 : 1,
       }}
-      onClick={
-        editable
-          ? (e) => e.stopPropagation()
-          : (e) => {
-              e.stopPropagation();
-              onBodyClick();
-            }
-      }
+      // Clic sur le CORPS : aucune action. On stoppe seulement la propagation pour ne pas
+      // déclencher la création de réservation du créneau parent (.agenda-block). Les seules
+      // actions du badge sont la croix × (supprimer) et la poignée (déplacer).
+      onClick={(e) => e.stopPropagation()}
     >
       {/* × : supprime la réservation (ou le brouillon) — caché, affiché au survol via CSS.
           Masqué si la résa est verrouillée (validation bloquante). */}
@@ -493,12 +527,43 @@ function MineBadge({
           {closeIcon}
         </button>
       )}
+      {/* Poignée de glissement : prise dédiée pour amorcer le drag sur desktop (le corps
+          n'y est pas draggable). Sur mobile, tout le corps est aussi déplaçable (cf.
+          dragFullSurface). Affichée au survol, en haut au centre. Le CLIC est neutralisé
+          pour éviter l'action rapide du corps si l'usager relâche sans déplacer. */}
+      {draggable && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: poignée pointer-only (drag natif)
+        <span
+          className="slot-drag-handle"
+          data-tip="Glisser pour déplacer"
+          aria-hidden
+          // Drag « pointer events » : stopPropagation pour ne pas ré-armer via le corps.
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onDragPointerDown?.(e);
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 14 points (2 lignes × 7) en SVG : cercles vectoriels → parfaitement ronds
+              à toute taille (le rendu HTML en pastilles dégénérait en ovales à 3px). */}
+          <svg className="slot-drag-grid" viewBox="0 0 34 9" aria-hidden="true">
+            {[2, 7].map((cy) =>
+              [2, 7, 12, 17, 22, 27, 32].map((cx) => (
+                <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.6" />
+              )),
+            )}
+          </svg>
+        </span>
+      )}
       {editable ? (
         // Graphique jauge (legacy _createGaugeBadge) : deux colonnes Enfants | icône |
         // Adultes ; chaque compteur = bouton rond − à gauche, nombre, bouton rond + à
         // droite (clic-maintenu), + libellé en dessous.
         <div
           className="gauge-badge"
+          // Mobile : data-tip="" masque l'info-bulle du badge au tap/survol des compteurs
+          // (le délégué `onAgendaTip` résout via closest[data-tip] → chaîne vide = pas de bulle).
+          data-tip={mobile ? "" : undefined}
           style={{
             display: "flex",
             alignItems: "center",
@@ -518,6 +583,8 @@ function MineBadge({
               alignItems: "center",
               width: "45%",
               flexShrink: 0,
+              // Mobile : descend le bloc (− nombre + / libellé) de 4px.
+              transform: mobile ? "translateY(4px)" : undefined,
             }}
           >
             <div
@@ -526,9 +593,11 @@ function MineBadge({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 0,
+                // Mobile : ligne − chiffre + compactée à 1rem de haut.
+                height: mobile ? "1rem" : undefined,
               }}
             >
-              <StepBtn sign="−" color={gColor} onClick={() => onBump("enfants", -1)} />
+              <StepBtn sign="−" color={gColor} onClick={() => onBump("enfants", -1)} big={mobile} />
               <input
                 type="number"
                 min={1}
@@ -538,11 +607,11 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  width: "1.4rem",
-                  height: "16px",
+                  width: mobile ? "2.8rem" : "1.4rem",
+                  height: mobile ? "32px" : "16px",
                   boxSizing: "border-box",
                   textAlign: "center",
-                  fontSize: ".85rem",
+                  fontSize: mobile ? "1.3rem" : ".85rem",
                   background: "transparent",
                   border: "none",
                   color: gColor,
@@ -551,11 +620,16 @@ function MineBadge({
                   flexShrink: 0,
                 }}
               />
-              <StepBtn sign="+" color={gColor} onClick={() => onBump("enfants", 1)} />
+              <StepBtn sign="+" color={gColor} onClick={() => onBump("enfants", 1)} big={mobile} />
             </div>
             <span
               className="gauge-txt"
-              style={{ color: gColor, fontSize: ".62rem", lineHeight: 1, fontWeight: 700 }}
+              style={{
+                color: gColor,
+                fontSize: mobile ? undefined : ".62rem",
+                lineHeight: 1,
+                fontWeight: 700,
+              }}
             >
               {enfants > 1 ? "Enfants" : "Enfant"}
             </span>
@@ -582,6 +656,8 @@ function MineBadge({
               alignItems: "center",
               width: "45%",
               flexShrink: 0,
+              // Mobile : descend le bloc (− nombre + / libellé) de 4px.
+              transform: mobile ? "translateY(4px)" : undefined,
             }}
           >
             <div
@@ -590,9 +666,16 @@ function MineBadge({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 0,
+                // Mobile : ligne − chiffre + compactée à 1rem de haut.
+                height: mobile ? "1rem" : undefined,
               }}
             >
-              <StepBtn sign="−" color={gColor} onClick={() => onBump("accompagnants", -1)} />
+              <StepBtn
+                sign="−"
+                color={gColor}
+                onClick={() => onBump("accompagnants", -1)}
+                big={mobile}
+              />
               <input
                 type="number"
                 min={1}
@@ -602,11 +685,11 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  width: "1.4rem",
-                  height: "16px",
+                  width: mobile ? "2.8rem" : "1.4rem",
+                  height: mobile ? "32px" : "16px",
                   boxSizing: "border-box",
                   textAlign: "center",
-                  fontSize: ".85rem",
+                  fontSize: mobile ? "1.3rem" : ".85rem",
                   background: "transparent",
                   border: "none",
                   color: gColor,
@@ -615,11 +698,21 @@ function MineBadge({
                   flexShrink: 0,
                 }}
               />
-              <StepBtn sign="+" color={gColor} onClick={() => onBump("accompagnants", 1)} />
+              <StepBtn
+                sign="+"
+                color={gColor}
+                onClick={() => onBump("accompagnants", 1)}
+                big={mobile}
+              />
             </div>
             <span
               className="gauge-txt"
-              style={{ color: gColor, fontSize: ".62rem", lineHeight: 1, fontWeight: 700 }}
+              style={{
+                color: gColor,
+                fontSize: mobile ? undefined : ".62rem",
+                lineHeight: 1,
+                fontWeight: 700,
+              }}
             >
               {accompagnants > 1 ? "Adultes" : "Adulte"}
             </span>
@@ -819,10 +912,15 @@ export function UserAgendaGrid({
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
   const [stackKey, setStackKey] = useState<{ slotId: string; dayKey: string } | null>(null);
-  // Glisser-déplacer : élément en cours de drag + clé "dayKey|slotId" du créneau survolé
-  // (drop target en surbrillance). Remplace l'ancien `draggingId`.
+  // Glisser-déplacer (pointer events, cf. usePointerDrag) : élément en cours de drag + clé
+  // "dayKey|slotId" du créneau survolé (drop target en surbrillance) + position du curseur
+  // pour l'aperçu flottant (ghost). Remplace l'ancien drag HTML5 (inopérant au doigt).
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  // Aperçu de drag (ghost) = clone HTML du badge source, capturé au pointerdown, pour
+  // retrouver l'ancien rendu « badge entier qui suit le pointeur » (et non un libellé texte).
+  const dragGhostRef = useRef<{ html: string; width: number } | null>(null);
   // Brouillon de réservations (ajouts), d'annulations, de modifications de compteurs/thème,
   // et de déplacements sur mes réservations existantes (legacy : tout est éditable).
   const [pendingAdds, setPendingAdds] = useState<PendingAdd[]>([]);
@@ -831,15 +929,57 @@ export function UserAgendaGrid({
     Record<number, { enfants: number; accompagnants: number; theme: string }>
   >({});
   const [pendingMoves, setPendingMoves] = useState<Record<number, PendingMove>>({});
-  const [recapOpen, setRecapOpen] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
+  // Toast (variantes --success vert / --danger rouge), repris de la grille admin : centré
+  // sur .app-main, bas de page, auto-dismiss ~4 s. Sert au verrou « une seule action »
+  // (rouge) et au résultat de l'enregistrement du brouillon (vert création/modif/déplacement,
+  // rouge suppression ou erreur).
+  const [toast, setToast] = useState<{
+    id: number;
+    content: string;
+    variant: "success" | "danger";
+  } | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastCenterX, setToastCenterX] = useState<number | null>(null);
+  const toastIdRef = useRef(0);
+  function showToast(content: string, variant: "success" | "danger") {
+    toastIdRef.current += 1;
+    setToast({ id: toastIdRef.current, content, variant });
+  }
   // Info-bulle flottante unique (texte data-tip / « Journées concernées »), factorisée
   // dans un hook partagé. Suspendue pendant la saisie d'un thème.
   const { tip, tipRef, onAgendaTip, clearTip } = useAgendaTooltip({
     getDates: (slotId, dayKey) => concernedDatesForBlock(slotId, dayKey),
     suppressed: () => isThemeBeingEdited(),
   });
+
+  // Affichage/dissipation du toast : mesure le centre de .app-main (et non du viewport),
+  // anime l'apparition, puis masque à ~4 s et retire à ~4,3 s. Relancé à chaque nouveau
+  // toast via son id (cf. grille admin).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: relancé à chaque nouveau toast via son id
+  useEffect(() => {
+    if (!toast) return;
+    const measure = () => {
+      const main = document.querySelector(".app-main");
+      if (main) {
+        const r = main.getBoundingClientRect();
+        setToastCenterX(r.left + r.width / 2);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    setToastVisible(false);
+    const raf = requestAnimationFrame(() => setToastVisible(true));
+    const hide = window.setTimeout(() => setToastVisible(false), 4000);
+    const clear = window.setTimeout(() => setToast(null), 4300);
+    return () => {
+      window.removeEventListener("resize", measure);
+      cancelAnimationFrame(raf);
+      window.clearTimeout(hide);
+      window.clearTimeout(clear);
+    };
+  }, [toast?.id]);
 
   const days = service.activeDays
     .split(",")
@@ -883,16 +1023,6 @@ export function UserAgendaGrid({
   const visiblePeriods =
     currentExerciceId == null ? periods : periods.filter((p) => p.exerciceId === currentExerciceId);
   const selectedPeriodId = visiblePeriods[periodIdx]?.id ?? null;
-
-  // Navigation entre exercices (◀ label ▶).
-  const exIdx = exercices.findIndex((e) => e.id === currentExerciceId);
-  const exLabel = exIdx >= 0 ? exercices[exIdx].label : "—";
-  const canExPrev = exIdx > 0 && showPrevious;
-  const canExNext = exIdx >= 0 && exIdx < exercices.length - 1;
-  function gotoExercice(id: number) {
-    setCurrentExerciceId(id);
-    setPeriodIdx(0);
-  }
 
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
   const mondayStr = anchorMonday;
@@ -1564,6 +1694,33 @@ export function UserAgendaGrid({
   }, [mode, coveringPeriod, rwPeriodId]);
 
   // ── Brouillon (legacy pendingSelection / pendingCancellations) ──────────
+  // ── « Un seul badge à la fois » ──────────────────────────────────────────────────
+  // Le brouillon peut accumuler PLUSIEURS actions (créer/déplacer/modifier/supprimer)
+  // mais toutes sur le MÊME élément (un seul badge). On dérive l'identité de cet élément :
+  // `add:<clé>` pour une création en brouillon, `bk:<id>` pour une réservation existante
+  // (déplacement / modification / suppression partagent le même bookingId). Toute action
+  // ciblant un AUTRE élément est bloquée (toast). Les actions sur le MÊME élément passent.
+  const pendingElementKey: string | null =
+    pendingAdds.length > 0
+      ? `add:${pendingAdds[0].key}`
+      : pendingRemovals.length > 0
+        ? `bk:${pendingRemovals[0].bookingId}`
+        : Object.keys(pendingMoves).length > 0
+          ? `bk:${Object.keys(pendingMoves)[0]}`
+          : Object.keys(pendingUpdates).length > 0
+            ? `bk:${Object.keys(pendingUpdates)[0]}`
+            : null;
+  // Autorise une action ciblant l'élément `targetKey` ? OUI si le brouillon est vide, ou si
+  // l'action porte sur l'élément déjà en cours (même badge). Sinon NON + toast --danger.
+  function guardSingleAction(targetKey: string): boolean {
+    if (pendingElementKey == null || pendingElementKey === targetKey) return true;
+    showToast(
+      "Une seule réservation à la fois : enregistrez ou annulez les modifications en cours avant d'agir sur une autre.",
+      "danger",
+    );
+    return false;
+  }
+
   function pendKey(slotId: string, dayKey: string, ponctuel: boolean) {
     return ponctuel ? `u:${slotId}` : `r:${slotId}|${dayKey}`;
   }
@@ -1587,6 +1744,9 @@ export function UserAgendaGrid({
   // Coche / décoche un créneau libre pour réservation (sans appel serveur).
   function togglePendingAdd(slotId: string, dayKey: string, ponctuel: boolean) {
     const key = pendKey(slotId, dayKey, ponctuel);
+    // Verrou « une seule action » : décocher l'ajout courant reste permis (même clé) ;
+    // cocher un AUTRE créneau alors qu'une action est en attente est bloqué.
+    if (!guardSingleAction(`add:${key}`)) return;
     setCommitError(null);
     setPendingAdds((prev) => {
       if (prev.some((a) => a.key === key)) return prev.filter((a) => a.key !== key);
@@ -1669,17 +1829,26 @@ export function UserAgendaGrid({
       ? `${ponctuelDateLabel(slotId)} · ${time}`
       : `${DAY_NAMES[dayKey] ?? dayKey} · ${time}`;
   }
-  // Un bloc accepte-t-il le dépôt de l'élément en cours de drag ? Cible LIBRE et de
-  // MÊME type (récurrent↔récurrent, ponctuel↔ponctuel) — cf. décision produit.
+  // Un bloc accepte-t-il le dépôt de `item` ? Cible LIBRE et de MÊME type
+  // (récurrent↔récurrent, ponctuel↔ponctuel) — cf. décision produit.
+  function canDropItem(item: DragItem, b: Block): boolean {
+    return !b.full && item.ponctuel === uniqueIdSet.has(b.slotId);
+  }
+  // Variante liée à l'état courant (pour la surbrillance au rendu).
   function canDropOn(b: Block): boolean {
-    return dragItem != null && !b.full && dragItem.ponctuel === uniqueIdSet.has(b.slotId);
+    return dragItem != null && canDropItem(dragItem, b);
+  }
+  // Créneau (Block) sous le point écran donné, via les data-slotid/data-daykey des cellules.
+  // Sert au hit-test du drag « pointer events » (il n'y a plus d'événement onDrop natif).
+  function blockAtPoint(x: number, y: number): Block | null {
+    const cell = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-slotid]");
+    const slotId = cell?.dataset.slotid;
+    if (!slotId) return null;
+    const dayKey = cell?.dataset.daykey ?? "";
+    return blocksByDay[dayKey]?.find((bl) => bl.slotId === slotId) ?? null;
   }
   // Dépôt sur un créneau : relocalise le brouillon, ou enregistre/annule un déplacement.
-  function dropOnBlock(b: Block) {
-    const item = dragItem;
-    setDragItem(null);
-    setDropKey(null);
-    if (!item) return;
+  function dropOnBlock(item: DragItem, b: Block) {
     const ponctuel = uniqueIdSet.has(b.slotId);
     if (item.ponctuel !== ponctuel || b.full) return; // sécurité (déjà filtré au dragover)
     const targetPeriodId = ponctuel ? 0 : (effectivePeriodId ?? 0);
@@ -1721,6 +1890,7 @@ export function UserAgendaGrid({
         bk.periodId === targetPeriodId &&
         (bk.week || "") === (targetWeek || "");
     if (isOrigin) {
+      // Retour à l'origine → annule le déplacement (brouillon vidé) : toujours permis.
       setPendingMoves((prev) => {
         if (!(item.bookingId in prev)) return prev;
         const next = { ...prev };
@@ -1729,6 +1899,10 @@ export function UserAgendaGrid({
       });
       return;
     }
+    // Démarre/re-cible un déplacement : soumis au verrou « une seule action ». Re-déposer
+    // la résa déjà en déplacement reste permis (même clé) ; déplacer une résa alors qu'une
+    // autre action est en attente est bloqué.
+    if (!guardSingleAction(`bk:${item.bookingId}`)) return;
     setPendingMoves((prev) => ({
       ...prev,
       [item.bookingId]: {
@@ -1740,6 +1914,81 @@ export function UserAgendaGrid({
         label: slotMoveLabel(b.slotId, b.dayKey, ponctuel),
       },
     }));
+  }
+
+  // Défilement « au bord » pendant le drag tactile (mobile, vue 1 jour) : maintenir le badge
+  // sur le bord gauche/droit de la grille passe au jour précédent/suivant — on peut ainsi
+  // déposer sur un autre jour sans relâcher. Le 1er pas est immédiat, puis répétition tant
+  // que le pointeur reste sur le bord. Ref toujours frais vers mobileGoDay : sinon
+  // l'intervalle capturerait une closure figée sur un mobileDayIdx/anchor périmé.
+  const mobileGoDayRef = useRef(mobileGoDay);
+  mobileGoDayRef.current = mobileGoDay;
+  const edgePageRef = useRef<{ dir: -1 | 1; timer: ReturnType<typeof setInterval> } | null>(null);
+  function stopEdgePaging() {
+    if (edgePageRef.current) {
+      clearInterval(edgePageRef.current.timer);
+      edgePageRef.current = null;
+    }
+  }
+  function handleEdgePaging(clientX: number) {
+    if (!isMobile) return stopEdgePaging();
+    const grid = document.querySelector(".agenda-grid");
+    if (!grid) return stopEdgePaging();
+    const r = grid.getBoundingClientRect();
+    const zone = Math.max(32, r.width * 0.15);
+    const dir: -1 | 1 | null = clientX <= r.left + zone ? -1 : clientX >= r.right - zone ? 1 : null;
+    if (dir === null) return stopEdgePaging();
+    if (edgePageRef.current?.dir === dir) return; // déjà en cours dans ce sens
+    stopEdgePaging();
+    mobileGoDayRef.current(dir); // 1er pas immédiat
+    edgePageRef.current = { dir, timer: setInterval(() => mobileGoDayRef.current(dir), 650) };
+  }
+  // Sécurité : stoppe la répétition si le composant est démonté en plein drag. (Cleanup
+  // autonome — n'utilise que le ref stable — pour ne pas dépendre de stopEdgePaging.)
+  useEffect(
+    () => () => {
+      if (edgePageRef.current) clearInterval(edgePageRef.current.timer);
+    },
+    [],
+  );
+
+  // Drag « pointer events » (souris + tactile) : activation au-delà du seuil → on mémorise
+  // l'item ; à chaque déplacement on suit le curseur (ghost), on surligne le créneau cible
+  // et on gère le défilement au bord (mobile) ; au relâché on dépose sur le créneau sous le
+  // pointeur (sinon annulation).
+  const pointerDrag = usePointerDrag<DragItem>({
+    onActivate: (item) => setDragItem(item),
+    onMove: (item, e) => {
+      setDragPos({ x: e.clientX, y: e.clientY });
+      handleEdgePaging(e.clientX);
+      const b = blockAtPoint(e.clientX, e.clientY);
+      setDropKey(b && canDropItem(item, b) ? `${b.dayKey}|${b.slotId}` : null);
+    },
+    onDrop: (item, e) => {
+      stopEdgePaging();
+      const b = blockAtPoint(e.clientX, e.clientY);
+      if (b && canDropItem(item, b)) dropOnBlock(item, b);
+      setDragItem(null);
+      setDropKey(null);
+      setDragPos(null);
+      dragGhostRef.current = null;
+    },
+    onCancel: () => {
+      stopEdgePaging();
+      setDragItem(null);
+      setDropKey(null);
+      setDragPos(null);
+      dragGhostRef.current = null;
+    },
+  });
+
+  // Amorce un drag : capture un clone HTML du badge source (pour le ghost) puis arme le
+  // drag « pointer events ». `e.currentTarget` = poignée (desktop) ou badge (mobile) → on
+  // remonte au badge via closest.
+  function beginDrag(item: DragItem, e: React.PointerEvent) {
+    const badge = (e.currentTarget as HTMLElement).closest<HTMLElement>(".user-agenda-mine-badge");
+    dragGhostRef.current = badge ? { html: badge.outerHTML, width: badge.offsetWidth } : null;
+    pointerDrag.start(item, e);
   }
 
   // Compteurs/thème courants d'une de MES réservations (brouillon ou valeur d'origine).
@@ -1758,6 +2007,9 @@ export function UserAgendaGrid({
     delta: 1 | -1,
     remaining: number,
   ) {
+    // Verrou « une seule action » : modifier une résa déjà en cours de modif reste permis ;
+    // modifier une AUTRE résa (ou modifier alors qu'une autre action est en attente) bloqué.
+    if (!guardSingleAction(`bk:${bk.id}`)) return;
     setCommitError(null);
     const cur = myCounts(bk);
     const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
@@ -1780,6 +2032,7 @@ export function UserAgendaGrid({
     value: number,
     remaining: number,
   ) {
+    if (!guardSingleAction(`bk:${bk.id}`)) return;
     setCommitError(null);
     const cur = myCounts(bk);
     const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
@@ -1790,6 +2043,7 @@ export function UserAgendaGrid({
     setPendingUpdates((prev) => ({ ...prev, [bk.id]: { ...cur, [field]: next } }));
   }
   function setMyTheme(bk: Booking, v: string) {
+    if (!guardSingleAction(`bk:${bk.id}`)) return;
     setCommitError(null);
     setPendingUpdates((prev) => ({ ...prev, [bk.id]: { ...myCounts(bk), theme: v } }));
   }
@@ -1798,21 +2052,21 @@ export function UserAgendaGrid({
   function togglePendingRemoval(bk: Booking) {
     // Résa verrouillée (validation bloquante) → annulation impossible.
     if (bookingLocked(bk)) return;
+    // Démarquer la suppression courante → brouillon vidé de cette suppression (permis).
+    if (pendingRemovals.some((r) => r.bookingId === bk.id)) {
+      setCommitError(null);
+      setPendingRemovals((prev) => prev.filter((r) => r.bookingId !== bk.id));
+      return;
+    }
+    // Supprimer cette résa est permis si le brouillon est vide ou porte déjà sur CE même
+    // badge (déplacement/modif du même bookingId) — plusieurs actions sur un même élément.
+    // Supprimer une AUTRE résa alors qu'un badge est en cours est bloqué (toast). Au commit,
+    // la suppression prime : le déplacement/modif de cette résa est ignoré (cf. commitPending).
+    if (!guardSingleAction(`bk:${bk.id}`)) return;
     setCommitError(null);
-    // Supprimer une réservation annule un éventuel déplacement en attente (sinon le
-    // commit échouerait : suppression puis déplacement d'une résa déjà supprimée).
-    setPendingMoves((prev) => {
-      if (!(bk.id in prev)) return prev;
-      const next = { ...prev };
-      delete next[bk.id];
-      return next;
-    });
-    setPendingRemovals((prev) => {
-      if (prev.some((r) => r.bookingId === bk.id)) return prev.filter((r) => r.bookingId !== bk.id);
-      const time = slotTime(bk.slotId, uniqueIdSet.has(bk.slotId));
-      const label = bk.dayKey ? `${DAY_NAMES[bk.dayKey] ?? bk.dayKey} · ${time}` : time;
-      return [...prev, { bookingId: bk.id, label }];
-    });
+    const time = slotTime(bk.slotId, uniqueIdSet.has(bk.slotId));
+    const label = bk.dayKey ? `${DAY_NAMES[bk.dayKey] ?? bk.dayKey} · ${time}` : time;
+    setPendingRemovals((prev) => [...prev, { bookingId: bk.id, label }]);
   }
 
   function clearPending() {
@@ -1821,7 +2075,6 @@ export function UserAgendaGrid({
     setPendingUpdates({});
     setPendingMoves({});
     setCommitError(null);
-    setRecapOpen(false);
   }
 
   const pendingCount =
@@ -1829,13 +2082,10 @@ export function UserAgendaGrid({
     pendingRemovals.length +
     Object.keys(pendingUpdates).length +
     Object.keys(pendingMoves).length;
-  // Le brouillon ne contient QUE des suppressions (aucun ajout / modif / déplacement)
-  // → le bouton d'enregistrement devient « Supprimer → ».
-  const onlyRemovals =
-    pendingRemovals.length > 0 &&
-    pendingAdds.length === 0 &&
-    Object.keys(pendingUpdates).length === 0 &&
-    Object.keys(pendingMoves).length === 0;
+  // La suppression PRIME (au commit comme à l'affichage) : dès qu'une suppression est en
+  // attente, le bouton d'enregistrement devient « Supprimer → » en rouge danger — même si
+  // un déplacement/modif du même élément coexiste (il sera ignoré au commit).
+  const isDeletion = pendingRemovals.length > 0;
 
   // Rafraîchissement automatique de la disponibilité : intervalle configurable
   // (Administration > Configuration ; 0 = désactivé) + au retour sur l'onglet
@@ -1867,26 +2117,44 @@ export function UserAgendaGrid({
   // appliqué — re-cliquer « Enregistrer » ne rejoue plus les annulations déjà
   // faites (« Réservation introuvable ») et le brouillon reste récupérable.
   function commitPending() {
+    // Type de l'action en cours (le brouillon ne contient qu'UN élément, cf. verrou) →
+    // détermine le toast de résultat : rouge pour une suppression, vert sinon.
+    const summary =
+      pendingRemovals.length > 0
+        ? { text: "Réservation supprimée.", variant: "danger" as const }
+        : pendingAdds.length > 0
+          ? { text: "Réservation enregistrée.", variant: "success" as const }
+          : Object.keys(pendingMoves).length > 0
+            ? { text: "Réservation déplacée.", variant: "success" as const }
+            : { text: "Réservation modifiée.", variant: "success" as const };
     setCommitting(true);
     setCommitError(null);
     startTransition(async () => {
       // Tout le brouillon part en UNE action atomique (commitDraft) : suppressions →
       // modifications → déplacements → ajouts dans une seule transaction serveur.
+      // Si une résa est À LA FOIS supprimée et déplacée/modifiée (deux actions acceptées sur
+      // le même élément), la SUPPRESSION prime : on ignore son déplacement/modif (sinon le
+      // serveur tenterait de déplacer une résa déjà supprimée → « introuvable »).
+      const removalIds = new Set(pendingRemovals.map((r) => r.bookingId));
       const draft = {
         removals: pendingRemovals.map((r) => r.bookingId),
-        updates: Object.entries(pendingUpdates).map(([id, u]) => ({
-          bookingId: Number(id),
-          enfants: u.enfants,
-          accompagnants: u.accompagnants,
-          theme: u.theme,
-        })),
-        moves: Object.entries(pendingMoves).map(([id, m]) => ({
-          bookingId: Number(id),
-          slotId: m.slotId,
-          ponctuel: m.ponctuel,
-          periodId: m.periodId,
-          week: m.week,
-        })),
+        updates: Object.entries(pendingUpdates)
+          .filter(([id]) => !removalIds.has(Number(id)))
+          .map(([id, u]) => ({
+            bookingId: Number(id),
+            enfants: u.enfants,
+            accompagnants: u.accompagnants,
+            theme: u.theme,
+          })),
+        moves: Object.entries(pendingMoves)
+          .filter(([id]) => !removalIds.has(Number(id)))
+          .map(([id, m]) => ({
+            bookingId: Number(id),
+            slotId: m.slotId,
+            ponctuel: m.ponctuel,
+            periodId: m.periodId,
+            week: m.week,
+          })),
         adds: pendingAdds.map((a) => ({
           ponctuel: a.ponctuel,
           slotId: a.slotId,
@@ -1901,10 +2169,13 @@ export function UserAgendaGrid({
       setCommitting(false);
       if (res.ok) {
         clearPending();
+        showToast(summary.text, summary.variant);
         router.refresh();
       } else {
         // Atomique : rien n'a été appliqué → on garde le panier intact pour correction.
+        // Plus de modale pour l'afficher → on signale l'échec par un toast rouge.
         setCommitError(res.error ?? "Échec de l'enregistrement.");
+        showToast(res.error ?? "Échec de l'enregistrement.", "danger");
         router.refresh();
       }
     });
@@ -1988,7 +2259,7 @@ export function UserAgendaGrid({
           const ye = mapMinToY(Math.min(b.endMin, gridEndMin));
           return {
             top: ys + 2,
-            height: Math.max(28, ye - ys - 4),
+            height: Math.max(14, ye - ys - 4),
             left: `calc(${b.leftPct}% + 2px)`,
             width: `calc(${b.widthPct}% - 4px)`,
           };
@@ -2032,27 +2303,6 @@ export function UserAgendaGrid({
           const ponctuel = uniqueIdSet.has(b.slotId);
           if (!ponctuel && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
           togglePendingAdd(b.slotId, b.dayKey, ponctuel);
-        }}
-        onDragOver={(e) => {
-          // Cible de dépôt valide (libre + même type) → autorise le drop.
-          if (canDropOn(b)) e.preventDefault();
-        }}
-        onDragEnter={(e) => {
-          if (canDropOn(b)) {
-            e.preventDefault();
-            setDropKey(`${b.dayKey}|${b.slotId}`);
-          }
-        }}
-        onDragLeave={(e) => {
-          // Retire la surbrillance uniquement en quittant réellement le bloc.
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-            setDropKey((k) => (k === `${b.dayKey}|${b.slotId}` ? null : k));
-          }
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          dropOnBlock(b);
         }}
       >
         {/* Badges centrés via le parent .agenda-block (justify-content:center).
@@ -2108,7 +2358,6 @@ export function UserAgendaGrid({
                   onBump={() => {}}
                   onSetCount={() => {}}
                   onSetTheme={() => {}}
-                  onBodyClick={() => {}}
                   draggable={false}
                 />
               );
@@ -2116,16 +2365,22 @@ export function UserAgendaGrid({
             if (myBk) {
               const mb = myBk;
               const cur = myCounts(mb);
+              // Déplacement en attente (pendingMove sur CETTE résa) → badge atténué + libellé.
+              const isMoving = pendingMoves[mb.id] != null;
               // Sans thème ni jauge → on affiche l'état (Validé / En attente). Avec un
               // thème OU une jauge, l'état est porté par l'icône ✔/⏳ → pas de libellé
-              // (sauf « À supprimer » pour un retrait en attente).
+              // (sauf « Suppression en cours… » / « Déplacement en cours… » pour une action en attente).
+              // La suppression PRIME sur le déplacement (deux actions possibles sur le même
+              // élément ; au commit la suppression l'emporte).
               const stateLabel = markedRemoval
-                ? "À supprimer"
-                : noWidgets
-                  ? mb.validated
-                    ? "Validé"
-                    : "En attente de validation"
-                  : "";
+                ? "Suppression en cours…"
+                : isMoving
+                  ? "Déplacement en cours…"
+                  : noWidgets
+                    ? mb.validated
+                      ? "Validé"
+                      : "En attente de validation"
+                    : "";
               // Place dispo pour CE booking = libre + sa propre occupation déjà comptée
               // (enfants + adultes en jauge ; 1 réservation hors jauge).
               const remaining = Math.max(
@@ -2139,16 +2394,19 @@ export function UserAgendaGrid({
               // Infobulle (legacy) : horaire + état + participants + semaine.
               const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
               const tipState = markedRemoval
-                ? "🗑️ À supprimer"
-                : mb.validated
-                  ? "✅ Réservé (validé)"
-                  : "⏳ Réservé (en attente)";
+                ? "🗑️ Suppression en cours"
+                : isMoving
+                  ? "↔️ Déplacement en cours"
+                  : mb.validated
+                    ? "✅ Réservé (validé)"
+                    : "⏳ Réservé (en attente)";
               const tipWeek =
                 abMode && (mb.week === "A" || mb.week === "B") ? `\nSemaine ${mb.week}` : "";
               return (
                 <MineBadge
                   validated={mb.validated}
                   markedRemoval={markedRemoval}
+                  moving={isMoving}
                   gaugeOn={gaugeOn}
                   themeMode={modes.themeMode}
                   themesMode={service.themesMode}
@@ -2168,20 +2426,18 @@ export function UserAgendaGrid({
                   onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
                   onSetCount={(f, v) => setMyCount(mb, f, v, remaining)}
                   onSetTheme={(v) => setMyTheme(mb, v)}
-                  onBodyClick={() => onBlockQuickAction(mb)}
-                  // Seules les réservations « en attente » (non validées, non marquées
-                  // pour suppression) sont déplaçables par glisser-déposer.
-                  draggable={!mb.validated && !markedRemoval}
+                  // Déplaçable par glisser-déposer sauf si VERROUILLÉE (validation
+                  // bloquante active) ou déjà marquée pour suppression. Aligné sur le
+                  // serveur (moveInTx → assertBookingUnlocked) : une résa validée mais
+                  // NON verrouillée reste déplaçable, comme elle reste annulable (croix ×).
+                  // (Auparavant gaté sur `!mb.validated`, plus restrictif que le serveur.)
+                  draggable={!bookingLocked(mb) && !markedRemoval}
+                  dragFullSurface={isMobile}
+                  mobile={isMobile}
                   dragging={dragItem?.kind === "booking" && dragItem.bookingId === mb.id}
-                  onDragStart={(e) => {
-                    setDragItem({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell });
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", String(mb.id));
-                  }}
-                  onDragEnd={() => {
-                    setDragItem(null);
-                    setDropKey(null);
-                  }}
+                  onDragPointerDown={(e) =>
+                    beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e)
+                  }
                 />
               );
             }
@@ -2226,19 +2482,14 @@ export function UserAgendaGrid({
                       prev.map((x) => (x.key === add.key ? { ...x, theme: v } : x)),
                     )
                   }
-                  onBodyClick={removeDraft}
                   // Brouillon : toujours déplaçable (relocalise simplement l'ajout).
                   draggable
+                  dragFullSurface={isMobile}
+                  mobile={isMobile}
                   dragging={dragItem?.kind === "draft" && dragItem.key === add.key}
-                  onDragStart={(e) => {
-                    setDragItem({ kind: "draft", key: add.key, ponctuel: isPonctuelCell });
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", add.key);
-                  }}
-                  onDragEnd={() => {
-                    setDragItem(null);
-                    setDropKey(null);
-                  }}
+                  onDragPointerDown={(e) =>
+                    beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e)
+                  }
                 />
               );
             }
@@ -2312,6 +2563,48 @@ export function UserAgendaGrid({
     <div id="tab-content-agenda" onMouseMove={onAgendaTip} onMouseLeave={clearTip}>
       {/* Info-bulle flottante unique (texte data-tip / « Journées concernées »). */}
       <AgendaTooltip tip={tip} tipRef={tipRef} />
+
+      {/* Toast (vert succès / rouge suppression ou erreur ou verrou), centré sur
+          .app-main, bas de page. La classe .toast positionne en bas + translateX(-50%) ;
+          on ne surcharge que `left`. */}
+      {toast &&
+        createPortal(
+          <output
+            className={`toast toast--${toast.variant}${toastVisible ? " show" : ""}`}
+            style={{
+              zIndex: 11000,
+              ...(toastCenterX != null ? { left: `${toastCenterX}px` } : {}),
+            }}
+          >
+            {toast.content}
+          </output>,
+          document.body,
+        )}
+
+      {/* Aperçu flottant du drag (ghost) = clone du badge source qui suit le pointeur
+          (ancien rendu « badge entier »). pointer-events:none → n'interfère pas avec le
+          hit-test (document.elementFromPoint) du créneau cible. */}
+      {dragItem &&
+        dragPos &&
+        dragGhostRef.current &&
+        createPortal(
+          <div
+            className="user-drag-ghost"
+            style={{
+              position: "fixed",
+              left: dragPos.x,
+              top: dragPos.y,
+              transform: "translate(-50%, -50%)",
+              width: dragGhostRef.current.width,
+              zIndex: 11000,
+              opacity: 0.9,
+            }}
+            // Clone HTML du badge (contenu déjà échappé par React au rendu d'origine).
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: snapshot interne du badge, pas une entrée externe
+            dangerouslySetInnerHTML={{ __html: dragGhostRef.current.html }}
+          />,
+          document.body,
+        )}
       <div
         style={{
           // position:relative → la nav semaine peut être centrée en absolu sur toute
@@ -2321,7 +2614,9 @@ export function UserAgendaGrid({
           alignItems: "center",
           justifyContent: "space-between",
           gap: isMobile ? 0 : ".75rem",
-          flexWrap: "wrap",
+          // Mobile : titre + nav semaine restent sur la MÊME ligne (pas de retour à la
+          // ligne) ; desktop : wrap autorisé.
+          flexWrap: isMobile ? "nowrap" : "wrap",
           // Sur mobile, pas de marge autour de la ligne de titre (ni dessus ni dessous).
           margin: isMobile ? "0" : "2rem 0 .75rem",
         }}
@@ -2329,32 +2624,6 @@ export function UserAgendaGrid({
         <div className="panel-title res-title" style={{ marginBottom: 0 }}>
           <span className="dot" />
           Réservations
-          {exercices.length > 0 && (
-            <span className="exercice-nav-inline">
-              <span className="ex-nav-label">{exLabel}</span>
-              {/* Flèches de navigation d'exercice masquées côté Réservations (usager). */}
-              <span className="ex-nav-arrows" style={{ display: "none" }}>
-                <button
-                  type="button"
-                  className="ex-arrow"
-                  aria-label="Exercice précédent"
-                  disabled={!canExPrev}
-                  onClick={() => canExPrev && gotoExercice(exercices[exIdx - 1].id)}
-                >
-                  ◀
-                </button>
-                <button
-                  type="button"
-                  className="ex-arrow"
-                  aria-label="Exercice suivant"
-                  disabled={!canExNext}
-                  onClick={() => canExNext && gotoExercice(exercices[exIdx + 1].id)}
-                >
-                  ▶
-                </button>
-              </span>
-            </span>
-          )}
         </div>
         {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
             titre et le sélecteur. */}
@@ -2748,18 +3017,6 @@ export function UserAgendaGrid({
                 if (slot && effectivePeriodId != null && effectivePeriodId > 0)
                   togglePendingAdd(slot.id, d, uniqueIdSet.has(slot.id));
               }}
-              onDragOver={(e) => {
-                if (isDayDisabled(d)) return;
-                if (dragItem != null) e.preventDefault();
-              }}
-              onDrop={(e) => {
-                // Dépôt dans l'inter-bloc (pas sur un créneau) → on annule simplement le drag ;
-                // les dépôts utiles sont gérés par le bloc-créneau (stopPropagation).
-                if (isDayDisabled(d)) return;
-                e.preventDefault();
-                setDragItem(null);
-                setDropKey(null);
-              }}
             >
               <AgendaDayBackground
                 quarters={quarters}
@@ -2780,95 +3037,139 @@ export function UserAgendaGrid({
         </div>
       </div>
 
-      {/* Sous le tableau : info « max. réservations ». */}
-      <p style={{ fontSize: ".8rem", color: "var(--muted)", margin: 0 }}>
-        ℹ️{" "}
-        {modes.recurringMode ? (
-          <>
-            Vous pouvez réserver{" "}
-            <strong>
-              {service.maxReservationsPeriod} créneau
-              {service.maxReservationsPeriod > 1 ? "x" : ""} par période
-            </strong>{" "}
-            et{" "}
-            <strong>
-              {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
-            </strong>
-            .
-          </>
-        ) : (
-          <>
-            Vous pouvez réserver{" "}
-            <strong>
-              {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
-            </strong>
-            .
-          </>
-        )}
-      </p>
-
-      {/* Compteur du brouillon, sur sa propre ligne juste en dessous.
-          Marge supérieure plus large sur mobile (0.75rem) que sur desktop (0.2rem). */}
-      <p
-        style={{
-          fontSize: ".75rem",
-          // Modifications en attente → couleur warning ; sinon muté.
-          color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
-          margin: isMobile ? "0.75rem 0 0" : "0.2rem 0 0",
-          textAlign: "right",
-        }}
-      >
-        {pendingCount > 0
-          ? [
-              pendingAdds.length > 0
-                ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
-                : "",
-              pendingRemovals.length > 0
-                ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
-                : "",
-              Object.keys(pendingUpdates).length > 0
-                ? `${Object.keys(pendingUpdates).length} élément${
-                    Object.keys(pendingUpdates).length > 1 ? "s" : ""
-                  } à modifier`
-                : "",
-              Object.keys(pendingMoves).length > 0
-                ? `${Object.keys(pendingMoves).length} élément${
-                    Object.keys(pendingMoves).length > 1 ? "s" : ""
-                  } à déplacer`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")
-          : "Aucune modification en attente"}
-      </p>
-
-      {/* Barre d'actions du brouillon (legacy « Annuler » / « Enregistrer → ») :
-          toujours affichée, boutons désactivés s'il n'y a aucune modification. */}
+      {/* Sous le tableau, sur la MÊME ligne : info « max. réservations » à gauche,
+          état du brouillon à droite. Si la place manque, c'est l'info (flexible) qui
+          wrappe sur plusieurs lignes ; le compteur (figé, nowrap) reste en place. */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: ".6rem",
-          flexWrap: "wrap",
+          alignItems: "flex-start",
+          gap: "2rem",
+          flexWrap: "nowrap",
+          margin: isMobile ? "0.5rem 0 0" : "0.2rem 0 0",
         }}
       >
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={clearPending}
-          disabled={pendingCount === 0}
+        <p
+          style={{
+            fontSize: ".75rem",
+            color: "var(--muted)",
+            margin: 0,
+            flex: "1 1 auto",
+            minWidth: 0,
+          }}
         >
-          Annuler
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => setRecapOpen(true)}
-          disabled={pendingCount === 0}
+          ℹ️{" "}
+          {modes.recurringMode ? (
+            <>
+              Vous pouvez réserver{" "}
+              <strong>
+                {service.maxReservationsPeriod} créneau
+                {service.maxReservationsPeriod > 1 ? "x" : ""} par période
+              </strong>{" "}
+              et{" "}
+              <strong>
+                {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
+              </strong>
+              .
+            </>
+          ) : (
+            <>
+              Vous pouvez réserver{" "}
+              <strong>
+                {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
+              </strong>
+              .
+            </>
+          )}
+        </p>
+
+        {/* Côté droit : compteur en haut, boutons « Annuler »/« Enregistrer → » EN DESSOUS,
+            le tout aligné à droite. */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: ".5rem",
+            flex: "0 0 auto",
+          }}
         >
-          {onlyRemovals ? "Supprimer →" : "Enregistrer →"}
-        </button>
+          {/* Compteur du brouillon (ne rétrécit pas, reste sur une ligne). */}
+          <p
+            style={{
+              fontSize: ".75rem",
+              // Modifications en attente → couleur warning ; sinon muté.
+              color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
+              margin: 0,
+              textAlign: "right",
+              flex: "0 0 auto",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {pendingCount > 0
+              ? [
+                  pendingAdds.length > 0
+                    ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
+                    : "",
+                  pendingRemovals.length > 0
+                    ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
+                    : "",
+                  Object.keys(pendingUpdates).length > 0
+                    ? `${Object.keys(pendingUpdates).length} élément${
+                        Object.keys(pendingUpdates).length > 1 ? "s" : ""
+                      } à modifier`
+                    : "",
+                  Object.keys(pendingMoves).length > 0
+                    ? `${Object.keys(pendingMoves).length} élément${
+                        Object.keys(pendingMoves).length > 1 ? "s" : ""
+                      } à déplacer`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "Aucune modification en attente"}
+          </p>
+
+          {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »), SOUS le compteur. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: ".6rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-ghost"
+              // Boutons d'action du brouillon plus compacts que le .btn de base (.4rem 1rem / .75rem).
+              style={{ padding: ".28rem .7rem", fontSize: ".7rem" }}
+              onClick={clearPending}
+              disabled={pendingCount === 0}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              // Boutons compacts ; une suppression en attente → « Supprimer → » en rouge danger.
+              style={{
+                padding: ".28rem .7rem",
+                fontSize: ".7rem",
+                ...(isDeletion
+                  ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }
+                  : {}),
+              }}
+              // Enregistrement DIRECT (plus de modale de confirmation) → le résultat est
+              // signalé par un toast vert (création/modif/déplacement) ou rouge (suppression).
+              onClick={commitPending}
+              disabled={pendingCount === 0 || committing}
+            >
+              {isDeletion ? "Supprimer →" : "Enregistrer →"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Bandeau debug (legacy #dem-info) : demandeur de l'usager + ses 5 modes,
@@ -3131,216 +3432,6 @@ export function UserAgendaGrid({
               </>
             );
           })()}
-        </ModalOverlay>
-      )}
-
-      {/* Modale récapitulative (legacy reservation-confirm-modal) : liste les
-          ajouts (+ thème si demandeur en mode thèmes) et les annulations, puis
-          « Confirmer » valide tout d'un coup. */}
-      {recapOpen && (
-        <ModalOverlay onClose={() => !committing && setRecapOpen(false)}>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={() => setRecapOpen(false)}
-            aria-label="Fermer"
-          >
-            ×
-          </button>
-          <div className="modal-title">✅ Confirmer mes réservations</div>
-
-          {/* Récapitulatif usager (cf. legacy #recap-user). */}
-          <div className="panel">
-            <div className="panel-title" style={{ justifyContent: "space-between" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
-                <span className="dot" />
-                Récapitulatif
-              </span>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => window.print()}
-                style={{ padding: ".4rem .9rem", fontSize: ".78rem" }}
-              >
-                🖨️ Imprimer
-              </button>
-            </div>
-            <div className="recap-grid">
-              <div className="recap-item">
-                <div className="recap-key">Nom</div>
-                <div className="recap-val">{userInfo.nom || "—"}</div>
-              </div>
-              <div className="recap-item">
-                <div className="recap-key">Prénom</div>
-                <div className="recap-val">{userInfo.prenom || "—"}</div>
-              </div>
-              <div className="recap-item">
-                <div className="recap-key">E-mail</div>
-                <div className="recap-val">{userInfo.email || "—"}</div>
-              </div>
-              <div className="recap-item">
-                <div className="recap-key">Niveau</div>
-                <div className="recap-val">{userInfo.niveau || "—"}</div>
-              </div>
-              {/* Enfants/Adultes globaux seulement hors mode jauge (sinon par créneau). */}
-              {!(modes.gaugeRec || modes.gaugePonct) && (
-                <>
-                  <div className="recap-item">
-                    <div className="recap-key">Enfants</div>
-                    <div className="recap-val">{userInfo.enfants || "—"}</div>
-                  </div>
-                  <div className="recap-item">
-                    <div className="recap-key">Adultes</div>
-                    <div className="recap-val">{userInfo.accompagnants || "—"}</div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Liste des réservations (cf. legacy #recap-bookings). */}
-          <div className="panel">
-            <div className="panel-title">
-              <span className="dot" />
-              Mes réservations
-            </div>
-            {pendingAdds.length === 0 &&
-            pendingRemovals.length === 0 &&
-            Object.keys(pendingMoves).length === 0 ? (
-              <p className="no-booking-msg">Aucune modification.</p>
-            ) : (
-              <div className="recap-period-entries">
-                {pendingAdds.map((a) => {
-                  const slot = a.ponctuel
-                    ? uniqueSlots.find((s) => s.id === a.slotId)
-                    : slots.find((s) => s.id === a.slotId);
-                  const allDay = !slot?.startTime || !slot?.endTime;
-                  const timeStr = allDay
-                    ? "Journée entière"
-                    : `${slot?.startTime} – ${slot?.endTime}`;
-                  const dayOrDate = a.ponctuel
-                    ? ponctuelDateLabel(a.slotId)
-                    : (DAY_NAMES[a.dayKey] ?? a.dayKey);
-                  const period = periods.find((p) => p.id === a.periodId);
-                  const gaugeOn = modes.gaugeRec || modes.gaugePonct;
-                  return (
-                    <div key={a.key} className="recap-period-entry">
-                      <div
-                        className="recap-period-dot"
-                        style={a.ponctuel ? undefined : { background: period?.color }}
-                      />
-                      <div className="recap-period-info" style={{ flex: 1 }}>
-                        <div className="key">
-                          {a.ponctuel ? "Séance ponctuelle" : (period?.label ?? "")}{" "}
-                          <span style={{ color: "var(--accent)", fontWeight: 700 }}>+</span>
-                        </div>
-                        <div className="val">
-                          {dayOrDate} : {timeStr}
-                          {a.theme ? ` · ${a.theme}` : ""}
-                        </div>
-                        {gaugeOn && (
-                          <div
-                            className="val"
-                            style={{ fontSize: ".72rem", color: "var(--accent)" }}
-                          >
-                            Enfants : {a.enfants} · Adultes : {a.accompagnants}
-                          </div>
-                        )}
-                        {modes.themeMode && (
-                          <div style={{ marginTop: ".25rem" }}>
-                            {service.themesMode === "liste" ? (
-                              <select
-                                value={a.theme}
-                                onChange={(e) =>
-                                  setPendingAdds((prev) =>
-                                    prev.map((x) =>
-                                      x.key === a.key ? { ...x, theme: e.target.value } : x,
-                                    ),
-                                  )
-                                }
-                                style={{ fontSize: ".72rem" }}
-                              >
-                                <option value="">— thème —</option>
-                                {themes.map((t) => (
-                                  <option key={t} value={t}>
-                                    {t}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <input
-                                value={a.theme}
-                                onChange={(e) =>
-                                  setPendingAdds((prev) =>
-                                    prev.map((x) =>
-                                      x.key === a.key ? { ...x, theme: e.target.value } : x,
-                                    ),
-                                  )
-                                }
-                                placeholder="thème"
-                                style={{ fontSize: ".72rem", width: 160 }}
-                              />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                {pendingRemovals.map((r) => (
-                  <div key={r.bookingId} className="recap-period-entry">
-                    <div
-                      className="recap-period-dot"
-                      style={{ background: "var(--danger)", opacity: 0.5 }}
-                    />
-                    <div className="recap-period-info" style={{ flex: 1 }}>
-                      <div className="key" style={{ color: "var(--danger)" }}>
-                        Supprimée
-                      </div>
-                      <div className="val" style={{ textDecoration: "line-through", opacity: 0.6 }}>
-                        {r.label}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {Object.entries(pendingMoves).map(([id, m]) => (
-                  <div key={`move-${id}`} className="recap-period-entry">
-                    <div className="recap-period-dot" style={{ background: "var(--warn)" }} />
-                    <div className="recap-period-info" style={{ flex: 1 }}>
-                      <div className="key" style={{ color: "var(--warn)" }}>
-                        Déplacée
-                      </div>
-                      <div className="val">→ {m.label}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {commitError && (
-            <p className="field-error" style={{ display: "block", marginTop: ".4rem" }}>
-              {commitError}
-            </p>
-          )}
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setRecapOpen(false)}
-              disabled={committing}
-            >
-              ← Modifier
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={commitPending}
-              disabled={committing}
-            >
-              {committing ? "Enregistrement…" : "Enregistrer mes réservations ✓"}
-            </button>
-          </div>
         </ModalOverlay>
       )}
     </div>
