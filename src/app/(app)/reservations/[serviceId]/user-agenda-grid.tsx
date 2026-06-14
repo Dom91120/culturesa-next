@@ -581,10 +581,8 @@ function MineBadge({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              width: "45%",
+              width: "50%",
               flexShrink: 0,
-              // Mobile : descend le bloc (− nombre + / libellé) de 4px.
-              transform: mobile ? "translateY(4px)" : undefined,
             }}
           >
             <div
@@ -593,52 +591,53 @@ function MineBadge({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 0,
-                // Mobile : ligne − chiffre + compactée à 1rem de haut.
-                height: mobile ? "1rem" : undefined,
               }}
             >
               <StepBtn sign="−" color={gColor} onClick={() => onBump("enfants", -1)} big={mobile} />
-              <input
-                type="number"
-                min={1}
-                max={remaining}
-                value={enfants}
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
-                style={{
-                  width: mobile ? "2.8rem" : "1.4rem",
-                  height: mobile ? "32px" : "16px",
-                  boxSizing: "border-box",
-                  textAlign: "center",
-                  fontSize: mobile ? "1.3rem" : ".85rem",
-                  background: "transparent",
-                  border: "none",
-                  color: gColor,
-                  fontWeight: 600,
-                  padding: 0,
-                  flexShrink: 0,
-                }}
-              />
+              {/* Wrapper : input au-dessus, libellé Enfant(s) en dessous. */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={remaining}
+                  value={enfants}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
+                  style={{
+                    width: mobile ? "2.8rem" : "1.4rem",
+                    height: "18px",
+                    boxSizing: "border-box",
+                    textAlign: "center",
+                    fontSize: mobile ? "1.3rem" : ".85rem",
+                    background: "transparent",
+                    border: "none",
+                    color: gColor,
+                    fontWeight: 600,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  className="gauge-txt"
+                  style={{
+                    color: gColor,
+                    fontSize: mobile ? undefined : ".62rem",
+                    lineHeight: 1,
+                    fontWeight: 700,
+                  }}
+                >
+                  {enfants > 1 ? "Enfants" : "Enfant"}
+                </span>
+              </div>
               <StepBtn sign="+" color={gColor} onClick={() => onBump("enfants", 1)} big={mobile} />
             </div>
-            <span
-              className="gauge-txt"
-              style={{
-                color: gColor,
-                fontSize: mobile ? undefined : ".62rem",
-                lineHeight: 1,
-                fontWeight: 700,
-              }}
-            >
-              {enfants > 1 ? "Enfants" : "Enfant"}
-            </span>
           </div>
           {/* Icône d'état */}
           <span
             className="slot-icon"
             style={{
-              width: "10%",
+              width: 0,
               flexShrink: 0,
               display: "flex",
               justifyContent: "center",
@@ -654,10 +653,8 @@ function MineBadge({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              width: "45%",
+              width: "50%",
               flexShrink: 0,
-              // Mobile : descend le bloc (− nombre + / libellé) de 4px.
-              transform: mobile ? "translateY(4px)" : undefined,
             }}
           >
             <div
@@ -666,8 +663,6 @@ function MineBadge({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 0,
-                // Mobile : ligne − chiffre + compactée à 1rem de haut.
-                height: mobile ? "1rem" : undefined,
               }}
             >
               <StepBtn
@@ -676,28 +671,42 @@ function MineBadge({
                 onClick={() => onBump("accompagnants", -1)}
                 big={mobile}
               />
-              <input
-                type="number"
-                min={1}
-                max={remaining}
-                value={accompagnants}
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
-                style={{
-                  width: mobile ? "2.8rem" : "1.4rem",
-                  height: mobile ? "32px" : "16px",
-                  boxSizing: "border-box",
-                  textAlign: "center",
-                  fontSize: mobile ? "1.3rem" : ".85rem",
-                  background: "transparent",
-                  border: "none",
-                  color: gColor,
-                  fontWeight: 600,
-                  padding: 0,
-                  flexShrink: 0,
-                }}
-              />
+              {/* Wrapper : input au-dessus, libellé Adulte(s) en dessous. */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={remaining}
+                  value={accompagnants}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
+                  style={{
+                    width: mobile ? "2.8rem" : "1.4rem",
+                    height: "18px",
+                    boxSizing: "border-box",
+                    textAlign: "center",
+                    fontSize: mobile ? "1.3rem" : ".85rem",
+                    background: "transparent",
+                    border: "none",
+                    color: gColor,
+                    fontWeight: 600,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  className="gauge-txt"
+                  style={{
+                    color: gColor,
+                    fontSize: mobile ? undefined : ".62rem",
+                    lineHeight: 1,
+                    fontWeight: 700,
+                  }}
+                >
+                  {accompagnants > 1 ? "Adultes" : "Adulte"}
+                </span>
+              </div>
               <StepBtn
                 sign="+"
                 color={gColor}
@@ -705,17 +714,6 @@ function MineBadge({
                 big={mobile}
               />
             </div>
-            <span
-              className="gauge-txt"
-              style={{
-                color: gColor,
-                fontSize: mobile ? undefined : ".62rem",
-                lineHeight: 1,
-                fontWeight: 700,
-              }}
-            >
-              {accompagnants > 1 ? "Adultes" : "Adulte"}
-            </span>
           </div>
         </div>
       ) : (
