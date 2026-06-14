@@ -2807,6 +2807,24 @@ textarea.theme-pending:focus::placeholder {
 }
 
 @media (max-width: 640px) {
+  /* User bar plus compacte sur mobile : remontée, pill et bouton thème à 24px, avatar réduit. */
+  .user-bar {
+    top: .2rem;
+  }
+  .user-bar .user-pill {
+    height: 28px;
+    padding: 0 .55rem 0 .3rem;
+  }
+  .user-bar .avatar {
+    width: 20px;
+    height: 20px;
+    font-size: .58rem;
+  }
+  .btn-theme {
+    width: 28px;
+    height: 28px;
+    font-size: .85rem;
+  }
   /* Cadre : sidebar empilée en haut (barre horizontale de services), contenu pleine largeur. */
   .app-layout {
     flex-direction: column;
@@ -2821,7 +2839,7 @@ textarea.theme-pending:focus::placeholder {
     border-right: none;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
-    padding: .1rem .5rem;
+    padding: .05rem .5rem;
     /* Pas de fond sur mobile (couvre aussi la surcharge html.light, plus spécifique). */
     background: none !important;
   }
@@ -2842,8 +2860,8 @@ textarea.theme-pending:focus::placeholder {
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: .5rem .7rem;
-    font-size: .95rem;
+    padding: .3rem .7rem;
+    font-size: .82rem;
     font-weight: 600;
     cursor: pointer;
   }
@@ -2879,12 +2897,17 @@ textarea.theme-pending:focus::placeholder {
   }
   #service-sidebar button,
   #service-sidebar .sidebar-compte-btn {
-    width: auto !important;
     flex: 0 0 auto;
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: .12rem .7rem;
+    /* Même hauteur que #mobile-services-toggle (padding vertical + police identiques). */
+    padding: .3rem .7rem;
+    font-size: .82rem;
     margin-top: 0 !important;
+  }
+  /* Icône réduite (1.05rem comme le burger du toggle) → même hauteur de contenu. */
+  #service-sidebar .sb-icon {
+    font-size: 1.05rem;
   }
   /* « Mon compte » sur sa propre ligne, pleine largeur, sous les services. */
   #service-sidebar .sidebar-compte-btn {
@@ -2926,10 +2949,6 @@ textarea.theme-pending:focus::placeholder {
   #agenda-period-tabs {
     margin-top: .5rem;
     margin-bottom: 0;
-  }
-  #agenda-period-tabs .period-btn {
-    padding: .28rem .55rem;
-    font-size: .72rem;
   }
   /* La nav semaine garde son centrage ABSOLU (style inline left:50%/top:50%/translate)
      aussi sur mobile → centrée par rapport à #tab-content-agenda, sur la ligne du titre,

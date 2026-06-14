@@ -83,7 +83,7 @@ function StepBtn({
   sign: "+" | "−";
   color: string;
   onClick: () => void;
-  // Mobile : bouton 2× plus gros (cf. lisibilité au doigt).
+  // Bouton ± toujours en cercle ; `big` = grand (mobile) vs petit (desktop).
   big?: boolean;
 }) {
   const onClickRef = useRef(onClick);
@@ -125,19 +125,18 @@ function StepBtn({
       onMouseUp={stop}
       onMouseLeave={stop}
       style={{
-        // Mobile (big) : bouton carré entouré d'un cercle, glyphe centré.
-        width: big ? "1.8rem" : 14,
-        height: big ? "1.8rem" : 16,
-        border: big ? `1px solid ${color}` : "none",
-        borderRadius: big ? "50%" : undefined,
+        // Toujours un cercle, glyphe centré. Carré agrandi sur mobile (big), réduit sur desktop.
+        width: big ? "1.8rem" : "1.3rem",
+        height: big ? "1.8rem" : "1.3rem",
+        border: `1px solid ${color}`,
+        borderRadius: "50%",
         background: "transparent",
         color,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
-        // Cercle (mobile) → glyphe centré ; sinon collé vers le nombre (− à droite, + à gauche).
-        justifyContent: big ? "center" : sign === "−" ? "end" : "start",
-        fontSize: big ? "1.3rem" : ".95rem",
+        justifyContent: "center",
+        fontSize: big ? "1.3rem" : "1rem",
         fontWeight: 700,
         lineHeight: 1,
         padding: 0,
@@ -504,13 +503,14 @@ function MineBadge({
       onClick={(e) => e.stopPropagation()}
     >
       {/* × : supprime la réservation (ou le brouillon) — caché, affiché au survol via CSS.
-          Masqué si la résa est verrouillée (validation bloquante). */}
-      {!locked && (
+          Masqué si la résa est verrouillée (validation bloquante) ou déjà en cours de
+          suppression (plus de bouton « Rétablir » : on annule via « Annuler »). */}
+      {!locked && !markedRemoval && (
         <button
           type="button"
           className="slot-btn-close"
-          data-tip={markedRemoval ? "Rétablir" : "Supprimer"}
-          aria-label={markedRemoval ? "Rétablir" : "Supprimer"}
+          data-tip="Supprimer"
+          aria-label="Supprimer"
           onMouseDown={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -593,11 +593,20 @@ function MineBadge({
                 gap: 0,
               }}
             >
-              <StepBtn sign="−" color={gColor} onClick={() => onBump("enfants", -1)} big={mobile} />
+              <StepBtn
+                sign="−"
+                color={gColor}
+                onClick={() => onBump("enfants", -1)}
+                big={dragFullSurface}
+              />
               {/* Wrapper : input au-dessus, libellé Enfant(s) en dessous. */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <input
                   type="number"
+                  // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+                  readOnly
+                  tabIndex={-1}
+                  inputMode="none"
                   min={1}
                   max={remaining}
                   value={enfants}
@@ -605,17 +614,18 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    width: mobile ? "2.8rem" : "1.4rem",
+                    width: dragFullSurface ? "2.8rem" : "2rem",
                     height: "18px",
                     boxSizing: "border-box",
                     textAlign: "center",
-                    fontSize: mobile ? "1.3rem" : ".85rem",
+                    fontSize: "1.2rem",
                     background: "transparent",
                     border: "none",
                     color: gColor,
                     fontWeight: 600,
                     padding: 0,
                     flexShrink: 0,
+                    cursor: "default",
                   }}
                 />
                 <span
@@ -630,7 +640,12 @@ function MineBadge({
                   {enfants > 1 ? "Enfants" : "Enfant"}
                 </span>
               </div>
-              <StepBtn sign="+" color={gColor} onClick={() => onBump("enfants", 1)} big={mobile} />
+              <StepBtn
+                sign="+"
+                color={gColor}
+                onClick={() => onBump("enfants", 1)}
+                big={dragFullSurface}
+              />
             </div>
           </div>
           {/* Icône d'état */}
@@ -642,7 +657,7 @@ function MineBadge({
               display: "flex",
               justifyContent: "center",
               alignSelf: "flex-start",
-              ...(validated ? { fontSize: "1.1rem" } : {}),
+              fontSize: "1.1rem",
             }}
           >
             {icon}
@@ -669,12 +684,16 @@ function MineBadge({
                 sign="−"
                 color={gColor}
                 onClick={() => onBump("accompagnants", -1)}
-                big={mobile}
+                big={dragFullSurface}
               />
               {/* Wrapper : input au-dessus, libellé Adulte(s) en dessous. */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <input
                   type="number"
+                  // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+                  readOnly
+                  tabIndex={-1}
+                  inputMode="none"
                   min={1}
                   max={remaining}
                   value={accompagnants}
@@ -682,17 +701,18 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    width: mobile ? "2.8rem" : "1.4rem",
+                    width: dragFullSurface ? "2.8rem" : "2rem",
                     height: "18px",
                     boxSizing: "border-box",
                     textAlign: "center",
-                    fontSize: mobile ? "1.3rem" : ".85rem",
+                    fontSize: "1.2rem",
                     background: "transparent",
                     border: "none",
                     color: gColor,
                     fontWeight: 600,
                     padding: 0,
                     flexShrink: 0,
+                    cursor: "default",
                   }}
                 />
                 <span
@@ -711,7 +731,7 @@ function MineBadge({
                 sign="+"
                 color={gColor}
                 onClick={() => onBump("accompagnants", 1)}
-                big={mobile}
+                big={dragFullSurface}
               />
             </div>
           </div>
@@ -720,8 +740,8 @@ function MineBadge({
         <span
           className="slot-icon"
           style={{
-            // Icône d'état des badges non-éditables (validé / en attente / à annuler) : 18×18 px.
-            fontSize: 18,
+            // Icône d'état des badges non-éditables (validé / en attente / à annuler).
+            fontSize: "1.1rem",
             lineHeight: 1,
             width: 18,
             height: 18,
@@ -2418,7 +2438,7 @@ export function UserAgendaGrid({
                     cur.enfants,
                     cur.accompagnants,
                   )}${tipWeek}`}
-                  closeIcon={markedRemoval ? "↺" : "×"}
+                  closeIcon="×"
                   locked={bookingLocked(mb)}
                   onClose={() => togglePendingRemoval(mb)}
                   onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
@@ -2431,7 +2451,8 @@ export function UserAgendaGrid({
                   // (Auparavant gaté sur `!mb.validated`, plus restrictif que le serveur.)
                   draggable={!bookingLocked(mb) && !markedRemoval}
                   dragFullSurface={isMobile}
-                  mobile={isMobile}
+                  // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
+                  mobile
                   dragging={dragItem?.kind === "booking" && dragItem.bookingId === mb.id}
                   onDragPointerDown={(e) =>
                     beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e)
@@ -2483,7 +2504,8 @@ export function UserAgendaGrid({
                   // Brouillon : toujours déplaçable (relocalise simplement l'ajout).
                   draggable
                   dragFullSurface={isMobile}
-                  mobile={isMobile}
+                  // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
+                  mobile
                   dragging={dragItem?.kind === "draft" && dragItem.key === add.key}
                   onDragPointerDown={(e) =>
                     beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e)
@@ -3035,72 +3057,179 @@ export function UserAgendaGrid({
         </div>
       </div>
 
-      {/* Sous le tableau, sur la MÊME ligne : info « max. réservations » à gauche,
-          état du brouillon à droite. Si la place manque, c'est l'info (flexible) qui
-          wrappe sur plusieurs lignes ; le compteur (figé, nowrap) reste en place. */}
+      {/* Légende des états (sous le tableau) : mini-badge (icône d'état seule) + libellé. */}
       <div
         style={{
           display: "flex",
+          flexDirection: "column",
           alignItems: "flex-start",
-          gap: "2rem",
-          flexWrap: "nowrap",
-          margin: isMobile ? "0.5rem 0 0" : "0.2rem 0 0",
+          gap: ".4rem",
+          margin: "0.2rem 0 0",
+          fontSize: ".75rem",
+          color: "var(--muted)",
         }}
       >
-        <p
-          style={{
-            fontSize: ".75rem",
-            color: "var(--muted)",
-            margin: 0,
-            flex: "1 1 auto",
-            minWidth: 0,
-          }}
-        >
-          ℹ️{" "}
-          {modes.recurringMode ? (
-            <>
-              Vous pouvez réserver{" "}
-              <strong>
-                {service.maxReservationsPeriod} créneau
-                {service.maxReservationsPeriod > 1 ? "x" : ""} par période
-              </strong>{" "}
-              et{" "}
-              <strong>
-                {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
-              </strong>
-              .
-            </>
-          ) : (
-            <>
-              Vous pouvez réserver{" "}
-              <strong>
-                {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
-              </strong>
-              .
-            </>
-          )}
-        </p>
-
-        {/* Côté droit : compteur en haut, boutons « Annuler »/« Enregistrer → » EN DESSOUS,
-            le tout aligné à droite. */}
+        {/* 1re ligne : état « en attente » à gauche, info « max. réservations » à droite. */}
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: ".5rem",
-            flex: "0 0 auto",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "1rem",
+            width: "100%",
           }}
         >
-          {/* Compteur du brouillon (ne rétrécit pas, reste sur une ligne). */}
+          {/* Info « max. réservations » (ligne du haut, alignée à gauche). */}
           <p
             style={{
               fontSize: ".75rem",
-              // Modifications en attente → couleur warning ; sinon muté.
+              color: "var(--muted)",
+              margin: 0,
+              textAlign: "left",
+              flex: "1 1 auto",
+              minWidth: 0,
+            }}
+          >
+            ℹ️{" "}
+            {modes.recurringMode ? (
+              <>
+                Vous pouvez réserver{" "}
+                <strong>
+                  {service.maxReservationsPeriod} créneau
+                  {service.maxReservationsPeriod > 1 ? "x" : ""} par période
+                </strong>{" "}
+                et{" "}
+                <strong>
+                  {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
+                </strong>
+                .
+              </>
+            ) : (
+              <>
+                Vous pouvez réserver{" "}
+                <strong>
+                  {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
+                </strong>
+                .
+              </>
+            )}
+          </p>
+        </div>
+        {/* 2e ligne : état « en attente » à gauche, boutons d'action à droite. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "2rem",
+            width: "100%",
+          }}
+        >
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: ".45rem", flexShrink: 0 }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 34,
+                height: 20,
+                borderRadius: "var(--rad-sm)",
+                background: "#ffe6a7",
+                boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+                flexShrink: 0,
+              }}
+            >
+              <span
+                className="slot-icon"
+                style={{ fontSize: ".85rem", lineHeight: 1, color: "#b2a478" }}
+              >
+                ⏳
+              </span>
+            </span>
+            En attente de validation
+          </span>
+          {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: ".6rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: ".28rem .7rem", fontSize: ".7rem" }}
+              onClick={clearPending}
+              disabled={pendingCount === 0}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              // Une suppression en attente → « Supprimer → » en rouge danger.
+              style={{
+                padding: ".28rem .7rem",
+                fontSize: ".7rem",
+                ...(isDeletion
+                  ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }
+                  : {}),
+              }}
+              // Enregistrement DIRECT → toast vert (création/modif/déplacement) ou rouge.
+              onClick={commitPending}
+              disabled={pendingCount === 0 || committing}
+            >
+              {isDeletion ? "Supprimer →" : "Enregistrer →"}
+            </button>
+          </div>
+        </div>
+        {/* 3e ligne : état « validée » à gauche, compteur du brouillon à droite. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "2rem",
+            width: "100%",
+          }}
+        >
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: ".45rem", flexShrink: 0 }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 34,
+                height: 20,
+                borderRadius: "var(--rad-sm)",
+                background: "#c8e8b8",
+                boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+                flexShrink: 0,
+              }}
+            >
+              <span
+                className="slot-icon"
+                style={{ fontSize: ".85rem", lineHeight: 1, color: "#3e7e2f" }}
+              >
+                ✔
+              </span>
+            </span>
+            Validée
+          </span>
+          {/* Compteur du brouillon (aligné à droite). */}
+          <p
+            style={{
+              fontSize: ".75rem",
               color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
               margin: 0,
               textAlign: "right",
-              flex: "0 0 auto",
               whiteSpace: "nowrap",
             }}
           >
@@ -3127,46 +3256,6 @@ export function UserAgendaGrid({
                   .join(" · ")
               : "Aucune modification en attente"}
           </p>
-
-          {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »), SOUS le compteur. */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              gap: ".6rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <button
-              type="button"
-              className="btn btn-ghost"
-              // Boutons d'action du brouillon plus compacts que le .btn de base (.4rem 1rem / .75rem).
-              style={{ padding: ".28rem .7rem", fontSize: ".7rem" }}
-              onClick={clearPending}
-              disabled={pendingCount === 0}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              // Boutons compacts ; une suppression en attente → « Supprimer → » en rouge danger.
-              style={{
-                padding: ".28rem .7rem",
-                fontSize: ".7rem",
-                ...(isDeletion
-                  ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }
-                  : {}),
-              }}
-              // Enregistrement DIRECT (plus de modale de confirmation) → le résultat est
-              // signalé par un toast vert (création/modif/déplacement) ou rouge (suppression).
-              onClick={commitPending}
-              disabled={pendingCount === 0 || committing}
-            >
-              {isDeletion ? "Supprimer →" : "Enregistrer →"}
-            </button>
-          </div>
         </div>
       </div>
 
