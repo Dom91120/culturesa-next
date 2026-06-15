@@ -10,5 +10,5 @@ export default async function ServiceSettingsIndex({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(`/services/${id}/reservations`);
+  redirect(`/services/${id}/periodes`);
 }

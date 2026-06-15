@@ -53,6 +53,16 @@ const DAYS: { key: string; label: string; full: string }[] = [
   { key: "dim", label: "Dim", full: "Dimanche" },
 ];
 
+// Libellé « Matin » / « Après-midi » de la grille des plages horaires.
+const timeLabelStyle: React.CSSProperties = {
+  fontSize: ".62rem",
+  fontWeight: 700,
+  letterSpacing: ".09em",
+  textTransform: "uppercase",
+  color: "var(--muted)",
+  whiteSpace: "nowrap",
+};
+
 /** Tri legacy : dateStart croissant (nulls en dernier), puis id. */
 function sortPeriods(periods: UiPeriod[]): UiPeriod[] {
   return periods.slice().sort((a, b) => {
@@ -340,41 +350,45 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
 
   return (
     <div className="panel">
-      {/* ── Ligne périodes : titre · nav exercice · tableau · actions ──────── */}
-      <div id="periods-row">
-        {/* Titre + navigation exercice sur une même ligne ; tableau en dessous. */}
-        <div className="pr-head">
-          <div className="panel-title pr-title">
-            <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-              <span className="dot" style={{ background: "var(--warn)" }} />
-              Périodes
-            </span>
-          </div>
-
-          <div className="periode-nav">
-            <button
-              type="button"
-              className="ex-arrow"
-              onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
-              disabled={!canPrev}
-              aria-label="Exercice précédent"
-            >
-              ◀
-            </button>
-            <span className="ex-nav-label">{exerciceLabel}</span>
-            <button
-              type="button"
-              className="ex-arrow"
-              onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
-              disabled={!canNext}
-              aria-label="Exercice suivant"
-            >
-              ▶
-            </button>
-          </div>
+      {/* Bandeau « Exercice ◀ … ▶ » : EXTRAIT du multi-colonnage, pleine largeur au-dessus. */}
+      <div className="pr-head">
+        <div className="panel-title pr-title" style={{ fontWeight: 500 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            <span className="dot" style={{ background: "var(--warn)" }} />
+            Exercice
+          </span>
         </div>
 
+        <div className="periode-nav">
+          <button
+            type="button"
+            className="ex-arrow"
+            onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
+            disabled={!canPrev}
+            aria-label="Exercice précédent"
+          >
+            ◀
+          </button>
+          <span className="ex-nav-label">{exerciceLabel}</span>
+          <button
+            type="button"
+            className="ex-arrow"
+            onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
+            disabled={!canNext}
+            aria-label="Exercice suivant"
+          >
+            ▶
+          </button>
+        </div>
+      </div>
+
+      {/* ── Multi-colonnage : tableau des périodes · actions · plages horaires ── */}
+      <div id="periods-row">
         <div className="pr-editor">
+          {/* Sous-titre discret entre « Exercice » et le tableau des périodes. */}
+          <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+            Périodes
+          </div>
           {visiblePeriods.length > 0 ? (
             <table className="periods-table">
               <thead>
@@ -393,7 +407,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                   </th>
                   <th>Coul</th>
                   <th>Étiq</th>
-                  <th className="td-left" style={{ width: 260 }}>
+                  <th className="td-left" style={{ width: 250 }}>
                     Libellé
                   </th>
                   <th>Début</th>
@@ -493,13 +507,93 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
               marginLeft: "auto",
               borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
               color: "var(--accent)",
-              padding: ".25rem .7rem",
-              fontSize: ".7rem",
+              padding: ".18rem .5rem",
+              fontSize: ".62rem",
               whiteSpace: "nowrap",
             }}
           >
             ＋ Ajouter une période
           </button>
+        </div>
+        {/* Plages horaires : placées dans la colonne DROITE de la grille #periods-row,
+            à côté du tableau Périodes (au lieu d'être empilées en dessous). */}
+        <div className="pr-hours">
+          <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+            Plages horaires
+          </div>
+          <div
+            className="defaults-row"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: ".5rem",
+            }}
+          >
+            {/* Matin / Après-midi : grille « libellé | début | fin » → les deux lignes sont
+                alignées en colonnes, avec un interligne réduit (rowGap). */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto auto auto",
+                columnGap: ".5rem",
+                rowGap: ".3rem",
+                alignItems: "center",
+                justifyContent: "start",
+              }}
+            >
+              <span style={timeLabelStyle}>Matin</span>
+              <TimeStepper
+                value={morningStart}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setMorningStart(v);
+                }}
+              />
+              <TimeStepper
+                value={morningEnd}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setMorningEnd(v);
+                }}
+              />
+              <span style={timeLabelStyle}>Après-midi</span>
+              <TimeStepper
+                value={afternoonStart}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setAfternoonStart(v);
+                }}
+              />
+              <TimeStepper
+                value={afternoonEnd}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setAfternoonEnd(v);
+                }}
+              />
+            </div>
+            {/* Auto-save : statut, sur sa propre ligne sous les plages. */}
+            <div
+              style={{ display: "flex", alignItems: "center", gap: ".5rem", minHeight: ".9rem" }}
+            >
+              {openingError && (
+                <span className="field-error" style={{ display: "inline" }}>
+                  {openingError}
+                </span>
+              )}
+              {!openingError && pending && (
+                <span style={{ fontSize: ".78rem", color: "var(--muted)" }}>Enregistrement…</span>
+              )}
+              {!openingError && !pending && openingSaved && (
+                <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -510,8 +604,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
       )}
 
       {/* ── Jours d'ouverture ──────────────────────────────────────────────── */}
-      <div className="panel-title panel-second-title">
-        <span className="dot" style={{ background: "var(--warn)" }} />
+      <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
         Jours d&apos;ouverture
       </div>
       <div style={{ display: "flex", gap: ".55rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -525,7 +618,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                 alignItems: "center",
                 gap: ".3rem",
                 cursor: "pointer",
-                fontSize: ".75rem",
+                fontSize: ".62rem",
                 fontWeight: 500,
               }}
             >
@@ -536,7 +629,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                 onChange={() => toggleDay(d.key)}
                 style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
               />
-              {d.label}
+              {d.full}
             </label>
           ))}
         </div>
@@ -556,7 +649,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             alignItems: "center",
             gap: ".3rem",
             cursor: "pointer",
-            fontSize: ".75rem",
+            fontSize: ".62rem",
             fontWeight: 500,
           }}
         >
@@ -579,7 +672,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             alignItems: "center",
             gap: ".3rem",
             cursor: "pointer",
-            fontSize: ".75rem",
+            fontSize: ".62rem",
             fontWeight: 500,
           }}
         >
@@ -595,89 +688,6 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
           />
           Vacances scolaires
         </label>
-      </div>
-
-      {/* ── Plages horaires ────────────────────────────────────────────────── */}
-      <div className="panel-title panel-second-title">
-        <span className="dot" style={{ background: "var(--warn)" }} />
-        Plages horaires
-      </div>
-      <div
-        className="defaults-row"
-        style={{ display: "flex", alignItems: "center", gap: "2rem", flexWrap: "wrap" }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-          <span
-            style={{
-              fontSize: ".62rem",
-              fontWeight: 700,
-              letterSpacing: ".09em",
-              textTransform: "uppercase",
-              color: "var(--muted)",
-            }}
-          >
-            Matin
-          </span>
-          <TimeStepper
-            value={morningStart}
-            onChange={(v) => {
-              hoursTouchedRef.current = true;
-              setOpeningSaved(false);
-              setMorningStart(v);
-            }}
-          />
-          <TimeStepper
-            value={morningEnd}
-            onChange={(v) => {
-              hoursTouchedRef.current = true;
-              setOpeningSaved(false);
-              setMorningEnd(v);
-            }}
-          />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-          <span
-            style={{
-              fontSize: ".62rem",
-              fontWeight: 700,
-              letterSpacing: ".09em",
-              textTransform: "uppercase",
-              color: "var(--muted)",
-            }}
-          >
-            Après-midi
-          </span>
-          <TimeStepper
-            value={afternoonStart}
-            onChange={(v) => {
-              hoursTouchedRef.current = true;
-              setOpeningSaved(false);
-              setAfternoonStart(v);
-            }}
-          />
-          <TimeStepper
-            value={afternoonEnd}
-            onChange={(v) => {
-              hoursTouchedRef.current = true;
-              setOpeningSaved(false);
-              setAfternoonEnd(v);
-            }}
-          />
-        </div>
-        {/* Auto-save : statut seulement (plus de bouton « Enregistrer »). */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".5rem" }}>
-          {openingError && (
-            <span className="field-error" style={{ display: "inline" }}>
-              {openingError}
-            </span>
-          )}
-          {!openingError && pending && (
-            <span style={{ fontSize: ".78rem", color: "var(--muted)" }}>Enregistrement…</span>
-          )}
-          {!openingError && !pending && openingSaved && (
-            <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
-          )}
-        </div>
       </div>
 
       {/* ── Modale création / édition ──────────────────────────────────────── */}

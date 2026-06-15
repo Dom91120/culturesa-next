@@ -72,7 +72,7 @@ export function deletePeriod(id: number) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sous-onglet Paramètres → Périodes d'ouverture (par service)
+// Sous-onglet Paramètres → Périodes et réservations (par service)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Libellé d'un exercice scolaire à partir de son année de début : « 2025-2026 ». */

@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation";
 type SubTab = { slug: string; label: string; icon: string };
 
 const SUB_TABS: SubTab[] = [
-  { slug: "reservations", label: "Réservations", icon: "📝" },
-  { slug: "periodes", label: "Périodes d'ouverture", icon: "🗓️" },
+  // L'onglet « Réservations » a été fusionné dans « Périodes et réservations » (son panneau
+  // est désormais rendu sous les périodes) ; la route /reservations redirige vers /periodes.
+  { slug: "periodes", label: "Périodes et réservations", icon: "🗓️" },
   { slug: "config", label: "Configuration", icon: "✨" },
   { slug: "exercice", label: "Changement d'exercice", icon: "🔄" },
   { slug: "rgpd", label: "RGPD", icon: "🛡️" },

@@ -1,32 +1,14 @@
-import { getService } from "@/server/services/services";
-import { notFound } from "next/navigation";
-import { ParamsSubnav } from "../params-subnav";
-import { ReservationsPanel } from "./reservations-panel";
+import { redirect } from "next/navigation";
 
+// L'onglet « Réservations » a été fusionné dans « Périodes et réservations » : son panneau
+// est désormais rendu sous les périodes (cf. ../periodes/page.tsx). Cette route redirige
+// vers /periodes pour ne pas casser les liens/marque-pages existants. Le composant
+// ReservationsPanel reste dans ce dossier (importé par la page périodes).
 export default async function ReservationsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const service = await getService(id);
-  if (!service) notFound();
-
-  return (
-    <div>
-      <ParamsSubnav serviceId={id} />
-      <ReservationsPanel
-        serviceId={id}
-        maxReservations={service.maxReservations}
-        maxReservationsPeriod={service.maxReservationsPeriod}
-        bookingDelay={service.bookingDelay}
-        autoValidationDelay={service.autoValidationDelay}
-        validationBloquante={service.validationBloquante}
-        mgrNoticeMode={service.mgrNoticeMode}
-        mgrNoticeIntervalHours={service.mgrNoticeIntervalHours}
-        mgrNoticeHour={service.mgrNoticeHour}
-        mgrNoticeWeekday={service.mgrNoticeWeekday}
-      />
-    </div>
-  );
+  redirect(`/services/${id}/periodes`);
 }

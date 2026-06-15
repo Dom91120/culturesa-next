@@ -2,6 +2,7 @@ import { getServiceOpeningConfig, listServicePeriods } from "@/server/services/p
 import { getService } from "@/server/services/services";
 import { notFound } from "next/navigation";
 import { ParamsSubnav } from "../params-subnav";
+import { ReservationsPanel } from "../reservations/reservations-panel";
 import { PeriodesPanel } from "./periodes-panel";
 
 /** Date (colonne @db.Date) → « YYYY-MM-DD » en UTC ; null → "". */
@@ -52,6 +53,19 @@ export default async function PeriodesPage({
             afternoonEnd: "18:00",
           }
         }
+      />
+      {/* Panneau « Réservations » déplacé sous les périodes (onglet « Périodes et réservations »). */}
+      <ReservationsPanel
+        serviceId={id}
+        maxReservations={service.maxReservations}
+        maxReservationsPeriod={service.maxReservationsPeriod}
+        bookingDelay={service.bookingDelay}
+        autoValidationDelay={service.autoValidationDelay}
+        validationBloquante={service.validationBloquante}
+        mgrNoticeMode={service.mgrNoticeMode}
+        mgrNoticeIntervalHours={service.mgrNoticeIntervalHours}
+        mgrNoticeHour={service.mgrNoticeHour}
+        mgrNoticeWeekday={service.mgrNoticeWeekday}
       />
     </div>
   );

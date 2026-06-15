@@ -1,7 +1,7 @@
 "use client";
 
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { setMailPrefAction, setMailTemplateAction } from "./actions";
 import { RichTextEditor } from "./rich-text-editor";
 
@@ -111,13 +111,27 @@ export function EchangesConfig({ rows }: { rows: KindData[] }) {
       } else {
         setSaved((s) => ({ ...s, [kind]: { ...d } }));
         setMsg({ ok: true, text: "Modèle enregistré ✓" });
+        setEditing(null); // ferme la modale après un enregistrement réussi
       }
     });
   }
 
+  // Fermeture de la modale d'édition par la touche Échap.
+  useEffect(() => {
+    if (!editing) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setEditing(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [editing]);
+
   function isDirty(kind: string): boolean {
     return draft[kind].subject !== saved[kind].subject || draft[kind].html !== saved[kind].html;
   }
+
+  // Modèle en cours d'édition (affiché dans la modale), ou null.
+  const editingRow = editing ? (rows.find((r) => r.kind === editing) ?? null) : null;
 
   return (
     <div className="panel" id="echanges-panel">
@@ -146,26 +160,16 @@ export function EchangesConfig({ rows }: { rows: KindData[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
-            const open = editing === r.kind;
-            return (
-              <Row
-                key={r.kind}
-                r={r}
-                open={open}
-                enabled={enabled[r.kind] ?? true}
-                draft={draft[r.kind]}
-                dirty={isDirty(r.kind)}
-                pending={pending}
-                editorKey={`${r.kind}-${editorNonce}`}
-                onToggleSend={(v) => toggleSend(r.kind, v)}
-                onToggleEdit={() => setEditing(open ? null : r.kind)}
-                onField={(f, v) => setField(r.kind, f, v)}
-                onReset={() => resetToDefault(r)}
-                onSave={() => saveTemplate(r.kind)}
-              />
-            );
-          })}
+          {rows.map((r) => (
+            <Row
+              key={r.kind}
+              r={r}
+              enabled={enabled[r.kind] ?? true}
+              pending={pending}
+              onToggleSend={(v) => toggleSend(r.kind, v)}
+              onEdit={() => setEditing(r.kind)}
+            />
+          ))}
         </tbody>
       </table>
 
@@ -180,6 +184,40 @@ export function EchangesConfig({ rows }: { rows: KindData[] }) {
         >
           {msg.text}
         </span>
+      )}
+
+      {/* Modale d'édition d'un modèle d'e-mail (objet + corps + aperçu). */}
+      {editingRow && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture clavier gérée globalement (Échap)
+        <div
+          className="modal-overlay open"
+          style={{ display: "flex" }}
+          // Clic sur le fond (hors de la boîte) → ferme la modale.
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditing(null);
+          }}
+        >
+          <div
+            className="modal-box"
+            style={{ maxWidth: 1000, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div className="modal-title">✏️ {editingRow.label}</div>
+            <Editor
+              draft={draft[editingRow.kind]}
+              variables={editingRow.variables}
+              label={editingRow.label}
+              dirty={isDirty(editingRow.kind)}
+              pending={pending}
+              editorKey={`${editingRow.kind}-${editorNonce}`}
+              onField={(f, v) => setField(editingRow.kind, f, v)}
+              onReset={() => resetToDefault(editingRow)}
+              onSave={() => saveTemplate(editingRow.kind)}
+            />
+            <button type="button" className="modal-close" onClick={() => setEditing(null)}>
+              ×
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -197,89 +235,56 @@ function th(align: "left" | "center"): React.CSSProperties {
 
 function Row({
   r,
-  open,
   enabled,
-  draft,
-  dirty,
   pending,
-  editorKey,
   onToggleSend,
-  onToggleEdit,
-  onField,
-  onReset,
-  onSave,
+  onEdit,
 }: {
   r: KindData;
-  open: boolean;
   enabled: boolean;
-  draft: { subject: string; html: string };
-  dirty: boolean;
   pending: boolean;
-  editorKey: string;
   onToggleSend: (v: boolean) => void;
-  onToggleEdit: () => void;
-  onField: (field: "subject" | "html", value: string) => void;
-  onReset: () => void;
-  onSave: () => void;
+  onEdit: () => void;
 }) {
   const cell: React.CSSProperties = {
     padding: ".55rem .6rem",
     borderBottom: "1px solid var(--border)",
   };
   return (
-    <>
-      <tr>
-        <td style={cell}>
-          <div style={{ fontWeight: 600 }}>{r.label}</div>
-          <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
-            {r.description}
-          </div>
-        </td>
-        <td style={{ ...cell, textAlign: "center" }}>
-          <input
-            type="checkbox"
-            aria-label={`Envoyer : ${r.label}`}
-            // Verrouillé → toujours coché et non modifiable (e-mail obligatoire).
-            checked={r.locked ? true : enabled}
-            disabled={pending || r.locked}
-            title={r.locked ? "Cet e-mail est toujours envoyé (non désactivable)." : undefined}
-            onChange={(e) => onToggleSend(e.target.checked)}
-            style={{
-              width: 18,
-              height: 18,
-              cursor: pending || r.locked ? "default" : "pointer",
-            }}
-          />
-        </td>
-        <td style={{ ...cell, textAlign: "center" }}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={onToggleEdit}
-            style={{ padding: ".25rem .6rem", fontSize: ".76rem" }}
-          >
-            {open ? "Fermer" : "✏️ Modifier"}
-          </button>
-        </td>
-      </tr>
-      {open && (
-        <tr>
-          <td colSpan={3} style={{ padding: ".6rem", borderBottom: "1px solid var(--border)" }}>
-            <Editor
-              draft={draft}
-              variables={r.variables}
-              label={r.label}
-              dirty={dirty}
-              pending={pending}
-              editorKey={editorKey}
-              onField={onField}
-              onReset={onReset}
-              onSave={onSave}
-            />
-          </td>
-        </tr>
-      )}
-    </>
+    <tr>
+      <td style={cell}>
+        <div style={{ fontWeight: 600 }}>{r.label}</div>
+        <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
+          {r.description}
+        </div>
+      </td>
+      <td style={{ ...cell, textAlign: "center" }}>
+        <input
+          type="checkbox"
+          aria-label={`Envoyer : ${r.label}`}
+          // Verrouillé → toujours coché et non modifiable (e-mail obligatoire).
+          checked={r.locked ? true : enabled}
+          disabled={pending || r.locked}
+          title={r.locked ? "Cet e-mail est toujours envoyé (non désactivable)." : undefined}
+          onChange={(e) => onToggleSend(e.target.checked)}
+          style={{
+            width: 18,
+            height: 18,
+            cursor: pending || r.locked ? "default" : "pointer",
+          }}
+        />
+      </td>
+      <td style={{ ...cell, textAlign: "center" }}>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={onEdit}
+          style={{ padding: ".25rem .6rem", fontSize: ".76rem" }}
+        >
+          ✏️ Modifier
+        </button>
+      </td>
+    </tr>
   );
 }
 

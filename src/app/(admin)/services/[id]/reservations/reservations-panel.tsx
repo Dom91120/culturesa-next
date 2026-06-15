@@ -50,7 +50,7 @@ const AUTO_VALIDATION_OPTIONS: { value: number; label: string }[] = [
 ];
 
 const selectStyle: React.CSSProperties = {
-  fontSize: ".85rem",
+  fontSize: ".62rem",
   padding: ".3rem .5rem",
   borderRadius: "var(--rad-sm)",
   border: "1px solid var(--border)",
@@ -62,32 +62,19 @@ const radioRow: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: ".4rem",
-  fontSize: ".85rem",
+  fontSize: ".62rem",
   flexWrap: "wrap",
 };
 
 const numStyle: React.CSSProperties = {
   width: 56,
-  fontSize: ".85rem",
+  fontSize: ".62rem",
   padding: ".2rem .35rem",
   borderRadius: "var(--rad-sm)",
   border: "1px solid var(--border)",
   background: "var(--surface2)",
   color: "var(--text)",
 };
-
-/** Pastille secondaire (titres des sections 2-4) — variante discrète. */
-function SecondTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="panel-title panel-second-title"
-      style={{ fontSize: ".82rem", color: "var(--muted)" }}
-    >
-      <span className="dot" style={{ background: "var(--warn)" }} />
-      {children}
-    </div>
-  );
-}
 
 export function ReservationsPanel(props: Props) {
   const { serviceId } = props;
@@ -170,96 +157,106 @@ export function ReservationsPanel(props: Props) {
     <div className="panel">
       <div className="panel-title">
         <span className="dot" style={{ background: "var(--warn)" }} />
-        Nombre de réservations
+        Réservations
       </div>
 
       <div
         style={{
-          display: "flex",
-          gap: "2.5rem",
-          flexWrap: "wrap",
+          display: "grid",
+          gridTemplateColumns: "max-content minmax(0, 1fr)",
+          columnGap: "5rem",
+          alignItems: "start",
           marginBottom: ".5rem",
         }}
       >
-        <Stepper
-          label="Maximum par période"
-          value={maxReservationsPeriod}
-          onMinus={() => stepMaxPeriod(-1)}
-          onPlus={() => stepMaxPeriod(1)}
-          disabled={pending}
-        />
-        <Stepper
-          label="Maximum par an"
-          value={maxReservations}
-          onMinus={() => stepMax(-1)}
-          onPlus={() => stepMax(1)}
-          disabled={pending}
-        />
+        {/* Groupe des deux compteurs « Maximum par période / par an ». */}
+        <div style={{ display: "flex", gap: "2.5rem", flexWrap: "wrap" }}>
+          <Stepper
+            label="Maximum par période"
+            value={maxReservationsPeriod}
+            onMinus={() => stepMaxPeriod(-1)}
+            onPlus={() => stepMaxPeriod(1)}
+            disabled={pending}
+          />
+          <Stepper
+            label="Maximum par an"
+            value={maxReservations}
+            onMinus={() => stepMax(-1)}
+            onPlus={() => stepMax(1)}
+            disabled={pending}
+          />
+        </div>
+
+        {/* Colonne de droite : délai avant réservation + verrouillage des résas validées. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: ".3rem" }}>
+          <label
+            title="Délai minimum avant une séance"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: ".6rem",
+              fontSize: ".62rem",
+              flexWrap: "wrap",
+            }}
+          >
+            Délai de réservation
+            <select
+              value={bookingDelay}
+              disabled={pending}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setBookingDelay(v);
+                save({ bookingDelay: v });
+              }}
+              style={selectStyle}
+            >
+              {BOOKING_DELAY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label
+            title="Verrouille les réservations validées"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: ".5rem",
+              fontSize: ".62rem",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              className="admin-cb"
+              checked={validationBloquante}
+              disabled={pending}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setValidationBloquante(v);
+                save({ validationBloquante: v });
+              }}
+              style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+            />
+            Validation bloquante
+          </label>
+        </div>
       </div>
 
-      <SecondTitle>Délai de réservation</SecondTitle>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".6rem",
-          fontSize: ".85rem",
-          flexWrap: "wrap",
-        }}
-      >
-        Délai minimum avant une séance
-        <select
-          value={bookingDelay}
-          disabled={pending}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            setBookingDelay(v);
-            save({ bookingDelay: v });
-          }}
-          style={selectStyle}
-        >
-          {BOOKING_DELAY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <SecondTitle>Validation bloquante</SecondTitle>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".5rem",
-          fontSize: ".85rem",
-          cursor: "pointer",
-          userSelect: "none",
-        }}
-      >
-        Verrouillage des réservations validées
-        <input
-          type="checkbox"
-          className="admin-cb"
-          checked={validationBloquante}
-          disabled={pending}
-          onChange={(e) => {
-            const v = e.target.checked;
-            setValidationBloquante(v);
-            save({ validationBloquante: v });
-          }}
-          style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
-        />
-      </label>
-
-      <SecondTitle>Auto-validation</SecondTitle>
+      {/* Même style que le sous-titre « Périodes » (panel-subtitle, .85rem, léger gras). */}
+      <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+        Auto-validation
+      </div>
       <label
         title="Les réservations en attente sont validées automatiquement après ce délai, sauf si la séance est déjà passée"
         style={{
           display: "flex",
           alignItems: "center",
           gap: ".6rem",
-          fontSize: ".85rem",
+          fontSize: ".62rem",
           flexWrap: "wrap",
         }}
       >
@@ -282,7 +279,13 @@ export function ReservationsPanel(props: Props) {
         </select>
       </label>
 
-      <SecondTitle>Auto-validation — notification aux gestionnaires</SecondTitle>
+      {/* Même style que le sous-titre « Périodes » (panel-subtitle, .85rem, léger gras). */}
+      <div
+        className="panel-subtitle"
+        style={{ fontSize: ".85rem", fontWeight: 500, margin: "2rem 0 0.85rem" }}
+      >
+        Auto-validation : notification aux gestionnaires
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: ".4rem" }}>
         <label style={radioRow}>
           <input
@@ -446,10 +449,19 @@ function Stepper({
   };
   return (
     <div>
-      <div style={{ fontSize: ".78rem", color: "var(--muted)", marginBottom: ".35rem" }}>
+      <div
+        style={{
+          fontSize: ".78rem",
+          color: "var(--muted)",
+          marginBottom: ".3rem",
+          textAlign: "center",
+        }}
+      >
         {label}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: ".75rem" }}>
+      <div
+        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: ".75rem" }}
+      >
         <button
           type="button"
           className="btn btn-ghost"
@@ -462,7 +474,7 @@ function Stepper({
         </button>
         <span
           style={{
-            fontSize: "1.6rem",
+            fontSize: "1.3rem",
             fontWeight: 700,
             color: "var(--warn)",
             minWidth: "1.5ch",

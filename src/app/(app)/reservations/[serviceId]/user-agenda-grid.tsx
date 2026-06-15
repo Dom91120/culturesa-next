@@ -70,6 +70,17 @@ type Period = {
 };
 type Exercice = { id: number; label: string };
 
+// Échelle proportionnelle BORNÉE des badges « ma réservation ». 1 unité = `--bu`, défini
+// en CSS sur .user-agenda-mine-badge comme `clamp(0.3px, 1cqmin, 0.8px)` : proportionnel
+// au plus petit côté de la cellule créneau (conteneur `container-type: size`), borné par un
+// plancher (0.3px, créneaux courts) et un plafond (0.8px, non mordant car la cellule est
+// plafonnée à 50px → 1cqmin ≤ 0.5px). Tous les éléments du badge (police, boutons ±, icônes,
+// thème, espacements) valent un multiple de cette unité → leur taille suit la hauteur/largeur
+// du créneau. `--bu` est hérité par tous les descendants ; il se résout toujours contre la
+// cellule créneau. (Coefficients calibrés pour ~retrouver les tailles d'origine quand le
+// plus petit côté du créneau ≈ 50 px : N ≈ pixels × 2.)
+const bu = (n: number) => `calc(var(--bu) * ${n})`;
+
 // Bouton − / + d'un compteur de jauge (sans cercle, remplace les anciennes flèches ▲▼).
 // Clic-maintenu : 1er pas immédiat, puis répétition (90 ms) après un délai de 400 ms
 // tant que le bouton reste enfoncé. La répétition appelle TOUJOURS le `onClick` courant
@@ -78,13 +89,10 @@ function StepBtn({
   sign,
   color,
   onClick,
-  big = false,
 }: {
   sign: "+" | "−";
   color: string;
   onClick: () => void;
-  // Bouton ± toujours en cercle ; `big` = grand (mobile) vs petit (desktop).
-  big?: boolean;
 }) {
   const onClickRef = useRef(onClick);
   onClickRef.current = onClick;
@@ -125,10 +133,10 @@ function StepBtn({
       onMouseUp={stop}
       onMouseLeave={stop}
       style={{
-        // Toujours un cercle, glyphe centré. Carré agrandi sur mobile (big), réduit sur desktop.
-        width: big ? "1.8rem" : "1.3rem",
-        height: big ? "1.8rem" : "1.3rem",
-        border: `1px solid ${color}`,
+        // Toujours un cercle, glyphe centré. Taille proportionnelle au créneau (cqmin).
+        width: bu(44),
+        height: bu(44),
+        border: `${bu(2)} solid ${color}`,
         borderRadius: "50%",
         background: "transparent",
         color,
@@ -136,7 +144,7 @@ function StepBtn({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: big ? "1.3rem" : "1rem",
+        fontSize: bu(32),
         fontWeight: 700,
         lineHeight: 1,
         padding: 0,
@@ -159,6 +167,7 @@ function ThemeField({
   themes,
   onChange,
   big = false,
+  multiline = false,
 }: {
   value: string;
   validated: boolean;
@@ -167,10 +176,16 @@ function ThemeField({
   onChange: (v: string) => void;
   // Mobile : champ thème 2× plus gros.
   big?: boolean;
+  // Le thème s'affiche sur plusieurs lignes (retour à la ligne au lieu de tronquer) — utilisé
+  // quand le thème prend la place centrale du slot-icon sur un créneau court (cf. themeInMiddle).
+  multiline?: boolean;
 }) {
   const themeColor = validated ? "#3e7e2f" : "#b2a478";
-  // Taille de police du champ thème (doublée sur mobile).
-  const themeFont = big ? "0.8rem" : ".62rem";
+  // Taille de police du champ thème : proportionnelle au créneau (cqmin, `bu(22)`), comme le
+  // reste du badge — y compris sur les créneaux courts (taille calculée). Le menu déroulant
+  // (rendu en PORTAIL hors du badge) reste fixe (pas de conteneur de requête → cqmin = viewport).
+  const themeFont = bu(22);
+  const menuFont = ".72rem";
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -238,15 +253,16 @@ function ThemeField({
             background: "transparent",
             cursor: "pointer",
             maxWidth: "100%",
-            // Mobile : pas de line-height imposée (laisse le texte respirer dans le champ).
-            lineHeight: big ? undefined : 1,
+            // multiline : interligne aéré pour le retour à la ligne ; sinon comportement usuel
+            // (mobile : pas de line-height imposée ; desktop : 1).
+            lineHeight: multiline ? 1.1 : big ? undefined : 1,
             boxSizing: "border-box",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 2,
-            height: big ? "0.8rem" : 14,
-            padding: "0 2px 0 4px",
+            gap: bu(4),
+            // Pas de hauteur imposée : le champ s'ajuste à son contenu (police themeFont).
+            padding: `0 ${bu(4)} 0 ${bu(8)}`,
             userSelect: "none",
             overflow: "hidden",
           }}
@@ -263,8 +279,9 @@ function ThemeField({
           <span
             style={{
               overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              // multiline : retour à la ligne (plusieurs lignes) au lieu de tronquer avec « … ».
+              textOverflow: multiline ? "clip" : "ellipsis",
+              whiteSpace: multiline ? "normal" : "nowrap",
               flex: 1,
               fontWeight: 700,
             }}
@@ -274,7 +291,7 @@ function ThemeField({
           <span
             style={{
               flexShrink: 0,
-              fontSize: big ? "2rem" : "1rem",
+              fontSize: bu(36),
               color: themeColor,
               lineHeight: 1,
             }}
@@ -296,7 +313,7 @@ function ThemeField({
                 background: "var(--surface)",
                 border: `1px solid ${themeColor}`,
                 borderRadius: 3,
-                fontSize: themeFont,
+                fontSize: menuFont,
                 color: "var(--text)",
                 zIndex: 10000,
                 maxHeight: 200,
@@ -358,6 +375,9 @@ function ThemeField({
         WebkitTextFillColor: themeColor,
         fontSize: themeFont,
         fontWeight: 700,
+        // multiline : autorise le retour à la ligne (écrase le `white-space:nowrap` de la
+        // règle .user-agenda-mine-badge .slot-spots) ; l'auto-resize suit la hauteur du texte.
+        ...(multiline ? { whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.1 } : null),
       }}
       onMouseDown={(e) => e.stopPropagation()}
       // Sans ça, le clic remonterait au créneau parent (.agenda-block → création de résa).
@@ -408,6 +428,8 @@ function MineBadge({
   dragging = false,
   onDragPointerDown,
   dragFullSurface = false,
+  shortSlot = false,
+  veryShortSlot = false,
 }: {
   validated: boolean;
   markedRemoval: boolean;
@@ -442,6 +464,12 @@ function MineBadge({
   onDragPointerDown?: (e: React.PointerEvent) => void;
   // Mobile : tout le badge est déplaçable (pas seulement la poignée).
   dragFullSurface?: boolean;
+  // Créneau court (≤ 30 min) : sort l'icône d'état du flux (position absolue en haut) pour
+  // libérer la hauteur du badge ras au profit du thème.
+  shortSlot?: boolean;
+  // Créneau très court (≤ 15 min) : décale les compteurs (nombre d'enfants/adultes) de 2px
+  // vers le bas.
+  veryShortSlot?: boolean;
 }) {
   // Couleur du texte/éléments : vert foncé si validé (lisible sur le fond vert clair
   // du badge), orange sinon (jamais « inherit »).
@@ -451,6 +479,10 @@ function MineBadge({
   // En déplacement : on neutralise l'édition (jauge/thème) pour afficher le libellé d'état.
   const editable = gaugeOn && !markedRemoval && !moving;
   const icon = validated ? "✔" : "⏳";
+  // Créneau court EN MODE JAUGE : le thème prend la place du slot-icon central (entre les
+  // colonnes Enfants/Adultes) et s'affiche sur plusieurs lignes, pour exploiter la largeur
+  // du badge au lieu de sa hauteur (trop faible à 30 min). Sinon le thème reste en bas.
+  const themeInMiddle = shortSlot && editable && themeMode && !markedRemoval;
   const themeField =
     themeMode && !markedRemoval ? (
       <ThemeField
@@ -460,6 +492,7 @@ function MineBadge({
         themes={themes}
         onChange={onSetTheme}
         big={mobile}
+        multiline={themeInMiddle}
       />
     ) : null;
   // Mobile : tout le badge amorce le drag ; desktop : uniquement via la poignée.
@@ -479,7 +512,14 @@ function MineBadge({
         top: "auto",
         left: "auto",
         transform: "none",
+        // Le badge REMPLIT la cellule créneau : sa taille = celle du créneau, et tous ses
+        // éléments (exprimés en cqmin via `bu`) s'y dimensionnent proportionnellement.
+        // minHeight:0 indispensable : neutralise à la fois le `min-height:38px` de la classe
+        // .has-widgets ET le `min-height:auto` par défaut d'un item flex — sinon le badge ne
+        // peut pas descendre sous ~38px et DÉPASSE un créneau court (ex. 30 min ≈ 24px).
         width: "100%",
+        height: "100%",
+        minHeight: 0,
         maxWidth: "100%",
         maxHeight: "none",
         boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
@@ -491,10 +531,14 @@ function MineBadge({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        // Jauge : interligne du badge (entre compteurs / thème / état). Sur mobile, pas de
-        // gap supplémentaire en mode jauge (les éléments agrandis se suffisent).
-        gap: editable ? (mobile ? 0 : 3) : 2,
+        // Jauge : interligne du badge (entre compteurs / thème / état), proportionnel au
+        // créneau. En mode jauge les éléments se suffisent → pas de gap supplémentaire.
+        gap: editable ? 0 : bu(4),
         textAlign: "center",
+        // Créneau court (≤ 30 min) : padding horizontal 1rem (border-box → la largeur reste
+        // celle de la cellule, le contenu est juste resserré).
+        boxSizing: "border-box",
+        padding: shortSlot ? "0 1rem" : undefined,
         opacity: dragging ? 0.4 : markedRemoval || moving ? 0.55 : 1,
       }}
       // Clic sur le CORPS : aucune action. On stoppe seulement la propagation pour ne pas
@@ -537,6 +581,15 @@ function MineBadge({
           className="slot-drag-handle"
           data-tip="Glisser pour déplacer"
           aria-hidden
+          // Grip remonté (on garde le translateX(-50%) de la CSS) : −3px sur créneau très
+          // court (≤ 15 min, + padding resserré), −2px sur créneau court (≤ 30 min).
+          style={
+            veryShortSlot
+              ? { transform: "translateX(-50%) translateY(-3px)", padding: `${bu(3.7)} ${bu(8)}` }
+              : shortSlot
+                ? { transform: "translateX(-50%) translateY(-2px)" }
+                : undefined
+          }
           // Drag « pointer events » : stopPropagation pour ne pas ré-armer via le corps.
           onPointerDown={(e) => {
             e.stopPropagation();
@@ -544,10 +597,14 @@ function MineBadge({
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 14 points (2 lignes × 7) en SVG : cercles vectoriels → parfaitement ronds
-              à toute taille (le rendu HTML en pastilles dégénérait en ovales à 3px). */}
-          <svg className="slot-drag-grid" viewBox="0 0 34 9" aria-hidden="true">
-            {[2, 7].map((cy) =>
+          {/* Grip en cercles vectoriels (ronds à toute taille). Créneau très court (≤ 15 min) :
+              7 points sur UNE seule ligne (viewBox plus bas) ; sinon 14 points (2 lignes × 7). */}
+          <svg
+            className="slot-drag-grid"
+            viewBox={veryShortSlot ? "0 0 34 4" : "0 0 34 9"}
+            aria-hidden="true"
+          >
+            {(veryShortSlot ? [2] : [2, 7]).map((cy) =>
               [2, 7, 12, 17, 22, 27, 32].map((cx) => (
                 <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.6" />
               )),
@@ -581,7 +638,9 @@ function MineBadge({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              width: "50%",
+              // Thème au centre (créneau court) : colonnes à largeur naturelle pour laisser
+              // la place au thème ; sinon chaque colonne occupe la moitié du badge.
+              width: themeInMiddle ? "auto" : "50%",
               flexShrink: 0,
             }}
           >
@@ -593,12 +652,7 @@ function MineBadge({
                 gap: 0,
               }}
             >
-              <StepBtn
-                sign="−"
-                color={gColor}
-                onClick={() => onBump("enfants", -1)}
-                big={dragFullSurface}
-              />
+              <StepBtn sign="−" color={gColor} onClick={() => onBump("enfants", -1)} />
               {/* Wrapper : input au-dessus, libellé Enfant(s) en dessous. */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <input
@@ -614,11 +668,11 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    width: dragFullSurface ? "2.8rem" : "2rem",
-                    height: "18px",
+                    width: bu(64),
+                    height: bu(36),
                     boxSizing: "border-box",
                     textAlign: "center",
-                    fontSize: "1.2rem",
+                    fontSize: bu(38),
                     background: "transparent",
                     border: "none",
                     color: gColor,
@@ -626,49 +680,69 @@ function MineBadge({
                     padding: 0,
                     flexShrink: 0,
                     cursor: "default",
+                    // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
+                    transform: veryShortSlot ? "translateY(3px)" : undefined,
                   }}
                 />
                 <span
                   className="gauge-txt"
                   style={{
                     color: gColor,
-                    fontSize: mobile ? undefined : ".62rem",
+                    fontSize: bu(20),
                     lineHeight: 1,
                     fontWeight: 700,
+                    // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
+                    transform: veryShortSlot ? "translateY(3px)" : undefined,
                   }}
                 >
                   {enfants > 1 ? "Enfants" : "Enfant"}
                 </span>
               </div>
-              <StepBtn
-                sign="+"
-                color={gColor}
-                onClick={() => onBump("enfants", 1)}
-                big={dragFullSurface}
-              />
+              <StepBtn sign="+" color={gColor} onClick={() => onBump("enfants", 1)} />
             </div>
           </div>
-          {/* Icône d'état */}
-          <span
-            className="slot-icon"
-            style={{
-              width: 0,
-              flexShrink: 0,
-              display: "flex",
-              justifyContent: "center",
-              alignSelf: "flex-start",
-              fontSize: "1.1rem",
-            }}
-          >
-            {icon}
-          </span>
+          {/* Colonne centrale : icône d'état ✔/⏳ — OU, sur créneau court, le thème
+              (multi-lignes) qui prend sa place pour rester visible (cf. themeInMiddle). */}
+          {themeInMiddle ? (
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                // Thème central aligné en BAS de la colonne (cf. demande créneau court).
+                alignSelf: "flex-end",
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                // Créneau très court (≤ 15 min) : thème remonté de 3px.
+                transform: veryShortSlot ? "translateY(-3px)" : undefined,
+              }}
+            >
+              {themeField}
+            </div>
+          ) : (
+            <span
+              className="slot-icon"
+              style={{
+                width: 0,
+                flexShrink: 0,
+                display: "flex",
+                justifyContent: "center",
+                alignSelf: "flex-start",
+                fontSize: bu(35),
+              }}
+            >
+              {icon}
+            </span>
+          )}
           {/* Colonne Adultes */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              width: "50%",
+              // Thème au centre (créneau court) : colonnes à largeur naturelle pour laisser
+              // la place au thème ; sinon chaque colonne occupe la moitié du badge.
+              width: themeInMiddle ? "auto" : "50%",
               flexShrink: 0,
             }}
           >
@@ -680,12 +754,7 @@ function MineBadge({
                 gap: 0,
               }}
             >
-              <StepBtn
-                sign="−"
-                color={gColor}
-                onClick={() => onBump("accompagnants", -1)}
-                big={dragFullSurface}
-              />
+              <StepBtn sign="−" color={gColor} onClick={() => onBump("accompagnants", -1)} />
               {/* Wrapper : input au-dessus, libellé Adulte(s) en dessous. */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <input
@@ -701,11 +770,11 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    width: dragFullSurface ? "2.8rem" : "2rem",
-                    height: "18px",
+                    width: bu(64),
+                    height: bu(36),
                     boxSizing: "border-box",
                     textAlign: "center",
-                    fontSize: "1.2rem",
+                    fontSize: bu(38),
                     background: "transparent",
                     border: "none",
                     color: gColor,
@@ -713,26 +782,25 @@ function MineBadge({
                     padding: 0,
                     flexShrink: 0,
                     cursor: "default",
+                    // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
+                    transform: veryShortSlot ? "translateY(3px)" : undefined,
                   }}
                 />
                 <span
                   className="gauge-txt"
                   style={{
                     color: gColor,
-                    fontSize: mobile ? undefined : ".62rem",
+                    fontSize: bu(20),
                     lineHeight: 1,
                     fontWeight: 700,
+                    // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
+                    transform: veryShortSlot ? "translateY(3px)" : undefined,
                   }}
                 >
                   {accompagnants > 1 ? "Adultes" : "Adulte"}
                 </span>
               </div>
-              <StepBtn
-                sign="+"
-                color={gColor}
-                onClick={() => onBump("accompagnants", 1)}
-                big={dragFullSurface}
-              />
+              <StepBtn sign="+" color={gColor} onClick={() => onBump("accompagnants", 1)} />
             </div>
           </div>
         </div>
@@ -741,16 +809,22 @@ function MineBadge({
           className="slot-icon"
           style={{
             // Icône d'état des badges non-éditables (validé / en attente / à annuler).
-            fontSize: "1.1rem",
+            fontSize: bu(35),
             lineHeight: 1,
-            width: 18,
-            height: 18,
+            width: bu(36),
+            height: bu(36),
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             // Même couleur de texte que le mode jauge (vert si validé, orange sinon ;
             // rouge si retrait en attente), pour que la coche s'harmonise avec le reste.
             color: stateColor,
+            // Créneau court (≤ 30 min, ~24px) : on décale l'icône d'état tout en haut, HORS
+            // DU FLUX (position absolue), pour libérer la hauteur du badge. Le thème devient
+            // alors le seul élément du flux → centré et visible au lieu d'être rogné en bas.
+            ...(shortSlot
+              ? { position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)" }
+              : null),
           }}
         >
           {icon}
@@ -761,7 +835,7 @@ function MineBadge({
         <span
           className="slot-spots"
           style={{
-            fontSize: ".62rem",
+            fontSize: bu(20),
             fontWeight: 600,
             lineHeight: 1.3,
             background: "none",
@@ -771,7 +845,8 @@ function MineBadge({
           {stateLabel}
         </span>
       )}
-      {themeField}
+      {/* Thème en bas — SAUF s'il a déjà été placé au centre (créneau court en mode jauge). */}
+      {!themeInMiddle && themeField}
     </div>
   );
 }
@@ -938,7 +1013,7 @@ export function UserAgendaGrid({
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   // Aperçu de drag (ghost) = clone HTML du badge source, capturé au pointerdown, pour
   // retrouver l'ancien rendu « badge entier qui suit le pointeur » (et non un libellé texte).
-  const dragGhostRef = useRef<{ html: string; width: number } | null>(null);
+  const dragGhostRef = useRef<{ html: string; width: number; height: number } | null>(null);
   // Brouillon de réservations (ajouts), d'annulations, de modifications de compteurs/thème,
   // et de déplacements sur mes réservations existantes (legacy : tout est éditable).
   const [pendingAdds, setPendingAdds] = useState<PendingAdd[]>([]);
@@ -2005,7 +2080,11 @@ export function UserAgendaGrid({
   // remonte au badge via closest.
   function beginDrag(item: DragItem, e: React.PointerEvent) {
     const badge = (e.currentTarget as HTMLElement).closest<HTMLElement>(".user-agenda-mine-badge");
-    dragGhostRef.current = badge ? { html: badge.outerHTML, width: badge.offsetWidth } : null;
+    // Largeur ET hauteur capturées : l'aperçu flottant (ghost) sert lui aussi de conteneur
+    // de requête (cqmin) au clone du badge, pour préserver les proportions hors du flux.
+    dragGhostRef.current = badge
+      ? { html: badge.outerHTML, width: badge.offsetWidth, height: badge.offsetHeight }
+      : null;
     pointerDrag.start(item, e);
   }
 
@@ -2328,7 +2407,25 @@ export function UserAgendaGrid({
           sortie du flux (position absolue en bas). */}
         <div
           className="agenda-block-chips"
-          style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", gap: 2 }}
+          // Conteneur de requête (cqmin) pour le badge « ma réservation » : il remplit le
+          // bloc-créneau (flex:1) MAIS plafonné à 50px de haut → un créneau d'1h ou plus
+          // (bloc ≳ 52px) donne un badge de 50px centré (le surplus de hauteur est réparti
+          // par justify-content:center) ; un créneau plus court (< 1h) garde la hauteur du
+          // créneau. La taille du badge = celle de la cellule (≤ 50px), et ses éléments
+          // (exprimés en `bu` = cqmin) s'y dimensionnent proportionnellement. Un enfant
+          // court (« Complet », créneau libre) reste centré (justify-content), le badge le
+          // remplit (height:100%). `containerType` n'est posé QUE côté usager (style inline),
+          // pas sur la classe partagée (agenda admin inchangé).
+          style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            maxHeight: 50,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: 2,
+            containerType: "size",
+          }}
         >
           {(() => {
             // Agenda usager : MA réservation → badge ✅/⏳ (clic = annuler) ;
@@ -2340,6 +2437,12 @@ export function UserAgendaGrid({
             const gaugeOn = modes.gaugeRec || modes.gaugePonct;
             // Badge sans thème NI jauge : on affiche toujours l'état (Validé / En attente).
             const noWidgets = !modes.themeMode && !gaugeOn;
+            // Créneau court (≤ 30 min) : badge ras → on sort l'icône d'état du flux pour
+            // dégager la place du thème (cf. MineBadge). Durée en minutes, pas un proxy
+            // pixel ; les créneaux « journée entière » non concernés.
+            const shortSlot = !b.isAllDay && b.endMin - b.startMin <= 30;
+            // Créneau très court (≤ 15 min) : décale les compteurs de la jauge vers le bas.
+            const veryShortSlot = !b.isAllDay && b.endMin - b.startMin <= 15;
             const myBk = b.bookings.find((x) => x.mine);
             // Brouillon : ma résa marquée pour annulation, ou créneau libre coché.
             const markedRemoval = myBk
@@ -2453,6 +2556,8 @@ export function UserAgendaGrid({
                   dragFullSurface={isMobile}
                   // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
                   mobile
+                  shortSlot={shortSlot}
+                  veryShortSlot={veryShortSlot}
                   dragging={dragItem?.kind === "booking" && dragItem.bookingId === mb.id}
                   onDragPointerDown={(e) =>
                     beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e)
@@ -2506,6 +2611,8 @@ export function UserAgendaGrid({
                   dragFullSurface={isMobile}
                   // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
                   mobile
+                  shortSlot={shortSlot}
+                  veryShortSlot={veryShortSlot}
                   dragging={dragItem?.kind === "draft" && dragItem.key === add.key}
                   onDragPointerDown={(e) =>
                     beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e)
@@ -2616,6 +2723,10 @@ export function UserAgendaGrid({
               top: dragPos.y,
               transform: "translate(-50%, -50%)",
               width: dragGhostRef.current.width,
+              height: dragGhostRef.current.height,
+              // Conteneur de requête (cqmin) du clone : le badge cloné (height:100%) le
+              // remplit, ses éléments retrouvent les mêmes proportions que le badge source.
+              containerType: "size",
               zIndex: 11000,
               opacity: 0.9,
             }}

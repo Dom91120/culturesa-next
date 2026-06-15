@@ -58,6 +58,7 @@ export async function updateReservationSettingsAction(
   } catch {
     return { ok: false, error: "Échec de l'enregistrement." };
   }
-  revalidatePath(`/services/${id}/reservations`);
+  // Le panneau « Réservations » est rendu sur l'onglet « Périodes et réservations ».
+  revalidatePath(`/services/${id}/periodes`);
   return { ok: true };
 }

@@ -4,7 +4,9 @@ import { bookingCreateSchema } from "@/schemas/booking";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import {
+  type BookingCancellationParams,
   type BookingConfirmationParams,
+  sendBookingCancellationMail,
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
 import {
@@ -303,30 +305,48 @@ export async function reservePonctuelAction(
   return { ok: true };
 }
 
-/** Annule une réservation appartenant à l'usager. */
+/**
+ * Annule une réservation appartenant à l'usager. Renvoie les paramètres de l'e-mail
+ * « Réservation annulée » à envoyer APRÈS le commit (best-effort) UNIQUEMENT si la
+ * réservation était VALIDÉE et a réellement été supprimée ; sinon `null`.
+ */
 async function cancelInTx(
   tx: Prisma.TransactionClient,
   userId: string,
   serviceId: string,
   bookingId: number,
-): Promise<void> {
+): Promise<BookingCancellationParams | null> {
   const booking = await tx.booking.findFirst({
     where: { id: bookingId, userId, serviceId },
-    select: { serviceId: true, validated: true },
+    select: { serviceId: true, validated: true, periodId: true, slotId: true },
   });
   if (!booking) throw new BookingError("Réservation introuvable.");
   // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
   await assertBookingUnlocked(tx, userId, booking);
-  await cancelUserBookingInTx(tx, userId, bookingId);
+  const deleted = await cancelUserBookingInTx(tx, userId, bookingId);
+  // E-mail d'annulation seulement pour une résa VALIDÉE effectivement supprimée.
+  if (!deleted || !booking.validated) return null;
+  return {
+    userId,
+    serviceId,
+    slotId: booking.slotId,
+    periodId: booking.periodId,
+    motif: "Supprimée par l'utilisateur",
+  };
 }
 
 export async function cancelMyBookingAction(serviceId: string, bookingId: number): Promise<Result> {
   const session = await requireUser();
+  let cancelMail: BookingCancellationParams | null = null;
   try {
-    await prisma.$transaction((tx) => cancelInTx(tx, session.user.id, serviceId, bookingId));
+    await prisma.$transaction(async (tx) => {
+      cancelMail = await cancelInTx(tx, session.user.id, serviceId, bookingId);
+    });
   } catch (e) {
     return mapBookingError(e);
   }
+  // « Réservation annulée » (best-effort, après commit).
+  if (cancelMail) await sendBookingCancellationMail(cancelMail);
   revalidate(serviceId);
   return { ok: true };
 }
@@ -609,9 +629,16 @@ export async function commitDraftInTx(
   userId: string,
   serviceId: string,
   draft: ParsedDraft,
-): Promise<BookingConfirmationParams[]> {
+): Promise<{
+  confirmations: BookingConfirmationParams[];
+  cancellations: BookingCancellationParams[];
+}> {
   const mails: BookingConfirmationParams[] = [];
-  for (const id of draft.removals) await cancelInTx(tx, userId, serviceId, id);
+  const cancellations: BookingCancellationParams[] = [];
+  for (const id of draft.removals) {
+    const cancel = await cancelInTx(tx, userId, serviceId, id);
+    if (cancel) cancellations.push(cancel);
+  }
   for (const u of draft.updates) {
     await updateInTx(tx, userId, serviceId, u.bookingId, u.enfants, u.accompagnants, u.theme);
   }
@@ -645,26 +672,30 @@ export async function commitDraftInTx(
       );
     }
   }
-  return mails;
+  return { confirmations: mails, cancellations };
 }
 
 export async function commitDraft(serviceId: string, rawDraft: unknown): Promise<Result> {
   const session = await requireUser();
   const parsed = draftSchema.safeParse(rawDraft);
   if (!parsed.success) return { ok: false, error: "Brouillon invalide." };
-  let mails: BookingConfirmationParams[] = [];
+  let confirmations: BookingConfirmationParams[] = [];
+  let cancellations: BookingCancellationParams[] = [];
   try {
     await prisma.$transaction(
       async (tx) => {
-        mails = await commitDraftInTx(tx, session.user.id, serviceId, parsed.data);
+        const res = await commitDraftInTx(tx, session.user.id, serviceId, parsed.data);
+        confirmations = res.confirmations;
+        cancellations = res.cancellations;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
     return mapBookingError(e);
   }
-  // Confirmations (best-effort, après commit).
-  for (const m of mails) await sendBookingConfirmationMail(m);
+  // Notifications best-effort, après commit : confirmations d'ajout + annulations de résas validées.
+  for (const m of confirmations) await sendBookingConfirmationMail(m);
+  for (const c of cancellations) await sendBookingCancellationMail(c);
   revalidate(serviceId);
   return { ok: true };
 }

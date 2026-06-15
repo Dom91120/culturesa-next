@@ -177,3 +177,65 @@ export async function sendBookingConfirmationMail(
     console.error("[sendBookingConfirmationMail] erreur:", e);
   }
 }
+
+export type BookingCancellationParams = {
+  userId: string;
+  serviceId: string;
+  slotId: string;
+  periodId?: number | null;
+  // Motif affiché dans l'e-mail (ex. « Supprimée par l'utilisateur »).
+  motif: string;
+};
+
+/**
+ * Envoie à l'usager l'e-mail « Réservation annulée » (kind `booking_cancelled`) après la
+ * suppression d'une de ses réservations. Le créneau, le service et la période sont résolus
+ * APRÈS coup (le slot/le service existent toujours, seule la réservation est supprimée).
+ * Totalement best-effort : toute erreur est seulement journalisée.
+ */
+export async function sendBookingCancellationMail(
+  params: BookingCancellationParams,
+): Promise<void> {
+  try {
+    if (!(await isMailEnabled("booking_cancelled"))) return;
+
+    const [user, slot] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: params.userId },
+        select: { email: true, prenom: true },
+      }),
+      prisma.slot.findUnique({
+        where: { id: params.slotId },
+        select: {
+          startTime: true,
+          endTime: true,
+          slotDate: true,
+          slotDay: true,
+          service: { select: { label: true } },
+        },
+      }),
+    ]);
+    const email = user?.email?.trim();
+    if (!email?.includes("@")) return;
+
+    const periodLabel = await resolvePeriodLabel({
+      serviceId: params.serviceId,
+      periodId: params.periodId,
+      slotDate: slot?.slotDate ?? null,
+    });
+
+    const prenom = user?.prenom?.trim() ?? "";
+    const vars: Record<string, string> = {
+      salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
+      prenom,
+      service: slot?.service.label ?? "",
+      creneau: slot ? formatSlotLabel(slot) : "",
+      periode: periodLabel,
+      motif: params.motif,
+    };
+
+    await sendTemplatedMail({ to: email, kind: "booking_cancelled", vars });
+  } catch (e) {
+    console.error("[sendBookingCancellationMail] erreur:", e);
+  }
+}

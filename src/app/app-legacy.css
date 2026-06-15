@@ -1006,20 +1006,29 @@ textarea {
 .user-agenda-mine-badge .slot-btn-close:hover {
   color: var(--danger);
 }
+/* Croix × du badge usager : taille proportionnelle au créneau (cqmin), au lieu des
+   18px / 1.15rem fixes partagés avec la table (.slot-btn, laissée en pixels). */
+.user-agenda-mine-badge .slot-btn-close {
+  top: calc(var(--bu) * 2);
+  right: calc(var(--bu) * 6);
+  width: calc(var(--bu) * 36);
+  height: calc(var(--bu) * 36);
+  font-size: calc(var(--bu) * 37);
+}
 /* Poignée de glissement des badges déplaçables : grille de 14 points (2 lignes × 7),
    centrée en haut, visible au survol. Fond OPAQUE hérité du badge (background-color:
    inherit → vert #c8e8b8 validé / orange #ffe6a7 en attente). Curseur grab : le
    mousedown amorce le drag natif du badge (parent draggable). */
 .user-agenda-mine-badge .slot-drag-handle {
   position: absolute;
-  top: 2px;
+  top: calc(var(--bu) * 4);
   left: 50%;
   transform: translateX(-50%);
   display: none; /* → flex au survol */
   align-items: center;
-  padding: 3px 4px;
+  padding: calc(var(--bu) * 6) calc(var(--bu) * 8);
   background-color: inherit;
-  border-radius: 4px;
+  border-radius: calc(var(--bu) * 8);
   cursor: grab;
   user-select: none;
   /* Drag « pointer events » : empêche le navigateur de scroller au lieu d'émettre les
@@ -1034,7 +1043,7 @@ textarea {
    (34×9). fill pilote la couleur des 14 cercles. */
 .user-agenda-mine-badge .slot-drag-grid {
   display: block;
-  width: 30px;
+  width: calc(var(--bu) * 60);
   height: auto;
   fill: var(--muted);
 }
@@ -1302,12 +1311,17 @@ textarea.theme-pending:focus::placeholder {
 }
 .periods-table th {
   padding: .25rem .4rem;
-  font-size: .72rem;
+  font-size: .62rem;
   font-weight: 600;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--muted);
   text-align: center;
+}
+/* Interligne en-tête → 1re ligne calé sur le rowGap (.3rem) de la grille des plages
+   horaires : .18rem (padding-bottom du th) + .12rem (padding-top du td) = .3rem. */
+.periods-table thead th {
+  padding-bottom: .18rem;
 }
 .periods-table td {
   padding: .12rem .4rem;
@@ -1346,37 +1360,49 @@ textarea.theme-pending:focus::placeholder {
 }
 #periods-row {
   display: grid;
-  grid-template-columns: max-content max-content;
-  grid-template-rows: auto auto auto;
-  column-gap: 8rem;
+  /* Colonne 2 (Plages horaires) flexible et rétrécissable → son contenu passe à la ligne
+     quand la place manque (cf. .pr-hours / .defaults-row). */
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 5rem;
 }
-/* Titre + navigation exercice réunis sur une même ligne de titre ; tableau en dessous. */
-#periods-row > .pr-head {
-  grid-column: 1;
-  grid-row: 1;
+/* Titre + navigation exercice (« Exercice ◀ … ▶ ») : bandeau pleine largeur AU-DESSUS du
+   multi-colonnage (hors de la grille #periods-row). */
+.pr-head {
   display: flex;
   align-items: center;
   gap: 1.25rem;
   flex-wrap: wrap;
   margin-bottom: .85rem;
 }
-#periods-row > .pr-head > .pr-title {
+.pr-head > .pr-title {
   margin-bottom: 0;
 }
-#periods-row > .pr-head > .periode-nav {
+.pr-head > .periode-nav {
   margin: 0;
 }
 #periods-row > .pr-editor {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
 }
 #periods-row > .pr-add {
   grid-column: 1;
-  grid-row: 3;
+  grid-row: 2;
   display: flex;
   align-items: center;
   gap: .5rem;
   margin-top: .5rem;
+}
+/* « Plages horaires » : colonne DROITE de la grille, à côté du tableau Périodes (occupe
+   les 2 rangées de la colonne 1, aligné en haut). */
+#periods-row > .pr-hours {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: start;
+  min-width: 0; /* autorise le rétrécissement (sinon min-width:auto = contenu → pas de wrap) */
+}
+#periods-row > .pr-hours .defaults-row {
+  margin: .5rem 0 0;
 }
 
 /* Barre de navigation entre exercices : ◀ label ▶ — réutilisée par périodes, planning rec et planning ponctuel */
@@ -2525,6 +2551,15 @@ textarea.theme-pending:focus::placeholder {
    (min-height 44px comme le slot-btn original avec widgets) et rend
    l'intérieur interactif (pointer-events:auto). */
 .user-agenda-mine-badge {
+  /* Unité d'échelle proportionnelle BORNÉE. Base = 1cqmin (1% du plus petit côté de la
+     cellule créneau, conteneur `container-type: size` posé en inline sur
+     .agenda-block-chips), clampée entre un plancher (0.3px) et un plafond (0.8px). En
+     pratique la cellule est plafonnée à 50px de haut → 1cqmin ≤ 0.5px (le plafond 0.8px
+     ne mord donc pas). Le plancher 0.3px empêche les éléments de devenir trop petits sur
+     les créneaux courts. Entre les deux, tout reste proportionnel au créneau. Héritée par
+     tous les descendants ; chaque taille vaut `calc(var(--bu) * N)` (helper `bu()`). Le
+     badge remplit la cellule (width/height:100% inline, minHeight:0) → --bu suit sa taille. */
+  --bu: clamp(0.3px, 1cqmin, 0.8px);
   position: absolute;
   top: 50%;
   left: 50%;
@@ -2679,6 +2714,12 @@ textarea.theme-pending:focus::placeholder {
 .rte-content:focus {
   outline: none;
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+/* Dans la modale d'édition des e-mails : la textbox (zone d'édition WYSIWYG) a une hauteur
+   bornée avec ascenseur vertical, au lieu de grandir et de pousser toute la modale. */
+.modal-box .rte-content {
+  max-height: 360px;
+  overflow-y: auto;
 }
 .rte-content p {
   margin: 0 0 .55rem;
@@ -2868,6 +2909,12 @@ textarea.theme-pending:focus::placeholder {
   #mobile-services-toggle .mst-burger {
     font-size: 1.05rem;
     line-height: 1;
+  }
+  /* Logo du service sélectionné, entre le burger et le libellé. */
+  #mobile-services-toggle .mst-icon {
+    font-size: 1.05rem;
+    line-height: 1;
+    flex-shrink: 0;
   }
   #mobile-services-toggle .mst-label {
     flex: 1;

@@ -29,14 +29,33 @@ export function UserShell({
   const [collapsed, setCollapsed] = useState(false);
   // Menu « sandwich » des services en mode smartphone (replié par défaut).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Mode smartphone (même breakpoint que la media query CSS, 640px) : en mobile la sidebar
+  // est une barre horizontale pleine largeur → l'état « collapsed » (toggle desktop) ne doit
+  // JAMAIS s'y appliquer, même s'il a été activé avant de réduire la fenêtre.
+  const [isMobile, setIsMobile] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const match = pathname.match(/^\/reservations\/([^/]+)/);
   const activeServiceId = match ? match[1] : null;
   // Libellé affiché sur le bouton sandwich : service actif, ou « Mon compte ».
+  const activeService = services.find((s) => s.id === activeServiceId);
   const activeServiceLabel =
-    services.find((s) => s.id === activeServiceId)?.label ??
-    (pathname === "/mon-compte" ? "Mon compte" : "Activités");
+    activeService?.label ?? (pathname === "/mon-compte" ? "Mon compte" : "Activités");
+  // Logo (icône) du service sélectionné, affiché sur le bouton sandwich mobile. Repli sur
+  // 📄 (comme la sidebar) pour un service sans icône ; 👤 pour « Mon compte ».
+  const activeServiceIcon = activeService
+    ? activeService.icon || "📄"
+    : pathname === "/mon-compte"
+      ? "👤"
+      : null;
 
   // Referme le menu sandwich après navigation (changement d'URL).
   // biome-ignore lint/correctness/useExhaustiveDependencies: on veut refermer à chaque changement de page.
@@ -97,7 +116,7 @@ export function UserShell({
         <div className="app-layout">
           <div
             id="service-sidebar-wrap"
-            className={`${collapsed ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
+            className={`${collapsed && !isMobile ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
             style={{
               width: "18%",
               minWidth: "fit-content",
@@ -126,6 +145,11 @@ export function UserShell({
               <span className="mst-burger" aria-hidden="true">
                 ☰
               </span>
+              {activeServiceIcon && (
+                <span className="mst-icon" aria-hidden="true">
+                  {activeServiceIcon}
+                </span>
+              )}
               <span className="mst-label">{activeServiceLabel}</span>
               <span className="mst-caret" aria-hidden="true">
                 ▾
