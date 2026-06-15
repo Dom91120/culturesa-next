@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeStepper } from "@/components/time-stepper";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
@@ -55,6 +56,12 @@ const DAYS: { key: string; label: string; full: string }[] = [
 
 // Libellé « Matin » / « Après-midi » de la grille des plages horaires.
 const timeLabelStyle: React.CSSProperties = {
+  // Même hauteur de boîte que les champs horaires (TimeStepper = 21px), texte centré :
+  // le libellé Matin / Après-midi est ainsi parfaitement aligné sur ses 2 champs.
+  display: "inline-flex",
+  alignItems: "center",
+  height: 21,
+  lineHeight: 1,
   fontSize: ".62rem",
   fontWeight: 700,
   letterSpacing: ".09em",
@@ -79,19 +86,6 @@ function sortPeriods(periods: UiPeriod[]): UiPeriod[] {
 function fmtDate(value: string): string {
   if (!value) return "—";
   return new Date(`${value}T00:00`).toLocaleDateString("fr-FR");
-}
-
-/** Incrémente/décrémente une heure « HH:MM » par pas de 15 min, calé sur la grille. */
-function stepTime(value: string, deltaMin: number): string {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-  let total = m ? Math.min(23, Number(m[1])) * 60 + Math.min(59, Number(m[2])) : 0;
-  const onGrid = total % 15 === 0;
-  if (onGrid) total += deltaMin;
-  else total = deltaMin > 0 ? Math.ceil(total / 15) * 15 : Math.floor(total / 15) * 15;
-  total = Math.max(0, Math.min(23 * 60 + 45, total));
-  const h = Math.floor(total / 60);
-  const mm = total % 60;
-  return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
 type ModalForm = {
@@ -325,6 +319,8 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
         return;
       }
       setOpeningSaved(true);
+      // Le badge « ✓ Enregistré » s'efface seul après 1,8 s (comme le panneau Réservations).
+      window.setTimeout(() => setOpeningSaved(false), 1800);
       router.refresh();
     });
   }
@@ -780,98 +776,5 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * Champ heure « HH:MM » avec boutons ▲▼ par pas de 15 min (port legacy).
- * Clic-maintenu : 1er pas immédiat, puis répétition (90 ms) après un délai de 400 ms
- * tant que le bouton reste enfoncé. La répétition lit la valeur COURANTE (valueRef)
- * pour accumuler correctement à chaque tick.
- */
-function TimeStepper({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const valueRef = useRef(value);
-  valueRef.current = value;
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  function stop() {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    timeoutRef.current = null;
-    intervalRef.current = null;
-  }
-
-  function startHold(delta: number) {
-    stop(); // garde-fou anti-répétition résiduelle
-    onChange(stepTime(valueRef.current, delta)); // 1er pas immédiat
-    timeoutRef.current = setTimeout(() => {
-      intervalRef.current = setInterval(() => onChange(stepTime(valueRef.current, delta)), 90);
-    }, 400);
-  }
-
-  // Nettoyage à l'unmount (utilise uniquement des refs stables).
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  return (
-    <span className="time-step-wrap">
-      <input
-        type="text"
-        value={value}
-        maxLength={5}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: 50,
-          // Hauteur calée sur la pile des flèches ▲/▼ : 2 × 10px + 1px de gap = 21px
-          // (cf. .time-step-btn / .time-step-btns dans app-legacy.css).
-          height: 21,
-          boxSizing: "border-box",
-          fontSize: ".78rem",
-          padding: "0 .35rem",
-          borderRadius: "var(--rad-sm)",
-          border: "1px solid var(--border)",
-          background: "var(--surface2)",
-          color: "var(--text)",
-          textAlign: "center",
-        }}
-      />
-      <span className="time-step-btns">
-        <button
-          type="button"
-          className="time-step-btn"
-          tabIndex={-1}
-          aria-label="Augmenter"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            startHold(15);
-          }}
-          onPointerUp={stop}
-          onPointerLeave={stop}
-          onPointerCancel={stop}
-        >
-          ▲
-        </button>
-        <button
-          type="button"
-          className="time-step-btn"
-          tabIndex={-1}
-          aria-label="Diminuer"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            startHold(-15);
-          }}
-          onPointerUp={stop}
-          onPointerLeave={stop}
-          onPointerCancel={stop}
-        >
-          ▼
-        </button>
-      </span>
-    </span>
   );
 }

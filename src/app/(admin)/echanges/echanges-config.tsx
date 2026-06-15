@@ -62,7 +62,23 @@ function renderPreview(
     );
 }
 
-export function EchangesConfig({ rows }: { rows: KindData[] }) {
+export function EchangesConfig({
+  rows,
+  title = "Échanges par mails",
+  intro,
+  panelId = "echanges-panel",
+  serviceId,
+}: {
+  rows: KindData[];
+  // Titre du panel + intro + id : permet de réutiliser cette table pour un autre groupe
+  // d'e-mails (ex. panel « E-mails automatiques » de l'onglet Messagerie).
+  title?: string;
+  intro?: React.ReactNode;
+  panelId?: string;
+  // Fourni → gabarits/préférences réglés PAR SERVICE (e-mails de réservation) ; absent →
+  // portée globale (e-mails système).
+  serviceId?: string;
+}) {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
     Object.fromEntries(rows.map((r) => [r.kind, r.enabled])),
   );
@@ -82,7 +98,7 @@ export function EchangesConfig({ rows }: { rows: KindData[] }) {
     setMsg(null);
     setEnabled((s) => ({ ...s, [kind]: value }));
     startTransition(async () => {
-      const res = await setMailPrefAction(kind, value);
+      const res = await setMailPrefAction(kind, value, serviceId);
       if (res && !res.ok) {
         setEnabled((s) => ({ ...s, [kind]: !value }));
         setMsg({ ok: false, text: res.error ?? "Échec de l'enregistrement." });
@@ -105,7 +121,7 @@ export function EchangesConfig({ rows }: { rows: KindData[] }) {
     setMsg(null);
     const d = draft[kind];
     startTransition(async () => {
-      const res = await setMailTemplateAction(kind, d.subject, d.html);
+      const res = await setMailTemplateAction(kind, d.subject, d.html, serviceId);
       if (res && !res.ok) {
         setMsg({ ok: false, text: res.error ?? "Échec de l'enregistrement." });
       } else {
@@ -134,21 +150,17 @@ export function EchangesConfig({ rows }: { rows: KindData[] }) {
   const editingRow = editing ? (rows.find((r) => r.kind === editing) ?? null) : null;
 
   return (
-    <div className="panel" id="echanges-panel">
+    <div className="panel" id={panelId}>
       <div className="panel-title">
         <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
           <span className="dot" style={{ background: "var(--accent)" }} />
-          Échanges — e-mails automatiques
+          {title}
         </span>
       </div>
 
       <p style={{ fontSize: ".85rem", lineHeight: 1.5, color: "var(--muted)", margin: "0 0 1rem" }}>
-        Personnalisez le contenu (objet + corps) de chaque e-mail automatique via l&apos;éditeur, et
-        choisissez ceux que l&apos;application envoie. Décocher « Envoyer » désactive l&apos;envoi
-        de ce type d&apos;e-mail (les réservations continuent de fonctionner). Les e-mails de{" "}
-        <strong>compte&nbsp;/&nbsp;sécurité</strong> (confirmation d&apos;adresse, mot de passe,
-        préavis RGPD) sont <strong>toujours envoyés</strong> : leur case est verrouillée, mais leur
-        contenu reste modifiable.
+        {intro ??
+          "Personnalisez le contenu (objet + corps) de chaque e-mail lié aux réservations via l'éditeur, et choisissez ceux que l'application envoie. Décocher « Envoyer » désactive l'envoi de ce type d'e-mail (les réservations continuent de fonctionner)."}
       </p>
 
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>

@@ -10,6 +10,7 @@ const SUB_TABS: SubTab[] = [
   // est désormais rendu sous les périodes) ; la route /reservations redirige vers /periodes.
   { slug: "periodes", label: "Périodes et réservations", icon: "🗓️" },
   { slug: "config", label: "Configuration", icon: "✨" },
+  { slug: "echanges", label: "Échanges", icon: "📨" },
   { slug: "exercice", label: "Changement d'exercice", icon: "🔄" },
   { slug: "rgpd", label: "RGPD", icon: "🛡️" },
 ];

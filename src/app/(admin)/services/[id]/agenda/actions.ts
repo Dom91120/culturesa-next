@@ -410,8 +410,8 @@ export async function deleteBookingAdminAction(
   const email = booking?.user?.email?.trim();
   if (booking && email?.includes("@")) {
     const wasValidated = booking.validated;
-    // Préférence « Échanges » : ce type d'e-mail est-il activé ?
-    if (!(await isMailEnabled(wasValidated ? "booking_cancelled" : "booking_refused"))) {
+    // Préférence « Échanges » du service : ce type d'e-mail est-il activé ?
+    if (!(await isMailEnabled(wasValidated ? "booking_cancelled" : "booking_refused", serviceId))) {
       return { ok: true };
     }
     const serviceLabel = booking.service?.label ?? "";
@@ -437,6 +437,7 @@ export async function deleteBookingAdminAction(
       to: email,
       kind: wasValidated ? "booking_cancelled" : "booking_refused",
       vars,
+      serviceId,
     });
   }
   return { ok: true };

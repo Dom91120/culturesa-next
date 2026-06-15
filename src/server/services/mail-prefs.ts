@@ -22,22 +22,32 @@ const KEY_BY_KIND: Record<MailKind, string> = {
   booking_reminder: "mail.send.booking_reminder",
 };
 
+// Clé de préférence : avec `serviceId` → réglage PAR SERVICE ; sans → réglage global
+// (conservé pour compat ; les e-mails de réservation sont désormais réglés par service).
+function sendKey(kind: MailKind, serviceId?: string): string {
+  return serviceId ? `mail.send.${serviceId}.${kind}` : KEY_BY_KIND[kind];
+}
+
 /** Un type d'e-mail est activé par défaut ; désactivé seulement si la valeur = "0". */
-export async function isMailEnabled(kind: MailKind): Promise<boolean> {
-  const key = KEY_BY_KIND[kind];
+export async function isMailEnabled(kind: MailKind, serviceId?: string): Promise<boolean> {
+  const key = sendKey(kind, serviceId);
   const cfg = await getConfigMany([key]);
   return cfg[key] !== "0";
 }
 
-/** État (activé/désactivé) des préférences, pour l'écran « Échanges ». */
-export async function getMailPrefs(): Promise<Record<MailKind, boolean>> {
-  const cfg = await getConfigMany(MAIL_KINDS.map((k) => KEY_BY_KIND[k]));
+/** État (activé/désactivé) des préférences d'un service (ou global si `serviceId` absent). */
+export async function getMailPrefs(serviceId?: string): Promise<Record<MailKind, boolean>> {
+  const cfg = await getConfigMany(MAIL_KINDS.map((k) => sendKey(k, serviceId)));
   const out = {} as Record<MailKind, boolean>;
-  for (const k of MAIL_KINDS) out[k] = cfg[KEY_BY_KIND[k]] !== "0";
+  for (const k of MAIL_KINDS) out[k] = cfg[sendKey(k, serviceId)] !== "0";
   return out;
 }
 
-/** Active/désactive l'envoi d'un type d'e-mail. */
-export async function setMailEnabled(kind: MailKind, enabled: boolean): Promise<void> {
-  await setConfig(KEY_BY_KIND[kind], enabled ? "1" : "0");
+/** Active/désactive l'envoi d'un type d'e-mail (par service si `serviceId`). */
+export async function setMailEnabled(
+  kind: MailKind,
+  enabled: boolean,
+  serviceId?: string,
+): Promise<void> {
+  await setConfig(sendKey(kind, serviceId), enabled ? "1" : "0");
 }

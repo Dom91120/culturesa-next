@@ -44,10 +44,8 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
 }> {
   const result = { week: 0, day: 0 };
 
-  // Préférence « Échanges » : ce type d'e-mail est-il activé ?
-  if (!(await isMailEnabled("booking_reminder"))) return result;
-
-  const tpl = await getMailTemplate("booking_reminder");
+  // Gabarit + préférence d'envoi sont PAR SERVICE → chargés plus bas, une fois par
+  // service distinct de chaque lot (les réservations couvrent plusieurs services).
   const appUrl = await getAppUrl();
   const todayMidnight = fromISO(toISO(now));
 
@@ -88,6 +86,22 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
     );
     const periodByBooking = new Map(bookings.map((b, idx) => [b.id, periodLabels[idx] ?? ""]));
 
+    // Gabarit + préférence d'envoi PAR SERVICE : chargés une fois par service distinct
+    // de ce lot (anti-N+1), pas par réservation.
+    const serviceIds = [...new Set(bookings.map((b) => b.serviceId))];
+    const tplByService = new Map<string, { subject: string; html: string }>();
+    const enabledByService = new Map<string, boolean>();
+    await Promise.all(
+      serviceIds.map(async (sid) => {
+        const [enabled, t] = await Promise.all([
+          isMailEnabled("booking_reminder", sid),
+          getMailTemplate("booking_reminder", sid),
+        ]);
+        enabledByService.set(sid, enabled);
+        tplByService.set(sid, t);
+      }),
+    );
+
     // Rappels déjà envoyés pour cette date + échéance → on les saute (idempotence).
     const already = new Set(
       (
@@ -104,6 +118,11 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
 
     for (const b of bookings) {
       if (already.has(b.id)) continue;
+
+      // Service : rappels désactivés ? on saute. Sinon, gabarit propre au service.
+      if (!enabledByService.get(b.serviceId)) continue;
+      const tpl = tplByService.get(b.serviceId);
+      if (!tpl) continue;
 
       // Slot d'occurrence à cette date = le slot daté direct de la réservation.
       const occ = dated.find((s) => s.id === b.slotId);

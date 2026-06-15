@@ -28,8 +28,10 @@ export async function sendTemplatedMail(opts: {
    * "direct" = lève en cas d'échec (e-mail de test admin, ou flux qui veut le savoir).
    */
   mode?: "queue" | "direct";
+  /** Gabarit propre à ce service (e-mails de réservation) ; absent → gabarit global. */
+  serviceId?: string;
 }): Promise<void> {
-  const tpl = await getMailTemplate(opts.kind);
+  const tpl = await getMailTemplate(opts.kind, opts.serviceId);
   const vars = opts.vars ?? {};
   const inner = renderHtmlTemplate(tpl.html, vars, opts.rawVars);
   const subject = renderSubjectTemplate(tpl.subject, vars);

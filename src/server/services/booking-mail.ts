@@ -135,8 +135,14 @@ export async function sendBookingConfirmationMail(
   params: BookingConfirmationParams,
 ): Promise<void> {
   try {
-    // Préférence « Échanges » : ce type d'e-mail est-il activé ?
-    if (!(await isMailEnabled(params.validated ? "booking_confirmed" : "booking_pending"))) return;
+    // Préférence « Échanges » du service : ce type d'e-mail est-il activé ?
+    if (
+      !(await isMailEnabled(
+        params.validated ? "booking_confirmed" : "booking_pending",
+        params.serviceId,
+      ))
+    )
+      return;
 
     const user = await prisma.user.findUnique({
       where: { id: params.userId },
@@ -172,7 +178,7 @@ export async function sendBookingConfirmationMail(
     };
 
     const kind = params.validated ? "booking_confirmed" : "booking_pending";
-    await sendTemplatedMail({ to: email, kind, vars });
+    await sendTemplatedMail({ to: email, kind, vars, serviceId: params.serviceId });
   } catch (e) {
     console.error("[sendBookingConfirmationMail] erreur:", e);
   }
@@ -197,7 +203,7 @@ export async function sendBookingCancellationMail(
   params: BookingCancellationParams,
 ): Promise<void> {
   try {
-    if (!(await isMailEnabled("booking_cancelled"))) return;
+    if (!(await isMailEnabled("booking_cancelled", params.serviceId))) return;
 
     const [user, slot] = await Promise.all([
       prisma.user.findUnique({
@@ -234,7 +240,12 @@ export async function sendBookingCancellationMail(
       motif: params.motif,
     };
 
-    await sendTemplatedMail({ to: email, kind: "booking_cancelled", vars });
+    await sendTemplatedMail({
+      to: email,
+      kind: "booking_cancelled",
+      vars,
+      serviceId: params.serviceId,
+    });
   } catch (e) {
     console.error("[sendBookingCancellationMail] erreur:", e);
   }

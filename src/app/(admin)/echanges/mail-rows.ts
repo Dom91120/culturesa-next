@@ -2,11 +2,20 @@ import { MAIL_KINDS, getMailPrefs } from "@/server/services/mail-prefs";
 import {
   DEFAULT_TEMPLATES,
   MAIL_VARS,
-  TEMPLATE_KINDS,
   type TemplateKind,
   getMailTemplate,
 } from "@/server/services/mail-templates";
-import { EchangesConfig, type KindData } from "./echanges-config";
+import type { KindData } from "./echanges-config";
+
+// E-mails « système » (compte / sécurité + test) : toujours envoyés, contenu modifiable.
+// Affichés dans l'onglet Messagerie (panel « E-mails automatiques »), pas dans Échanges.
+export const SYSTEM_MAIL_KINDS = [
+  "email_verification",
+  "password_reset",
+  "account_deletion_request",
+  "account_deletion_notice",
+  "email_test",
+] as const satisfies readonly TemplateKind[];
 
 // Libellés / descriptions affichés pour chaque type d'e-mail.
 const META: Record<TemplateKind, { label: string; description: string }> = {
@@ -54,15 +63,23 @@ const META: Record<TemplateKind, { label: string; description: string }> = {
   },
 };
 
-export default async function EchangesPage() {
+/**
+ * Construit les `KindData` (préférence + modèle) pour les types d'e-mail demandés.
+ * `serviceId` → gabarits/préférences PAR SERVICE (e-mails de réservation) ; absent →
+ * portée globale (e-mails système).
+ */
+export async function getMailRows(
+  kinds: readonly TemplateKind[],
+  serviceId?: string,
+): Promise<KindData[]> {
   // Préférences et templates : indépendants → chargés en parallèle.
   const [prefs, templates] = await Promise.all([
-    getMailPrefs(),
-    Promise.all(TEMPLATE_KINDS.map((k) => getMailTemplate(k))),
+    getMailPrefs(serviceId),
+    Promise.all(kinds.map((k) => getMailTemplate(k, serviceId))),
   ]);
   const toggleable = new Set<string>(MAIL_KINDS);
 
-  const rows: KindData[] = TEMPLATE_KINDS.map((kind, i) => {
+  return kinds.map((kind, i) => {
     const locked = !toggleable.has(kind);
     return {
       kind,
@@ -78,6 +95,4 @@ export default async function EchangesPage() {
       variables: MAIL_VARS[kind],
     };
   });
-
-  return <EchangesConfig rows={rows} />;
 }

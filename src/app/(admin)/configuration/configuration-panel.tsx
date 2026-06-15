@@ -29,6 +29,27 @@ const REFRESH_OPTIONS: { value: number; label: string }[] = [
   { value: 300, label: "5 minutes" },
 ];
 
+// Ligne de réglage (libellé + contrôle), calée sur le style des lignes de « Réservations ».
+// fontSize .62rem : le libellé du <label> est rendu en MAJUSCULES (règle globale `label`) ;
+// on le cale donc sur .62rem comme les autres libellés majuscules de l'app.
+const rowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: ".5rem",
+  fontSize: ".62rem",
+  flexWrap: "wrap",
+};
+// Sous-titre de section (panel-subtitle, .85rem) — identique à « Réservations / Périodes ».
+const subtitleStyle: React.CSSProperties = { fontSize: ".85rem", fontWeight: 500 };
+const selectStyle: React.CSSProperties = {
+  fontSize: ".85rem",
+  padding: ".2rem .4rem",
+  borderRadius: "var(--rad-sm)",
+  border: "1px solid var(--border)",
+  background: "var(--surface2)",
+  color: "var(--text)",
+};
+
 export function ConfigurationPanel({
   zone: initialZone,
   holidayCount,
@@ -119,33 +140,18 @@ export function ConfigurationPanel({
 
   return (
     <div className="panel">
-      <div className="panel-title" style={{ padding: ".3rem 0" }}>
+      <div className="panel-title" style={{ marginBottom: ".75rem" }}>
         <span className="dot" style={{ background: "var(--warn)" }} />
         Configuration
       </div>
 
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".5rem",
-          fontSize: ".85rem",
-          flexWrap: "wrap",
-        }}
-      >
-        Vacances scolaires — zone
-        <select
-          value={zone}
-          onChange={(e) => onZoneChange(e.target.value)}
-          style={{
-            fontSize: ".85rem",
-            padding: ".2rem .4rem",
-            borderRadius: "var(--rad-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--surface2)",
-            color: "var(--text)",
-          }}
-        >
+      {/* ─ Vacances scolaires ─ */}
+      <div className="panel-subtitle" style={{ ...subtitleStyle, margin: "0 0 .75rem" }}>
+        Vacances scolaires
+      </div>
+      <label style={rowStyle}>
+        Zone
+        <select value={zone} onChange={(e) => onZoneChange(e.target.value)} style={selectStyle}>
           <option value="A">A</option>
           <option value="B">B</option>
           <option value="C">C</option>
@@ -170,17 +176,12 @@ export function ConfigurationPanel({
         </span>
       </label>
 
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".5rem",
-          fontSize: ".85rem",
-          flexWrap: "wrap",
-          marginTop: ".75rem",
-        }}
-      >
-        URL de l'application
+      {/* ─ Application ─ */}
+      <div className="panel-subtitle" style={{ ...subtitleStyle, margin: "1.5rem 0 .75rem" }}>
+        Application
+      </div>
+      <label style={rowStyle}>
+        URL
         <input
           type="url"
           value={appUrl}
@@ -209,29 +210,17 @@ export function ConfigurationPanel({
         </span>
       </label>
 
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".5rem",
-          fontSize: ".85rem",
-          flexWrap: "wrap",
-          marginTop: ".75rem",
-        }}
-      >
-        Réservations — rafraîchissement automatique
+      {/* ─ Rafraîchissement automatique ─ */}
+      <div className="panel-subtitle" style={{ ...subtitleStyle, margin: "1.5rem 0 .75rem" }}>
+        Rafraîchissement automatique
+      </div>
+      <label style={rowStyle}>
+        Réservations
         <select
           value={refreshSeconds}
           onChange={(e) => onRefreshChange(Number(e.target.value))}
           disabled={pending}
-          style={{
-            fontSize: ".85rem",
-            padding: ".2rem .4rem",
-            borderRadius: "var(--rad-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--surface2)",
-            color: "var(--text)",
-          }}
+          style={selectStyle}
         >
           {REFRESH_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -245,30 +234,13 @@ export function ConfigurationPanel({
             : "Fréquence de mise à jour de la disponibilité côté usager."}
         </span>
       </label>
-
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".5rem",
-          fontSize: ".85rem",
-          flexWrap: "wrap",
-          marginTop: ".75rem",
-        }}
-      >
-        Agenda — rafraîchissement automatique
+      <label style={{ ...rowStyle, marginTop: ".5rem" }}>
+        Agenda
         <select
           value={agendaRefresh}
           onChange={(e) => onAgendaRefreshChange(Number(e.target.value))}
           disabled={pending}
-          style={{
-            fontSize: ".85rem",
-            padding: ".2rem .4rem",
-            borderRadius: "var(--rad-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--surface2)",
-            color: "var(--text)",
-          }}
+          style={selectStyle}
         >
           {REFRESH_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -283,17 +255,11 @@ export function ConfigurationPanel({
         </span>
       </label>
 
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".5rem",
-          cursor: "pointer",
-          fontSize: ".85rem",
-          userSelect: "none",
-          marginTop: ".75rem",
-        }}
-      >
+      {/* ─ Avancé ─ */}
+      <div className="panel-subtitle" style={{ ...subtitleStyle, margin: "1.5rem 0 .75rem" }}>
+        Avancé
+      </div>
+      <label style={{ ...rowStyle, cursor: "pointer", userSelect: "none" }}>
         Mode debug
         <input
           type="checkbox"

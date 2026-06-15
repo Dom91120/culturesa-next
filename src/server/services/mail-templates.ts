@@ -172,36 +172,49 @@ ${DETAILS_CONFIRMATION}
   },
 };
 
-function subjectKey(kind: TemplateKind) {
-  return `mail.tpl.${kind}.subject`;
+// Clés app_config. Avec `serviceId` → surcharge PAR SERVICE (e-mails de réservation,
+// onglet Paramètres › Échanges) ; sans → surcharge GLOBALE (e-mails système, Messagerie).
+function subjectKey(kind: TemplateKind, serviceId?: string) {
+  return serviceId ? `mail.tpl.${serviceId}.${kind}.subject` : `mail.tpl.${kind}.subject`;
 }
-function htmlKey(kind: TemplateKind) {
-  return `mail.tpl.${kind}.html`;
+function htmlKey(kind: TemplateKind, serviceId?: string) {
+  return serviceId ? `mail.tpl.${serviceId}.${kind}.html` : `mail.tpl.${kind}.html`;
 }
 
-/** Gabarit effectif d'un type d'e-mail : surcharge enregistrée, sinon défaut. */
-export async function getMailTemplate(kind: TemplateKind): Promise<MailTemplate> {
-  const cfg = await getConfigMany([subjectKey(kind), htmlKey(kind)]);
-  const subject = cfg[subjectKey(kind)].trim() || DEFAULT_TEMPLATES[kind].subject;
-  const html = cfg[htmlKey(kind)].trim() || DEFAULT_TEMPLATES[kind].html;
+/**
+ * Gabarit effectif d'un type d'e-mail : surcharge enregistrée, sinon défaut intégré.
+ * `serviceId` → gabarit propre au service ; absent → gabarit global. Le repli est
+ * toujours le défaut intégré (pas de couche globale derrière le service).
+ */
+export async function getMailTemplate(
+  kind: TemplateKind,
+  serviceId?: string,
+): Promise<MailTemplate> {
+  const sk = subjectKey(kind, serviceId);
+  const hk = htmlKey(kind, serviceId);
+  const cfg = await getConfigMany([sk, hk]);
+  const subject = cfg[sk].trim() || DEFAULT_TEMPLATES[kind].subject;
+  const html = cfg[hk].trim() || DEFAULT_TEMPLATES[kind].html;
   return { subject, html };
 }
 
 /**
- * Enregistre la surcharge d'un gabarit. Si le contenu est identique au défaut (ou
- * vide), on efface la surcharge (retour au défaut, propagation des évolutions).
+ * Enregistre la surcharge d'un gabarit (par service si `serviceId`, sinon globale). Si
+ * le contenu est identique au défaut (ou vide), on efface la surcharge (retour au défaut,
+ * propagation des évolutions).
  */
 export async function setMailTemplate(
   kind: TemplateKind,
   subject: string,
   html: string,
+  serviceId?: string,
 ): Promise<void> {
   const def = DEFAULT_TEMPLATES[kind];
   const s = subject.trim();
   const h = html.trim();
   await setConfigMany({
-    [subjectKey(kind)]: s && s !== def.subject.trim() ? subject : "",
-    [htmlKey(kind)]: h && h !== def.html.trim() ? html : "",
+    [subjectKey(kind, serviceId)]: s && s !== def.subject.trim() ? subject : "",
+    [htmlKey(kind, serviceId)]: h && h !== def.html.trim() ? html : "",
   });
 }
 

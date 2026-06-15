@@ -13,7 +13,6 @@ const ADMIN_TABS: Tab[] = [
   { href: "/users", label: "Comptes utilisateurs", icon: "👥" },
   { href: "/demandeurs", label: "Demandeurs", icon: "🏛️" },
   { href: "/messagerie", label: "Messagerie", icon: "✉️" },
-  { href: "/echanges", label: "Échanges", icon: "📨" },
   { href: "/configuration", label: "Configuration", icon: "⚙️" },
   { href: "/rgpd", label: "RGPD", icon: "🛡️" },
 ];
