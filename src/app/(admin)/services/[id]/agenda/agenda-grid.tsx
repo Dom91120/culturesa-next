@@ -61,6 +61,7 @@ import { CopyWeekConfirmModal, SlotDeleteModal } from "./agenda-confirm-modals";
 import { plural } from "./agenda-format";
 import { BookingDeleteModal } from "./booking-delete-modal";
 import { BookingDetailModal } from "./booking-detail-modal";
+import { DefaultDemandeursModal } from "./default-demandeurs-modal";
 import { OccurrencesField } from "./occurrences-field";
 import { SlotConfigModal } from "./slot-config-modal";
 
@@ -3923,66 +3924,12 @@ export function AgendaGrid({
 
       {/* Mode création : modale de choix des demandeurs autorisés PAR DÉFAUT (créneaux créés). */}
       {createDemModal && (
-        <ModalOverlay onClose={() => setCreateDemModal(false)}>
-          <div className="modal-title">Demandeurs autorisés par défaut</div>
-          <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: "0 0 .6rem" }}>
-            Appliqués aux créneaux que vous créez. Aucune coche = ouvert à tous.
-          </p>
-          {serviceDemandeurs.length === 0 ? (
-            <p style={{ fontSize: ".8rem", color: "var(--muted)" }}>
-              Aucun demandeur configuré pour ce service.
-            </p>
-          ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem .9rem" }}>
-              {serviceDemandeurs.map((d) => (
-                <label
-                  key={d.id}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: ".35rem",
-                    fontSize: ".82rem",
-                    fontWeight: 400,
-                    color: "var(--text)",
-                    textTransform: "none",
-                    letterSpacing: "normal",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={createDemIds.includes(d.id)}
-                    onChange={(e) =>
-                      setCreateDemIds((prev) =>
-                        e.target.checked
-                          ? [...new Set([...prev, d.id])]
-                          : prev.filter((x) => x !== d.id),
-                      )
-                    }
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  {d.label}
-                </label>
-              ))}
-            </div>
-          )}
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setCreateDemIds([])}
-              disabled={createDemIds.length === 0}
-            >
-              Tout décocher
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setCreateDemModal(false)}
-            >
-              OK
-            </button>
-          </div>
-        </ModalOverlay>
+        <DefaultDemandeursModal
+          serviceDemandeurs={serviceDemandeurs}
+          selected={createDemIds}
+          onChange={setCreateDemIds}
+          onClose={() => setCreateDemModal(false)}
+        />
       )}
 
       {/* Mode création : modale de configuration d'un créneau (capacité + demandeurs). */}
