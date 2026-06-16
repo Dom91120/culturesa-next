@@ -42,8 +42,8 @@ const rowStyle: React.CSSProperties = {
 // Sous-titre de section (panel-subtitle, .85rem) — identique à « Réservations / Périodes ».
 const subtitleStyle: React.CSSProperties = { fontSize: ".85rem", fontWeight: 500 };
 const selectStyle: React.CSSProperties = {
-  fontSize: ".85rem",
-  padding: ".2rem .4rem",
+  fontSize: ".78rem",
+  padding: ".15rem .4rem",
   borderRadius: "var(--rad-sm)",
   border: "1px solid var(--border)",
   background: "var(--surface2)",
@@ -171,7 +171,7 @@ export function ConfigurationPanel({
         >
           🔄 Rafraîchir
         </button>
-        <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+        <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>
           {info ?? `${count} période(s) en base`}
         </span>
       </label>
@@ -193,19 +193,19 @@ export function ConfigurationPanel({
           onBlur={saveAppUrl}
           disabled={pending}
           style={{
-            fontSize: ".85rem",
-            padding: ".25rem .45rem",
+            fontSize: ".78rem",
+            padding: ".2rem .45rem",
             borderRadius: "var(--rad-sm)",
             border: "1px solid var(--border)",
             background: "var(--surface2)",
             color: "var(--text)",
-            minWidth: 260,
+            minWidth: 220,
           }}
         />
         {appUrlSaved && (
           <span style={{ fontSize: ".72rem", color: "var(--accent)" }}>✅ Enregistré</span>
         )}
-        <span style={{ fontSize: ".72rem", color: "var(--muted)", flexBasis: "100%" }}>
+        <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>
           Lien « Portail CultuRésa » des e-mails. Laisser vide pour ne pas afficher de lien.
         </span>
       </label>
@@ -228,7 +228,7 @@ export function ConfigurationPanel({
             </option>
           ))}
         </select>
-        <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+        <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>
           {refreshSaved
             ? "Enregistré ✓"
             : "Fréquence de mise à jour de la disponibilité côté usager."}
@@ -248,7 +248,7 @@ export function ConfigurationPanel({
             </option>
           ))}
         </select>
-        <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+        <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>
           {agendaRefreshSaved
             ? "Enregistré ✓"
             : "Fréquence de mise à jour de l'agenda côté gestionnaire."}

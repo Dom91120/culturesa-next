@@ -2,65 +2,36 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
-import { createDemandeurAction, deleteDemandeurAction, updateDemandeurAction } from "./actions";
+import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
 
-type Row = { id: number | null; label: string; openOnSchoolHolidays: boolean; key: string };
-type Initial = { id: number; label: string; openOnSchoolHolidays: boolean };
+type DemandeurOption = { id: number; label: string };
+type Initial = { id: number; label: string; demandeurId: number | null; position: number };
+type Row = {
+  id: number | null;
+  label: string;
+  demandeurId: number | null;
+  position: number;
+  key: string;
+};
 
-const GRID = "1fr 190px 32px";
-
-// ── Interrupteur fin (30×16) — repris de la maquette ─────────────────────────
-function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      style={{
-        position: "relative",
-        width: 30,
-        height: 16,
-        borderRadius: 99,
-        background: on ? "var(--accent)" : "var(--surface2)",
-        border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
-        cursor: "pointer",
-        transition: "background .2s, border-color .2s",
-        flexShrink: 0,
-        padding: 0,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 1,
-          left: on ? 15 : 1,
-          width: 12,
-          height: 12,
-          borderRadius: "50%",
-          background: on ? "#0f1117" : "var(--muted)",
-          transition: "left .2s",
-          display: "block",
-        }}
-      />
-    </button>
-  );
-}
+const GRID = "1fr 170px 70px 32px";
 
 /**
- * Éditeur des demandeurs affiché dans la modale du référentiel (Administration >
- * Configuration). MODE TAMPON : les modifications restent locales jusqu'au clic sur
- * « Enregistrer » (qui applique le diff en lot) ; « Annuler » ferme sans persister.
+ * Éditeur des niveaux scolaires (modale du référentiel, Administration > Configuration).
+ * MODE TAMPON : modifications locales jusqu'au clic sur « Enregistrer ». Demandeur optionnel,
+ * position d'ordre.
  */
-export function DemandeursEditor({
+export function NiveauxEditor({
   initial,
+  demandeurs,
   onClose,
 }: {
   initial: Initial[];
+  demandeurs: DemandeurOption[];
   onClose?: () => void;
 }) {
   const counter = useRef(0);
-  const [rows, setRows] = useState<Row[]>(() => initial.map((d) => ({ ...d, key: `db-${d.id}` })));
+  const [rows, setRows] = useState<Row[]>(() => initial.map((n) => ({ ...n, key: `db-${n.id}` })));
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -69,50 +40,51 @@ export function DemandeursEditor({
   function patch(key: string, p: Partial<Row>) {
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
   }
-
   function add() {
     const key = `new-${counter.current++}`;
-    setRows((rs) => [...rs, { id: null, label: "", openOnSchoolHolidays: true, key }]);
+    setRows((rs) => [...rs, { id: null, label: "", demandeurId: null, position: 0, key }]);
     setConfirmKey(null);
   }
-
   function remove(key: string) {
     setConfirmKey(null);
     setRows((rs) => rs.filter((r) => r.key !== key));
   }
 
-  // Applique en lot les suppressions / créations / mises à jour, puis ferme la modale.
   function saveAll() {
-    const initialById = new Map(initial.map((d) => [d.id, d]));
+    const initialById = new Map(initial.map((n) => [n.id, n]));
     const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
-    const toDelete = initial.filter((d) => !currentIds.has(d.id));
+    const toDelete = initial.filter((n) => !currentIds.has(n.id));
     const toCreate = rows.filter((r) => r.id == null && r.label.trim() !== "");
     const toUpdate = rows.filter((r) => {
       if (r.id == null || r.label.trim() === "") return false;
       const init = initialById.get(r.id);
       return (
         !!init &&
-        (init.label !== r.label.trim() || init.openOnSchoolHolidays !== r.openOnSchoolHolidays)
+        (init.label !== r.label.trim() ||
+          init.demandeurId !== r.demandeurId ||
+          init.position !== r.position)
       );
     });
 
     startSaving(async () => {
       try {
-        for (const d of toDelete) {
-          const res = await deleteDemandeurAction(d.id);
+        for (const n of toDelete) {
+          const res = await deleteNiveauAction(n.id);
           if (!res.ok) throw new Error(res.error);
         }
         for (const r of toCreate) {
-          const res = await createDemandeurAction({
+          const res = await createNiveauAction({
             label: r.label.trim(),
-            openOnSchoolHolidays: r.openOnSchoolHolidays,
+            demandeurId: r.demandeurId,
+            position: r.position,
           });
           if (!res.ok) throw new Error(res.error);
         }
         for (const r of toUpdate) {
-          const res = await updateDemandeurAction(r.id as number, {
+          const res = await updateNiveauAction(r.id as number, {
             label: r.label.trim(),
-            openOnSchoolHolidays: r.openOnSchoolHolidays,
+            demandeurId: r.demandeurId,
+            position: r.position,
           });
           if (!res.ok) throw new Error(res.error);
         }
@@ -127,7 +99,6 @@ export function DemandeursEditor({
 
   return (
     <div>
-      {/* En-tête : statut d'erreur éventuel + bouton d'ajout (le titre est porté par la modale). */}
       <div
         style={{
           display: "flex",
@@ -152,7 +123,6 @@ export function DemandeursEditor({
         </button>
       </div>
 
-      {/* En-têtes de colonnes (discrets) */}
       <div
         style={{
           display: "grid",
@@ -167,8 +137,9 @@ export function DemandeursEditor({
           color: "var(--muted)",
         }}
       >
+        <span>Niveau</span>
         <span>Demandeur</span>
-        <span style={{ textAlign: "center" }}>Ouvert vacances scolaires</span>
+        <span style={{ textAlign: "center" }}>Position</span>
         <span />
       </div>
 
@@ -192,7 +163,7 @@ export function DemandeursEditor({
               type="text"
               className="dem-ghost"
               value={r.label}
-              placeholder="Nom du demandeur"
+              placeholder="Nom du niveau"
               onChange={(e) => patch(r.key, { label: e.target.value })}
               style={{
                 fontSize: ".85rem",
@@ -210,15 +181,15 @@ export function DemandeursEditor({
             {confirming ? (
               <div
                 style={{
-                  gridColumn: "2 / 4",
+                  gridColumn: "2 / 5",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "flex-end",
                   gap: ".5rem",
                 }}
               >
-                <span style={{ fontSize: ".76rem", color: "var(--muted)" }}>
-                  Supprimer ce demandeur ?
+                <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
+                  Supprimer ce niveau ?
                 </span>
                 <button
                   type="button"
@@ -246,17 +217,54 @@ export function DemandeursEditor({
               </div>
             ) : (
               <>
-                <span style={{ display: "flex", justifyContent: "center" }}>
-                  <Switch
-                    on={r.openOnSchoolHolidays}
-                    onChange={(v) => patch(r.key, { openOnSchoolHolidays: v })}
-                  />
-                </span>
+                <select
+                  value={r.demandeurId ?? ""}
+                  onChange={(e) =>
+                    patch(r.key, {
+                      demandeurId: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
+                  style={{
+                    fontSize: ".78rem",
+                    padding: ".2rem .35rem",
+                    borderRadius: "var(--rad-sm)",
+                    border: "1px solid var(--border)",
+                    background: "var(--surface2)",
+                    color: "var(--text)",
+                    width: "100%",
+                  }}
+                >
+                  <option value="">— aucun —</option>
+                  {demandeurs.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={0}
+                  value={r.position}
+                  onChange={(e) =>
+                    patch(r.key, { position: Math.max(0, Number(e.target.value) || 0) })
+                  }
+                  style={{
+                    fontSize: ".78rem",
+                    padding: ".2rem .35rem",
+                    borderRadius: "var(--rad-sm)",
+                    border: "1px solid var(--border)",
+                    background: "var(--surface2)",
+                    color: "var(--text)",
+                    width: "100%",
+                    textAlign: "center",
+                    boxSizing: "border-box",
+                  }}
+                />
                 <button
                   type="button"
                   className="dem-x"
                   onClick={() => setConfirmKey(r.key)}
-                  title="Supprimer ce demandeur"
+                  title="Supprimer ce niveau"
                   style={{
                     background: "none",
                     border: "none",
@@ -287,11 +295,10 @@ export function DemandeursEditor({
             borderTop: "1px solid var(--border)",
           }}
         >
-          Aucun demandeur. Cliquez sur « Ajouter ».
+          Aucun niveau. Cliquez sur « Ajouter ».
         </div>
       )}
 
-      {/* Mode tampon : enregistrement explicite (pas d'autosave). */}
       <div
         style={{
           display: "flex",

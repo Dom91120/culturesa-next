@@ -1,47 +1,44 @@
 "use server";
 
-import type { ActionState } from "@/lib/action-state";
-import { idSchema, niveauSchema } from "@/schemas/referentiels";
+import { niveauSchema } from "@/schemas/referentiels";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/niveaux";
 import { revalidatePath } from "next/cache";
 
-const PATH = "/niveaux";
+// Actions typées (référentiel Niveaux en modale, mode tampon). Un niveau a une position
+// d'ordre et peut être rattaché à un demandeur (demandeurId optionnel).
 
-function readForm(formData: FormData) {
-  const rawDemandeur = formData.get("demandeurId");
-  return niveauSchema.safeParse({
-    label: formData.get("label"),
-    demandeurId: rawDemandeur === "" || rawDemandeur === null ? null : rawDemandeur,
-    position: formData.get("position") ?? 0,
-  });
+type NiveauData = { label: string; demandeurId: number | null; position: number };
+type Result = { ok: true } | { ok: false; error: string };
+type CreateResult = { ok: true; id: number } | { ok: false; error: string };
+
+export async function createNiveauAction(input: NiveauData): Promise<CreateResult> {
+  await requireRole("gestionnaire");
+  const parsed = niveauSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  }
+  const created = await svc.createNiveau(parsed.data);
+  revalidatePath("/configuration");
+  return { ok: true, id: created.id };
 }
 
-export async function createNiveauAction(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
+export async function updateNiveauAction(id: number, input: NiveauData): Promise<Result> {
   await requireRole("gestionnaire");
-  const parsed = readForm(formData);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message };
-  await svc.createNiveau(parsed.data);
-  revalidatePath(PATH);
+  if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Niveau introuvable" };
+  const parsed = niveauSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
+  }
+  await svc.updateNiveau(id, parsed.data);
+  revalidatePath("/configuration");
   return { ok: true };
 }
 
-export async function updateNiveauAction(formData: FormData) {
+export async function deleteNiveauAction(id: number): Promise<Result> {
   await requireRole("gestionnaire");
-  const id = idSchema.safeParse(formData.get("id"));
-  const parsed = readForm(formData);
-  if (!id.success || !parsed.success) return;
-  await svc.updateNiveau(id.data, parsed.data);
-  revalidatePath(PATH);
-}
-
-export async function deleteNiveauAction(formData: FormData) {
-  await requireRole("gestionnaire");
-  const id = idSchema.safeParse(formData.get("id"));
-  if (!id.success) return;
-  await svc.deleteNiveau(id.data);
-  revalidatePath(PATH);
+  if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Niveau introuvable" };
+  await svc.deleteNiveau(id);
+  revalidatePath("/configuration");
+  return { ok: true };
 }

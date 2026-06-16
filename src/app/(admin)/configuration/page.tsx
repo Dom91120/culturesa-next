@@ -1,13 +1,14 @@
 import { getConfigMany } from "@/server/config";
+import { prisma } from "@/server/db";
 import { countSchoolHolidays } from "@/server/services/holidays";
-import Link from "next/link";
+import { listNiveaux } from "@/server/services/niveaux";
+import { listServicesForCurrentAdmin } from "@/server/services/services";
+import { listStructures } from "@/server/services/structures";
 import { ConfigurationPanel } from "./configuration-panel";
-
-const LINKS = [
-  { href: "/periods", label: "Périodes", desc: "Périodes et exercices annuels" },
-  { href: "/structures", label: "Structures", desc: "Structures rattachées aux demandeurs" },
-  { href: "/niveaux", label: "Niveaux", desc: "Référentiel des niveaux scolaires" },
-];
+import { DemandeursReferentiel } from "./demandeurs-referentiel";
+import { NiveauxReferentiel } from "./niveaux-referentiel";
+import { ServicesReferentiel } from "./services-referentiel";
+import { StructuresReferentiel } from "./structures-referentiel";
 
 export default async function ConfigurationPage() {
   const cfg = await getConfigMany([
@@ -18,7 +19,6 @@ export default async function ConfigurationPage() {
     "app.url",
   ]);
   const zone = cfg["school.zone"] || "A";
-  const holidayCount = await countSchoolHolidays(zone);
   const parseSeconds = (v: string, fallback: number) => {
     const n = Number.parseInt(v, 10);
     return Number.isFinite(n) ? n : fallback;
@@ -27,6 +27,32 @@ export default async function ConfigurationPage() {
   const agendaRefreshSeconds = parseSeconds(cfg["agenda.autoRefreshSeconds"], 60);
   const debugMode = cfg["debug.mode"] === "1";
   const appUrl = cfg["app.url"] || "";
+
+  // Référentiels affichés en modale (mêmes données que les anciens onglets).
+  const [holidayCount, demandeurs, servicesRaw, structuresRaw, niveauxRaw] = await Promise.all([
+    countSchoolHolidays(zone),
+    prisma.demandeur.findMany({
+      orderBy: { label: "asc" },
+      select: { id: true, label: true, openOnSchoolHolidays: true },
+    }),
+    listServicesForCurrentAdmin(),
+    listStructures(),
+    listNiveaux(),
+  ]);
+  const demandeurOptions = demandeurs.map((d) => ({ id: d.id, label: d.label }));
+  const services = servicesRaw.map((s) => ({ id: s.id, label: s.label, icon: s.icon }));
+  const structures = structuresRaw.map((s) => ({
+    id: s.id,
+    label: s.label,
+    demandeurId: s.demandeurId,
+    users: s._count.users,
+  }));
+  const niveaux = niveauxRaw.map((n) => ({
+    id: n.id,
+    label: n.label,
+    demandeurId: n.demandeurId,
+    position: n.position,
+  }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -48,24 +74,10 @@ export default async function ConfigurationPage() {
           Paramètres généraux et référentiels.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: ".5rem", maxWidth: 480 }}>
-          {LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="btn btn-ghost"
-              style={{
-                textDecoration: "none",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: ".15rem",
-                padding: ".6rem .9rem",
-              }}
-            >
-              <span style={{ fontWeight: 600 }}>{l.label}</span>
-              <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>{l.desc}</span>
-            </Link>
-          ))}
+          <ServicesReferentiel services={services} />
+          <DemandeursReferentiel demandeurs={demandeurs} />
+          <StructuresReferentiel structures={structures} demandeurs={demandeurOptions} />
+          <NiveauxReferentiel niveaux={niveaux} demandeurs={demandeurOptions} />
         </div>
       </div>
     </div>

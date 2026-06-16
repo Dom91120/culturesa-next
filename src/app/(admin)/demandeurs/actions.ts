@@ -29,7 +29,7 @@ export async function createDemandeurAction(input: {
     data: { label: parsed.data.label, openOnSchoolHolidays: parsed.data.openOnSchoolHolidays },
     select: { id: true },
   });
-  revalidatePath("/demandeurs");
+  revalidatePath("/configuration");
   return { ok: true, id: created.id };
 }
 
@@ -47,7 +47,7 @@ export async function updateDemandeurAction(
     where: { id },
     data: { label: parsed.data.label, openOnSchoolHolidays: parsed.data.openOnSchoolHolidays },
   });
-  revalidatePath("/demandeurs");
+  revalidatePath("/configuration");
   return { ok: true };
 }
 
@@ -60,6 +60,6 @@ export async function deleteDemandeurAction(id: number): Promise<Result> {
   await requireRole("gestionnaire");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Demandeur introuvable" };
   await prisma.demandeur.delete({ where: { id } });
-  revalidatePath("/demandeurs");
+  revalidatePath("/configuration");
   return { ok: true };
 }
