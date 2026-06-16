@@ -53,15 +53,16 @@ import {
   moveBookingAction,
   moveRecurringSlotAction,
   moveUniqueSlotAction,
-  saveSlotConfigAction,
   setBookingPointageAction,
   setBookingValidatedAction,
   setServiceDefaultCapacityAction,
 } from "./actions";
+import { CopyWeekConfirmModal, SlotDeleteModal } from "./agenda-confirm-modals";
 import { plural } from "./agenda-format";
 import { BookingDeleteModal } from "./booking-delete-modal";
 import { BookingDetailModal } from "./booking-detail-modal";
 import { OccurrencesField } from "./occurrences-field";
+import { SlotConfigModal } from "./slot-config-modal";
 
 type Service = {
   id: string;
@@ -398,10 +399,6 @@ export function AgendaGrid({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [ctxMenu]);
-  const [capValue, setCapValue] = useState("0");
-  const [capDemIds, setCapDemIds] = useState<number[]>([]);
-  const [capError, setCapError] = useState<string | null>(null);
-  const [capSaving, startCapSave] = useTransition();
   // Distingue un clic (ouvre la modale) d'un glisser-déplacer terminé (ne l'ouvre pas).
   const justMovedRef = useRef(false);
   // Info-bulle flottante unique (texte data-tip / « Journées concernées »), factorisée
@@ -1409,39 +1406,10 @@ export function AgendaGrid({
     runResult(deleteBookingAdminAction(id, service.id, motif));
   }
 
-  // Ouvre la modale de configuration d'un créneau (capacité + demandeurs autorisés),
-  // pré-remplie depuis les données du créneau cliqué.
+  // Ouvre la modale de configuration d'un créneau (capacité + demandeurs autorisés) ;
+  // le pré-remplissage depuis le créneau est fait au rendu (SlotConfigModal).
   function openCapModal(slotId: string) {
-    const slot =
-      slots.find((s) => s.id === slotId) ?? uniqueSlots.find((s) => s.id === slotId) ?? null;
-    setCapValue(String(slot?.capacity ?? service.capacity));
-    setCapDemIds(slotDemandeurs[slotId] ?? []);
-    setCapError(null);
     setCapModal({ slotId });
-  }
-
-  function submitCapConfig() {
-    if (!capModal) return;
-    const capacity = Number.parseInt(capValue, 10);
-    if (!Number.isFinite(capacity) || capacity < 0) {
-      setCapError("Capacité invalide.");
-      return;
-    }
-    setCapError(null);
-    startCapSave(async () => {
-      const res = await saveSlotConfigAction({
-        serviceId: service.id,
-        slotId: capModal.slotId,
-        capacity,
-        demandeurIds: capDemIds,
-      });
-      if (res && !res.ok) {
-        setCapError(res.error ?? "Échec de l'enregistrement.");
-        return;
-      }
-      setCapModal(null);
-      router.refresh();
-    });
   }
 
   // ── Mode création : glisser-DÉPLACER un créneau vide ────────────────────────
@@ -4025,112 +3993,20 @@ export function AgendaGrid({
             uniqueSlots.find((s) => s.id === capModal.slotId) ??
             null;
           return (
-            <ModalOverlay onClose={() => setCapModal(null)}>
-              <div className="modal-title">
-                Configuration du créneau
-                {slot ? ` · ${slot.startTime}–${slot.endTime}` : ""}
-              </div>
-              <div className="form-grid">
-                <div className="field full">
-                  <label htmlFor="cap-input">Capacité (places)</label>
-                  <input
-                    id="cap-input"
-                    type="number"
-                    min={0}
-                    value={capValue}
-                    onChange={(e) => setCapValue(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="field full" style={{ marginTop: ".6rem" }}>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: ".7rem",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: ".06em",
-                    color: "var(--muted)",
-                    marginBottom: ".2rem",
-                  }}
-                >
-                  Demandeurs autorisés
-                </span>
-                {serviceDemandeurs.length === 0 ? (
-                  <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: ".3rem 0 0" }}>
-                    Aucun demandeur configuré pour ce service.
-                  </p>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: ".5rem .9rem",
-                      marginTop: ".4rem",
-                    }}
-                  >
-                    {serviceDemandeurs.map((d) => (
-                      <label
-                        key={d.id}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: ".35rem",
-                          fontSize: ".82rem",
-                          fontWeight: 400,
-                          color: "var(--text)",
-                          textTransform: "none",
-                          letterSpacing: "normal",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={capDemIds.includes(d.id)}
-                          onChange={(e) =>
-                            setCapDemIds((prev) =>
-                              e.target.checked
-                                ? [...new Set([...prev, d.id])]
-                                : prev.filter((x) => x !== d.id),
-                            )
-                          }
-                          style={{ accentColor: "var(--accent)" }}
-                        />
-                        {d.label}
-                      </label>
-                    ))}
-                  </div>
-                )}
-                <span
-                  style={{
-                    display: "block",
-                    marginTop: ".4rem",
-                    fontSize: ".72rem",
-                    fontStyle: "italic",
-                    color: "var(--muted)",
-                  }}
-                >
-                  Aucune coche = ouvert à tous les demandeurs.
-                </span>
-              </div>
-              {capError && (
-                <p className="field-error" style={{ display: "block" }}>
-                  {capError}
-                </p>
-              )}
-              <div className="btn-row">
-                <button type="button" className="btn btn-ghost" onClick={() => setCapModal(null)}>
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={submitCapConfig}
-                  disabled={capSaving}
-                >
-                  {capSaving ? "Enregistrement…" : "Enregistrer"}
-                </button>
-              </div>
-            </ModalOverlay>
+            <SlotConfigModal
+              key={capModal.slotId}
+              serviceId={service.id}
+              slotId={capModal.slotId}
+              title={slot ? ` · ${slot.startTime}–${slot.endTime}` : ""}
+              initialCapacity={String(slot?.capacity ?? service.capacity)}
+              initialDemIds={slotDemandeurs[capModal.slotId] ?? []}
+              serviceDemandeurs={serviceDemandeurs}
+              onClose={() => setCapModal(null)}
+              onSaved={() => {
+                setCapModal(null);
+                router.refresh();
+              }}
+            />
           );
         })()}
 
@@ -4143,77 +4019,22 @@ export function AgendaGrid({
             null;
           const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
           return (
-            <ModalOverlay onClose={() => setSlotDeleteTarget(null)}>
-              <div className="modal-title" style={{ color: "var(--danger)" }}>
-                🗑️ Supprimer le créneau
-              </div>
-              <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
-                Vous êtes sur le point de supprimer ce créneau
-                {timePart ? (
-                  <>
-                    {" "}
-                    <strong>{timePart}</strong>
-                  </>
-                ) : null}
-                .
-              </p>
-              <p
-                style={{
-                  fontSize: ".78rem",
-                  color: "var(--danger)",
-                  fontWeight: 600,
-                  margin: "0 0 1rem",
-                }}
-              >
-                ⚠️ Cette action est irréversible.
-              </p>
-              <div className="btn-row">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setSlotDeleteTarget(null)}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={confirmDeleteSlot}
-                  style={{ background: "var(--danger)", border: "none", color: "var(--text)" }}
-                >
-                  🗑️ Supprimer
-                </button>
-              </div>
-            </ModalOverlay>
+            <SlotDeleteModal
+              timePart={timePart}
+              onCancel={() => setSlotDeleteTarget(null)}
+              onConfirm={confirmDeleteSlot}
+            />
           );
         })()}
 
       {/* Confirmation de copie des créneaux d'une semaine A/B vers l'autre. */}
       {copyConfirm && (
-        <ModalOverlay onClose={() => setCopyConfirm(null)}>
-          <div className="modal-title" style={{ color: "var(--warn)" }}>
-            Copier les créneaux · Semaine {copyConfirm.from} → {copyConfirm.to}
-          </div>
-          <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 1rem" }}>
-            Les créneaux récurrents de la <strong>semaine {copyConfirm.from}</strong> qui n'existent
-            pas encore en <strong>semaine {copyConfirm.to}</strong> y seront recréés (capacité et
-            demandeurs autorisés inclus). Les créneaux déjà présents en semaine {copyConfirm.to} ne
-            sont pas dupliqués.
-          </p>
-          <div className="btn-row">
-            <button type="button" className="btn btn-ghost" onClick={() => setCopyConfirm(null)}>
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={confirmCopyWeek}
-              style={{ background: "var(--warn)", border: "none", color: "var(--text)" }}
-            >
-              Valider
-            </button>
-          </div>
-        </ModalOverlay>
+        <CopyWeekConfirmModal
+          from={copyConfirm.from}
+          to={copyConfirm.to}
+          onCancel={() => setCopyConfirm(null)}
+          onConfirm={confirmCopyWeek}
+        />
       )}
 
       {/* Menu contextuel (clic droit) : Copier une réservation / Coller sur un créneau. */}
