@@ -45,6 +45,6 @@ export async function requireServiceManager(serviceId: string) {
     where: { userId_serviceId: { userId: session.user.id, serviceId } },
     select: { serviceId: true },
   });
-  if (!mgr) redirect("/services");
+  if (!mgr) redirect("/configuration");
   return session;
 }

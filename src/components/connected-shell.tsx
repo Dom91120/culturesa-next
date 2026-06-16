@@ -9,10 +9,9 @@ export type ServiceItem = { id: string; label: string; icon: string | null };
 type Tab = { href: string; label: string; icon: string };
 
 const ADMIN_TABS: Tab[] = [
-  { href: "/services", label: "Services", icon: "🏷️" },
-  { href: "/users", label: "Comptes utilisateurs", icon: "👥" },
-  { href: "/messagerie", label: "Messagerie", icon: "✉️" },
   { href: "/configuration", label: "Configuration", icon: "⚙️" },
+  { href: "/users", label: "Utilisateurs", icon: "👥" },
+  { href: "/messagerie", label: "Messagerie", icon: "✉️" },
   { href: "/rgpd", label: "RGPD", icon: "🛡️" },
 ];
 
@@ -157,7 +156,7 @@ export function ConnectedShell({
                 id="sidebar-admin-btn"
                 className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
                 style={{ marginTop: ".6rem" }}
-                onClick={() => router.push("/services")}
+                onClick={() => router.push("/configuration")}
               >
                 <span className="sb-icon">⚙️</span>
                 <span className="sb-label">Administration</span>
