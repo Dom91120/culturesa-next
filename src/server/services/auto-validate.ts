@@ -173,8 +173,65 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
   const dueRecurringIds: number[] = [];
   const mails: Parameters<typeof sendBookingConfirmationMail>[0][] = [];
 
+  const svcIds = services.map((s) => s.id);
+
+  // Toutes les réservations candidates de TOUS les services en UNE requête (au lieu
+  // d'un findMany par service — audit perf P4 : N+1 sur les services).
+  const allCands = svcIds.length
+    ? await prisma.booking.findMany({
+        where: {
+          serviceId: { in: svcIds },
+          validated: false,
+          parentBookingId: null,
+          autoValidateFrom: { not: null },
+        },
+        select: {
+          id: true,
+          serviceId: true,
+          bookingType: true,
+          userId: true,
+          periodId: true,
+          themeLabel: true,
+          enfants: true,
+          accompagnants: true,
+          autoValidateFrom: true,
+          slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
+        },
+      })
+    : [];
+  stats.candidates = allCands.length;
+
+  // Fins de période (test « séance passée » des récurrents) — toutes en UNE requête.
+  const periodIds = [
+    ...new Set(
+      allCands
+        .filter((c) => c.bookingType === "recurring" && c.periodId > 0)
+        .map((c) => c.periodId),
+    ),
+  ];
+  const periodEnd = new Map<number, Date | null>(
+    periodIds.length
+      ? (
+          await prisma.period.findMany({
+            where: { id: { in: periodIds } },
+            select: { id: true, dateEnd: true },
+          })
+        ).map((p) => [p.id, p.dateEnd])
+      : [],
+  );
+
+  // Regroupe les candidates par service.
+  const candsByService = new Map<string, typeof allCands>();
+  for (const c of allCands) {
+    const arr = candsByService.get(c.serviceId);
+    if (arr) arr.push(c);
+    else candsByService.set(c.serviceId, [c]);
+  }
+
   for (const svc of services) {
     stats.services += 1;
+    const cands = candsByService.get(svc.id) ?? [];
+    if (cands.length === 0) continue;
     const delay = svc.autoValidationDelay;
     const delayMinutes = Math.abs(delay);
     const isBusiness = delay < 0;
@@ -182,43 +239,6 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
       .split(",")
       .map((d) => d.trim())
       .filter(Boolean);
-
-    const cands = await prisma.booking.findMany({
-      where: {
-        serviceId: svc.id,
-        validated: false,
-        parentBookingId: null,
-        autoValidateFrom: { not: null },
-      },
-      select: {
-        id: true,
-        bookingType: true,
-        userId: true,
-        periodId: true,
-        themeLabel: true,
-        enfants: true,
-        accompagnants: true,
-        autoValidateFrom: true,
-        slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
-      },
-    });
-    stats.candidates += cands.length;
-    if (cands.length === 0) continue;
-
-    // Fin de période pour le test « séance passée » des réservations récurrentes.
-    const periodIds = [
-      ...new Set(
-        cands.filter((c) => c.bookingType === "recurring" && c.periodId > 0).map((c) => c.periodId),
-      ),
-    ];
-    const periodEnd = new Map<number, Date | null>(
-      (
-        await prisma.period.findMany({
-          where: { id: { in: periodIds } },
-          select: { id: true, dateEnd: true },
-        })
-      ).map((p) => [p.id, p.dateEnd]),
-    );
 
     for (const c of cands) {
       // Séance déjà passée → on n'auto-valide pas.

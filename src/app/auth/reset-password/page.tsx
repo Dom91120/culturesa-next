@@ -2,6 +2,7 @@
 
 import { authClient } from "@/lib/auth-client";
 import { PASSWORD_POLICY_MESSAGE, PWD_RULES, isPasswordValid } from "@/lib/password";
+import { useFormSubmit } from "@/lib/use-form-submit";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -12,8 +13,7 @@ function ResetForm() {
   const token = params.get("token");
   const errorParam = params.get("error");
 
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { pending, error, onSubmit } = useFormSubmit();
   const [pwd, setPwd] = useState("");
 
   if (!token || errorParam) {
@@ -37,29 +37,16 @@ function ResetForm() {
     );
   }
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
+  const handleSubmit = onSubmit(async (form) => {
     if (!token) return;
-    const form = new FormData(e.currentTarget);
     const confirm = String(form.get("confirm"));
-    if (!isPasswordValid(pwd)) {
-      setError(PASSWORD_POLICY_MESSAGE);
-      return;
-    }
-    if (pwd !== confirm) {
-      setError("Les deux mots de passe ne correspondent pas.");
-      return;
-    }
-    setPending(true);
+    if (!isPasswordValid(pwd)) return PASSWORD_POLICY_MESSAGE;
+    if (pwd !== confirm) return "Les deux mots de passe ne correspondent pas.";
     const res = await authClient.resetPassword({ newPassword: pwd, token });
-    setPending(false);
-    if (res.error) {
-      setError(res.error.message || "Échec de la réinitialisation. Le lien a peut-être expiré.");
-      return;
-    }
+    if (res.error)
+      return res.error.message || "Échec de la réinitialisation. Le lien a peut-être expiré.";
     router.push("/auth/login");
-  }
+  });
 
   return (
     <div className="panel">
@@ -67,7 +54,7 @@ function ResetForm() {
         <span className="dot" />
         Nouveau mot de passe
       </div>
-      <form onSubmit={onSubmit}>
+      <form onSubmit={handleSubmit}>
         <div className="form-grid">
           <div className="field full">
             <label htmlFor="password">

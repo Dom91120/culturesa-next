@@ -1,43 +1,36 @@
 "use client";
 
 import { signIn } from "@/lib/auth-client";
+import { useFormSubmit } from "@/lib/use-form-submit";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { pending, error, onSubmit } = useFormSubmit();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const canSubmit = email.trim().length > 0 && password.length > 0;
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setPending(true);
+  const handleSubmit = onSubmit(async () => {
     const res = await signIn.email({ email, password });
-    setPending(false);
     if (res.error) {
       // On ne déduit plus « e-mail non confirmé » de TOUT 403 : Better Auth renvoie
       // aussi 403 pour une origine non autorisée (ex. accès LAN). On se fie au code.
       const code = res.error.code;
-      setError(
-        code === "EMAIL_NOT_VERIFIED"
-          ? "Adresse e-mail non confirmée. Vérifiez votre boîte mail."
-          : code === "INVALID_EMAIL_OR_PASSWORD"
-            ? "E-mail ou mot de passe incorrect."
-            : res.error.message || "Connexion impossible. Réessayez.",
-      );
-      return;
+      return code === "EMAIL_NOT_VERIFIED"
+        ? "Adresse e-mail non confirmée. Vérifiez votre boîte mail."
+        : code === "INVALID_EMAIL_OR_PASSWORD"
+          ? "E-mail ou mot de passe incorrect."
+          : res.error.message || "Connexion impossible. Réessayez.";
     }
     // Redirection selon le rôle déléguée à « / » (gestionnaire → Administration,
     // sinon → réservation).
     router.push("/");
     router.refresh();
-  }
+  });
 
   return (
     <>
@@ -52,7 +45,7 @@ export default function LoginPage() {
       </div>
 
       <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit}>
           <div className="panel">
             <div className="panel-title">
               <span className="dot" />

@@ -95,8 +95,11 @@ export async function listBookableServices() {
  * `excludeBookingId` exclut la réservation en cours (déplacement / édition de
  * compteurs) du décompte. `db` accepte le client global ou un client transactionnel.
  *
- * NB : pour un récurrent, le décompte est scopé par {service, slot, période} — pas par
- * semaine A/B (même périmètre que la création usager ; l'écart A/B est un point distinct).
+ * NB : pour un récurrent, le décompte est scopé par {service, slot, période} ; A, B et
+ * « toutes semaines » partagent donc un même budget. CHOIX ASSUMÉ (audit 2026-06-16) :
+ * conservateur, JAMAIS surbookant (sur une date A, occupation = A + toutes-sem. ≤
+ * A + B + toutes-sem. ≤ capacité ; idem B), au prix d'une sous-utilisation possible des
+ * parités. Scoper par parité reviendrait à RELÂCHER ce garde-fou (décision produit) — non retenu.
  */
 export async function assertSlotCapacity(
   db: Prisma.TransactionClient,

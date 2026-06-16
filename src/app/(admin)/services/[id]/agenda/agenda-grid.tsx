@@ -369,7 +369,6 @@ export function AgendaGrid({
   // Presse-papier « copier / couper une réservation » : la source en attente de collage.
   const [copiedBooking, setCopiedBooking] = useState<{
     id: number;
-    name: string;
     mode: "copy" | "cut";
   } | null>(null);
   // Menu contextuel (clic droit) : copier une réservation, ou coller sur un créneau.
@@ -2232,7 +2231,7 @@ export function AgendaGrid({
                     { bk: b.bookings[0], cls: "stack-front" },
                   ] as { bk: Booking; cls: string }[]
                 ).map(({ bk, cls }) => (
-                  <div key={cls} className={cls}>
+                  <div key={bk.id} className={cls}>
                     <div
                       className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}`}
                       style={{ ...badgeStyle(bk.validated), position: "relative" }}
@@ -4225,7 +4224,6 @@ export function AgendaGrid({
                   onClick={() => {
                     setCopiedBooking({
                       id: ctxMenu.booking.id,
-                      name: ctxMenu.booking.name,
                       mode: "cut",
                     });
                     setCtxMenu(null);
@@ -4238,7 +4236,6 @@ export function AgendaGrid({
                   onClick={() => {
                     setCopiedBooking({
                       id: ctxMenu.booking.id,
-                      name: ctxMenu.booking.name,
                       mode: "copy",
                     });
                     setCtxMenu(null);

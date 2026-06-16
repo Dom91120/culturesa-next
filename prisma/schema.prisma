@@ -191,9 +191,9 @@ model Service {
   // true par défaut = comportement historique (enfants + accompagnants).
   gaugeAccompagnants    Boolean    @default(true)
 
-  // Délai d'auto-validation en minutes signées (cf. PLAN.md §4).
-  //   0 = jamais ; négatif = N jours OUVRÉS avant la séance ;
-  //   positif = N (semaines) calendaires après la résa.
+  // Délai d'auto-validation en minutes SIGNÉES (cf. services/auto-validate.ts).
+  //   0 = jamais ; négatif = N minutes OUVRÉES (jours actifs ∩ plages) ;
+  //   positif = N minutes calendaires après `booking.autoValidateFrom`.
   autoValidationDelay   Int        @default(0)
 
   // Notification des gestionnaires sur les auto-validations (digest par service).
@@ -258,6 +258,9 @@ model Slot {
   @@index([serviceId])
   @@index([parentSlotId])
   @@index([periodId])
+  // Cron de rappels (filtre slotDate + state, quotidien sur tous les slots) et
+  // plage de dates des éditions ; préfixe slotDate sert les deux.
+  @@index([slotDate, state])
   @@map("slots")
 }
 

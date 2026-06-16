@@ -1,5 +1,5 @@
 import { holidaysInRange } from "@/lib/french-holidays";
-import { DAYS, type PeriodInput } from "@/schemas/config";
+import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import type { EntityState, Prisma } from "@prisma/client";
 
@@ -32,43 +32,6 @@ export async function refreshPeriodHolidays(
     label: h.label,
   }));
   if (rows.length) await client.periodHoliday.createMany({ data: rows, skipDuplicates: true });
-}
-
-export function listPeriods() {
-  return prisma.period.findMany({
-    orderBy: [{ position: "asc" }, { id: "asc" }],
-    include: { service: { select: { label: true } } },
-  });
-}
-
-function toData(data: PeriodInput) {
-  return {
-    label: data.label,
-    etiquette: data.etiquette ?? null,
-    serviceId: data.serviceId || null,
-    exerciceId: data.exerciceId ?? null,
-    dateStart: data.dateStart ?? null,
-    dateEnd: data.dateEnd ?? null,
-    color: data.color,
-    position: data.position,
-    state: data.state,
-  };
-}
-
-export async function createPeriod(data: PeriodInput) {
-  const period = await prisma.period.create({ data: toData(data) });
-  await refreshPeriodHolidays(period.id);
-  return period;
-}
-
-export async function updatePeriod(id: number, data: PeriodInput) {
-  const period = await prisma.period.update({ where: { id }, data: toData(data) });
-  await refreshPeriodHolidays(id);
-  return period;
-}
-
-export function deletePeriod(id: number) {
-  return prisma.period.delete({ where: { id } });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

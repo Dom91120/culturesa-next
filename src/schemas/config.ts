@@ -4,7 +4,6 @@ import { z } from "zod";
 
 const TIME = /^\d{2}:\d{2}$/;
 export const DAYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
-const dayEnum = z.enum(DAYS);
 
 // ── Services ──
 export const serviceCreateSchema = z.object({

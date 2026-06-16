@@ -14,6 +14,3 @@ export const niveauSchema = z.object({
   position: z.coerce.number().int().min(0).default(0),
 });
 export type NiveauInput = z.infer<typeof niveauSchema>;
-
-/** Identifiant numérique générique (pour update/delete). */
-export const idSchema = z.coerce.number().int().positive();

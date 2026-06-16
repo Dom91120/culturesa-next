@@ -48,7 +48,10 @@ function parseBlocks(text) {
       j++;
     }
     const body = text.slice(open + 1, j - 1);
-    const sel = header.trim().replace(/\/\*[\s\S]*?\*\//g, "").trim();
+    const sel = header
+      .trim()
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .trim();
     if (sel.startsWith("@media") || sel.startsWith("@supports")) {
       blocks.push({ kind: "at", header: text.slice(i, open), body, raw: text.slice(i, j) });
     } else if (sel.startsWith("@")) {
@@ -81,7 +84,10 @@ function selectorDead(selector) {
 function ruleDead(header) {
   const sel = header.replace(/\/\*[\s\S]*?\*\//g, "").trim();
   if (!sel) return false;
-  const selectors = sel.split(",").map((s) => s.trim()).filter(Boolean);
+  const selectors = sel
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (selectors.length === 0) return false;
   return selectors.every(selectorDead);
 }

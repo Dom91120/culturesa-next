@@ -1,24 +1,21 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
+import { useFormSubmit } from "@/lib/use-form-submit";
 import Link from "next/link";
 import { useState } from "react";
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
-  const [pending, setPending] = useState(false);
+  const { pending, onSubmit } = useFormSubmit();
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setPending(true);
-    const form = new FormData(e.currentTarget);
+  const handleSubmit = onSubmit(async (form) => {
     await authClient.requestPasswordReset({
       email: String(form.get("email")),
       redirectTo: "/auth/reset-password",
     });
-    setPending(false);
     setSent(true);
-  }
+  });
 
   if (sent) {
     return (
@@ -69,7 +66,7 @@ export default function ForgotPasswordPage() {
         <p style={{ fontSize: ".82rem", color: "var(--muted)", marginBottom: "1rem" }}>
           Saisissez votre e-mail pour recevoir un lien de réinitialisation.
         </p>
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit}>
           <div className="form-grid">
             <div className="field full">
               <label htmlFor="email">

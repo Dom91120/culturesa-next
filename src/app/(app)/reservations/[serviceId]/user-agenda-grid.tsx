@@ -38,9 +38,9 @@ import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-hol
 import { usePointerDrag } from "@/lib/use-pointer-drag";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { cancelMyBookingAction, commitDraft } from "./actions";
+import { commitDraft } from "./actions";
 
 type Service = {
   id: string;
@@ -930,7 +930,6 @@ export function UserAgendaGrid({
   themes,
   modes,
   exercices,
-  showPrevious,
   demandeurLabel,
   openOnSchoolHolidays,
   schoolHolidays,
@@ -947,7 +946,6 @@ export function UserAgendaGrid({
   themes: string[];
   modes: ServiceModes;
   exercices: Exercice[];
-  showPrevious: boolean;
   demandeurLabel: string | null;
   // Demandeur de l'usager ouvert pendant les vacances scolaires (filtre des dates prédites).
   openOnSchoolHolidays: boolean;
@@ -1004,7 +1002,6 @@ export function UserAgendaGrid({
   const [hideNoSlotPref, setHideNoSlotPref] = useState(true);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
-  const [stackKey, setStackKey] = useState<{ slotId: string; dayKey: string } | null>(null);
   // Glisser-déplacer (pointer events, cf. usePointerDrag) : élément en cours de drag + clé
   // "dayKey|slotId" du créneau survolé (drop target en surbrillance) + position du curseur
   // pour l'aperçu flottant (ghost). Remplace l'ancien drag HTML5 (inopérant au doigt).
@@ -1074,10 +1071,14 @@ export function UserAgendaGrid({
     };
   }, [toast?.id]);
 
-  const days = service.activeDays
-    .split(",")
-    .map((d) => d.trim())
-    .filter(Boolean);
+  const days = useMemo(
+    () =>
+      service.activeDays
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean),
+    [service.activeDays],
+  );
 
   // ── Mobile : vue « un jour à la fois » ──────────────────────────────────────
   // Sur smartphone, la grille hebdo (5-7 colonnes) est illisible : on n'affiche
@@ -1093,7 +1094,10 @@ export function UserAgendaGrid({
   }, []);
   const mobileDay = days.length ? (days[Math.min(mobileDayIdx, days.length - 1)] ?? null) : null;
   // Liste de jours réellement rendue : un seul jour sur mobile, toute la semaine sinon.
-  const displayDays = isMobile && mobileDay ? [mobileDay] : days;
+  const displayDays = useMemo(
+    () => (isMobile && mobileDay ? [mobileDay] : days),
+    [isMobile, mobileDay, days],
+  );
   // Compactage « sans créneau » : valeur effective. Sur mobile, toujours désactivé (la
   // case est masquée et n'est donc pas modifiable) → on affiche toute la plage horaire.
   const hideNoSlot = isMobile ? false : hideNoSlotPref;
@@ -1101,12 +1105,16 @@ export function UserAgendaGrid({
   // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
   // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00) est ignorée — sinon
   // afternoonEnd=00:00 ramenait la fin de grille à minuit et masquait toute la grille.
-  const openRanges = (
-    [
-      [toMinutes(service.morningStart, 9 * 60), toMinutes(service.morningEnd, 12 * 60)],
-      [toMinutes(service.afternoonStart, 14 * 60), toMinutes(service.afternoonEnd, 18 * 60)],
-    ] as const
-  ).filter(([s, e]) => e > s);
+  const openRanges = useMemo(
+    () =>
+      (
+        [
+          [toMinutes(service.morningStart, 9 * 60), toMinutes(service.morningEnd, 12 * 60)],
+          [toMinutes(service.afternoonStart, 14 * 60), toMinutes(service.afternoonEnd, 18 * 60)],
+        ] as const
+      ).filter(([s, e]) => e > s),
+    [service.morningStart, service.morningEnd, service.afternoonStart, service.afternoonEnd],
+  );
   const startMin = openRanges.length ? Math.min(...openRanges.map((r) => r[0])) : 9 * 60;
   const endMin = openRanges.length ? Math.max(...openRanges.map((r) => r[1])) : 18 * 60;
   const baseFirst = Math.floor(startMin / 60);
@@ -1294,30 +1302,38 @@ export function UserAgendaGrid({
   }
 
   // Libellé daté de chaque jour de la semaine réelle, par dayKey.
-  const weekDateByDay: Record<string, string> = {};
-  if (mondayStr) {
-    for (const d of days)
-      weekDateByDay[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
-  }
+  const weekDateByDay = useMemo(() => {
+    const out: Record<string, string> = {};
+    if (mondayStr) {
+      for (const d of days) out[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
+    }
+    return out;
+  }, [mondayStr, days]);
   // Jour fermé : uniquement en semaine réelle, pour un jour hors de la période
   // active, OU férié quand le service ferme les fériés, OU en vacances scolaires
   // quand le demandeur de l'usager ferme pendant les vacances. Contrairement au
   // legacy (grisage purement visuel), on bloque ici aussi toutes les interactions
   // → l'usager ne peut pas réserver ce jour-là (créneau miroir inclus).
-  const isDayDisabled = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr) return false;
-    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
-    if (
-      coveringPeriod?.dateStart &&
-      coveringPeriod.dateEnd &&
-      (dayYmd < coveringPeriod.dateStart || dayYmd > coveringPeriod.dateEnd)
-    ) {
-      return true;
-    }
-    if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
-    // Vacances scolaires : fermé pour un demandeur fermé pendant les vacances.
-    return !openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
-  };
+  // useCallback : référence stable requise pour mémoïser `occupiedQ` (sinon recalcul à
+  // chaque rendu, donc à chaque survol/drag). coveringPeriod est une réf stable (élément
+  // du tableau `periods` via find), les helpers (ymd/isFrenchHoliday/…) sont module-level.
+  const isDayDisabled = useCallback(
+    (dayKey: string): boolean => {
+      if (mode !== "realweek" || !mondayStr) return false;
+      const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+      if (
+        coveringPeriod?.dateStart &&
+        coveringPeriod.dateEnd &&
+        (dayYmd < coveringPeriod.dateStart || dayYmd > coveringPeriod.dateEnd)
+      ) {
+        return true;
+      }
+      if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
+      // Vacances scolaires : fermé pour un demandeur fermé pendant les vacances.
+      return !openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
+    },
+    [mode, mondayStr, coveringPeriod, service.openOnHolidays, openOnSchoolHolidays, schoolHolidays],
+  );
   // Jour férié français (service fermé les fériés), en semaine réelle.
   const isHolidayDay = (dayKey: string): boolean => {
     if (mode !== "realweek" || !mondayStr || service.openOnHolidays) return false;
@@ -1390,8 +1406,11 @@ export function UserAgendaGrid({
   // un CRÉNEAU (granularité HEURE : dès qu'un créneau — réservé OU vide réservable —
   // touche une heure, ses 4 quarts sont conservés pour garder le repère "heure").
   // Les quarts sans créneau sont ensuite sautés dans `quarters`.
-  const occupiedQ = new Set<number>();
-  if (hideNoSlot) {
+  // Mémoïsé : double boucle slots × uniqueSlots construisant un Set — sinon recalculé à
+  // CHAQUE rendu (donc à chaque survol/drag, via onMouseMove/setDragPos). Cf. P2 audit.
+  const occupiedQ = useMemo(() => {
+    const set = new Set<number>();
+    if (!hideNoSlot) return set;
     const occupiedHours = new Set<number>();
     const addHours = (sMin: number, eMin: number) => {
       const s = Math.max(sMin, gridStartMin);
@@ -1425,10 +1444,26 @@ export function UserAgendaGrid({
     // Étend chaque heure occupée à ses 4 quarts (dans [gridStartMin, gridEndMin]).
     for (const h of occupiedHours) {
       for (let q = h; q < h + 60; q += 15) {
-        if (q >= gridStartMin && q < gridEndMin) occupiedQ.add(q);
+        if (q >= gridStartMin && q < gridEndMin) set.add(q);
       }
     }
-  }
+    return set;
+  }, [
+    hideNoSlot,
+    slots,
+    effectivePeriodId,
+    abMode,
+    effectiveWeek,
+    displayDays,
+    isDayDisabled,
+    service.capacity,
+    mode,
+    mondayStr,
+    sundayStr,
+    uniqueSlots,
+    gridStartMin,
+    gridEndMin,
+  ]);
 
   // Géométrie de la grille (quarts visibles + mapping minute↔pixel) mutualisée.
   // `occupiedQ` (compactage hideNoSlot) est construit ci-dessus côté usager.
@@ -1687,34 +1722,11 @@ export function UserAgendaGrid({
   // cheval), un jour de vacances, ou un férié.
   const dayBlocks = (d: string): Block[] => (isDayDisabled(d) ? [] : (blocksByDay[d] ?? []));
 
-  function run(p: Promise<unknown>) {
-    startTransition(async () => {
-      await p;
-      router.refresh();
-    });
-  }
-
   // Validation bloquante (port legacy `_blockedDelete = validationMode && validated &&
   // validationBloquante`) : une résa VALIDÉE est verrouillée quand le service a
   // `validationBloquante` ET que le demandeur de l'usager est en mode validation.
   function bookingLocked(bk: { validated: boolean }): boolean {
     return service.validationBloquante && modes.validationMode && bk.validated;
-  }
-
-  // Agenda USAGER : clic sur une réservation. Si c'est la mienne → annulation ;
-  // sinon (réservation d'autrui, anonyme) → aucune action. La réservation d'un
-  // créneau libre passe par la modale de confirmation (openCreate → submitCreate).
-  function onBlockQuickAction(bk: Booking): boolean {
-    // Occurrence synthétique (lecture seule) → aucune action ici.
-    if (bk.synthetic) return true;
-    // Résa verrouillée (validation bloquante) → aucune action.
-    if (bookingLocked(bk)) return true;
-    // Clic sur MA réservation → la marque (ou démarque) pour annulation (brouillon).
-    if (bk.mine) {
-      togglePendingRemoval(bk);
-      return true;
-    }
-    return true;
   }
 
   // Impression N&B (bw=true) ou couleur : ouvre une fenêtre dédiée avec la seule grille.
@@ -2277,17 +2289,6 @@ export function UserAgendaGrid({
       }
     });
   }
-
-  // Bloc de la pile ouverte, recalculé en direct (reste à jour après refresh ;
-  // se referme tout seul si le créneau n'a plus de réservation).
-  const stackBlock = stackKey
-    ? (blocksByDay[stackKey.dayKey]?.find((bl) => bl.slotId === stackKey.slotId) ?? null)
-    : null;
-  const stackSlot = stackKey
-    ? (slots.find((s) => s.id === stackKey.slotId) ??
-      uniqueSlots.find((s) => s.id === stackKey.slotId) ??
-      null)
-    : null;
 
   // Rendu d'UN bloc-créneau (timed ou journée entière), réutilisé par la grille
   // horaire et par la bande « Journée entière » (port du legacy
@@ -3408,229 +3409,6 @@ export function UserAgendaGrid({
             </span>
           ))}
         </div>
-      )}
-
-      {stackKey && stackBlock && (
-        <ModalOverlay onClose={() => setStackKey(null)}>
-          {(() => {
-            // Modale "pile" stylée comme le legacy (cell-stack-modal) : pastille
-            // date/jour, sous-titre horaire, bascules validation/pointage, mini-grille
-            // horaire (csm-time-col + bloc créneau coloré csm-slot-block) contenant la
-            // liste des badges (cell-stack-list), puis bandeau capacité.
-            const isPonctuel = uniqueIdSet.has(stackKey.slotId);
-            const uSlot = uniqueSlots.find((s) => s.id === stackKey.slotId);
-            const ponctDate =
-              isPonctuel && uSlot?.slotDate
-                ? new Date(`${uSlot.slotDate}T00:00:00`).toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })
-                : "";
-            const period = periods.find((p) => p.id === effectivePeriodId);
-            // Pastille : libellé de période (récurrent) ou date (ponctuel), cf. legacy.
-            const pillLabel = isPonctuel ? ponctDate : (period?.label ?? "");
-            const dayLabel = DAY_NAMES[stackKey.dayKey] ?? stackKey.dayKey;
-            // Jauge = somme enfants (+ accompagnants si comptés) / capacité.
-            const gaugeSum = stackBlock.bookings.reduce(
-              (s, bk) => s + gaugeUnits(bk.enfants, bk.accompagnants, service.gaugeAccompagnants),
-              0,
-            );
-            const gaugeTotal = stackBlock.capacity;
-            const gaugePct =
-              gaugeTotal > 0 ? Math.min(100, Math.round((gaugeSum / gaugeTotal) * 100)) : 0;
-            const gaugeFill = gaugeColor(gaugePct);
-            const showGauge = isPonctuel ? modes.gaugePonct : modes.gaugeRec;
-            const sMin = stackSlot ? toMinutes(stackSlot.startTime, 0) : 0;
-            const eMin = stackSlot ? toMinutes(stackSlot.endTime, sMin + 60) : sMin + 60;
-            const hasRange = eMin > sMin;
-            const pxPerMinModal = 24 / 15; // 24 px par quart d'heure (legacy)
-            const blockMinH = hasRange ? Math.max(56, (eMin - sMin) * pxPerMinModal) : 56;
-            const marks: number[] = [];
-            if (hasRange) for (let m = sMin; m <= eMin; m += 15) marks.push(m);
-            return (
-              <>
-                <button
-                  type="button"
-                  className="modal-close"
-                  onClick={() => setStackKey(null)}
-                  aria-label="Fermer"
-                >
-                  ×
-                </button>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    flexWrap: "wrap",
-                    marginBottom: ".6rem",
-                    paddingRight: "1.5rem",
-                  }}
-                >
-                  {/* Gauche : pastille période/date + horaire (jour) sur la même ligne. */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: ".6rem",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span
-                      className={`period-btn active${isPonctuel ? " is-uniq" : ""}`}
-                      style={{
-                        cursor: "default",
-                        padding: ".12rem .5rem",
-                        fontSize: ".64rem",
-                        gap: ".3rem",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      <span className="period-badge" />
-                      {pillLabel}
-                    </span>
-                    <span className="panel-subtitle" style={{ margin: 0 }}>
-                      {isPonctuel
-                        ? stackSlot
-                          ? `${stackSlot.startTime} – ${stackSlot.endTime}`
-                          : ""
-                        : `${dayLabel}${stackSlot ? ` · ${stackSlot.startTime} – ${stackSlot.endTime}` : ""}`}
-                    </span>
-                  </div>
-                </div>
-                <div className="csm-grid-wrap">
-                  <div className="csm-time-col" style={{ height: blockMinH }}>
-                    {marks.map((m) => (
-                      <div
-                        key={m}
-                        className="csm-time-mark"
-                        style={{ top: (m - sMin) * pxPerMinModal }}
-                      >
-                        {`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`}
-                      </div>
-                    ))}
-                  </div>
-                  <div
-                    className={`csm-slot-block${isPonctuel ? " is-uniq" : ""}`}
-                    style={
-                      {
-                        minHeight: blockMinH,
-                        "--quarter-h": "24px",
-                        "--hour-h": "96px",
-                      } as React.CSSProperties
-                    }
-                  >
-                    <div className="cell-stack-list">
-                      {stackBlock.bookings.map((bk) => (
-                        // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
-                        <div
-                          key={bk.id}
-                          className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${bk.pointage != null ? " is-locked" : ""}`}
-                          style={{
-                            ...badgeStyle(bk.validated),
-                            cursor: "pointer",
-                            position: "relative",
-                          }}
-                          data-tip={`${bk.demandeur} — ${bk.name}`}
-                          onClick={() => {
-                            onBlockQuickAction(bk);
-                          }}
-                        >
-                          <PointagePill pointage={bk.pointage} />
-                          {/* Réservation pointée OU validée-bloquée → verrouillée : pas de
-                              suppression rapide (cf. legacy isLockedBadge, croix masquée). */}
-                          {bk.pointage == null && !bookingLocked(bk) && (
-                            <button
-                              type="button"
-                              className="planning-name-tag-close"
-                              data-tip="Supprimer"
-                              aria-label="Supprimer"
-                              style={{
-                                position: "absolute",
-                                top: 1,
-                                right: 3,
-                                border: "none",
-                                background: "transparent",
-                                color: "inherit",
-                                cursor: "pointer",
-                                fontSize: ".8rem",
-                                lineHeight: 1,
-                                padding: 0,
-                                opacity: 0.6,
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Usager : on n'annule que SA propre réservation.
-                                if (bk.mine && window.confirm("Annuler cette réservation ?")) {
-                                  run(cancelMyBookingAction(service.id, bk.id));
-                                }
-                              }}
-                            >
-                              ×
-                            </button>
-                          )}
-                          {(bk.structure || bk.demandeur) && (
-                            <span style={{ fontWeight: 700 }}>{bk.structure || bk.demandeur}</span>
-                          )}
-                          <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>
-                            {bk.name}
-                          </span>
-                          {modes.themeMode && bk.theme && (
-                            <span
-                              style={{
-                                fontSize: ".62rem",
-                                fontWeight: 600,
-                                color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
-                              }}
-                            >
-                              {bk.theme}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div id="csm-cap-info">
-                  {showGauge ? (
-                    <span className="csm-gauge-info">
-                      <span>Jauge</span>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: 80,
-                          height: 6,
-                          borderRadius: 3,
-                          background: "rgba(0,0,0,.18)",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            height: "100%",
-                            width: `${gaugePct}%`,
-                            background: gaugeFill,
-                          }}
-                        />
-                      </span>
-                      <span>
-                        {gaugeSum}/{gaugeTotal}
-                      </span>
-                    </span>
-                  ) : (
-                    <span>
-                      {stackBlock.used}/{stackBlock.capacity}
-                    </span>
-                  )}
-                </div>
-              </>
-            );
-          })()}
-        </ModalOverlay>
       )}
     </div>
   );

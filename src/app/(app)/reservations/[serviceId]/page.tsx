@@ -31,7 +31,6 @@ export default async function ReservationsServicePage({
       themes={data.themes}
       modes={data.modes}
       exercices={data.exercices}
-      showPrevious={data.service.showPreviousExercices}
       demandeurLabel={data.demandeurLabel}
       openOnSchoolHolidays={data.openOnSchoolHolidays}
       schoolHolidays={data.schoolHolidays}

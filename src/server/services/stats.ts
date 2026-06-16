@@ -232,8 +232,22 @@ export async function getServiceStats(
     .map(([label, value]) => ({ label, value }));
 
   // ── Population PRÉVU/RÉALISÉ (occurrences datées passées, validées) ────────────
+  // Bornes poussées en base : on ne charge que les occurrences PASSÉES (≤ today) qui
+  // recoupent [dateFrom, dateTo], au lieu de tout l'historique daté du service. Le
+  // filtre en mémoire ci-dessous est conservé, identique, comme garde-fou.
+  const occUpper = dateTo && dateTo < today ? dateTo : today;
   const occRows = await prisma.booking.findMany({
-    where: { serviceId, validated: true, slot: { slotDate: { not: null } } },
+    where: {
+      serviceId,
+      validated: true,
+      slot: {
+        slotDate: {
+          not: null,
+          ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+          lte: new Date(`${occUpper}T00:00:00.000Z`),
+        },
+      },
+    },
     select: { pointage: true, parentBookingId: true, slot: { select: { slotDate: true } } },
   });
   const occ = occRows.filter((o) => {
