@@ -8,7 +8,7 @@ type DemandeurOption = { id: number; label: string };
 type Initial = { id: number; label: string; demandeurId: number; users: number };
 type Row = { id: number | null; label: string; demandeurId: number; users: number; key: string };
 
-const GRID = "1fr 170px 64px 32px";
+const GRID = "1fr 170px 64px 80px";
 
 /**
  * Éditeur des structures (modale du référentiel, Administration > Configuration).
@@ -129,10 +129,10 @@ export function StructuresEditor({
           color: "var(--muted)",
         }}
       >
-        <span>Structure</span>
+        <span style={{ paddingLeft: ".5rem" }}>Structure</span>
         <span>Demandeur</span>
         <span style={{ textAlign: "center" }}>Usagers</span>
-        <span />
+        <span style={{ textAlign: "center" }}>Action</span>
       </div>
 
       {rows.map((r) => {
@@ -234,22 +234,19 @@ export function StructuresEditor({
                 </span>
                 <button
                   type="button"
-                  className="dem-x"
+                  className="btn btn-ghost"
                   onClick={() => setConfirmKey(r.key)}
                   title="Supprimer cette structure"
                   style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "var(--muted)",
-                    fontSize: "1rem",
+                    fontSize: ".75rem",
+                    padding: ".15rem .4rem",
                     lineHeight: 1,
-                    borderRadius: 6,
-                    padding: ".25rem",
-                    transition: "opacity .15s",
+                    color: "#e05555",
+                    borderColor: "rgba(220,80,80,.4)",
+                    justifySelf: "center",
                   }}
                 >
-                  ✕
+                  🗑️
                 </button>
               </>
             )}
@@ -302,7 +299,7 @@ export function StructuresEditor({
 
       <style>
         {
-          ".dem-row:hover{background:var(--surface2)}.dem-x{opacity:0}.dem-row:hover .dem-x{opacity:1}.dem-ghost:hover{background:var(--surface2)}.dem-ghost:focus{background:var(--surface2);box-shadow:inset 0 -2px 0 var(--accent)}"
+          ".dem-row:hover{background:var(--surface2)}.dem-ghost:hover{background:var(--surface2)}.dem-ghost:focus{background:var(--surface2);box-shadow:inset 0 -2px 0 var(--accent)}"
         }
       </style>
     </div>

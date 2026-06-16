@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ServicesManager } from "../services/services-manager";
+import { ServicesEditor } from "../services/services-editor";
 
 type ServiceRow = { id: string; label: string; icon: string | null };
 
 /**
- * Entrée « Services » du panneau Référentiels (page Configuration) : un bouton au même
- * style que les autres référentiels, qui ouvre une MODALE réutilisant `ServicesManager`
- * (même écran que l'onglet Administration > Services : table, ajout, modifier, supprimer).
+ * Entrée « Services » du panneau Référentiels (page Configuration) : ouvre une MODALE
+ * réutilisant `ServicesEditor` (mode tampon, comme Demandeurs).
  */
 export function ServicesReferentiel({ services }: { services: ServiceRow[] }) {
   const [open, setOpen] = useState(false);
@@ -48,7 +47,6 @@ export function ServicesReferentiel({ services }: { services: ServiceRow[] }) {
         <div
           className="modal-overlay open"
           style={{ display: "flex" }}
-          // Clic sur le fond (hors de la boîte) → ferme la modale.
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
@@ -57,8 +55,10 @@ export function ServicesReferentiel({ services }: { services: ServiceRow[] }) {
             className="modal-box"
             style={{ maxWidth: 720, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
           >
-            {/* ServicesManager fournit son propre en-tête « Configuration des services ». */}
-            <ServicesManager services={services} embedded onClose={() => setOpen(false)} />
+            <div className="modal-title" style={{ marginBottom: 0 }}>
+              Services
+            </div>
+            <ServicesEditor initial={services} onClose={() => setOpen(false)} />
             <button type="button" className="modal-close" onClick={() => setOpen(false)}>
               ×
             </button>

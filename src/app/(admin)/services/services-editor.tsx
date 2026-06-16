@@ -1,0 +1,390 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
+import { deleteServicesAction, saveServiceFromModalAction } from "./actions";
+import { ICON_CATEGORIES } from "./legacy-icons";
+
+type Initial = { id: string; label: string; icon: string | null };
+type Row = { id: string | null; label: string; icon: string | null; key: string };
+
+const GRID = "40px 1fr 80px";
+
+/**
+ * Éditeur des services (modale du référentiel, Administration > Configuration).
+ * MODE TAMPON (comme Demandeurs) : modifications locales jusqu'au clic sur « Enregistrer ».
+ * Édition en ligne du nom + sélecteur d'icône par ligne.
+ */
+export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClose?: () => void }) {
+  const counter = useRef(0);
+  const [rows, setRows] = useState<Row[]>(() => initial.map((s) => ({ ...s, key: `db-${s.id}` })));
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  // Ligne dont le sélecteur d'icône est ouvert (null = fermé).
+  const [pickerKey, setPickerKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const [saving, startSaving] = useTransition();
+
+  function patch(key: string, p: Partial<Row>) {
+    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
+  }
+  function add() {
+    const key = `new-${counter.current++}`;
+    setRows((rs) => [...rs, { id: null, label: "", icon: null, key }]);
+    setConfirmKey(null);
+  }
+  function remove(key: string) {
+    setConfirmKey(null);
+    setRows((rs) => rs.filter((r) => r.key !== key));
+  }
+
+  function saveAll() {
+    const initialById = new Map(initial.map((s) => [s.id, s]));
+    const currentIds = new Set(rows.map((r) => r.id).filter((id): id is string => id != null));
+    const toDelete = initial.filter((s) => !currentIds.has(s.id));
+    const toCreate = rows.filter((r) => r.id == null && r.label.trim() !== "");
+    const toUpdate = rows.filter((r) => {
+      if (r.id == null || r.label.trim() === "") return false;
+      const init = initialById.get(r.id);
+      return !!init && (init.label !== r.label.trim() || (init.icon ?? null) !== (r.icon ?? null));
+    });
+
+    startSaving(async () => {
+      try {
+        for (const s of toDelete) {
+          const res = await deleteServicesAction([s.id]);
+          if (res && !res.ok) throw new Error(res.error ?? "Échec de la suppression.");
+        }
+        for (const r of toCreate) {
+          const res = await saveServiceFromModalAction({ label: r.label.trim(), icon: r.icon });
+          if (res && !res.ok) throw new Error(res.error ?? "Échec de la création.");
+        }
+        for (const r of toUpdate) {
+          const res = await saveServiceFromModalAction({
+            id: r.id as string,
+            label: r.label.trim(),
+            icon: r.icon,
+          });
+          if (res && !res.ok) throw new Error(res.error ?? "Échec de la mise à jour.");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
+        return;
+      }
+      router.refresh();
+      onClose?.();
+    });
+  }
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: ".75rem",
+          marginBottom: "0.75rem",
+        }}
+      >
+        {error && (
+          <span className="field-error" style={{ fontSize: ".72rem" }}>
+            {error}
+          </span>
+        )}
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={add}
+          style={{ fontSize: ".64rem", padding: ".18rem .5rem" }}
+        >
+          ＋ Ajouter
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: GRID,
+          gap: ".75rem",
+          alignItems: "center",
+          padding: "0 .75rem .5rem",
+          fontSize: ".66rem",
+          fontWeight: 600,
+          letterSpacing: ".05em",
+          textTransform: "uppercase",
+          color: "var(--muted)",
+        }}
+      >
+        <span style={{ textAlign: "center" }}>Icône</span>
+        <span style={{ paddingLeft: ".5rem" }}>Service</span>
+        <span style={{ textAlign: "center" }}>Action</span>
+      </div>
+
+      {rows.map((r) => {
+        const confirming = confirmKey === r.key;
+        return (
+          <div
+            key={r.key}
+            className="dem-row"
+            style={{
+              display: "grid",
+              gridTemplateColumns: GRID,
+              gap: ".75rem",
+              alignItems: "center",
+              padding: ".4rem .75rem",
+              borderRadius: "var(--rad-sm)",
+              borderTop: "1px solid var(--border)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setPickerKey(r.key)}
+              title="Choisir une icône"
+              style={{
+                width: 30,
+                height: 30,
+                fontSize: "1.1rem",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--rad-sm)",
+                background: "var(--surface2)",
+                cursor: "pointer",
+                justifySelf: "center",
+                lineHeight: 1,
+              }}
+            >
+              {r.icon || "🎯"}
+            </button>
+
+            {confirming ? (
+              <div
+                style={{
+                  gridColumn: "2 / 4",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  gap: ".5rem",
+                }}
+              >
+                <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
+                  Supprimer ce service et toutes ses données ?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(r.key)}
+                  style={{
+                    border: "1px solid var(--danger)",
+                    background: "transparent",
+                    color: "var(--danger)",
+                    borderRadius: "var(--rad-sm)",
+                    fontSize: ".72rem",
+                    padding: ".2rem .55rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Supprimer
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setConfirmKey(null)}
+                  style={{ fontSize: ".72rem", padding: ".2rem .55rem" }}
+                >
+                  Annuler
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  className="dem-ghost"
+                  value={r.label}
+                  placeholder="Nom du service"
+                  onChange={(e) => patch(r.key, { label: e.target.value })}
+                  style={{
+                    fontSize: ".85rem",
+                    fontWeight: 600,
+                    color: "var(--text)",
+                    border: "none",
+                    background: "transparent",
+                    outline: "none",
+                    borderRadius: "var(--rad-sm)",
+                    padding: ".35rem .5rem",
+                    width: "100%",
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setConfirmKey(r.key)}
+                  title="Supprimer ce service"
+                  style={{
+                    fontSize: ".75rem",
+                    padding: ".15rem .4rem",
+                    lineHeight: 1,
+                    color: "#e05555",
+                    borderColor: "rgba(220,80,80,.4)",
+                    justifySelf: "center",
+                  }}
+                >
+                  🗑️
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      {rows.length === 0 && (
+        <div
+          style={{
+            padding: "1.5rem",
+            textAlign: "center",
+            fontSize: ".82rem",
+            color: "var(--muted)",
+            borderTop: "1px solid var(--border)",
+          }}
+        >
+          Aucun service. Cliquez sur « Ajouter ».
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: ".6rem",
+          marginTop: "1.25rem",
+        }}
+      >
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => onClose?.()}
+          disabled={saving}
+          style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
+        >
+          Annuler
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={saveAll}
+          disabled={saving}
+          style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
+        >
+          {saving ? "Enregistrement…" : "Enregistrer"}
+        </button>
+      </div>
+
+      {/* Sélecteur d'icône (cible la ligne `pickerKey`). */}
+      {pickerKey !== null && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture au clic sur le fond
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.5)",
+            zIndex: 10020,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPickerKey(null);
+          }}
+        >
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--rad-sm)",
+              padding: "1.25rem 1.5rem",
+              maxWidth: 480,
+              width: "92%",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,.4)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "1rem",
+              }}
+            >
+              <span style={{ fontSize: ".95rem", fontWeight: 600, color: "var(--text)" }}>
+                Choisir une icône
+              </span>
+              <button
+                type="button"
+                onClick={() => setPickerKey(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "1.2rem",
+                  color: "var(--muted)",
+                  lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            {ICON_CATEGORIES.map((cat) => (
+              <div key={cat.label} style={{ marginBottom: ".85rem" }}>
+                <div
+                  style={{
+                    fontSize: ".62rem",
+                    fontWeight: 700,
+                    letterSpacing: ".1em",
+                    textTransform: "uppercase",
+                    color: "var(--muted)",
+                    marginBottom: ".3rem",
+                  }}
+                >
+                  {cat.label}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {cat.icons.map((ic) => (
+                    <button
+                      type="button"
+                      key={ic}
+                      onClick={() => {
+                        patch(pickerKey, { icon: ic });
+                        setPickerKey(null);
+                      }}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        fontSize: "1.15rem",
+                        border: "2px solid transparent",
+                        borderRadius: 6,
+                        background: "var(--surface2)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {ic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <style>
+        {
+          ".dem-row:hover{background:var(--surface2)}.dem-ghost:hover{background:var(--surface2)}.dem-ghost:focus{background:var(--surface2);box-shadow:inset 0 -2px 0 var(--accent)}"
+        }
+      </style>
+    </div>
+  );
+}
