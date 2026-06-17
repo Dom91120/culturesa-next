@@ -25,7 +25,6 @@ import {
   layoutOverlaps,
   mondayOf,
   parseWeeks,
-  printAgendaGrid,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
@@ -1729,15 +1728,115 @@ export function UserAgendaGrid({
     return service.validationBloquante && modes.validationMode && bk.validated;
   }
 
-  // Impression N&B (bw=true) ou couleur : ouvre une fenêtre dédiée avec la seule grille.
-  function printAgenda(bw: boolean) {
-    const subtitle =
-      mode === "model"
-        ? (periods[periodIdx]?.label ?? null)
-        : mondayStr
-          ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
-          : null;
-    printAgendaGrid({ bw, serviceLabel: service.label, subtitle, fallbackTitle: "Réservations" });
+  // Impression « liste » (bouton N&B) : au lieu du modèle graphique, une LISTE imprimable
+  // des réservations de l'usager pour la période concernée. Une ligne par occurrence datée :
+  // ponctuels autonomes + occurrences (miroirs) des récurrentes, avec date, créneau, type,
+  // thème, statut et pointage. Fenêtre dédiée (print déclenché par l'ouvreur, pas de script inline).
+  function printMyBookings() {
+    if (typeof window === "undefined") return;
+    const period = mode === "model" ? (visiblePeriods[periodIdx] ?? null) : coveringPeriod;
+    const inPeriod = (d: string) =>
+      !period ||
+      ((!period.dateStart || d >= period.dateStart) && (!period.dateEnd || d <= period.dateEnd));
+    const uniqById = new Map(uniqueSlots.map((u) => [u.id, u]));
+    const slotById = new Map(slots.map((s) => [s.id, s]));
+    const timeOf = (st?: string, en?: string) => (st && en ? `${st} – ${en}` : "Journée entière");
+    const dateLabel = (d: string) =>
+      new Date(`${d}T00:00:00`).toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    const statutOf = (v: boolean) => (v ? "Validée" : "En attente");
+    const pointageOf = (p?: string | null) =>
+      p === "present" ? "Présent" : p === "absent" ? "Absent" : "—";
+
+    type Row = {
+      date: string;
+      creneau: string;
+      type: string;
+      theme: string;
+      statut: string;
+      pointage: string;
+    };
+    const rows: Row[] = [];
+    for (const b of bookings) {
+      if (!b.mine || b.synthetic) continue;
+      if (uniqueIdSet.has(b.slotId)) {
+        // Ponctuel autonome daté.
+        const u = uniqById.get(b.slotId);
+        if (!u?.slotDate || !inPeriod(u.slotDate)) continue;
+        rows.push({
+          date: u.slotDate,
+          creneau: timeOf(u.startTime, u.endTime),
+          type: "Ponctuelle",
+          theme: b.theme || "—",
+          statut: statutOf(b.validated),
+          pointage: pointageOf(b.pointage),
+        });
+      } else if (b.parentBookingId == null && b.bookingType === "recurring") {
+        // Récurrente → une ligne par occurrence (miroir) de la période, filtrée par la
+        // semaine A/B de la résa et les vacances scolaires (si le demandeur ferme alors).
+        if (period && b.periodId !== period.id) continue;
+        const slot = slotById.get(b.slotId);
+        const childByDate = new Map<string, Booking>();
+        for (const c of bookings) {
+          if (c.parentBookingId !== b.id) continue;
+          const d = uniqById.get(c.slotId)?.slotDate;
+          if (d) childByDate.set(d, c);
+        }
+        const occ = uniqueSlots
+          .filter((u) => u.parentSlotId === b.slotId && u.slotDate)
+          .map((u) => u.slotDate as string)
+          .filter((d) => inPeriod(d))
+          .filter((d) => (b.week === "A" || b.week === "B" ? slotWeekTag(d) === b.week : true))
+          .filter((d) => openOnSchoolHolidays || !isSchoolVacance(d))
+          .sort();
+        for (const d of occ) {
+          const child = childByDate.get(d);
+          rows.push({
+            date: d,
+            creneau: timeOf(slot?.startTime, slot?.endTime),
+            type: "Récurrente",
+            theme: (child?.theme ?? b.theme) || "—",
+            statut: statutOf(child?.validated ?? b.validated),
+            pointage: pointageOf(child?.pointage),
+          });
+        }
+      }
+    }
+    rows.sort((a, z) => a.date.localeCompare(z.date) || a.creneau.localeCompare(z.creneau));
+
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const win = window.open("", "_blank", "width=900,height=800");
+    if (!win) {
+      window.alert("Veuillez autoriser les pop-ups pour imprimer.");
+      return;
+    }
+    const titleStr = [service.label, period?.label].filter(Boolean).join(" — ") || "Réservations";
+    const who = `${userInfo.prenom} ${userInfo.nom}`.trim();
+    const head = ["Date", "Créneau", "Type", "Thème", "Statut", "Pointage"];
+    const body = rows.length
+      ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
+          .map(
+            (r) =>
+              `<tr><td>${esc(dateLabel(r.date))}</td><td>${esc(r.creneau)}</td><td>${esc(
+                r.type,
+              )}</td><td>${esc(r.theme)}</td><td>${esc(r.statut)}</td><td>${esc(
+                r.pointage,
+              )}</td></tr>`,
+          )
+          .join("")}</tbody></table>`
+      : `<p class="empty">Aucune réservation pour cette période.</p>`;
+    const css =
+      "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:24px;font-size:12px}h1{font-size:16px;margin:0 0 4px}.meta{color:#444;margin:0 0 16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px 8px;text-align:left}th{background:#eee !important;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.empty{color:#444}";
+    win.document.write(
+      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titleStr)}</title><style>${css}</style></head><body><h1>${esc(titleStr)}</h1><div class="meta">${esc(who)} · ${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${body}</body></html>`,
+    );
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
   }
 
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
@@ -2973,9 +3072,9 @@ export function UserAgendaGrid({
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
             <button
               type="button"
-              onClick={() => printAgenda(true)}
-              data-tip="Imprimer en noir & blanc"
-              aria-label="Imprimer en noir & blanc"
+              onClick={printMyBookings}
+              data-tip="Imprimer la liste de mes réservations"
+              aria-label="Imprimer la liste de mes réservations"
               style={{
                 background: "none",
                 border: "1px solid var(--border)",
@@ -3005,86 +3104,6 @@ export function UserAgendaGrid({
                 <rect x="6" y="14" width="12" height="8" />
               </svg>
             </button>
-            <button
-              type="button"
-              onClick={() => printAgenda(false)}
-              data-tip="Imprimer en couleur"
-              aria-label="Imprimer en couleur"
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--accent)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" />
-                <rect x="6" y="14" width="12" height="8" rx="1" />
-              </svg>
-            </button>
-            <a
-              href={`/reservations/${service.id}/export`}
-              data-tip="Exporter mes réservations (CSV)"
-              aria-label="Exporter mes réservations (CSV)"
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--accent)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-                textDecoration: "none",
-              }}
-            >
-              <span
-                style={{
-                  position: "absolute",
-                  width: 1,
-                  height: 1,
-                  overflow: "hidden",
-                  clip: "rect(0 0 0 0)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Exporter mes réservations (CSV)
-              </span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </a>
           </div>
         </div>
       </div>
@@ -3116,7 +3135,7 @@ export function UserAgendaGrid({
         </div>
       )}
 
-      <div className="planning-wrap" id="agenda-print-grid">
+      <div className="planning-wrap">
         <div
           className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
           style={{ gridTemplateColumns: `44px repeat(${displayDays.length}, minmax(0, 1fr))` }}
