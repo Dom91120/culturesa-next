@@ -114,7 +114,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
             ) : null}
           </p>
         </div>
-        <label className="check" style={{ fontSize: ".85rem" }}>
+        <label className="check" style={{ fontSize: ".62rem" }}>
           <input
             type="checkbox"
             checked={showPrevious}
