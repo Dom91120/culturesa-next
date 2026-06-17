@@ -10,6 +10,7 @@ import {
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
 import { BookingError, assertSlotCapacity } from "@/server/services/bookings";
+import { type DatedSession, listDatedSessions } from "@/server/services/editions";
 import { isMailEnabled } from "@/server/services/mail-prefs";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
@@ -29,6 +30,19 @@ import { z } from "zod";
 type DayKeyT = (typeof DAYS)[number];
 
 const idSchema = z.coerce.number().int().positive();
+
+/**
+ * Sessions datées (occurrences) du service sur [fromYmd, toYmd] avec leurs participants
+ * nominatifs — pour l'impression « liste » de l'agenda admin. Gardé gestionnaire.
+ */
+export async function listAgendaSessionsAction(
+  serviceId: string,
+  fromYmd: string,
+  toYmd: string,
+): Promise<DatedSession[]> {
+  await requireServiceManager(serviceId);
+  return listDatedSessions(serviceId, fromYmd, toYmd);
+}
 
 /** Un parent récurrent a-t-il au moins un miroir (enfant) POINTÉ ? → il devient immuable. */
 async function parentLockedByPointage(parentId: number): Promise<boolean> {

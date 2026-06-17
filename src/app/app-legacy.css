@@ -2156,10 +2156,6 @@ textarea.theme-pending:focus::placeholder {
 #agenda-period-tabs {
   margin: 0;
 }
-/* La grille agenda tient en pleine largeur (colonnes minmax(0,1fr)) : pas d'ascenseur. */
-#agenda-print-grid {
-  overflow: visible;
-}
 #agenda-period-tabs .period-btn {
   padding: .2rem .6rem;
   font-size: .7rem;

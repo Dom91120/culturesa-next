@@ -25,7 +25,6 @@ import {
   layoutOverlaps,
   mondayOf,
   parseWeeks,
-  printAgendaGrid,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
@@ -49,6 +48,7 @@ import {
   cutBookingAction,
   deleteBookingAdminAction,
   deleteSlotAction,
+  listAgendaSessionsAction,
   listAgendaUsersAction,
   moveBookingAction,
   moveRecurringSlotAction,
@@ -1690,15 +1690,91 @@ export function AgendaGrid({
     return false;
   }
 
-  // Impression N&B (bw=true) ou couleur : ouvre une fenêtre dédiée avec la seule grille.
-  function printAgenda(bw: boolean) {
-    const subtitle =
-      mode === "model"
-        ? (periods[periodIdx]?.label ?? null)
-        : mondayStr
-          ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
-          : null;
-    printAgendaGrid({ bw, serviceLabel: service.label, subtitle, fallbackTitle: "Agenda" });
+  // Impression « liste » (bouton N&B) : au lieu du modèle graphique, la LISTE nominative
+  // des réservations de TOUS les usagers pour la semaine affichée (Semaine réelle) ou la
+  // période affichée (Modèle). Une ligne par occurrence datée (ponctuels + miroirs des
+  // récurrentes), via une action gardée gestionnaire (listDatedSessions). La fenêtre est
+  // ouverte AVANT l'await (anti-popup-blocker) puis remplie après réponse.
+  async function printSessionsList() {
+    if (typeof window === "undefined") return;
+    let from = "";
+    let to = "";
+    let scopeLabel = "";
+    if (mode === "realweek") {
+      if (!mondayStr) return;
+      from = mondayStr;
+      to = sundayStr ?? mondayStr;
+      scopeLabel = `Semaine du ${shortDateFmt.format(addDays(mondayStr, 0))} au ${shortDateFmt.format(
+        addDays(mondayStr, 6),
+      )}`;
+    } else {
+      const period = visiblePeriods[periodIdx] ?? null;
+      if (!period?.dateStart || !period?.dateEnd) return;
+      from = period.dateStart;
+      to = period.dateEnd;
+      scopeLabel = period.label;
+    }
+    if (!from || !to) return;
+    const win = window.open("", "_blank", "width=960,height=800");
+    if (!win) {
+      window.alert("Veuillez autoriser les pop-ups pour imprimer.");
+      return;
+    }
+    win.document.write(
+      '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Préparation…</title></head><body style="font-family:system-ui,Arial,sans-serif;margin:24px">Préparation de la liste…</body></html>',
+    );
+    win.document.close();
+
+    let sessions: Awaited<ReturnType<typeof listAgendaSessionsAction>> = [];
+    try {
+      sessions = await listAgendaSessionsAction(service.id, from, to);
+    } catch {
+      // requireServiceManager peut rejeter un appelant non autorisé — liste vide alors.
+    }
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const pointageOf = (p?: string | null) => (p === "present" ? "P" : p === "absent" ? "A" : "—");
+    const rows = sessions.flatMap((sess) =>
+      sess.attendees.map((a) => ({
+        date: sess.dateLabel,
+        creneau: `${sess.startTime} – ${sess.endTime}`,
+        identite: `${a.nom} ${a.prenom}`.trim(),
+        struct: a.structure || a.demandeur,
+        enfants: a.enfants,
+        accompagnants: a.accompagnants,
+        theme: a.theme || "—",
+        pointage: pointageOf(a.pointage),
+      })),
+    );
+    const head = [
+      "Date",
+      "Créneau",
+      "Identité",
+      "Structure / Demandeur",
+      "Enf.",
+      "Acc.",
+      "Thème",
+      "P/A",
+    ];
+    const inner = rows.length
+      ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
+          .map(
+            (r) =>
+              `<tr><td>${esc(r.date)}</td><td>${esc(r.creneau)}</td><td>${esc(r.identite)}</td><td>${esc(r.struct)}</td><td class="c">${r.enfants}</td><td class="c">${r.accompagnants}</td><td>${esc(r.theme)}</td><td class="c">${esc(r.pointage)}</td></tr>`,
+          )
+          .join("")}</tbody></table>`
+      : '<p class="empty">Aucune réservation pour cette période.</p>';
+    const titleStr = `${service.label} — ${scopeLabel}`;
+    // Plus compact : police réduite, cellules sur une seule ligne (white-space:nowrap)
+    // pour que « 09:00 – 10:00 » et l'identité ne se coupent pas.
+    const css =
+      "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:18px;font-size:10px}h1{font-size:14px;margin:0 0 3px}.meta{color:#444;margin:0 0 10px;font-size:10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:2px 6px;text-align:left;white-space:nowrap}td.c{text-align:center}th{background:#eee !important;font-size:9px;text-transform:uppercase;letter-spacing:.03em}.empty{color:#444}";
+    win.document.open();
+    win.document.write(
+      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titleStr)}</title><style>${css}</style></head><body><h1>${esc(titleStr)}</h1><div class="meta">${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${inner}</body></html>`,
+    );
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
   }
 
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
@@ -2779,76 +2855,40 @@ export function AgendaGrid({
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
             {/* Boutons d'impression masqués en mode création. */}
             {!creationMode && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => printAgenda(true)}
-                  data-tip="Imprimer en noir & blanc"
-                  aria-label="Imprimer en noir & blanc"
-                  style={{
-                    background: "none",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--rad-sm)",
-                    padding: ".28rem .38rem",
-                    cursor: "pointer",
-                    color: "var(--muted)",
-                    display: "flex",
-                    alignItems: "center",
-                    lineHeight: 1,
-                  }}
+              <button
+                type="button"
+                onClick={printSessionsList}
+                data-tip="Imprimer la liste des réservations"
+                aria-label="Imprimer la liste des réservations"
+                style={{
+                  background: "none",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--rad-sm)",
+                  padding: ".28rem .38rem",
+                  cursor: "pointer",
+                  color: "var(--muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  lineHeight: 1,
+                }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <polyline points="6 9 6 2 18 2 18 9" />
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                    <rect x="6" y="14" width="12" height="8" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => printAgenda(false)}
-                  data-tip="Imprimer en couleur"
-                  aria-label="Imprimer en couleur"
-                  style={{
-                    background: "none",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--rad-sm)",
-                    padding: ".28rem .38rem",
-                    cursor: "pointer",
-                    color: "var(--accent)",
-                    display: "flex",
-                    alignItems: "center",
-                    lineHeight: 1,
-                  }}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                    <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" />
-                    <rect x="6" y="14" width="12" height="8" rx="1" />
-                  </svg>
-                </button>
-              </>
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+              </button>
             )}
             <button
               type="button"
@@ -2888,7 +2928,7 @@ export function AgendaGrid({
         </div>
       </div>
 
-      <div className="planning-wrap" id="agenda-print-grid">
+      <div className="planning-wrap">
         <div
           className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
           style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}

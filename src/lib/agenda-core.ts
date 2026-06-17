@@ -184,67 +184,6 @@ export function layoutOverlaps(items: LayoutItem[]): void {
 
 export const ROW_H = 56;
 
-// Feuille de style autonome pour la fenêtre d'impression : ne reprend que les
-// classes nécessaires au rendu de la grille agenda (équivalent legacy printAgenda).
-export const PRINT_CSS = `
-  body{font-family:system-ui,Segoe UI,sans-serif;margin:1rem;color:#1a1a1a}
-  h1{font-size:1.1rem;margin:0 0 1rem}
-  .planning-wrap{position:relative}
-  .agenda-grid{display:grid;gap:0;border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fff}
-  .agenda-header-cell{background:#f3f3f3;padding:.4rem .3rem;font-size:.72rem;font-weight:700;text-align:center;border-bottom:1px solid #ccc;border-left:1px solid #ccc;display:flex;flex-direction:column;align-items:center;gap:1px}
-  .agenda-corner{border-left:none}
-  .agenda-day-sub{font-size:.6rem;color:#666;font-weight:600}
-  .agenda-time-col{position:relative;border-right:1px solid #ccc}
-  .agenda-time-mark{position:absolute;right:4px;font-size:.6rem;color:#666;transform:translateY(-50%)}
-  .agenda-day-col{position:relative;border-left:1px solid #ccc;min-height:40px}
-  .agenda-grid-line{position:absolute;left:0;right:0;border-top:1px solid #e2e2e2}
-  .agenda-grid-line.is-hour{border-top-color:#bbb}
-  .agenda-block{position:absolute;border-radius:6px;padding:2px 4px;overflow:hidden;display:flex;flex-direction:column;gap:2px;font-size:.62rem;background:#f0c14b;border:1px solid #b89020;color:#3a2f00}
-  .agenda-block-chips{display:flex;flex-direction:column;gap:1px;overflow:hidden;flex:1}
-  .agenda-block-meta{font-size:.58rem;font-weight:700;display:flex;align-items:center;gap:3px}
-  .agenda-block-gauge-bar{flex:1;height:4px;border-radius:2px;background:rgba(0,0,0,.15);overflow:hidden;display:inline-block;min-width:24px}
-  .agenda-block-gauge-bar>span{display:block;height:100%;background:#b89020}
-  .planning-name-tag{display:inline-flex;flex-direction:column;font-size:.62rem;font-weight:700}
-  @media print{@page{size:landscape;margin:1cm}}
-`;
-
-// ─── Impression de la grille ─────────────────────────────────────────────────
-// Mutualisé entre les deux grilles : clone le nœud #agenda-print-grid dans une
-// fenêtre autonome stylée par PRINT_CSS, en N&B ou couleur. Le titre = libellé du
-// service + sous-titre mode-dépendant (période ou plage de semaine), calculé par
-// l'appelant ; `fallbackTitle` diffère (« Agenda » admin / « Réservations » usager).
-export function printAgendaGrid(opts: {
-  bw: boolean;
-  serviceLabel: string;
-  subtitle?: string | null;
-  fallbackTitle: string;
-}): void {
-  if (typeof window === "undefined") return;
-  const grid = document.getElementById("agenda-print-grid");
-  if (!grid) {
-    window.alert("Rien à imprimer.");
-    return;
-  }
-  const titleStr =
-    [opts.serviceLabel, opts.subtitle].filter(Boolean).join(" — ") || opts.fallbackTitle;
-  const clone = grid.cloneNode(true) as HTMLElement;
-  for (const n of clone.querySelectorAll(".agenda-empty-overlay")) n.remove();
-  const win = window.open("", "_blank", "width=1100,height=800");
-  if (!win) {
-    window.alert("Veuillez autoriser les pop-ups pour imprimer.");
-    return;
-  }
-  const bwCss = opts.bw
-    ? "*{color:#000 !important;background:#fff !important;border-color:#999 !important}.agenda-block,.planning-name-tag{border:1px solid #333 !important}"
-    : "";
-  win.document.write(
-    `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${titleStr}</title><style>${PRINT_CSS}${bwCss}</style></head><body><h1>${titleStr}</h1>${clone.outerHTML}</body></html>`,
-  );
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 300);
-}
-
 // ─── Géométrie de la grille semaine (axe horaire) ────────────────────────────
 // Mutualisée entre la grille admin et la grille usager : à partir des bornes de
 // la plage horaire, de la pause méridienne et — optionnellement — de l'ensemble
