@@ -32,6 +32,7 @@ import {
 } from "@/lib/agenda-core";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
+import { printHtmlDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
@@ -1693,8 +1694,8 @@ export function AgendaGrid({
   // Impression « liste » (bouton N&B) : au lieu du modèle graphique, la LISTE nominative
   // des réservations de TOUS les usagers pour la semaine affichée (Semaine réelle) ou la
   // période affichée (Modèle). Une ligne par occurrence datée (ponctuels + miroirs des
-  // récurrentes), via une action gardée gestionnaire (listDatedSessions). La fenêtre est
-  // ouverte AVANT l'await (anti-popup-blocker) puis remplie après réponse.
+  // récurrentes), via une action gardée gestionnaire (listDatedSessions). Rendu dans un
+  // iframe caché (printHtmlDocument) — sans pop-up ni fenêtre visible.
   async function printSessionsList() {
     if (typeof window === "undefined") return;
     let from = "";
@@ -1715,15 +1716,6 @@ export function AgendaGrid({
       scopeLabel = period.label;
     }
     if (!from || !to) return;
-    const win = window.open("", "_blank", "width=960,height=800");
-    if (!win) {
-      window.alert("Veuillez autoriser les pop-ups pour imprimer.");
-      return;
-    }
-    win.document.write(
-      '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Préparation…</title></head><body style="font-family:system-ui,Arial,sans-serif;margin:24px">Préparation de la liste…</body></html>',
-    );
-    win.document.close();
 
     let sessions: Awaited<ReturnType<typeof listAgendaSessionsAction>> = [];
     try {
@@ -1768,13 +1760,9 @@ export function AgendaGrid({
     // pour que « 09:00 – 10:00 » et l'identité ne se coupent pas.
     const css =
       "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:18px;font-size:10px}h1{font-size:14px;margin:0 0 3px}.meta{color:#444;margin:0 0 10px;font-size:10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:2px 6px;text-align:left;white-space:nowrap}td.c{text-align:center}th{background:#eee !important;font-size:9px;text-transform:uppercase;letter-spacing:.03em}.empty{color:#444}";
-    win.document.open();
-    win.document.write(
+    printHtmlDocument(
       `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titleStr)}</title><style>${css}</style></head><body><h1>${esc(titleStr)}</h1><div class="meta">${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${inner}</body></html>`,
     );
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
   }
 
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
