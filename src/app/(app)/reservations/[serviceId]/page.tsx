@@ -1,5 +1,5 @@
 import { getConfigMany } from "@/server/config";
-import { isServiceManager, requireUser } from "@/server/guards";
+import { requireUser } from "@/server/guards";
 import { getUserServiceAgenda } from "@/server/services/bookings";
 import { notFound } from "next/navigation";
 import { UserAgendaGrid } from "./user-agenda-grid";
@@ -13,10 +13,6 @@ export default async function ReservationsServicePage({
   const session = await requireUser();
   const data = await getUserServiceAgenda(serviceId, session.user.id);
   if (!data) notFound();
-
-  // Gestionnaire du service → autorise l'impression « tous usagers » (liste nominative).
-  const role = (session.user as { role?: "utilisateur" | "gestionnaire" | "administrateur" }).role;
-  const isManager = await isServiceManager(serviceId, session.user.id, role);
 
   // Réglages lus côté serveur (Administration > Configuration).
   const cfg = await getConfigMany(["reservations.autoRefreshSeconds", "debug.mode"]);
@@ -39,7 +35,6 @@ export default async function ReservationsServicePage({
       openOnSchoolHolidays={data.openOnSchoolHolidays}
       schoolHolidays={data.schoolHolidays}
       userInfo={data.user}
-      isManager={isManager}
       autoRefreshSeconds={autoRefreshSeconds}
       debugMode={debugMode}
     />
