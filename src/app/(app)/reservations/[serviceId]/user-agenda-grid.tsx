@@ -3202,29 +3202,33 @@ export function UserAgendaGrid({
               minWidth: 0,
             }}
           >
-            ℹ️{" "}
-            {modes.recurringMode ? (
-              <>
-                Vous pouvez réserver{" "}
-                <strong>
-                  {service.maxReservationsPeriod} créneau
-                  {service.maxReservationsPeriod > 1 ? "x" : ""} par période
-                </strong>{" "}
-                et{" "}
-                <strong>
-                  {service.maxReservations} créneau{service.maxReservations > 1 ? "x" : ""} par an
-                </strong>
-                .
-              </>
-            ) : (
-              <>
-                Vous pouvez réserver{" "}
-                <strong>
-                  {service.maxReservations} séance{service.maxReservations > 1 ? "s" : ""} par an
-                </strong>
-                .
-              </>
-            )}
+            ℹ️ {(() => {
+              // « par période » affiché dès qu'il y a des périodes : récurrent (toujours) OU
+              // ponctuel rattaché à des périodes — la limite par période s'applique aussi au
+              // ponctuel (cf. assertReservationLimits, slot avec periodId). Hors période, seule
+              // la limite annuelle vaut.
+              const showPeriod = modes.recurringMode || periods.length > 0;
+              // Libellé unifié « séance(s) » quel que soit le mode (récurrent ou ponctuel).
+              const noun = (n: number) => `séance${n > 1 ? "s" : ""}`;
+              return (
+                <>
+                  Vous pouvez réserver{" "}
+                  {showPeriod && (
+                    <>
+                      <strong>
+                        {service.maxReservationsPeriod} {noun(service.maxReservationsPeriod)} par
+                        période
+                      </strong>{" "}
+                      et{" "}
+                    </>
+                  )}
+                  <strong>
+                    {service.maxReservations} {noun(service.maxReservations)} par an
+                  </strong>
+                  .
+                </>
+              );
+            })()}
           </p>
         </div>
         {/* 2e ligne : état « en attente » à gauche, boutons d'action à droite. */}
