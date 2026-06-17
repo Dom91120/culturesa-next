@@ -3207,7 +3207,26 @@ export function UserAgendaGrid({
               // ponctuel rattaché à des périodes — la limite par période s'applique aussi au
               // ponctuel (cf. assertReservationLimits, slot avec periodId). Hors période, seule
               // la limite annuelle vaut.
-              const showPeriod = modes.recurringMode || periods.length > 0;
+              // Granularité d'une période, déduite de la durée médiane (dateStart→dateEnd) :
+              // ~mois / ~trimestre / ~année. Sert à nommer la limite « par <granularité> ».
+              const spans = periods
+                .filter((p) => p.dateStart && p.dateEnd)
+                .map((p) => (Date.parse(p.dateEnd) - Date.parse(p.dateStart)) / 86_400_000 + 1)
+                .sort((a, b) => a - b);
+              const medianDays = spans.length ? spans[Math.floor(spans.length / 2)] : null;
+              const periodNoun =
+                medianDays == null
+                  ? "période"
+                  : medianDays <= 45
+                    ? "mois"
+                    : medianDays <= 200
+                      ? "trimestre"
+                      : "année";
+              // « par <granularité> » affiché dès qu'il y a des périodes (récurrent toujours, ou
+              // ponctuel rattaché à des périodes — la limite s'applique aussi, cf.
+              // assertReservationLimits). Masqué quand la période = l'année (doublon « par an »).
+              const showPeriod =
+                (modes.recurringMode || periods.length > 0) && periodNoun !== "année";
               // Libellé unifié « séance(s) » quel que soit le mode (récurrent ou ponctuel).
               const noun = (n: number) => `séance${n > 1 ? "s" : ""}`;
               return (
@@ -3216,8 +3235,8 @@ export function UserAgendaGrid({
                   {showPeriod && (
                     <>
                       <strong>
-                        {service.maxReservationsPeriod} {noun(service.maxReservationsPeriod)} par
-                        période
+                        {service.maxReservationsPeriod} {noun(service.maxReservationsPeriod)} par{" "}
+                        {periodNoun}
                       </strong>{" "}
                       et{" "}
                     </>
