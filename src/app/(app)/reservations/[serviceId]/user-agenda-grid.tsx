@@ -1937,7 +1937,7 @@ export function UserAgendaGrid({
   // Un bloc accepte-t-il le dépôt de `item` ? Cible LIBRE et de MÊME type
   // (récurrent↔récurrent, ponctuel↔ponctuel) — cf. décision produit.
   function canDropItem(item: DragItem, b: Block): boolean {
-    return !b.full && item.ponctuel === uniqueIdSet.has(b.slotId);
+    return !b.full && !isSlotClosed(b) && item.ponctuel === uniqueIdSet.has(b.slotId);
   }
   // Variante liée à l'état courant (pour la surbrillance au rendu).
   function canDropOn(b: Block): boolean {
@@ -2331,6 +2331,18 @@ export function UserAgendaGrid({
     return openOnSchoolHolidays ? dates : dates.filter((d) => !isSchoolVacance(d));
   };
 
+  // Créneau « clôturé » par le délai de réservation → non réservable, création bloquée.
+  //   • Ponctuel  → sa date est antérieure à la 1re date réservable (aujourd'hui + délai).
+  //   • Récurrent → AUCUN miroir réservable (concernedDatesForBlock applique délai + A/B
+  //     + vacances) ; réserver le récurrent ne matérialiserait aucune occurrence.
+  const isSlotClosed = (b: Block): boolean => {
+    if (uniqueIdSet.has(b.slotId)) {
+      const u = uniqueSlots.find((s) => s.id === b.slotId);
+      return !!u?.slotDate && u.slotDate < earliestBookable;
+    }
+    return concernedDatesForBlock(b.slotId, b.dayKey).length === 0;
+  };
+
   // Saisie de thème en cours (textarea/input focalisé dans un badge, ou picker liste
   // ouvert) → on n'affiche pas l'info-bulle pour ne pas gêner (port _isThemeBeingEdited).
   const isThemeBeingEdited = (): boolean => {
@@ -2362,6 +2374,8 @@ export function UserAgendaGrid({
             width: `calc(${b.widthPct}% - 4px)`,
           };
         })();
+    // Clôturé par le délai → bloc non réservable (grisé, clic ignoré, libellé « Clôturé »).
+    const closed = isSlotClosed(b);
     return (
       // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
       <div
@@ -2392,12 +2406,14 @@ export function UserAgendaGrid({
                 borderColor: "var(--slot-uniq-color)",
               }
             : {}),
+          // Créneau clôturé (délai) : grisé + curseur « interdit ».
+          ...(closed ? { opacity: 0.6, cursor: "not-allowed" } : {}),
         }}
         onClick={(e) => {
           // Clic sur un créneau → coche/décoche pour réservation (brouillon).
           // (Si c'est ma résa, le badge interne gère l'annulation et stoppe la propagation.)
           e.stopPropagation();
-          if (b.full) return;
+          if (b.full || closed) return;
           const ponctuel = uniqueIdSet.has(b.slotId);
           if (!ponctuel && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
           togglePendingAdd(b.slotId, b.dayKey, ponctuel);
@@ -2619,6 +2635,21 @@ export function UserAgendaGrid({
                     beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e)
                   }
                 />
+              );
+            }
+            if (closed) {
+              // Délai de réservation dépassé (ponctuel) ou aucun miroir réservable (récurrent).
+              return (
+                <div
+                  style={{
+                    textAlign: "center",
+                    color: "var(--muted)",
+                    fontWeight: 600,
+                    fontSize: ".62rem",
+                  }}
+                >
+                  Clôturé
+                </div>
               );
             }
             if (b.full) {
