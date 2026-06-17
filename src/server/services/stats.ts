@@ -127,7 +127,14 @@ export async function getServiceStats(
       periodId: true,
       slotId: true,
       slot: { select: { slotDay: true, slotDate: true, capacity: true } },
-      user: { select: { niveau: true, structure: { select: { label: true } } } },
+      user: {
+        select: {
+          niveau: true,
+          structure: { select: { label: true } },
+          // Repli « Top structures » : demandeur si l'usager n'a pas de structure.
+          demandeur: { select: { label: true } },
+        },
+      },
     },
   });
 
@@ -180,10 +187,10 @@ export async function getServiceStats(
       const bucket = ymd(ref).slice(0, 7);
       monthMap.set(bucket, (monthMap.get(bucket) ?? 0) + 1);
     }
-    structMap.set(
-      b.user.structure?.label ?? "(sans structure)",
-      (structMap.get(b.user.structure?.label ?? "(sans structure)") ?? 0) + 1,
-    );
+    // Structure de l'usager, repli sur son demandeur (cohérent avec les éditions/legacy) ;
+    // « (sans structure) » réservé aux usagers sans structure NI demandeur.
+    const struct = b.user.structure?.label || b.user.demandeur?.label || "(sans structure)";
+    structMap.set(struct, (structMap.get(struct) ?? 0) + 1);
     const niv = b.user.niveau?.trim() || "(aucun)";
     niveauMap.set(niv, (niveauMap.get(niv) ?? 0) + 1);
   }
@@ -207,7 +214,7 @@ export async function getServiceStats(
     const cap = capBySlot.get(b.slotId) ?? 0;
     if (cap <= 0) continue;
     const fill = Math.min(100, (100 * (occBySlot.get(b.slotId) ?? 0)) / cap);
-    const s = b.user.structure?.label ?? "(sans structure)";
+    const s = b.user.structure?.label || b.user.demandeur?.label || "(sans structure)";
     fillSum.set(s, (fillSum.get(s) ?? 0) + fill);
     fillCnt.set(s, (fillCnt.get(s) ?? 0) + 1);
   }
