@@ -39,7 +39,7 @@ import type { ServiceModes } from "@/server/services/service-modes";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { commitDraft } from "./actions";
+import { commitDraft, listServiceSessionsAction } from "./actions";
 
 type Service = {
   id: string;
@@ -933,6 +933,7 @@ export function UserAgendaGrid({
   openOnSchoolHolidays,
   schoolHolidays,
   userInfo,
+  isManager,
   autoRefreshSeconds,
   debugMode,
 }: {
@@ -958,6 +959,8 @@ export function UserAgendaGrid({
     enfants: number;
     accompagnants: number;
   };
+  // Gestionnaire du service → autorise l'impression de la liste nominative « tous usagers ».
+  isManager: boolean;
   // Intervalle d'auto-rafraîchissement de la disponibilité, en secondes (0 = désactivé).
   autoRefreshSeconds: number;
   // Mode debug (app_config `debug.mode`, lu côté serveur) : affiche le bandeau dem-info.
@@ -1833,6 +1836,100 @@ export function UserAgendaGrid({
       "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:24px;font-size:12px}h1{font-size:16px;margin:0 0 4px}.meta{color:#444;margin:0 0 16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px 8px;text-align:left}th{background:#eee !important;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.empty{color:#444}";
     win.document.write(
       `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titleStr)}</title><style>${css}</style></head><body><h1>${esc(titleStr)}</h1><div class="meta">${esc(who)} · ${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${body}</body></html>`,
+    );
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  }
+
+  // Impression « tous usagers » (GESTIONNAIRE uniquement) : liste nominative des occurrences
+  // datées du service pour la semaine affichée (Semaine réelle) ou la période affichée
+  // (Modèle). Les noms sont chargés via une server action gardée (requireServiceManager) —
+  // ils ne transitent jamais vers un usager normal. La fenêtre est ouverte AVANT l'await
+  // (sinon bloquée par le navigateur), puis remplie après réponse.
+  async function printAllSessions() {
+    if (typeof window === "undefined") return;
+    let from = "";
+    let to = "";
+    let scopeLabel = "";
+    if (mode === "realweek") {
+      if (!mondayStr) return;
+      from = mondayStr;
+      to = sundayStr ?? mondayStr;
+      scopeLabel = `Semaine du ${shortDateFmt.format(addDays(mondayStr, 0))} au ${shortDateFmt.format(
+        addDays(mondayStr, 6),
+      )}`;
+    } else {
+      const period = visiblePeriods[periodIdx] ?? null;
+      if (!period?.dateStart || !period?.dateEnd) return;
+      from = period.dateStart;
+      to = period.dateEnd;
+      scopeLabel = period.label;
+    }
+    if (!from || !to) return;
+    const win = window.open("", "_blank", "width=960,height=800");
+    if (!win) {
+      window.alert("Veuillez autoriser les pop-ups pour imprimer.");
+      return;
+    }
+    win.document.write(
+      '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Préparation…</title></head><body style="font-family:system-ui,Arial,sans-serif;margin:24px">Préparation de la liste…</body></html>',
+    );
+    win.document.close();
+
+    const res = await listServiceSessionsAction(service.id, from, to);
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const pointageOf = (p?: string | null) =>
+      p === "present" ? "Présent" : p === "absent" ? "Absent" : "—";
+    let inner: string;
+    let total = 0;
+    if (!res.ok) {
+      inner = `<p class="empty">${esc(res.error)}</p>`;
+    } else {
+      const rows = res.sessions.flatMap((sess) =>
+        sess.attendees.map((a) => ({
+          date: sess.dateLabel,
+          creneau: `${sess.startTime} – ${sess.endTime}`,
+          nom: a.nom,
+          prenom: a.prenom,
+          struct: a.structure || a.demandeur,
+          enfants: a.enfants,
+          accompagnants: a.accompagnants,
+          theme: a.theme || "—",
+          pointage: pointageOf(a.pointage),
+        })),
+      );
+      total = rows.length;
+      const head = [
+        "Date",
+        "Créneau",
+        "Nom",
+        "Prénom",
+        "Structure / Demandeur",
+        "Enf.",
+        "Acc.",
+        "Thème",
+        "Pointage",
+      ];
+      inner = total
+        ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
+            .map(
+              (r) =>
+                `<tr><td>${esc(r.date)}</td><td>${esc(r.creneau)}</td><td>${esc(r.nom)}</td><td>${esc(
+                  r.prenom,
+                )}</td><td>${esc(r.struct)}</td><td>${r.enfants}</td><td>${r.accompagnants}</td><td>${esc(
+                  r.theme,
+                )}</td><td>${esc(r.pointage)}</td></tr>`,
+            )
+            .join("")}</tbody></table>`
+        : '<p class="empty">Aucune réservation pour cette période.</p>';
+    }
+    const titleStr = `${service.label} — ${scopeLabel}`;
+    const css =
+      "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:24px;font-size:12px}h1{font-size:16px;margin:0 0 4px}.meta{color:#444;margin:0 0 16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px 8px;text-align:left}th{background:#eee !important;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.empty{color:#444}";
+    win.document.open();
+    win.document.write(
+      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titleStr)}</title><style>${css}</style></head><body><h1>${esc(titleStr)}</h1><div class="meta">${total} réservation${total > 1 ? "s" : ""}</div>${inner}</body></html>`,
     );
     win.document.close();
     win.focus();
@@ -3072,9 +3169,17 @@ export function UserAgendaGrid({
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
             <button
               type="button"
-              onClick={printMyBookings}
-              data-tip="Imprimer la liste de mes réservations"
-              aria-label="Imprimer la liste de mes réservations"
+              onClick={isManager ? printAllSessions : printMyBookings}
+              data-tip={
+                isManager
+                  ? "Imprimer la liste des réservations (tous les usagers)"
+                  : "Imprimer la liste de mes réservations"
+              }
+              aria-label={
+                isManager
+                  ? "Imprimer la liste des réservations (tous les usagers)"
+                  : "Imprimer la liste de mes réservations"
+              }
               style={{
                 background: "none",
                 border: "1px solid var(--border)",

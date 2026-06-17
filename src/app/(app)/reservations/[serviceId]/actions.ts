@@ -2,7 +2,7 @@
 
 import { bookingCreateSchema } from "@/schemas/booking";
 import { prisma } from "@/server/db";
-import { requireUser } from "@/server/guards";
+import { isServiceManager, requireUser } from "@/server/guards";
 import {
   type BookingCancellationParams,
   type BookingConfirmationParams,
@@ -19,6 +19,7 @@ import {
   createUniqueBookingInTx,
   userCanAccessService,
 } from "@/server/services/bookings";
+import { type DatedSession, listDatedSessions } from "@/server/services/editions";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -26,6 +27,26 @@ import { z } from "zod";
 
 function revalidate(serviceId: string) {
   revalidatePath(`/reservations/${serviceId}`);
+}
+
+/**
+ * Sessions datées (occurrences) du service sur [fromYmd, toYmd], avec leurs participants
+ * nominatifs — pour l'impression « tous usagers » côté gestionnaire. RÉSERVÉ aux
+ * gestionnaires du service (données personnelles des autres usagers) ; un usager normal
+ * reçoit `{ ok: false }`.
+ */
+export async function listServiceSessionsAction(
+  serviceId: string,
+  fromYmd: string,
+  toYmd: string,
+): Promise<{ ok: true; sessions: DatedSession[] } | { ok: false; error: string }> {
+  const session = await requireUser();
+  const role = (session.user as { role?: "utilisateur" | "gestionnaire" | "administrateur" }).role;
+  if (!(await isServiceManager(serviceId, session.user.id, role))) {
+    return { ok: false, error: "Accès réservé aux gestionnaires du service." };
+  }
+  const sessions = await listDatedSessions(serviceId, fromYmd, toYmd);
+  return { ok: true, sessions };
 }
 
 type Result = { ok: boolean; error?: string };
