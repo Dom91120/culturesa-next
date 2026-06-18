@@ -113,6 +113,30 @@ export const auth = betterAuth({
         }
       }
 
+      // À l'inscription publique, au moins 1 enfant ET 1 accompagnant sont
+      // obligatoires. Enforcement serveur (en plus des contraintes du formulaire)
+      // pour rejeter une requête qui contournerait la validation côté client.
+      // La création par un administrateur (auth.api.signUpEmail, cf. users/actions.ts)
+      // ne transmet pas ces champs et les renseigne ensuite : on n'impose donc le
+      // minimum que lorsqu'ils sont effectivement fournis dans la requête.
+      if (ctx.path === "/sign-up/email") {
+        const b = (ctx.body ?? {}) as { enfants?: unknown; accompagnants?: unknown };
+        if (b.enfants !== undefined || b.accompagnants !== undefined) {
+          const enfants = Number(b.enfants);
+          const accompagnants = Number(b.accompagnants);
+          if (
+            !Number.isInteger(enfants) ||
+            enfants < 1 ||
+            !Number.isInteger(accompagnants) ||
+            accompagnants < 1
+          ) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Indiquez au moins 1 enfant et 1 accompagnant.",
+            });
+          }
+        }
+      }
+
       // Enforcement serveur de la politique de mot de passe (complexité), en plus du
       // minPasswordLength. Rejette tout mot de passe non conforme, y compris une
       // requête qui contournerait la validation côté formulaire.

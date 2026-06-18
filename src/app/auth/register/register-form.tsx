@@ -72,7 +72,17 @@ export function RegisterForm({
     const nom = String(form.get("nom")).trim();
     const email = String(form.get("email")).trim();
     const password2 = String(form.get("password2"));
+    const enfants = Number(form.get("enfants"));
+    const accompagnants = Number(form.get("accompagnants"));
 
+    if (!Number.isInteger(enfants) || enfants < 1) {
+      setError("Indiquez au moins 1 enfant.");
+      return;
+    }
+    if (!Number.isInteger(accompagnants) || accompagnants < 1) {
+      setError("Indiquez au moins 1 accompagnant.");
+      return;
+    }
     if (!pwdValid) {
       setError("Le mot de passe ne respecte pas toutes les règles.");
       return;
@@ -99,8 +109,8 @@ export function RegisterForm({
       nom,
       tel: String(form.get("tel") ?? "").trim(),
       niveau,
-      enfants: Number(form.get("enfants") || 0),
-      accompagnants: Number(form.get("accompagnants") || 0),
+      enfants,
+      accompagnants,
       ...(demandeurId ? { demandeurId: Number(demandeurId) } : {}),
       ...(structureId ? { structureId: Number(structureId) } : {}),
       // Le défi captcha (token signé + saisie) est transmis au middleware serveur
@@ -277,25 +287,31 @@ export function RegisterForm({
               </div>
             </div>
             <div>
-              <label htmlFor="c-enfants">Nb enfants</label>
+              <label htmlFor="c-enfants">
+                Nb enfants <span className="required-star">*</span>
+              </label>
               <input
                 id="c-enfants"
                 name="enfants"
                 type="number"
-                min={0}
+                required
+                min={1}
                 max={99}
-                placeholder="25"
+                placeholder="1"
               />
             </div>
             <div>
-              <label htmlFor="c-accompagnants">Nb accompagnants</label>
+              <label htmlFor="c-accompagnants">
+                Nb accompagnants <span className="required-star">*</span>
+              </label>
               <input
                 id="c-accompagnants"
                 name="accompagnants"
                 type="number"
-                min={0}
+                required
+                min={1}
                 max={99}
-                placeholder="0"
+                placeholder="1"
               />
             </div>
           </div>

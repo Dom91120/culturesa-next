@@ -24,10 +24,36 @@ const baseUserSchema = z.object({
   services: z.array(z.string().min(1)).default([]),
 });
 
-const updateUserSchema = baseUserSchema.extend({ id: z.string().min(1) });
-const createUserSchema = baseUserSchema.extend({
-  email: z.string().trim().email(),
-});
+// Un compte « utilisateur » doit toujours déclarer au moins 1 enfant ET
+// 1 accompagnant — à la création comme à l'édition (on ne peut pas le repasser
+// sous 1/1). L'exigence ne s'applique PAS aux gestionnaires/administrateurs.
+function requireKidsForUser(
+  d: { role: string; enfants: number; accompagnants: number },
+  ctx: z.RefinementCtx,
+) {
+  if (d.role !== "utilisateur") return;
+  if (d.enfants < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["enfants"],
+      message: "Au moins 1 enfant est requis pour un utilisateur.",
+    });
+  }
+  if (d.accompagnants < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["accompagnants"],
+      message: "Au moins 1 accompagnant est requis pour un utilisateur.",
+    });
+  }
+}
+
+const updateUserSchema = baseUserSchema
+  .extend({ id: z.string().min(1) })
+  .superRefine(requireKidsForUser);
+const createUserSchema = baseUserSchema
+  .extend({ email: z.string().trim().email() })
+  .superRefine(requireKidsForUser);
 
 export type UpdateUserInput = z.input<typeof updateUserSchema>;
 export type CreateUserInput = z.input<typeof createUserSchema>;

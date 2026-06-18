@@ -55,6 +55,9 @@ export function UserModal({
   const [pending, startTransition] = useTransition();
 
   const isManager = role === "gestionnaire";
+  // Un compte « utilisateur » doit déclarer ≥ 1 enfant et ≥ 1 accompagnant, à la
+  // création comme à l'édition ; pas d'exigence pour les gestionnaires/administrateurs.
+  const requireKids = role === "utilisateur";
 
   // Cascade : ne montrer que les structures de la catégorie (demandeur) sélectionnée.
   const visibleStructures = useMemo(
@@ -104,6 +107,18 @@ export function UserModal({
     if (mode === "create" && !email.trim()) {
       setError("L'e-mail est obligatoire");
       return;
+    }
+    if (requireKids) {
+      const nbEnfants = enfants === "" ? 0 : Number(enfants);
+      const nbAccompagnants = accompagnants === "" ? 0 : Number(accompagnants);
+      if (!Number.isInteger(nbEnfants) || nbEnfants < 1) {
+        setError("Au moins 1 enfant est requis pour un utilisateur.");
+        return;
+      }
+      if (!Number.isInteger(nbAccompagnants) || nbAccompagnants < 1) {
+        setError("Au moins 1 accompagnant est requis pour un utilisateur.");
+        return;
+      }
     }
     setError(null);
     const common = {
@@ -309,11 +324,13 @@ export function UserModal({
               </div>
             </div>
             <div>
-              <label htmlFor="uc-enfants">Nb enfants</label>
+              <label htmlFor="uc-enfants">
+                Nb enfants {requireKids && <span className="required-star">*</span>}
+              </label>
               <input
                 id="uc-enfants"
                 type="number"
-                min={0}
+                min={requireKids ? 1 : 0}
                 max={99}
                 value={enfants}
                 autoComplete="off"
@@ -321,11 +338,13 @@ export function UserModal({
               />
             </div>
             <div>
-              <label htmlFor="uc-accompagnants">Nb accompagnants</label>
+              <label htmlFor="uc-accompagnants">
+                Nb accompagnants {requireKids && <span className="required-star">*</span>}
+              </label>
               <input
                 id="uc-accompagnants"
                 type="number"
-                min={0}
+                min={requireKids ? 1 : 0}
                 max={99}
                 value={accompagnants}
                 autoComplete="off"

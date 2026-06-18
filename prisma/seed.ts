@@ -274,15 +274,23 @@ async function main() {
     data: { capacity: 15 },
   });
 
+  // enfants/accompagnants ≥ 1 : un compte « utilisateur » doit toujours en déclarer
+  // au moins 1 de chaque (cf. validation côté inscription et gestion des comptes).
   const demoUsers = [
-    { email: "huppert@demo.fr", prenom: "Isabelle", nom: "HUPPERT", demandeurId: 5 },
-    { email: "adjani@demo.fr", prenom: "Isabelle", nom: "ADJANI", demandeurId: 5 },
+    { email: "huppert@demo.fr", prenom: "Isabelle", nom: "HUPPERT", demandeurId: 5, enfants: 4, accompagnants: 1 },
+    { email: "adjani@demo.fr", prenom: "Isabelle", nom: "ADJANI", demandeurId: 5, enfants: 9, accompagnants: 1 },
   ];
   const userIds: Record<string, string> = {};
   for (const u of demoUsers) {
     const created = await prisma.user.upsert({
       where: { email: u.email },
-      update: { prenom: u.prenom, nom: u.nom, demandeurId: u.demandeurId },
+      update: {
+        prenom: u.prenom,
+        nom: u.nom,
+        demandeurId: u.demandeurId,
+        enfants: u.enfants,
+        accompagnants: u.accompagnants,
+      },
       create: {
         email: u.email,
         emailVerified: true,
@@ -292,6 +300,8 @@ async function main() {
         role: "utilisateur",
         rgpdOk: true,
         demandeurId: u.demandeurId,
+        enfants: u.enfants,
+        accompagnants: u.accompagnants,
       },
     });
     userIds[u.nom] = created.id;
