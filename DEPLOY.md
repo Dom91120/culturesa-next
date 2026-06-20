@@ -42,15 +42,39 @@ docker compose up -d --build           # redéployer après un git pull
 
 ## Sauvegarde de la base
 
-```bash
-# Dump
-docker compose exec db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup_$(date +%F).sql
+### Automatique (quotidienne)
 
-# Restauration
-cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+Le conteneur `cron` réalise un **dump quotidien à 02h00** (`cron/backup.sh`, déclenché par
+`cron/crontab`) : `pg_dump` compressé en gzip, déposé dans **`./backups/`** sur l'hôte.
+La **rotation** ne conserve que les **7 dumps les plus récents** (≈ une semaine) ; les
+plus anciens sont supprimés automatiquement.
+
+```bash
+# Vérifier les sauvegardes présentes
+ls -lh backups/
+
+# Suivre l'exécution (le job écrit sur la sortie du conteneur)
+docker compose logs -f cron
+
+# Lancer un dump immédiat (hors planification)
+docker compose exec cron /usr/local/bin/backup.sh
 ```
 
-> 💡 Pense à planifier un `pg_dump` via cron + une copie hors-site.
+> 💡 `./backups/` vit sur le même disque que la base : **copie ces dumps hors-site**
+> (rsync/scp/objet S3…) pour une vraie protection contre la perte du serveur.
+
+### Manuel / restauration
+
+```bash
+# Dump ponctuel
+docker compose exec db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup_$(date +%F).sql
+
+# Restauration depuis un dump compressé du conteneur cron
+gunzip -c backups/culturesa-AAAAMMJJ-HHMMSS.sql.gz | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+
+# Restauration depuis un dump .sql non compressé
+cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+```
 
 ## Points d'attention
 - `next.config.ts` **doit** contenir `output: "standalone"` (sera ajouté à l'étape projet).

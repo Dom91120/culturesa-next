@@ -10,3 +10,7 @@
 
 # Rappels de réservation (J-7 et J-1) — tous les jours à 07h00
 0 7 * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/booking-reminder >/dev/null 2>&1
+
+# Sauvegarde de la base — tous les jours à 02h00 (dump compressé + rotation sur 7 jours).
+# Sortie redirigée vers le stdout du conteneur (PID 1) → visible via `docker compose logs cron`.
+0 2 * * * /usr/local/bin/backup.sh >/proc/1/fd/1 2>&1

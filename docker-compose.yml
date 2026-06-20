@@ -61,8 +61,16 @@ services:
     restart: unless-stopped
     depends_on:
       - app
+      - db
     environment:
       CRON_SECRET: ${CRON_SECRET}
+      # Sauvegarde quotidienne de la base (pg_dump → /backups, cf. cron/backup.sh)
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Les dumps atterrissent dans ./backups sur l'hôte (à copier hors-site).
+      - ./backups:/backups
     networks:
       - web
 
