@@ -538,7 +538,7 @@ function Row({
               style={{ color: "var(--muted)" }}
               title="Défini dans « Échanges par mail » (colonne Destinataire), commun à tous les services."
             >
-              — (voir « Échanges par mail »)
+              Voir « Échanges par mail »
             </span>
           )}
         </td>
