@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
 
 type DemandeurOption = { id: number; label: string };
@@ -129,9 +129,62 @@ export function NiveauxEditor({
     });
   }
 
+  function resetRows() {
+    setRows(initial.map((n) => ({ ...n, key: `db-${n.id}` })));
+  }
+
+  // « Modification/création en cours » : une ligne en édition (✏️), une ligne nouvelle,
+  // une suppression en attente ou une ligne (libellé/demandeur/position) modifiée. Pilote
+  // le pied : « Fermer » au repos, « Annuler / Enregistrer » sinon.
+  const initialById = new Map(initial.map((n) => [n.id, n]));
+  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
+  const dirty =
+    editKey !== null ||
+    rows.some((r) => r.id == null) ||
+    initial.some((n) => !currentIds.has(n.id)) ||
+    rows.some((r) => {
+      if (r.id == null) return false;
+      const init = initialById.get(r.id);
+      return (
+        !!init &&
+        (init.label !== r.label.trim() ||
+          init.demandeurId !== r.demandeurId ||
+          init.position !== r.position)
+      );
+    });
+
+  // Resynchronise le tampon après un enregistrement (réconcilie les nouveaux id) ou lors
+  // d'un rafraîchissement externe sans modification locale en cours.
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const justSaved = useRef(false);
+  const initSig = JSON.stringify(initial);
+  const lastSig = useRef(initSig);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resync piloté par la signature des données serveur
+  useEffect(() => {
+    if (initSig === lastSig.current) return;
+    lastSig.current = initSig;
+    if (justSaved.current || !dirtyRef.current) {
+      resetRows();
+      setEditKey(null);
+      setConfirmKey(null);
+      setError(null);
+    }
+    justSaved.current = false;
+  }, [initSig]);
+
+  // Annule les modifications en cours (revient au tampon serveur), sans fermer la modale.
+  function cancelEdits() {
+    resetRows();
+    setEditKey(null);
+    setConfirmKey(null);
+    setDragKey(null);
+    setDragOverKey(null);
+    setDragAfter(false);
+    setError(null);
+  }
+
   function saveAll() {
-    const initialById = new Map(initial.map((n) => [n.id, n]));
-    const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
     const toDelete = initial.filter((n) => !currentIds.has(n.id));
     const toCreate = rows.filter((r) => r.id == null && r.label.trim() !== "");
     const toUpdate = rows.filter((r) => {
@@ -144,6 +197,15 @@ export function NiveauxEditor({
           init.position !== r.position)
       );
     });
+
+    // Rien à enregistrer (ex. ligne vierge laissée vide) : on nettoie et on repasse en
+    // lecture sans appel serveur.
+    if (toDelete.length === 0 && toCreate.length === 0 && toUpdate.length === 0) {
+      setRows((rs) => rs.filter((r) => r.id != null));
+      setEditKey(null);
+      setConfirmKey(null);
+      return;
+    }
 
     startSaving(async () => {
       try {
@@ -171,8 +233,8 @@ export function NiveauxEditor({
         setError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
         return;
       }
+      justSaved.current = true;
       router.refresh();
-      onClose?.();
     });
   }
 
@@ -444,6 +506,8 @@ export function NiveauxEditor({
         </div>
       )}
 
+      {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
+          ou création est en cours. */}
       <div
         style={{
           display: "flex",
@@ -453,24 +517,38 @@ export function NiveauxEditor({
           marginTop: "1.25rem",
         }}
       >
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => onClose?.()}
-          disabled={saving}
-          style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
-        >
-          Annuler
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={saveAll}
-          disabled={saving}
-          style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
-        >
-          {saving ? "Enregistrement…" : "Enregistrer"}
-        </button>
+        {dirty ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={cancelEdits}
+              disabled={saving}
+              style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveAll}
+              disabled={saving}
+              style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
+            >
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => onClose?.()}
+            disabled={saving}
+            style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
+          >
+            Fermer
+          </button>
+        )}
       </div>
 
       <style>{".dem-row:hover{background:var(--surface2)}"}</style>

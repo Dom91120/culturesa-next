@@ -1,7 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type CSSProperties, type ReactNode, useRef, useState, useTransition } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 /** Résultat des server actions de référentiel (contrat {ok,error} partagé). */
 export type RefActionResult = { ok: boolean; error?: string };
@@ -93,10 +100,54 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
     setRows((rs) => rs.filter((r) => r.key !== key));
   }
 
-  // Applique en lot suppressions / créations / mises à jour, puis ferme la modale.
+  // Réinitialise le tampon sur l'état serveur courant.
+  function resetRows() {
+    setRows(initial.map((d) => ({ ...fromInitial(d), key: `db-${d.id}` })));
+  }
+
+  // « Modification/création en cours » : une ligne nouvelle, une suppression en attente
+  // ou une ligne modifiée par rapport à l'état initial. Pilote l'affichage du pied :
+  // « Fermer » au repos, « Annuler / Enregistrer » dès qu'il y a une modification.
+  const initialById = new Map(initial.map((d) => [d.id, d]));
+  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
+  const dirty =
+    rows.some((r) => r.id == null) ||
+    initial.some((d) => !currentIds.has(d.id)) ||
+    rows.some((r) => {
+      const init = r.id != null ? initialById.get(r.id) : undefined;
+      return !!init && isDirty(r, init);
+    });
+
+  // Resynchronise le tampon sur les données serveur après un enregistrement
+  // (réconcilie les nouveaux id ⇒ évite une re-création au prochain save) ou lors d'un
+  // rafraîchissement externe sans modification locale en cours.
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const justSaved = useRef(false);
+  const initSig = JSON.stringify(initial);
+  const lastSig = useRef(initSig);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resync piloté par la signature des données serveur
+  useEffect(() => {
+    if (initSig === lastSig.current) return;
+    lastSig.current = initSig;
+    if (justSaved.current || !dirtyRef.current) {
+      resetRows();
+      setConfirmKey(null);
+      setError(null);
+    }
+    justSaved.current = false;
+  }, [initSig]);
+
+  // Annule les modifications en cours (revient au tampon serveur), sans fermer la modale.
+  function cancelEdits() {
+    resetRows();
+    setConfirmKey(null);
+    setError(null);
+  }
+
+  // Applique en lot suppressions / créations / mises à jour, puis laisse la modale ouverte
+  // (le pied repasse sur « Fermer » une fois le tampon resynchronisé).
   function saveAll() {
-    const initialById = new Map(initial.map((d) => [d.id, d]));
-    const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
     const toDelete = initial.filter((d) => !currentIds.has(d.id));
     const toCreate = rows.filter((r) => r.id == null && isValid(r));
     const toUpdate = rows.filter((r) => {
@@ -104,6 +155,14 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
       const init = initialById.get(r.id);
       return !!init && isDirty(r, init);
     });
+
+    // Rien à enregistrer (ex. ligne vierge ajoutée puis laissée vide) : on nettoie le
+    // tampon et on repasse en lecture sans appel serveur.
+    if (toDelete.length === 0 && toCreate.length === 0 && toUpdate.length === 0) {
+      setRows((rs) => rs.filter((r) => r.id != null));
+      setConfirmKey(null);
+      return;
+    }
 
     startSaving(async () => {
       try {
@@ -123,8 +182,8 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
         setError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
         return;
       }
+      justSaved.current = true;
       router.refresh();
-      onClose?.();
     });
   }
 
@@ -297,7 +356,8 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
         </div>
       )}
 
-      {/* Mode tampon : enregistrement explicite (pas d'autosave). */}
+      {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
+          ou création est en cours (mode tampon, enregistrement explicite). */}
       <div
         style={{
           display: "flex",
@@ -307,24 +367,38 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
           marginTop: "1.25rem",
         }}
       >
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => onClose?.()}
-          disabled={saving}
-          style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
-        >
-          Annuler
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={saveAll}
-          disabled={saving}
-          style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
-        >
-          {saving ? "Enregistrement…" : "Enregistrer"}
-        </button>
+        {dirty ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={cancelEdits}
+              disabled={saving}
+              style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveAll}
+              disabled={saving}
+              style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
+            >
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => onClose?.()}
+            disabled={saving}
+            style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
+          >
+            Fermer
+          </button>
+        )}
       </div>
 
       <style>

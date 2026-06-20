@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { deleteServicesAction, saveServiceFromModalAction } from "./actions";
 import { ICON_CATEGORIES } from "./legacy-icons";
 
@@ -38,9 +38,53 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
     setRows((rs) => rs.filter((r) => r.key !== key));
   }
 
+  function resetRows() {
+    setRows(initial.map((s) => ({ ...s, key: `db-${s.id}` })));
+  }
+
+  // « Modification/création en cours » : ligne nouvelle, suppression en attente ou ligne
+  // (libellé/icône) modifiée. Pilote le pied : « Fermer » au repos, « Annuler /
+  // Enregistrer » dès qu'il y a une modification.
+  const initialById = new Map(initial.map((s) => [s.id, s]));
+  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is string => id != null));
+  const dirty =
+    rows.some((r) => r.id == null) ||
+    initial.some((s) => !currentIds.has(s.id)) ||
+    rows.some((r) => {
+      if (r.id == null) return false;
+      const init = initialById.get(r.id);
+      return !!init && (init.label !== r.label.trim() || (init.icon ?? null) !== (r.icon ?? null));
+    });
+
+  // Resynchronise le tampon après un enregistrement (réconcilie les nouveaux id) ou lors
+  // d'un rafraîchissement externe sans modification locale en cours.
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const justSaved = useRef(false);
+  const initSig = JSON.stringify(initial);
+  const lastSig = useRef(initSig);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resync piloté par la signature des données serveur
+  useEffect(() => {
+    if (initSig === lastSig.current) return;
+    lastSig.current = initSig;
+    if (justSaved.current || !dirtyRef.current) {
+      resetRows();
+      setConfirmKey(null);
+      setPickerKey(null);
+      setError(null);
+    }
+    justSaved.current = false;
+  }, [initSig]);
+
+  // Annule les modifications en cours (revient au tampon serveur), sans fermer la modale.
+  function cancelEdits() {
+    resetRows();
+    setConfirmKey(null);
+    setPickerKey(null);
+    setError(null);
+  }
+
   function saveAll() {
-    const initialById = new Map(initial.map((s) => [s.id, s]));
-    const currentIds = new Set(rows.map((r) => r.id).filter((id): id is string => id != null));
     const toDelete = initial.filter((s) => !currentIds.has(s.id));
     const toCreate = rows.filter((r) => r.id == null && r.label.trim() !== "");
     const toUpdate = rows.filter((r) => {
@@ -48,6 +92,14 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
       const init = initialById.get(r.id);
       return !!init && (init.label !== r.label.trim() || (init.icon ?? null) !== (r.icon ?? null));
     });
+
+    // Rien à enregistrer (ex. ligne vierge laissée vide) : on nettoie et on repasse en
+    // lecture sans appel serveur.
+    if (toDelete.length === 0 && toCreate.length === 0 && toUpdate.length === 0) {
+      setRows((rs) => rs.filter((r) => r.id != null));
+      setConfirmKey(null);
+      return;
+    }
 
     startSaving(async () => {
       try {
@@ -71,8 +123,8 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
         setError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
         return;
       }
+      justSaved.current = true;
       router.refresh();
-      onClose?.();
     });
   }
 
@@ -249,6 +301,8 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
         </div>
       )}
 
+      {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
+          ou création est en cours. */}
       <div
         style={{
           display: "flex",
@@ -258,24 +312,38 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
           marginTop: "1.25rem",
         }}
       >
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => onClose?.()}
-          disabled={saving}
-          style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
-        >
-          Annuler
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={saveAll}
-          disabled={saving}
-          style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
-        >
-          {saving ? "Enregistrement…" : "Enregistrer"}
-        </button>
+        {dirty ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={cancelEdits}
+              disabled={saving}
+              style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveAll}
+              disabled={saving}
+              style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
+            >
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => onClose?.()}
+            disabled={saving}
+            style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
+          >
+            Fermer
+          </button>
+        )}
       </div>
 
       {/* Sélecteur d'icône (cible la ligne `pickerKey`). */}

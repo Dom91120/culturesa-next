@@ -1,5 +1,6 @@
 "use client";
 
+import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
 import { usePathname, useRouter } from "next/navigation";
@@ -103,6 +104,15 @@ export function UserShell({
               }}
             >
               👤 Mon compte
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                window.dispatchEvent(new Event(ONBOARDING_REPLAY_EVENT));
+              }}
+            >
+              💡 Revoir la présentation
             </button>
             <button type="button" className="danger" onClick={onLogout}>
               ⏏ Déconnexion

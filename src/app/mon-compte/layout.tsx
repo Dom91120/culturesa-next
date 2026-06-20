@@ -20,7 +20,7 @@ export default async function MonCompteLayout({ children }: { children: React.Re
       select: { id: true, label: true, icon: true },
     });
     return (
-      <ConnectedShell user={user} services={services}>
+      <ConnectedShell user={user} services={services} isAdmin={role === "administrateur"}>
         {children}
       </ConnectedShell>
     );

@@ -1,5 +1,6 @@
 "use client";
 
+import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
 import { usePathname, useRouter } from "next/navigation";
@@ -34,10 +35,14 @@ function initialsOf(name: string, email: string) {
 export function ConnectedShell({
   user,
   services,
+  isAdmin,
   children,
 }: {
   user: { name: string; email: string };
   services: ServiceItem[];
+  // Seuls les administrateurs voient l'« Administration » (Configuration, Utilisateurs,
+  // Messagerie, RGPD) ; les gestionnaires se limitent à leurs services.
+  isAdmin: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -49,7 +54,8 @@ export function ConnectedShell({
   const serviceMatch = pathname.match(/^\/services\/([^/]+)/);
   const activeServiceId = serviceMatch ? serviceMatch[1] : null;
   const adminActive = !activeServiceId && pathname !== "/mon-compte";
-  const tabs = activeServiceId ? serviceTabs(activeServiceId) : ADMIN_TABS;
+  // Onglets d'administration réservés aux administrateurs.
+  const tabs = activeServiceId ? serviceTabs(activeServiceId) : isAdmin ? ADMIN_TABS : [];
 
   // Onglet actif = le href le plus long qui préfixe le chemin courant.
   let activeHref = "";
@@ -96,6 +102,15 @@ export function ConnectedShell({
               }}
             >
               👤 Mon compte
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                window.dispatchEvent(new Event(ONBOARDING_REPLAY_EVENT));
+              }}
+            >
+              💡 Revoir la présentation
             </button>
             <button type="button" className="danger" onClick={onLogout}>
               ⏏ Déconnexion
@@ -151,16 +166,18 @@ export function ConnectedShell({
                 </button>
               ))}
 
-              <button
-                type="button"
-                id="sidebar-admin-btn"
-                className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
-                style={{ marginTop: ".6rem" }}
-                onClick={() => router.push("/configuration")}
-              >
-                <span className="sb-icon">⚙️</span>
-                <span className="sb-label">Administration</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  id="sidebar-admin-btn"
+                  className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
+                  style={{ marginTop: ".6rem" }}
+                  onClick={() => router.push("/configuration")}
+                >
+                  <span className="sb-icon">⚙️</span>
+                  <span className="sb-label">Administration</span>
+                </button>
+              )}
 
               <button
                 type="button"

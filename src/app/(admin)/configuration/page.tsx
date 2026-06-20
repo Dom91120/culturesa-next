@@ -1,5 +1,6 @@
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
+import { requireRole } from "@/server/guards";
 import { countSchoolHolidays } from "@/server/services/holidays";
 import { listNiveaux } from "@/server/services/niveaux";
 import { listServicesForCurrentAdmin } from "@/server/services/services";
@@ -11,6 +12,8 @@ import { ServicesReferentiel } from "./services-referentiel";
 import { StructuresReferentiel } from "./structures-referentiel";
 
 export default async function ConfigurationPage() {
+  // Administration réservée aux administrateurs (les gestionnaires n'y ont pas accès).
+  await requireRole("administrateur");
   const cfg = await getConfigMany([
     "school.zone",
     "reservations.autoRefreshSeconds",

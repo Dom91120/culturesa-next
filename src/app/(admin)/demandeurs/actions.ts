@@ -20,7 +20,7 @@ export async function createDemandeurAction(input: {
   label: string;
   openOnSchoolHolidays: boolean;
 }): Promise<CreateResult> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   const parsed = rowSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
@@ -37,7 +37,7 @@ export async function updateDemandeurAction(
   id: number,
   input: { label: string; openOnSchoolHolidays: boolean },
 ): Promise<Result> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Demandeur introuvable" };
   const parsed = rowSchema.safeParse(input);
   if (!parsed.success) {
@@ -57,7 +57,7 @@ export async function updateDemandeurAction(
  * users.demandeurId et niveaux.demandeurId remis à NULL.
  */
 export async function deleteDemandeurAction(id: number): Promise<Result> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Demandeur introuvable" };
   await prisma.demandeur.delete({ where: { id } });
   revalidatePath("/configuration");

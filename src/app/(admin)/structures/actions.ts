@@ -15,7 +15,7 @@ export async function createStructureAction(input: {
   label: string;
   demandeurId: number;
 }): Promise<CreateResult> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   const parsed = structureSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
@@ -29,7 +29,7 @@ export async function updateStructureAction(
   id: number,
   input: { label: string; demandeurId: number },
 ): Promise<Result> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Structure introuvable" };
   const parsed = structureSchema.safeParse(input);
   if (!parsed.success) {
@@ -41,7 +41,7 @@ export async function updateStructureAction(
 }
 
 export async function deleteStructureAction(id: number): Promise<Result> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Structure introuvable" };
   await svc.deleteStructure(id);
   revalidatePath("/configuration");

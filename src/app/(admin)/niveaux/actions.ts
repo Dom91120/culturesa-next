@@ -13,7 +13,7 @@ type Result = { ok: true } | { ok: false; error: string };
 type CreateResult = { ok: true; id: number } | { ok: false; error: string };
 
 export async function createNiveauAction(input: NiveauData): Promise<CreateResult> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   const parsed = niveauSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
@@ -24,7 +24,7 @@ export async function createNiveauAction(input: NiveauData): Promise<CreateResul
 }
 
 export async function updateNiveauAction(id: number, input: NiveauData): Promise<Result> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Niveau introuvable" };
   const parsed = niveauSchema.safeParse(input);
   if (!parsed.success) {
@@ -36,7 +36,7 @@ export async function updateNiveauAction(id: number, input: NiveauData): Promise
 }
 
 export async function deleteNiveauAction(id: number): Promise<Result> {
-  await requireRole("gestionnaire");
+  await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Niveau introuvable" };
   await svc.deleteNiveau(id);
   revalidatePath("/configuration");

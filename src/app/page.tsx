@@ -1,13 +1,21 @@
 import { getSession } from "@/server/guards";
+import { listServicesForCurrentAdmin } from "@/server/services/services";
 import { redirect } from "next/navigation";
 
-// Page d'accueil : aiguille selon le rôle. Un gestionnaire/administrateur arrive
-// directement sur l'Administration (/configuration) ; tout autre compte (ou visiteur)
-// sur la réservation. C'est aussi la cible du redirect post-connexion et du
-// fallback requireRole(redirect("/")).
+// Page d'accueil : aiguille selon le rôle. C'est aussi la cible du redirect
+// post-connexion et du fallback requireRole(redirect("/")).
+//   - administrateur → Administration (/configuration) ;
+//   - gestionnaire   → l'agenda de son 1er service géré (sinon /mon-compte) ; il
+//                      N'A PAS accès aux onglets d'administration ;
+//   - tout autre compte / visiteur → la réservation.
 export default async function HomePage() {
   const session = await getSession();
   const role = (session?.user as { role?: string } | undefined)?.role ?? "utilisateur";
-  const isManager = role === "gestionnaire" || role === "administrateur";
-  redirect(isManager ? "/configuration" : "/reservations");
+
+  if (role === "administrateur") redirect("/configuration");
+  if (role === "gestionnaire") {
+    const services = await listServicesForCurrentAdmin();
+    redirect(services.length > 0 ? `/services/${services[0].id}/agenda` : "/mon-compte");
+  }
+  redirect("/reservations");
 }
