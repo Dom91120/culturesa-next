@@ -528,17 +528,27 @@ model MailTrigger {
   @@map("mail_triggers")
 }
 
-// Référentiel des métadonnées des types d'e-mail INTÉGRÉS (libellé, description,
-// destinataire affichés). La CLÉ reste le contrat avec le code (gabarit par défaut,
-// variables et logique d'envoi restent codés) ; seules les métadonnées sont des données.
-// Peuplé au seed (cf. defaultMailTypes()). Les types PERSONNALISÉS ont leur propre registre
-// par service (app_config `mail.custom.types.<serviceId>`).
+// Table UNIQUE des types d'e-mails (métadonnées + contenu), toutes portées confondues.
+// Clé composite (serviceId, key) : `serviceId = ""` ⇒ niveau GLOBAL (intégrés + types perso
+// globaux) ; `serviceId = "<svc>"` ⇒ entrée propre à un service (type perso du service, ou
+// SURCHARGE de contenu d'un type intégré). Les métadonnées (label/description/recipient/
+// builtin/system/position) font foi sur la ligne globale ; les lignes par service ne portent
+// que le contenu (subject/html). Lecture du contenu en cascade : (svc,key) → ("",key) → défaut
+// code (DEFAULT_TEMPLATES, repli de sûreté). Les CLÉS intégrées restent un contrat avec le code.
+// Routage / envoi / destinataire par action et SMTP restent dans app_config (ce sont des réglages).
 model MailType {
-  key         String   @id
-  label       String
+  serviceId   String   @default("") @map("service_id")
+  key         String
+  label       String   @default("")
   description String   @default("")
   recipient   String   @default("")
+  subject     String   @default("")
+  html        String   @default("")
+  builtin     Boolean  @default(false)
+  system      Boolean  @default(false)
+  position    Int      @default(0) @db.SmallInt
   createdAt   DateTime @default(now()) @db.Timestamptz
 
+  @@id([serviceId, key])
   @@map("mail_types")
 }

@@ -116,7 +116,9 @@ export function defaultMailTypes(): { key: TemplateKind; meta: MailTypeMeta }[] 
 export async function getMailTypeMeta(): Promise<Record<string, MailTypeMeta>> {
   const map: Record<string, MailTypeMeta> = { ...META };
   try {
-    const rows = await prisma.mailType.findMany();
+    // Métadonnées = lignes GLOBALES (serviceId ""); les lignes par service ne portent
+    // que du contenu (surcharges), pas de métadonnées.
+    const rows = await prisma.mailType.findMany({ where: { serviceId: "" } });
     for (const r of rows) {
       map[r.key] = { label: r.label, description: r.description, recipient: r.recipient };
     }

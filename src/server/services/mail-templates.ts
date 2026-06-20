@@ -1,4 +1,5 @@
-import { deleteConfig, getConfigMany, isConfigValueUsed, setConfigMany } from "@/server/config";
+import { isConfigValueUsed } from "@/server/config";
+import { prisma } from "@/server/db";
 
 // Gabarits (sujet + corps HTML) éditables des e-mails. Stockés dans app_config (clés
 // `mail.tpl.<kind>.subject` / `.html`) ; à défaut, le gabarit par défaut ci-dessous est
@@ -200,42 +201,38 @@ ${DETAILS_CONFIRMATION}
   },
 };
 
-// Clés app_config. Avec `serviceId` → surcharge PAR SERVICE ; sans → couche GLOBALE.
-// `kind` est un TemplateKind intégré OU une clé de type personnalisé (« custom_… »).
-function subjectKey(kind: string, serviceId?: string) {
-  return serviceId ? `mail.tpl.${serviceId}.${kind}.subject` : `mail.tpl.${kind}.subject`;
-}
-function htmlKey(kind: string, serviceId?: string) {
-  return serviceId ? `mail.tpl.${serviceId}.${kind}.html` : `mail.tpl.${kind}.html`;
-}
-
+// ── Stockage UNIFIÉ : table `mail_types` (clé composite (serviceId, key), "" = global) ──
 const builtinDefault = (kind: string): MailTemplate | undefined =>
   (DEFAULT_TEMPLATES as Record<string, MailTemplate>)[kind];
 
+const scopeOf = (serviceId?: string): string => serviceId ?? "";
+const pick = (...vals: (string | undefined)[]): string =>
+  vals.find((v) => v && v.trim() !== "") ?? "";
+
 /**
- * Gabarit effectif d'un type d'e-mail. Repli en cascade :
- *   surcharge service → couche globale → défaut intégré (s'il existe).
- * Les types INTÉGRÉS de réservation n'ont pas de couche globale (jamais écrite) → ils
- * retombent sur le défaut. Les types PERSONNALISÉS (« custom_… ») n'ont pas de défaut
- * intégré → leur contenu « par défaut » est leur couche globale (créée à l'ajout).
+ * Gabarit effectif d'un type d'e-mail. Cascade : surcharge service → ligne globale →
+ * défaut intégré (`DEFAULT_TEMPLATES`, repli de sûreté). Tout est lu dans `mail_types`.
  */
 export async function getMailTemplate(kind: string, serviceId?: string): Promise<MailTemplate> {
-  const keys = [subjectKey(kind), htmlKey(kind)];
-  if (serviceId) keys.push(subjectKey(kind, serviceId), htmlKey(kind, serviceId));
-  const cfg = await getConfigMany(keys);
-  const svcSub = serviceId ? cfg[subjectKey(kind, serviceId)].trim() : "";
-  const svcHtml = serviceId ? cfg[htmlKey(kind, serviceId)].trim() : "";
+  const scopes = serviceId ? [serviceId, ""] : [""];
+  const rows = await prisma.mailType.findMany({
+    where: { key: kind, serviceId: { in: scopes } },
+    select: { serviceId: true, subject: true, html: true },
+  });
+  const svc = serviceId ? rows.find((r) => r.serviceId === serviceId) : undefined;
+  const glob = rows.find((r) => r.serviceId === "");
   const def = builtinDefault(kind);
-  const subject = svcSub || cfg[subjectKey(kind)].trim() || def?.subject || "";
-  const html = svcHtml || cfg[htmlKey(kind)].trim() || def?.html || "";
-  return { subject, html };
+  return {
+    subject: pick(svc?.subject, glob?.subject, def?.subject),
+    html: pick(svc?.html, glob?.html, def?.html),
+  };
 }
 
 /**
- * Enregistre la surcharge d'un gabarit (par service si `serviceId`, sinon couche globale).
- * Pour un type INTÉGRÉ, si le contenu == défaut (ou vide) la surcharge est EFFACÉE (la clé
- * `app_config` est supprimée, pas laissée vide) → retour au défaut, sans ligne résiduelle.
- * Pour un type PERSONNALISÉ (sans défaut intégré), vide ⇒ efface aussi.
+ * Enregistre le contenu (objet + corps) d'un type d'e-mail dans `mail_types`.
+ *  - Surcharge PAR SERVICE d'un type INTÉGRÉ : si == la base (globale/défaut), la ligne de
+ *    surcharge est SUPPRIMÉE (retour à la base, sans ligne résiduelle) ; sinon upsert.
+ *  - Ligne globale d'un intégré, ou type personnalisé (toute portée) : upsert (la ligne existe).
  */
 export async function setMailTemplate(
   kind: string,
@@ -243,33 +240,33 @@ export async function setMailTemplate(
   html: string,
   serviceId?: string,
 ): Promise<void> {
-  const def = builtinDefault(kind);
-  const s = subject.trim();
-  const h = html.trim();
-  const subjVal = s && (!def || s !== def.subject.trim()) ? subject : "";
-  const htmlVal = h && (!def || h !== def.html.trim()) ? html : "";
+  const scope = scopeOf(serviceId);
+  const builtin = (TEMPLATE_KINDS as readonly string[]).includes(kind);
 
-  const toSet: Record<string, string> = {};
-  const toDel: string[] = [];
-  if (subjVal) toSet[subjectKey(kind, serviceId)] = subjVal;
-  else toDel.push(subjectKey(kind, serviceId));
-  if (htmlVal) toSet[htmlKey(kind, serviceId)] = htmlVal;
-  else toDel.push(htmlKey(kind, serviceId));
+  if (scope !== "" && builtin) {
+    const base = await getMailTemplate(kind, ""); // base globale (ou défaut code)
+    if (subject.trim() === base.subject.trim() && html.trim() === base.html.trim()) {
+      await prisma.mailType.deleteMany({ where: { serviceId: scope, key: kind } });
+      return;
+    }
+    await prisma.mailType.upsert({
+      where: { serviceId_key: { serviceId: scope, key: kind } },
+      update: { subject, html },
+      create: { serviceId: scope, key: kind, subject, html, builtin: true },
+    });
+    return;
+  }
 
-  if (Object.keys(toSet).length > 0) await setConfigMany(toSet);
-  if (toDel.length > 0) await deleteConfig(toDel);
+  await prisma.mailType.upsert({
+    where: { serviceId_key: { serviceId: scope, key: kind } },
+    update: { subject, html },
+    create: { serviceId: scope, key: kind, subject, html, builtin },
+  });
 }
 
-// ── Types d'e-mails PERSONNALISÉS ───────────────────────────────────────────────────
-//  Deux portées, même mécanique (serviceId optionnel) :
-//   - PAR SERVICE  : registre `mail.custom.types.<serviceId>`, contenu `mail.tpl.<serviceId>.<key>.*`
-//                    (créés par le gestionnaire dans « Modèles d'e-mails » du service) ;
-//   - GLOBAL (admin): registre `mail.custom.types`, contenu `mail.tpl.<key>.*` (couche globale)
-//                    (créés dans Messagerie « Modèles d'e-mails (tous services) »), routables partout.
-//  serviceId omis ⇒ portée GLOBALE.
+// ── Types d'e-mails PERSONNALISÉS (lignes `mail_types` avec builtin = false) ──────────
+//  serviceId fourni ⇒ type DU SERVICE (serviceId = "<svc>") ; omis ⇒ type GLOBAL (serviceId = "").
 export type CustomMailType = { key: string; label: string; description: string; recipient: string };
-const customTypesKey = (serviceId?: string) =>
-  serviceId ? `mail.custom.types.${serviceId}` : "mail.custom.types";
 const DEFAULT_CUSTOM_RECIPIENT = "L'usager concerné";
 
 /** Gabarit de départ d'un type personnalisé (sert aussi de cible au bouton « Réinitialiser »). */
@@ -295,83 +292,82 @@ export const CUSTOM_MAIL_VARS: MailVar[] = [
 ];
 
 export async function listCustomMailTypes(serviceId?: string): Promise<CustomMailType[]> {
-  const key = customTypesKey(serviceId);
-  const cfg = await getConfigMany([key]);
-  try {
-    const arr = JSON.parse(cfg[key] || "[]");
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter((t) => !!t?.key && typeof t.label === "string")
-      .map((t) => ({
-        key: t.key as string,
-        label: t.label as string,
-        description: typeof t.description === "string" ? t.description : "",
-        recipient: typeof t.recipient === "string" ? t.recipient : DEFAULT_CUSTOM_RECIPIENT,
-      }));
-  } catch {
-    return [];
-  }
+  const rows = await prisma.mailType.findMany({
+    where: { serviceId: scopeOf(serviceId), builtin: false },
+    orderBy: { createdAt: "asc" },
+    select: { key: true, label: true, description: true, recipient: true },
+  });
+  return rows.map((r) => ({
+    key: r.key,
+    label: r.label,
+    description: r.description,
+    recipient: r.recipient || DEFAULT_CUSTOM_RECIPIENT,
+  }));
 }
 
 export async function isCustomMailType(key: string, serviceId?: string): Promise<boolean> {
-  return (await listCustomMailTypes(serviceId)).some((t) => t.key === key);
+  const row = await prisma.mailType.findUnique({
+    where: { serviceId_key: { serviceId: scopeOf(serviceId), key } },
+    select: { builtin: true },
+  });
+  return !!row && !row.builtin;
 }
 
 /**
- * Ce type personnalisé est-il routé par un service (clés `mail.route.*`) ?
+ * Ce type personnalisé est-il routé par un service (clés `mail.route.*` d'app_config) ?
  * Portée service → routes de CE service ; portée globale → routes de N'IMPORTE quel service.
  */
 export async function isCustomMailTypeUsed(key: string, serviceId?: string): Promise<boolean> {
   return isConfigValueUsed(serviceId ? `mail.route.${serviceId}.` : "mail.route.", key);
 }
 
-/** Crée un type personnalisé (clé unique + libellé) avec un gabarit de départ. serviceId omis ⇒ global. */
+/** Crée un type personnalisé (clé unique + libellé + contenu de départ). serviceId omis ⇒ global. */
 export async function createCustomMailType(
   serviceId: string | undefined,
   label: string,
   description = "",
   recipient: string = DEFAULT_CUSTOM_RECIPIENT,
 ): Promise<CustomMailType> {
-  const types = await listCustomMailTypes(serviceId);
   const key = `custom_${crypto.randomUUID().slice(0, 8)}`;
-  const t: CustomMailType = { key, label, description, recipient };
-  await setConfigMany({ [customTypesKey(serviceId)]: JSON.stringify([...types, t]) });
-  // Gabarit de départ stocké au niveau du service (modifiable ensuite).
   const starter = customStarterTemplate(label);
-  await setMailTemplate(key, starter.subject, starter.html, serviceId);
-  return t;
+  await prisma.mailType.create({
+    data: {
+      serviceId: scopeOf(serviceId),
+      key,
+      label,
+      description,
+      recipient,
+      subject: starter.subject,
+      html: starter.html,
+      builtin: false,
+    },
+  });
+  return { key, label, description, recipient };
 }
 
-/** Met à jour les métadonnées (nom / description / destinataire) d'un type personnalisé. serviceId omis ⇒ global. */
+/** Met à jour les métadonnées (nom / description / destinataire) d'un type personnalisé. */
 export async function updateCustomMailType(
   serviceId: string | undefined,
   key: string,
   fields: { label: string; description: string; recipient: string },
 ): Promise<void> {
-  const types = await listCustomMailTypes(serviceId);
-  await setConfigMany({
-    [customTypesKey(serviceId)]: JSON.stringify(
-      types.map((t) => (t.key === key ? { ...t, ...fields } : t)),
-    ),
+  await prisma.mailType.update({
+    where: { serviceId_key: { serviceId: scopeOf(serviceId), key } },
+    data: { label: fields.label, description: fields.description, recipient: fields.recipient },
   });
 }
 
 /**
- * Supprime un type personnalisé du service : retire l'entrée du registre ET efface son
- * contenu de gabarit propre au service (`mail.tpl.<svc>.<key>.subject/html`), pour ne pas
- * laisser de lignes `app_config` orphelines. Les routages le pointant retombent sur le défaut.
+ * Supprime un type personnalisé. Global ⇒ supprime la ligne globale ET ses éventuelles
+ * surcharges par service (même `key`). Par service ⇒ supprime la seule ligne du service.
+ * Les routages le pointant retombent sur le défaut (cf. resolveTriggerKind).
  */
 export async function deleteCustomMailType(
   serviceId: string | undefined,
   key: string,
 ): Promise<void> {
-  const types = (await listCustomMailTypes(serviceId)).filter((t) => t.key !== key);
-  const regKey = customTypesKey(serviceId);
-  // Registre : on réécrit s'il reste des types, sinon on supprime la clé (pas de « [] » résiduel).
-  if (types.length > 0) await setConfigMany({ [regKey]: JSON.stringify(types) });
-  else await deleteConfig([regKey]);
-  // Contenu de gabarit propre au service (évite les lignes app_config orphelines).
-  await deleteConfig([subjectKey(key, serviceId), htmlKey(key, serviceId)]);
+  if (scopeOf(serviceId) === "") await prisma.mailType.deleteMany({ where: { key } });
+  else await prisma.mailType.deleteMany({ where: { serviceId, key } });
 }
 
 function escapeHtml(s: string): string {

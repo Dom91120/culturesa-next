@@ -3,10 +3,11 @@
  * Idempotent : peut être relancé sans dupliquer.
  *   pnpm db:seed
  */
-import { defaultMailTypes } from "@/app/(admin)/echanges/mail-rows";
+import { SYSTEM_MAIL_KINDS, defaultMailTypes } from "@/app/(admin)/echanges/mail-rows";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { defaultMailTriggers } from "@/server/services/mail-prefs";
+import { DEFAULT_TEMPLATES } from "@/server/services/mail-templates";
 
 async function main() {
   // ── Demandeurs ──
@@ -489,16 +490,40 @@ async function main() {
   }
   console.log(`✓ ${triggers.length} déclencheurs d'e-mails (référentiel).`);
 
-  // ── Métadonnées des types d'e-mail intégrés (référentiel persisté en base) ──
+  // ── Types d'e-mail INTÉGRÉS (lignes globales de mail_types : métadonnées + contenu) ──
+  const systemSet = new Set<string>(SYSTEM_MAIL_KINDS);
   const mailTypes = defaultMailTypes();
+  let mtPos = 0;
   for (const { key, meta } of mailTypes) {
+    mtPos += 1;
+    const def = (DEFAULT_TEMPLATES as Record<string, { subject: string; html: string }>)[key];
     await prisma.mailType.upsert({
-      where: { key },
-      update: { label: meta.label, description: meta.description, recipient: meta.recipient },
-      create: { key, label: meta.label, description: meta.description, recipient: meta.recipient },
+      where: { serviceId_key: { serviceId: "", key } },
+      // Mise à jour : métadonnées + drapeaux/ordre (le CONTENU n'est PAS écrasé → préserve
+      // d'éventuelles éditions admin lors d'un reseed).
+      update: {
+        label: meta.label,
+        description: meta.description,
+        recipient: meta.recipient,
+        builtin: true,
+        system: systemSet.has(key),
+        position: mtPos,
+      },
+      create: {
+        serviceId: "",
+        key,
+        label: meta.label,
+        description: meta.description,
+        recipient: meta.recipient,
+        subject: def?.subject ?? "",
+        html: def?.html ?? "",
+        builtin: true,
+        system: systemSet.has(key),
+        position: mtPos,
+      },
     });
   }
-  console.log(`✓ ${mailTypes.length} types d'e-mail intégrés (métadonnées).`);
+  console.log(`✓ ${mailTypes.length} types d'e-mail intégrés (métadonnées + contenu).`);
 
   // ── Resync des séquences d'auto-increment ──
   // Les blocs ci-dessus insèrent des id EXPLICITES (1, 2, 3…) sans faire avancer
