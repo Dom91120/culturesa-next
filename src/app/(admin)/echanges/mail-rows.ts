@@ -144,6 +144,7 @@ export async function getMailRows(
   // « Verrouillé » = e-mail système (toujours envoyé). Les types de réservation ne le sont
   // pas (leur envoi est piloté par action, cf. « Échanges par mail »).
   const toggleable = new Set<string>(MAIL_KINDS);
+  const systemSet = new Set<string>(SYSTEM_MAIL_KINDS);
 
   return kinds.map((kind, i) => {
     const m = meta[kind] ?? META[kind];
@@ -153,6 +154,10 @@ export async function getMailRows(
       description: m.description,
       recipient: m.recipient,
       locked: !toggleable.has(kind),
+      // « Système » = e-mail compte/sécurité TOUJOURS envoyé. `manager_digest`
+      // (Auto-validations) est listé ici mais son envoi est réglé PAR SERVICE
+      // (Paramètres › Réservations) → pas « système ».
+      system: systemSet.has(kind) && kind !== "manager_digest",
       subject: templates[i].subject,
       html: templates[i].html,
       defaultSubject: DEFAULT_TEMPLATES[kind].subject,
@@ -211,6 +216,7 @@ async function customRows(serviceId?: string): Promise<KindData[]> {
         description: t.description, // brut (éditable) ; peut être vide
         recipient: t.recipient,
         locked: false,
+        system: false,
         deletable: true,
         used,
         subject: content.subject,

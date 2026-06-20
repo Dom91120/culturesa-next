@@ -19,6 +19,8 @@ export type KindData = {
   recipient: string;
   // Verrouillé : e-mail système, toujours envoyé (case « Envoyer » cochée et non modifiable).
   locked: boolean;
+  // E-mail système (compte/sécurité) : affiché dans la colonne « Système » (case cochée).
+  system: boolean;
   // Type d'e-mail personnalisé (modifiable/supprimable). Absent/false → type intégré.
   deletable?: boolean;
   // Routé par au moins un service → suppression interdite (bouton désactivé).
@@ -83,6 +85,7 @@ export function EchangesConfig({
   intro,
   panelId = "echanges-panel",
   serviceId,
+  showSystem = false,
   showRecipient = false,
   showSend = true,
   allowCreate = false,
@@ -99,6 +102,8 @@ export function EchangesConfig({
   // Fourni → gabarits/préférences réglés PAR SERVICE (e-mails de réservation) ; absent →
   // portée globale (e-mails système).
   serviceId?: string;
+  // Affiche une colonne « Système » (case cochée/désactivée si e-mail système).
+  showSystem?: boolean;
   // Affiche une colonne « Destinataire » (panel « E-mails automatiques »).
   showRecipient?: boolean;
   // Affiche la colonne « Envoyer » (masquée dans « Modèles d'e-mails » : l'envoi se règle
@@ -236,6 +241,7 @@ export function EchangesConfig({
         <thead>
           <tr>
             <th style={th("left")}>Type d&apos;e-mail</th>
+            {showSystem && <th style={{ ...th("center"), width: 80 }}>Système</th>}
             {showRecipient && <th style={{ ...th("left"), width: 200 }}>Destinataire</th>}
             {showSend && <th style={{ ...th("center"), width: 90 }}>Envoyer</th>}
             <th style={{ ...th("center"), width: 140 }}>{contentLabel}</th>
@@ -247,6 +253,7 @@ export function EchangesConfig({
             <Row
               key={r.kind}
               r={r}
+              showSystem={showSystem}
               showRecipient={showRecipient}
               showSend={showSend}
               showAction={allowCreate}
@@ -465,6 +472,7 @@ function th(align: "left" | "center"): React.CSSProperties {
 
 function Row({
   r,
+  showSystem = false,
   showRecipient,
   showSend = true,
   showAction = false,
@@ -474,6 +482,7 @@ function Row({
   onAskDelete,
 }: {
   r: KindData;
+  showSystem?: boolean;
   showRecipient: boolean;
   showSend?: boolean;
   // Affiche la colonne « Action » (admin, « Modèles d'e-mails »).
@@ -492,31 +501,26 @@ function Row({
   return (
     <tr>
       <td style={cell}>
-        <div style={{ display: "flex", alignItems: "center", gap: ".4rem", flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 600 }}>{r.label}</span>
-          {/* E-mail système : toujours envoyé (remplace l'ancienne case « Envoyer » verrouillée). */}
-          {r.locked && (
-            <span
-              title="Cet e-mail est toujours envoyé (non désactivable)."
-              style={{
-                fontSize: ".66rem",
-                color: "var(--muted)",
-                border: "1px solid var(--border)",
-                borderRadius: "999px",
-                padding: ".02rem .4rem",
-                whiteSpace: "nowrap",
-              }}
-            >
-              toujours envoyé
-            </span>
-          )}
-        </div>
+        <div style={{ fontWeight: 600 }}>{r.label}</div>
         {r.description && (
           <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
             {r.description}
           </div>
         )}
       </td>
+      {showSystem && (
+        <td style={{ ...cell, textAlign: "center" }}>
+          <input
+            type="checkbox"
+            aria-label={`Système : ${r.label}`}
+            checked={r.system}
+            disabled
+            readOnly
+            title={r.system ? "E-mail système" : "E-mail de réservation (non système)"}
+            style={{ width: 16, height: 16, cursor: "default" }}
+          />
+        </td>
+      )}
       {showRecipient && (
         <td style={{ ...cell, fontSize: ".82rem" }}>
           {/* Destinataire intrinsèque (e-mails système) ; pour les e-mails de réservation il se

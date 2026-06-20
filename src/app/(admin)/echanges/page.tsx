@@ -24,6 +24,7 @@ export default async function EchangesAdminPage() {
       rows={rows}
       title="Modèles d'e-mails"
       panelId="admin-modeles-panel"
+      showSystem
       showRecipient
       showSend={false}
       allowCreate
