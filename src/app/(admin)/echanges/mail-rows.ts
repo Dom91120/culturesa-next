@@ -180,14 +180,14 @@ export type RoutingRow = {
 };
 
 /**
- * Lignes du sous-onglet « Échanges par mail » : une par ACTION (déclencheur), avec le
- * type d'e-mail EFFECTIF (re-routable) et la préférence d'envoi propre à l'action.
+ * Lignes de « Échanges par mail » (GLOBAL, administrateur) : une par ACTION (déclencheur),
+ * avec le type d'e-mail EFFECTIF (re-routable), la préférence d'envoi et le destinataire.
  */
-export async function getRoutingRows(serviceId: string): Promise<RoutingRow[]> {
+export async function getRoutingRows(): Promise<RoutingRow[]> {
   const [prefs, kinds, recipients, triggers] = await Promise.all([
-    getTriggerPrefs(serviceId),
-    getTriggerKinds(serviceId),
-    getTriggerRecipients(serviceId),
+    getTriggerPrefs(),
+    getTriggerKinds(),
+    getTriggerRecipients(),
     listMailTriggers(), // référentiel persisté (libellé + ordre)
   ]);
   return triggers.map((t) => ({
@@ -231,15 +231,12 @@ async function customRows(serviceId?: string): Promise<KindData[]> {
 }
 
 /**
- * Lignes du sous-onglet « Modèles d'e-mails » d'un SERVICE : types intégrés (contenu propre
- * au service) PUIS types personnalisés du service (supprimables).
+ * Lignes du « Modèles d'e-mails » d'un SERVICE : types intégrés de réservation, avec le
+ * contenu propre au service (surcharge du contenu global). Un service ne fait que SURCHARGER
+ * le contenu — la création de types personnalisés est centralisée en administration (globale).
  */
 export async function getModeleRows(serviceId: string): Promise<KindData[]> {
-  const [builtin, custom] = await Promise.all([
-    getMailRows(MAIL_KINDS, serviceId),
-    customRows(serviceId),
-  ]);
-  return [...builtin, ...custom];
+  return getMailRows(MAIL_KINDS, serviceId);
 }
 
 /**
@@ -253,21 +250,12 @@ export async function getGlobalModeleRows(): Promise<KindData[]> {
 }
 
 /**
- * Options du menu « Type d'e-mail » (Échanges par mail) : intégrés + personnalisés du
- * service + personnalisés GLOBAUX (tous services).
+ * Options du menu « Type d'e-mail » (« Échanges par mail », GLOBAL) : types intégrés +
+ * types personnalisés GLOBAUX. Le routage étant global, on ne propose PAS les types perso
+ * d'un service (ils ne seraient ciblables que dans leur service).
  */
-export async function getKindOptions(
-  serviceId: string,
-): Promise<{ value: string; label: string }[]> {
-  const [meta, custom, global] = await Promise.all([
-    getMailTypeMeta(),
-    listCustomMailTypes(serviceId),
-    listCustomMailTypes(),
-  ]);
+export async function getKindOptions(): Promise<{ value: string; label: string }[]> {
+  const [meta, global] = await Promise.all([getMailTypeMeta(), listCustomMailTypes()]);
   const builtin = MAIL_KINDS.map((k) => ({ value: k, label: (meta[k] ?? META[k]).label }));
-  return [
-    ...builtin,
-    ...global.map((t) => ({ value: t.key, label: `${t.label} (tous services)` })),
-    ...custom.map((t) => ({ value: t.key, label: t.label })),
-  ];
+  return [...builtin, ...global.map((t) => ({ value: t.key, label: t.label }))];
 }

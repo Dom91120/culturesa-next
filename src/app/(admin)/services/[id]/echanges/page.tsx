@@ -1,13 +1,13 @@
-import { EchangesTabs } from "@/app/(admin)/echanges/echanges-tabs";
-import { getKindOptions, getModeleRows, getRoutingRows } from "@/app/(admin)/echanges/mail-rows";
-import { canManageService } from "@/server/guards";
+import { EchangesConfig } from "@/app/(admin)/echanges/echanges-config";
+import { getModeleRows } from "@/app/(admin)/echanges/mail-rows";
 import { getService } from "@/server/services/services";
 import { notFound } from "next/navigation";
 import { ParamsSubnav } from "../params-subnav";
 
-// Onglet « Échanges » des Paramètres d'un service, en deux sous-onglets :
-//  - « Échanges par mail » : routage action → type d'e-mail (re-routable) + envoi par action ;
-//  - « Modèles d'e-mails » : contenu par type d'e-mail (+ création de types personnalisés).
+// Onglet « Échanges » des Paramètres d'un service : CONTENU (objet + corps) des e-mails de
+// réservation, propre au service (surcharge du contenu global). Le routage / le destinataire /
+// l'envoi des actions sont GLOBAUX (Administration › Échanges › « Échanges par mail ») ; la
+// création de types personnalisés est centralisée en administration (types globaux).
 export default async function ServiceEchangesPage({
   params,
 }: {
@@ -17,23 +17,21 @@ export default async function ServiceEchangesPage({
   const service = await getService(id);
   if (!service) notFound();
 
-  const [canManage, routingRows, modeleRows, kindOptions] = await Promise.all([
-    canManageService(id),
-    getRoutingRows(id),
-    getModeleRows(id),
-    getKindOptions(id),
-  ]);
+  const modeleRows = await getModeleRows(id);
 
   return (
     <div>
       <ParamsSubnav serviceId={id} />
-      <EchangesTabs
+      <EchangesConfig
+        // Remonte le composant si l'ensemble des types change.
+        key={modeleRows.map((r) => r.kind).join(",")}
+        rows={modeleRows}
         serviceId={id}
-        serviceLabel={service.label}
-        routingRows={routingRows}
-        kindOptions={kindOptions}
-        modeleRows={modeleRows}
-        canManage={canManage}
+        showSend={false}
+        allowCreate={false}
+        title="Modèles d'e-mails"
+        panelId="modeles-panel"
+        intro="Contenu (objet + corps) de chaque e-mail de réservation, propre à ce service. À défaut de personnalisation ici, le contenu global (Administration › Échanges) est utilisé. Le routage, le destinataire et l'envoi des actions sont communs à tous les services (Administration › Échanges › « Échanges par mail »)."
       />
     </div>
   );

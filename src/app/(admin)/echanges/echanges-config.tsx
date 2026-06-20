@@ -257,7 +257,10 @@ export function EchangesConfig({
               showRecipient={showRecipient}
               showSend={showSend}
               showAction={allowCreate}
-              editable={allowCreate && !!r.deletable}
+              // ✏️ (nom/description) : types perso, OU types intégrés en portée GLOBALE (admin).
+              canEditMeta={allowCreate && (!!r.deletable || !serviceId)}
+              // 🗑️ : types personnalisés uniquement.
+              canDelete={allowCreate && !!r.deletable}
               onEdit={() => setEditing(r.kind)}
               onEditMeta={() =>
                 setMetaEdit({
@@ -476,7 +479,8 @@ function Row({
   showRecipient,
   showSend = true,
   showAction = false,
-  editable = false,
+  canEditMeta = false,
+  canDelete = false,
   onEdit,
   onEditMeta,
   onAskDelete,
@@ -487,8 +491,10 @@ function Row({
   showSend?: boolean;
   // Affiche la colonne « Action » (admin, « Modèles d'e-mails »).
   showAction?: boolean;
-  // Type personnalisé : modifiable (métadonnées) et supprimable.
-  editable?: boolean;
+  // Métadonnées (nom/description) éditables : types perso, ou types intégrés au niveau global.
+  canEditMeta?: boolean;
+  // Supprimable : types personnalisés uniquement.
+  canDelete?: boolean;
   onEdit: () => void;
   onEditMeta?: () => void;
   // Demande la suppression : ouvre la modale de confirmation (--danger) au niveau du parent.
@@ -524,15 +530,15 @@ function Row({
       {showRecipient && (
         <td style={{ ...cell, fontSize: ".82rem" }}>
           {/* Destinataire intrinsèque (e-mails système) ; pour les e-mails de réservation il se
-              règle PAR SERVICE (onglet « Échanges par mail » de chaque service, colonne Destinataire). */}
+              règle GLOBALEMENT dans « Échanges par mail » (colonne Destinataire). */}
           {r.locked ? (
             r.recipient
           ) : (
             <span
               style={{ color: "var(--muted)" }}
-              title="Défini par service dans « Échanges par mail » (colonne Destinataire)."
+              title="Défini dans « Échanges par mail » (colonne Destinataire), commun à tous les services."
             >
-              — (par service)
+              — (voir « Échanges par mail »)
             </span>
           )}
         </td>
@@ -563,41 +569,45 @@ function Row({
       </td>
       {showAction && (
         <td style={{ ...cell, textAlign: "center" }}>
-          {!editable ? (
+          {!canEditMeta && !canDelete ? (
             <span style={{ color: "var(--muted)" }}>—</span>
           ) : (
             <span style={{ display: "inline-flex", alignItems: "center", gap: ".35rem" }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={onEditMeta}
-                title="Modifier le nom, la description et le destinataire"
-                aria-label={`Modifier le type : ${r.label}`}
-                style={{ padding: ".25rem .5rem", fontSize: ".76rem" }}
-              >
-                ✏️
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={onAskDelete}
-                disabled={r.used}
-                title={
-                  r.used
-                    ? "Type utilisé par au moins un service : retirez-le des actions avant de le supprimer."
-                    : "Supprimer ce type d'e-mail"
-                }
-                aria-label={`Supprimer le type : ${r.label}`}
-                style={{
-                  padding: ".25rem .45rem",
-                  fontSize: ".76rem",
-                  color: r.used ? "var(--muted)" : "#e05555",
-                  borderColor: r.used ? "var(--border)" : "rgba(220,80,80,.4)",
-                  cursor: r.used ? "not-allowed" : "pointer",
-                }}
-              >
-                🗑️
-              </button>
+              {canEditMeta && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={onEditMeta}
+                  title="Modifier le nom et la description"
+                  aria-label={`Modifier le type : ${r.label}`}
+                  style={{ padding: ".25rem .5rem", fontSize: ".76rem" }}
+                >
+                  ✏️
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={onAskDelete}
+                  disabled={r.used}
+                  title={
+                    r.used
+                      ? "Type utilisé par au moins un service : retirez-le des actions avant de le supprimer."
+                      : "Supprimer ce type d'e-mail"
+                  }
+                  aria-label={`Supprimer le type : ${r.label}`}
+                  style={{
+                    padding: ".25rem .45rem",
+                    fontSize: ".76rem",
+                    color: r.used ? "var(--muted)" : "#e05555",
+                    borderColor: r.used ? "var(--border)" : "rgba(220,80,80,.4)",
+                    cursor: r.used ? "not-allowed" : "pointer",
+                  }}
+                >
+                  🗑️
+                </button>
+              )}
             </span>
           )}
         </td>

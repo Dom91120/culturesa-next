@@ -12,20 +12,19 @@ const RECIPIENT_OPTS: { value: string; label: string }[] = [
 ];
 
 /**
- * Sous-onglet « Échanges par mail » : une ligne par ACTION (déclencheur).
+ * « Échanges par mail » (GLOBAL, administrateur) : une ligne par ACTION (déclencheur).
  *  - « Type d'e-mail » : menu déroulant — re-route l'action vers un autre type d'e-mail.
  *  - « Destinataire » : qui reçoit l'e-mail de CETTE action (défaut : l'usager concerné).
  *  - « Envoyer » : active/désactive l'envoi pour CETTE action.
- * Le CONTENU des e-mails se règle dans le sous-onglet « Modèles d'e-mails ».
+ * Réglages communs à tous les services. Le CONTENU des e-mails se règle dans « Modèles d'e-mails »
+ * (global en administration, surchargeable par service).
  */
 export function MailRoutingTable({
   rows,
   kindOptions,
-  serviceId,
 }: {
   rows: RoutingRow[];
   kindOptions: { value: string; label: string }[];
-  serviceId: string;
 }) {
   const [kind, setKind] = useState<Record<string, string>>(
     Object.fromEntries(rows.map((r) => [r.triggerKey, r.kind])),
@@ -47,7 +46,7 @@ export function MailRoutingTable({
     setMsg(null);
     setKind((s) => ({ ...s, [t]: value }));
     startTransition(async () => {
-      const res = await setTriggerKindAction(t, value, serviceId);
+      const res = await setTriggerKindAction(t, value);
       if (res && !res.ok) {
         setKind((s) => ({ ...s, [t]: prev }));
         setMsg({ ok: false, text: res.error ?? "Échec de l'enregistrement." });
@@ -61,7 +60,7 @@ export function MailRoutingTable({
     setMsg(null);
     setEnabled((s) => ({ ...s, [t]: value }));
     startTransition(async () => {
-      const res = await setMailTriggerAction(t, value, serviceId);
+      const res = await setMailTriggerAction(t, value);
       if (res && !res.ok) {
         setEnabled((s) => ({ ...s, [t]: !value }));
         setMsg({ ok: false, text: res.error ?? "Échec de l'enregistrement." });
@@ -73,7 +72,7 @@ export function MailRoutingTable({
 
   function persistRecipient(t: string, k: string, a: string, prevK: string, prevA: string) {
     startTransition(async () => {
-      const res = await setTriggerRecipientAction(t, k, a, serviceId);
+      const res = await setTriggerRecipientAction(t, k, a);
       if (res && !res.ok) {
         setRecip((s) => ({ ...s, [t]: prevK }));
         setAddr((s) => ({ ...s, [t]: prevA }));

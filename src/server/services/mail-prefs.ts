@@ -127,44 +127,41 @@ export const TRIGGER_KIND = Object.fromEntries(
 export const isBookingTrigger = (v: string): v is BookingTrigger =>
   (BOOKING_TRIGGERS as readonly string[]).includes(v);
 
-function triggerKey(t: BookingTrigger, serviceId?: string): string {
-  return serviceId ? `mail.send.${serviceId}.t.${t}` : `mail.send.t.${t}`;
+// ── Réglages PAR ACTION, désormais GLOBAUX (administrateur), plus par service ──
+//  Routage (type d'e-mail), envoi (« Envoyer ») et destinataire : une seule config pour
+//  TOUS les services (« Échanges par mail » au niveau administrateur). Seul le CONTENU des
+//  gabarits reste surchargeable par service (cf. mail-templates / getMailTemplate).
+function sendKey(t: BookingTrigger): string {
+  return `mail.send.t.${t}`;
 }
 
 /** Un déclencheur envoie par défaut ; désactivé seulement si la valeur stockée = "0". */
-export async function isTriggerEnabled(t: BookingTrigger, serviceId?: string): Promise<boolean> {
-  const key = triggerKey(t, serviceId);
-  const cfg = await getConfigMany([key]);
-  return cfg[key] !== "0";
+export async function isTriggerEnabled(t: BookingTrigger): Promise<boolean> {
+  const cfg = await getConfigMany([sendKey(t)]);
+  return cfg[sendKey(t)] !== "0";
 }
 
-/** État (activé/désactivé) de tous les déclencheurs d'un service. */
-export async function getTriggerPrefs(
-  serviceId?: string,
-): Promise<Record<BookingTrigger, boolean>> {
-  const cfg = await getConfigMany(BOOKING_TRIGGERS.map((t) => triggerKey(t, serviceId)));
+/** État (activé/désactivé) de tous les déclencheurs (global). */
+export async function getTriggerPrefs(): Promise<Record<BookingTrigger, boolean>> {
+  const cfg = await getConfigMany(BOOKING_TRIGGERS.map((t) => sendKey(t)));
   const out = {} as Record<BookingTrigger, boolean>;
-  for (const t of BOOKING_TRIGGERS) out[t] = cfg[triggerKey(t, serviceId)] !== "0";
+  for (const t of BOOKING_TRIGGERS) out[t] = cfg[sendKey(t)] !== "0";
   return out;
 }
 
-/** Active/désactive l'envoi d'e-mail pour une action précise (par service si `serviceId`). */
-export async function setTriggerEnabled(
-  t: BookingTrigger,
-  enabled: boolean,
-  serviceId?: string,
-): Promise<void> {
-  await setConfig(triggerKey(t, serviceId), enabled ? "1" : "0");
+/** Active/désactive l'envoi d'e-mail pour une action précise (global). */
+export async function setTriggerEnabled(t: BookingTrigger, enabled: boolean): Promise<void> {
+  await setConfig(sendKey(t), enabled ? "1" : "0");
 }
 
-// ── Routage déclencheur → type d'e-mail (sélectionnable par service) ─────────
-//  Par défaut, chaque action utilise le type d'e-mail de TRIGGER_KIND. Un service
-//  peut RE-ROUTER une action vers un autre type via le sous-onglet « Échanges par
-//  mail » (le contenu reste celui du type choisi, défini dans « Modèles d'e-mails »).
+// ── Routage déclencheur → type d'e-mail (GLOBAL) ─────────────────────────────
+//  Par défaut, chaque action utilise le type d'e-mail de TRIGGER_KIND. L'administrateur
+//  peut RE-ROUTER une action vers un autre type via « Échanges par mail » (global). Le
+//  contenu reste celui du type choisi (surchargeable par service dans « Modèles d'e-mails »).
 const isMailKind = (v: string): v is MailKind => (MAIL_KINDS as readonly string[]).includes(v);
 
-function routeKey(t: BookingTrigger, serviceId: string): string {
-  return `mail.route.${serviceId}.${t}`;
+function routeKey(t: BookingTrigger): string {
+  return `mail.route.${t}`;
 }
 
 /**
@@ -206,54 +203,47 @@ async function triggerDefaultMap(): Promise<Record<BookingTrigger, MailKind>> {
   return map;
 }
 
-// Un override de routage est valide si la cible existe encore : type intégré, type
-// personnalisé DU SERVICE, ou type personnalisé GLOBAL. Sinon (type supprimé), on retombe
-// sur le défaut du déclencheur.
-async function isValidKind(v: string, serviceId: string): Promise<boolean> {
-  return isMailKind(v) || (await isCustomMailType(v, serviceId)) || (await isCustomMailType(v));
+// Un override de routage est valide si la cible existe encore : type intégré OU type
+// personnalisé GLOBAL. (Le routage étant global, on ne peut pas cibler un type perso d'un
+// service.) Sinon (type supprimé), on retombe sur le défaut du déclencheur.
+async function isValidKind(v: string): Promise<boolean> {
+  return isMailKind(v) || (await isCustomMailType(v));
 }
 
-/** Type d'e-mail EFFECTIF d'une action : override du service si valide, sinon défaut (base). */
-export async function resolveTriggerKind(t: BookingTrigger, serviceId?: string): Promise<string> {
+/** Type d'e-mail EFFECTIF d'une action (global) : override si valide, sinon défaut (base). */
+export async function resolveTriggerKind(t: BookingTrigger): Promise<string> {
   const defaults = await triggerDefaultMap();
-  if (!serviceId) return defaults[t];
-  const key = routeKey(t, serviceId);
-  const cfg = await getConfigMany([key]);
-  const v = cfg[key];
-  return v && (await isValidKind(v, serviceId)) ? v : defaults[t];
+  const cfg = await getConfigMany([routeKey(t)]);
+  const v = cfg[routeKey(t)];
+  return v && (await isValidKind(v)) ? v : defaults[t];
 }
 
-/** Mapping effectif (action → type) d'un service, pour l'affichage du tableau. */
-export async function getTriggerKinds(serviceId: string): Promise<Record<BookingTrigger, string>> {
-  const [cfg, customList, globalList, defaults] = await Promise.all([
-    getConfigMany(BOOKING_TRIGGERS.map((t) => routeKey(t, serviceId))),
-    listCustomMailTypes(serviceId),
-    listCustomMailTypes(), // types personnalisés GLOBAUX (tous services)
+/** Mapping effectif (action → type), global, pour l'affichage du tableau. */
+export async function getTriggerKinds(): Promise<Record<BookingTrigger, string>> {
+  const [cfg, globalList, defaults] = await Promise.all([
+    getConfigMany(BOOKING_TRIGGERS.map((t) => routeKey(t))),
+    listCustomMailTypes(), // types personnalisés GLOBAUX (seuls routables en global)
     triggerDefaultMap(),
   ]);
-  const custom = new Set([...customList, ...globalList].map((c) => c.key));
+  const custom = new Set(globalList.map((c) => c.key));
   const out = {} as Record<BookingTrigger, string>;
   for (const t of BOOKING_TRIGGERS) {
-    const v = cfg[routeKey(t, serviceId)];
+    const v = cfg[routeKey(t)];
     out[t] = v && (isMailKind(v) || custom.has(v)) ? v : defaults[t];
   }
   return out;
 }
 
-/** Re-route une action vers un type d'e-mail (par service). */
-export async function setTriggerKind(
-  t: BookingTrigger,
-  kind: string,
-  serviceId: string,
-): Promise<void> {
-  await setConfig(routeKey(t, serviceId), kind);
+/** Re-route une action vers un type d'e-mail (global). */
+export async function setTriggerKind(t: BookingTrigger, kind: string): Promise<void> {
+  await setConfig(routeKey(t), kind);
 }
 
-// ── Destinataire PAR ACTION (déclencheur), par service ───────────────────────
+// ── Destinataire PAR ACTION (déclencheur), GLOBAL ────────────────────────────
 //  Le destinataire dépend de l'ACTION, pas du modèle. Par défaut « usager »
 //  (l'usager concerné) = comportement historique. Les autres options sont
-//  résolues au moment de l'envoi (gestionnaires du service, administrateurs,
-//  ou une/des adresse(s) fixe(s)).
+//  résolues au moment de l'envoi (gestionnaires DU SERVICE concerné par la réservation,
+//  administrateurs, ou une/des adresse(s) fixe(s)).
 export type MailRecipientKind = "usager" | "gestionnaires" | "administrateurs" | "fixe";
 const MAIL_RECIPIENT_KINDS: readonly MailRecipientKind[] = [
   "usager",
@@ -264,65 +254,56 @@ const MAIL_RECIPIENT_KINDS: readonly MailRecipientKind[] = [
 export const isMailRecipientKind = (v: string): v is MailRecipientKind =>
   (MAIL_RECIPIENT_KINDS as readonly string[]).includes(v);
 
-function recipientKey(t: BookingTrigger, serviceId: string): string {
-  return `mail.recipient.${serviceId}.${t}`;
+function recipientKey(t: BookingTrigger): string {
+  return `mail.recipient.${t}`;
 }
-function recipientAddrKey(t: BookingTrigger, serviceId: string): string {
-  return `mail.recipient.${serviceId}.${t}.addr`;
+function recipientAddrKey(t: BookingTrigger): string {
+  return `mail.recipient.${t}.addr`;
 }
 
 export type TriggerRecipient = { kind: MailRecipientKind; addr: string };
 
 /** Réglage destinataire d'une action (défaut « usager » si absent/invalide). */
-export async function getTriggerRecipient(
-  t: BookingTrigger,
-  serviceId: string,
-): Promise<TriggerRecipient> {
-  const cfg = await getConfigMany([recipientKey(t, serviceId), recipientAddrKey(t, serviceId)]);
-  const raw = cfg[recipientKey(t, serviceId)];
+export async function getTriggerRecipient(t: BookingTrigger): Promise<TriggerRecipient> {
+  const cfg = await getConfigMany([recipientKey(t), recipientAddrKey(t)]);
+  const raw = cfg[recipientKey(t)];
   return {
     kind: isMailRecipientKind(raw) ? raw : "usager",
-    addr: cfg[recipientAddrKey(t, serviceId)] ?? "",
+    addr: cfg[recipientAddrKey(t)] ?? "",
   };
 }
 
-/** Réglages destinataire de toutes les actions d'un service (affichage tableau). */
-export async function getTriggerRecipients(
-  serviceId: string,
-): Promise<Record<BookingTrigger, TriggerRecipient>> {
-  const keys = BOOKING_TRIGGERS.flatMap((t) => [
-    recipientKey(t, serviceId),
-    recipientAddrKey(t, serviceId),
-  ]);
+/** Réglages destinataire de toutes les actions (global), pour l'affichage du tableau. */
+export async function getTriggerRecipients(): Promise<Record<BookingTrigger, TriggerRecipient>> {
+  const keys = BOOKING_TRIGGERS.flatMap((t) => [recipientKey(t), recipientAddrKey(t)]);
   const cfg = await getConfigMany(keys);
   const out = {} as Record<BookingTrigger, TriggerRecipient>;
   for (const t of BOOKING_TRIGGERS) {
-    const raw = cfg[recipientKey(t, serviceId)];
+    const raw = cfg[recipientKey(t)];
     out[t] = {
       kind: isMailRecipientKind(raw) ? raw : "usager",
-      addr: cfg[recipientAddrKey(t, serviceId)] ?? "",
+      addr: cfg[recipientAddrKey(t)] ?? "",
     };
   }
   return out;
 }
 
 /**
- * Définit le destinataire d'une action. Le défaut « usager » n'est PAS stocké (les clés
- * sont supprimées) pour ne pas accumuler de lignes redondantes ; l'adresse fixe n'est
+ * Définit le destinataire d'une action (global). Le défaut « usager » n'est PAS stocké (les
+ * clés sont supprimées) pour ne pas accumuler de lignes redondantes ; l'adresse fixe n'est
  * conservée que pour « fixe ».
  */
 export async function setTriggerRecipient(
   t: BookingTrigger,
   kind: MailRecipientKind,
   addr: string,
-  serviceId: string,
 ): Promise<void> {
   if (kind === "usager") {
-    await deleteConfig([recipientKey(t, serviceId), recipientAddrKey(t, serviceId)]);
+    await deleteConfig([recipientKey(t), recipientAddrKey(t)]);
     return;
   }
-  await setConfig(recipientKey(t, serviceId), kind);
-  await setConfig(recipientAddrKey(t, serviceId), kind === "fixe" ? addr : "");
+  await setConfig(recipientKey(t), kind);
+  await setConfig(recipientAddrKey(t), kind === "fixe" ? addr : "");
 }
 
 /** Un destinataire résolu : adresse + prénom (vide si non personnalisable). `personal`
@@ -340,7 +321,8 @@ export async function resolveTriggerRecipients(
   serviceId: string,
   ctx: { userId?: string | null },
 ): Promise<ResolvedRecipient[]> {
-  const { kind, addr } = await getTriggerRecipient(t, serviceId);
+  // Réglage destinataire GLOBAL ; `serviceId` ne sert qu'à résoudre « gestionnaires du service ».
+  const { kind, addr } = await getTriggerRecipient(t);
 
   if (kind === "usager") {
     if (!ctx.userId) return [];

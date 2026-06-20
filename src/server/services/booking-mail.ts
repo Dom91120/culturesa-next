@@ -141,8 +141,8 @@ export async function sendBookingConfirmationMail(
   params: BookingConfirmationParams,
 ): Promise<void> {
   try {
-    // Préférence « Échanges » du service : cette ACTION envoie-t-elle un e-mail ?
-    if (!(await isTriggerEnabled(params.trigger, params.serviceId))) return;
+    // Préférence « Échanges » (globale) : cette ACTION envoie-t-elle un e-mail ?
+    if (!(await isTriggerEnabled(params.trigger))) return;
 
     // Destinataire(s) selon le réglage de l'action (défaut = l'usager concerné).
     const recipients = await resolveTriggerRecipients(params.trigger, params.serviceId, {
@@ -183,7 +183,7 @@ export async function sendBookingConfirmationMail(
     };
 
     // Type d'e-mail EFFECTIF (re-routage éventuel du service, cf. « Échanges par mail »).
-    const kind = await resolveTriggerKind(params.trigger, params.serviceId);
+    const kind = await resolveTriggerKind(params.trigger);
     for (const r of recipients) {
       // Salutation personnalisée uniquement pour l'usager concerné.
       const prenom = r.personal ? r.prenom : "";
@@ -220,7 +220,7 @@ export async function sendBookingCancellationMail(
   try {
     // Annulation par l'usager lui-même (l'annulation/suppression par un gestionnaire
     // passe par un autre chemin avec son propre déclencheur).
-    if (!(await isTriggerEnabled("cancel_user", params.serviceId))) return;
+    if (!(await isTriggerEnabled("cancel_user"))) return;
 
     const [recipients, slot, concerned] = await Promise.all([
       resolveTriggerRecipients("cancel_user", params.serviceId, { userId: params.userId }),
@@ -255,7 +255,7 @@ export async function sendBookingCancellationMail(
       motif: params.motif,
     };
 
-    const kind = await resolveTriggerKind("cancel_user", params.serviceId);
+    const kind = await resolveTriggerKind("cancel_user");
     for (const r of recipients) {
       const prenom = r.personal ? r.prenom : "";
       await sendTemplatedMail({

@@ -92,27 +92,23 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
     );
     const periodByBooking = new Map(bookings.map((b, idx) => [b.id, periodLabels[idx] ?? ""]));
 
-    // Gabarit + préférence d'envoi PAR SERVICE : chargés une fois par service distinct
-    // de ce lot (anti-N+1), pas par réservation.
+    // Réglages de l'action « rappel » désormais GLOBAUX (envoi / type / destinataire) :
+    // lus UNE fois. Seul le CONTENU du gabarit reste surchargeable par service.
+    const [enabled, kindForReminder, rec] = await Promise.all([
+      isTriggerEnabled("reminder"),
+      resolveTriggerKind("reminder"),
+      getTriggerRecipient("reminder"),
+    ]);
     const serviceIds = [...new Set(bookings.map((b) => b.serviceId))];
     const tplByService = new Map<string, { subject: string; html: string }>();
-    const enabledByService = new Map<string, boolean>();
-    // Destinataire de l'action « rappel » par service (défaut « usager »). Pour les autres
-    // portées (gestionnaires/admins/fixe), la liste est la même pour toutes les réservations
-    // du service → résolue UNE fois ici (anti-N+1).
-    const recipKindByService = new Map<string, string>();
+    // Pour les portées gestionnaires/admins/fixe, la liste de destinataires se résout PAR
+    // SERVICE (gestionnaires du service concerné) et est la même pour toutes les réservations
+    // du service → résolue UNE fois par service ici (anti-N+1).
     const svcRecipientsByService = new Map<string, ResolvedRecipient[]>();
     await Promise.all(
       serviceIds.map(async (sid) => {
-        // Type d'e-mail EFFECTIF de l'action « rappel » (re-routage éventuel du service).
-        const [enabled, kindForSvc, rec] = await Promise.all([
-          isTriggerEnabled("reminder", sid),
-          resolveTriggerKind("reminder", sid),
-          getTriggerRecipient("reminder", sid),
-        ]);
-        enabledByService.set(sid, enabled);
-        tplByService.set(sid, await getMailTemplate(kindForSvc, sid));
-        recipKindByService.set(sid, rec.kind);
+        // Contenu du gabarit PAR SERVICE (cascade (svc,kind) → (global,kind) → défaut code).
+        tplByService.set(sid, await getMailTemplate(kindForReminder, sid));
         if (rec.kind !== "usager") {
           svcRecipientsByService.set(sid, await resolveTriggerRecipients("reminder", sid, {}));
         }
@@ -136,8 +132,8 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
     for (const b of bookings) {
       if (already.has(b.id)) continue;
 
-      // Service : rappels désactivés ? on saute. Sinon, gabarit propre au service.
-      if (!enabledByService.get(b.serviceId)) continue;
+      // Rappels désactivés (réglage global) ? on saute. Sinon, gabarit propre au service.
+      if (!enabled) continue;
       const tpl = tplByService.get(b.serviceId);
       if (!tpl) continue;
 
@@ -145,8 +141,8 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
       const occ = dated.find((s) => s.id === b.slotId);
       if (!occ) continue;
 
-      // Destinataire(s) selon le réglage de l'action « rappel » (défaut = l'usager concerné).
-      const recipKind = recipKindByService.get(b.serviceId) ?? "usager";
+      // Destinataire(s) selon le réglage GLOBAL de l'action « rappel » (défaut = usager concerné).
+      const recipKind = rec.kind;
       let recipients: ResolvedRecipient[];
       if (recipKind === "usager") {
         const email = b.user?.email?.trim();

@@ -6,25 +6,20 @@ import { MailRoutingTable } from "./mail-routing-table";
 import type { RoutingRow } from "./mail-rows";
 
 /**
- * Onglet « Échanges » d'un service, scindé en deux sous-onglets :
- *  - « Échanges par mail » : routage action → type d'e-mail + activation (par action) ;
- *  - « Modèles d'e-mails » : contenu (objet + corps) de chaque type d'e-mail.
+ * Onglet « Échanges » (ADMINISTRATION), GLOBAL, scindé en deux sous-onglets :
+ *  - « Échanges par mail » : routage action → type d'e-mail + destinataire + envoi (par action),
+ *    réglages COMMUNS à tous les services ;
+ *  - « Modèles d'e-mails » : contenu (objet + corps) de tous les e-mails au niveau global
+ *    (surchargeable par service dans les Paramètres de chaque service).
  */
-export function EchangesTabs({
-  serviceId,
-  serviceLabel,
+export function EchangesAdminTabs({
   routingRows,
   kindOptions,
   modeleRows,
-  canManage = false,
 }: {
-  serviceId: string;
-  serviceLabel: string;
   routingRows: RoutingRow[];
   kindOptions: { value: string; label: string }[];
   modeleRows: KindData[];
-  // Création/suppression de types personnalisés (propres au service) : gestionnaire du service ou admin.
-  canManage?: boolean;
 }) {
   const [tab, setTab] = useState<"routage" | "modeles">("routage");
 
@@ -54,7 +49,7 @@ export function EchangesTabs({
           <div className="panel-title">
             <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
               <span className="dot" style={{ background: "var(--accent)" }} />
-              Échanges par mail — {serviceLabel}
+              Échanges par mail
             </span>
           </div>
           <p
@@ -65,27 +60,34 @@ export function EchangesTabs({
               margin: "0 0 1rem",
             }}
           >
-            Pour chaque action, choisissez le type d&apos;e-mail envoyé et activez/désactivez son
-            envoi (propre à ce service). Le contenu de chaque type se règle dans «&nbsp;Modèles
-            d&apos;e-mails&nbsp;».
+            Pour chaque action, choisissez le type d&apos;e-mail envoyé, son destinataire et
+            activez/désactivez son envoi. Ces réglages sont{" "}
+            <strong>communs à tous les services</strong>. Le contenu de chaque type se règle dans
+            «&nbsp;Modèles d&apos;e-mails&nbsp;».
           </p>
-          <MailRoutingTable rows={routingRows} kindOptions={kindOptions} serviceId={serviceId} />
+          <MailRoutingTable rows={routingRows} kindOptions={kindOptions} />
         </div>
       ) : (
         <EchangesConfig
-          // Remonte le composant quand l'ensemble des types change (création/suppression)
-          // pour réinitialiser l'état d'édition interne sur les nouvelles lignes.
+          // Remonte le composant quand l'ensemble des types change (création/suppression).
           key={modeleRows.map((r) => r.kind).join(",")}
           rows={modeleRows}
-          serviceId={serviceId}
+          showSystem
+          showRecipient
           showSend={false}
-          allowCreate={canManage}
+          allowCreate
           title="Modèles d'e-mails"
-          panelId="modeles-panel"
+          panelId="admin-modeles-panel"
           intro={
-            canManage
-              ? "Contenu (objet + corps) de chaque type d'e-mail, propre à ce service. Vous pouvez aussi créer des types personnalisés propres à ce service, routables vers une action dans « Échanges par mail »."
-              : "Contenu (objet + corps) de chaque type d'e-mail de réservation, propre à ce service. À défaut de personnalisation, le gabarit par défaut intégré est utilisé."
+            <>
+              Contenu (objet + corps) de tous les e-mails au niveau <strong>global</strong>. Les
+              e-mails <strong>système</strong> (compte/sécurité, test) sont{" "}
+              <strong>toujours envoyés</strong> ; les e-mails de <strong>réservation</strong>{" "}
+              servent de base à <strong>tous les services</strong> (surchargeable par service) —
+              leur destinataire et leur envoi se règlent dans «&nbsp;Échanges par mail&nbsp;». Vous
+              pouvez aussi créer des types <strong>personnalisés globaux</strong>, routables
+              partout.
+            </>
           }
         />
       )}

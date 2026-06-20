@@ -427,8 +427,8 @@ export async function deleteBookingAdminAction(
     const wasValidated = booking.validated;
     // Action : suppression d'une réservation validée vs refus d'une demande en attente.
     const trigger = wasValidated ? "cancel_manager" : "refuse";
-    // Préférence « Envoyer » de cette action activée ?
-    if (!(await isTriggerEnabled(trigger, serviceId))) {
+    // Préférence « Envoyer » (globale) de cette action activée ?
+    if (!(await isTriggerEnabled(trigger))) {
       return { ok: true };
     }
     const serviceLabel = booking.service?.label ?? "";
@@ -450,7 +450,7 @@ export async function deleteBookingAdminAction(
     };
     // Best-effort : en cas d'échec, l'e-mail est mis en file (renvoyable depuis
     // Administration > Messagerie). N'interrompt jamais la suppression.
-    const kind = await resolveTriggerKind(trigger, serviceId);
+    const kind = await resolveTriggerKind(trigger);
     await sendTemplatedMail({
       to: email,
       kind,

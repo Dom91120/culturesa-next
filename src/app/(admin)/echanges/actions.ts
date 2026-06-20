@@ -35,55 +35,45 @@ async function authorizeScope(serviceId: string | undefined): Promise<void> {
 }
 function revalidateScope(serviceId: string | undefined): void {
   if (serviceId) revalidatePath(`/services/${serviceId}/echanges`);
-  else revalidatePath("/messagerie");
+  else revalidatePath("/echanges");
 }
 
 /**
- * Active/désactive l'envoi d'e-mail pour une ACTION précise (déclencheur), par service.
+ * Active/désactive l'envoi d'e-mail pour une ACTION précise (déclencheur), GLOBALEMENT.
  * Permet de couper l'e-mail sur une action sans toucher aux autres qui partagent le même
  * type (ex. désactiver l'auto-validation tout en gardant la validation manuelle).
  */
 export async function setMailTriggerAction(
   trigger: string,
   enabled: boolean,
-  serviceId?: string,
 ): Promise<ActionState> {
   if (!isBookingTrigger(trigger)) return { ok: false, error: "Action inconnue." };
-  // Les déclencheurs de réservation sont réglés PAR SERVICE.
-  if (!serviceId) return { ok: false, error: "Service requis." };
-  await authorizeScope(serviceId);
-  await setTriggerEnabled(trigger, enabled, serviceId);
-  revalidateScope(serviceId);
+  await requireRole("administrateur");
+  await setTriggerEnabled(trigger, enabled);
+  revalidatePath("/echanges");
   return { ok: true };
 }
 
-/** Re-route une action vers un autre type d'e-mail (menu « Type d'e-mail », par service). */
-export async function setTriggerKindAction(
-  trigger: string,
-  kind: string,
-  serviceId?: string,
-): Promise<ActionState> {
+/** Re-route une action vers un autre type d'e-mail (menu « Type d'e-mail », global). */
+export async function setTriggerKindAction(trigger: string, kind: string): Promise<ActionState> {
   if (!isBookingTrigger(trigger)) return { ok: false, error: "Action inconnue." };
-  if (!serviceId) return { ok: false, error: "Service requis." };
-  // Cible valide : type intégré OU type personnalisé de CE service.
-  if (!isBookingKind(kind) && !(await isCustomMailType(kind, serviceId))) {
+  // Cible valide : type intégré OU type personnalisé GLOBAL (le routage est global).
+  if (!isBookingKind(kind) && !(await isCustomMailType(kind))) {
     return { ok: false, error: "Type d'e-mail inconnu." };
   }
-  await authorizeScope(serviceId);
-  await setTriggerKind(trigger, kind, serviceId);
-  revalidateScope(serviceId);
+  await requireRole("administrateur");
+  await setTriggerKind(trigger, kind);
+  revalidatePath("/echanges");
   return { ok: true };
 }
 
-/** Définit le destinataire d'une action (menu « Destinataire », par service). */
+/** Définit le destinataire d'une action (menu « Destinataire », global). */
 export async function setTriggerRecipientAction(
   trigger: string,
   kind: string,
   addr: string,
-  serviceId?: string,
 ): Promise<ActionState> {
   if (!isBookingTrigger(trigger)) return { ok: false, error: "Action inconnue." };
-  if (!serviceId) return { ok: false, error: "Service requis." };
   if (!isMailRecipientKind(kind)) return { ok: false, error: "Destinataire inconnu." };
   // Pour « adresse(s) fixe(s) » : au moins une adresse valide requise.
   const cleanAddr = (addr ?? "")
@@ -94,9 +84,9 @@ export async function setTriggerRecipientAction(
   if (kind === "fixe" && cleanAddr === "") {
     return { ok: false, error: "Renseignez au moins une adresse e-mail valide." };
   }
-  await authorizeScope(serviceId);
-  await setTriggerRecipient(trigger, kind as MailRecipientKind, cleanAddr, serviceId);
-  revalidateScope(serviceId);
+  await requireRole("administrateur");
+  await setTriggerRecipient(trigger, kind as MailRecipientKind, cleanAddr);
+  revalidatePath("/echanges");
   return { ok: true };
 }
 
@@ -129,8 +119,9 @@ export async function setMailTemplateAction(
 }
 
 /**
- * Crée un type d'e-mail PERSONNALISÉ. `serviceId` fourni → type du service (gestionnaire du
- * service ou admin) ; omis → type GLOBAL « tous services » (admin uniquement).
+ * Crée un type d'e-mail PERSONNALISÉ GLOBAL (« tous services », admin uniquement). La création
+ * de types PAR SERVICE est abolie : un service ne fait que surcharger le contenu des types
+ * globaux (cf. « Modèles d'e-mails » d'un service).
  */
 export async function createMailTypeAction(
   serviceId: string | undefined,
@@ -138,6 +129,9 @@ export async function createMailTypeAction(
   description = "",
   recipient = "",
 ): Promise<ActionState> {
+  // Les types personnalisés sont désormais GLOBAUX uniquement (centralisés en administration).
+  if (serviceId)
+    return { ok: false, error: "Les types personnalisés se créent en administration." };
   await authorizeScope(serviceId);
   const l = (label ?? "").trim();
   if (!l) return { ok: false, error: "Libellé requis." };
@@ -151,7 +145,12 @@ export async function createMailTypeAction(
   return { ok: true };
 }
 
-/** Modifie nom / description d'un type personnalisé (service → gestionnaire ; global → admin). */
+/**
+ * Modifie nom / description d'un type d'e-mail.
+ *  - type PERSONNALISÉ (service → gestionnaire ; global → admin) ;
+ *  - type INTÉGRÉ : métadonnées éditables uniquement au niveau GLOBAL (admin, serviceId omis) —
+ *    la clé reste fixe (contrat code), seuls le libellé/la description changent.
+ */
 export async function updateMailTypeAction(
   serviceId: string | undefined,
   key: string,
@@ -160,7 +159,9 @@ export async function updateMailTypeAction(
   recipient: string,
 ): Promise<ActionState> {
   await authorizeScope(serviceId);
-  if (!(await isCustomMailType(key, serviceId))) {
+  const isCustom = await isCustomMailType(key, serviceId);
+  const isBuiltinGlobal = !serviceId && (TEMPLATE_KINDS as readonly string[]).includes(key);
+  if (!isCustom && !isBuiltinGlobal) {
     return { ok: false, error: "Type d'e-mail inconnu." };
   }
   const l = (label ?? "").trim();
