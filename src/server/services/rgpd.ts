@@ -5,8 +5,10 @@ import type { Prisma } from "@prisma/client";
 
 export type AnonymizeReason = "self_service" | "admin" | "retention";
 
-/** Délai (en jours) après envoi du préavis avant effacement possible. */
-export const GRACE_DAYS = 30;
+/** Délai de grâce par défaut (jours) après préavis avant effacement, si config absente. */
+export const DEFAULT_GRACE_DAYS = 30;
+/** Clé app_config du délai de grâce RGPD. */
+const GRACE_DAYS_KEY = "rgpd.graceDays";
 /** Durée de rétention par défaut (années) si la config est absente. */
 export const DEFAULT_RETENTION_YEARS = 2;
 /** Clé app_config de la durée de rétention RGPD. */
@@ -321,6 +323,14 @@ export async function getRetentionYears(): Promise<number> {
   return v;
 }
 
+/** Lit le délai de grâce configuré (jours), borné 1–365, défaut 30. */
+export async function getGraceDays(): Promise<number> {
+  const cfg = await getConfigMany([GRACE_DAYS_KEY]);
+  const v = Number.parseInt(cfg[GRACE_DAYS_KEY] ?? "", 10);
+  if (!Number.isFinite(v) || v < 1 || v > 365) return DEFAULT_GRACE_DAYS;
+  return v;
+}
+
 /** Seuil d'inactivité en jours = années de rétention × 365. */
 function thresholdDays(years: number): number {
   return years * 365;
@@ -336,6 +346,7 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
   if (userIds.length === 0) return 0;
   const years = await getRetentionYears();
   const minDays = thresholdDays(years);
+  const graceDays = await getGraceDays();
 
   const users = await prisma.user.findMany({
     where: {
@@ -367,7 +378,7 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
         data: {
           action: "deletion_notice",
           targetUserId: u.id,
-          details: { graceDays: GRACE_DAYS },
+          details: { graceDays },
           createdAt: sentAt,
         },
       }),
@@ -380,7 +391,7 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
         salutation: `Bonjour ${name},`,
         prenom: u.prenom?.trim() ?? "",
         annees: `${years} an(s)`,
-        delai: `${GRACE_DAYS} jours`,
+        delai: `${graceDays} jours`,
       };
       await sendTemplatedMail({
         to: u.email,
@@ -400,7 +411,7 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
 
 /**
  * Anonymise les comptes réellement éligibles : inactivité ≥ seuil ET préavis
- * envoyé il y a ≥ GRACE_DAYS. Re-vérifie ces conditions côté serveur avant
+ * envoyé il y a ≥ délai de grâce. Re-vérifie ces conditions côté serveur avant
  * d'agir (la liste cliente ne fait pas foi). Délègue à `anonymizeUser`.
  * Retourne le nombre de comptes anonymisés.
  */
@@ -411,6 +422,7 @@ export async function anonymizeInactive(
   if (userIds.length === 0) return 0;
   const years = await getRetentionYears();
   const minDays = thresholdDays(years);
+  const graceDays = await getGraceDays();
 
   const users = await prisma.user.findMany({
     where: {
@@ -438,7 +450,7 @@ export async function anonymizeInactive(
     const noticeAgeDays = u.deletionNoticeSentAt
       ? Math.floor((now - u.deletionNoticeSentAt.getTime()) / MS_PER_DAY)
       : -1;
-    if (noticeAgeDays < GRACE_DAYS) continue;
+    if (noticeAgeDays < graceDays) continue;
 
     await anonymizeUser(u.id, "retention");
 
@@ -462,7 +474,7 @@ export async function anonymizeInactive(
  * Tâche planifiée de rétention RGPD (cf. /api/cron/rgpd-retention). Automatise ce
  * que l'écran « Administration > RGPD » fait manuellement :
  *   1. envoie le préavis aux comptes inactifs ≥ seuil et sans préavis ;
- *   2. anonymise ceux dont le préavis date d'au moins GRACE_DAYS et qui sont
+ *   2. anonymise ceux dont le préavis date d'au moins le délai de grâce et qui sont
  *      toujours inactifs.
  * `markDeletionNotice` et `anonymizeInactive` re-vérifient l'éligibilité côté
  * serveur ; on leur passe donc simplement les candidats issus du scan. Acteur
@@ -471,6 +483,7 @@ export async function anonymizeInactive(
 export async function runRgpdRetention(): Promise<{ notified: number; anonymized: number }> {
   const scan = await listInactiveScan();
   const minDays = thresholdDays(await getRetentionYears());
+  const graceDays = await getGraceDays();
   const now = Date.now();
 
   const noticeIds = scan
@@ -483,7 +496,7 @@ export async function runRgpdRetention(): Promise<{ notified: number; anonymized
       (u) =>
         u.deletionNoticeSentAt != null &&
         u.daysInactive >= minDays &&
-        Math.floor((now - u.deletionNoticeSentAt.getTime()) / MS_PER_DAY) >= GRACE_DAYS,
+        Math.floor((now - u.deletionNoticeSentAt.getTime()) / MS_PER_DAY) >= graceDays,
     )
     .map((u) => u.id);
   const anonymized = await anonymizeInactive(anonIds, null);

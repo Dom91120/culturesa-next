@@ -6,11 +6,10 @@ import { useMemo, useState, useTransition } from "react";
 import {
   anonymizeInactiveAction,
   sendInactivityNoticesAction,
+  setGraceDaysAction,
   setRetentionYearsAction,
 } from "./actions";
 
-/** Délai de grâce après préavis (doit rester synchro avec le serveur). */
-const GRACE_DAYS = 30;
 const PAGE_SIZE = 10;
 const MS_PER_DAY = 86_400_000;
 
@@ -58,13 +57,17 @@ function noticeAge(sentAt: string | null): number {
 }
 
 /** Cellule « Préavis » selon l'état d'éligibilité et l'âge du préavis. */
-function NoticeCell({ row, eligible }: { row: InactiveRow; eligible: boolean }): ReactNode {
+function NoticeCell({
+  row,
+  eligible,
+  graceDays,
+}: { row: InactiveRow; eligible: boolean; graceDays: number }): ReactNode {
   if (!eligible) return <span style={{ color: "var(--muted)" }}>—</span>;
   if (!row.deletionNoticeSentAt) {
     return <span style={{ color: "#e8a45a", fontWeight: 600 }}>à envoyer</span>;
   }
   const sentLbl = dateFmt.format(new Date(row.deletionNoticeSentAt));
-  const remain = GRACE_DAYS - noticeAge(row.deletionNoticeSentAt);
+  const remain = graceDays - noticeAge(row.deletionNoticeSentAt);
   if (remain > 0) {
     return (
       <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
@@ -83,13 +86,16 @@ function NoticeCell({ row, eligible }: { row: InactiveRow; eligible: boolean }):
 export function InactivityScan({
   rows,
   retentionYears,
+  graceDays,
 }: {
   rows: InactiveRow[];
   retentionYears: number;
+  graceDays: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [years, setYears] = useState(retentionYears);
+  const [grace, setGrace] = useState(graceDays);
   const [page, setPage] = useState(0);
 
   const thresholdDays = years * 365;
@@ -102,12 +108,12 @@ export function InactivityScan({
       if (u.daysInactive < thresholdDays) continue; // non éligible
       if (!u.deletionNoticeSentAt) {
         needNotice.push(u.id);
-      } else if (noticeAge(u.deletionNoticeSentAt) >= GRACE_DAYS) {
+      } else if (noticeAge(u.deletionNoticeSentAt) >= grace) {
         canAnon.push(u.id);
       }
     }
     return { needNoticeIds: needNotice, canAnonymizeIds: canAnon };
-  }, [rows, thresholdDays]);
+  }, [rows, thresholdDays, grace]);
 
   const needNoticeCount = needNoticeIds.length;
   const canAnonymizeCount = canAnonymizeIds.length;
@@ -128,6 +134,16 @@ export function InactivityScan({
     });
   }
 
+  function onGraceChange(raw: string) {
+    const v = Number.parseInt(raw, 10);
+    if (!Number.isFinite(v) || v < 1 || v > 365) return;
+    setGrace(v);
+    startTransition(async () => {
+      await setGraceDaysAction(v);
+      router.refresh();
+    });
+  }
+
   function refresh() {
     startTransition(() => {
       router.refresh();
@@ -138,7 +154,7 @@ export function InactivityScan({
     if (needNoticeCount === 0) return;
     if (
       !confirm(
-        `Envoyer le préavis de suppression à ${needNoticeCount} ${countWord(needNoticeCount)} éligible(s) sans préavis ? Un délai de ${GRACE_DAYS} jours s'appliquera avant tout effacement.`,
+        `Envoyer le préavis de suppression à ${needNoticeCount} ${countWord(needNoticeCount)} éligible(s) sans préavis ? Un délai de ${grace} jours s'appliquera avant tout effacement.`,
       )
     )
       return;
@@ -153,7 +169,7 @@ export function InactivityScan({
     if (canAnonymizeCount === 0) return;
     if (
       !confirm(
-        `Effacer définitivement (anonymiser) ${canAnonymizeCount} ${countWord(canAnonymizeCount)} inactif(s) dont le préavis a été envoyé il y a plus de ${GRACE_DAYS} jours ? Cette opération est irréversible. Les réservations sont conservées.`,
+        `Effacer définitivement (anonymiser) ${canAnonymizeCount} ${countWord(canAnonymizeCount)} inactif(s) dont le préavis a été envoyé il y a plus de ${grace} jours ? Cette opération est irréversible. Les réservations sont conservées.`,
       )
     )
       return;
@@ -235,6 +251,35 @@ export function InactivityScan({
           />
           années
         </label>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: ".5rem",
+            fontSize: ".78rem",
+            color: "var(--muted)",
+          }}
+        >
+          Délai de grâce
+          <input
+            type="number"
+            min={1}
+            max={365}
+            value={grace}
+            onChange={(e) => onGraceChange(e.target.value)}
+            disabled={pending}
+            style={{
+              width: 60,
+              fontSize: ".78rem",
+              padding: ".2rem .4rem",
+              borderRadius: "var(--rad-sm)",
+              border: "1px solid var(--border)",
+              background: "var(--surface2)",
+              color: "var(--text)",
+            }}
+          />
+          jours
+        </label>
         <div style={{ marginLeft: "auto", display: "flex", gap: ".4rem", flexWrap: "wrap" }}>
           <button
             type="button"
@@ -301,7 +346,7 @@ export function InactivityScan({
           <tbody>
             {pageRows.map((u) => {
               const eligible = u.daysInactive >= thresholdDays;
-              const canDelete = eligible && noticeAge(u.deletionNoticeSentAt) >= GRACE_DAYS;
+              const canDelete = eligible && noticeAge(u.deletionNoticeSentAt) >= grace;
               const fullName = `${u.nom} ${u.prenom}`.trim() || u.email;
 
               let actionCell: ReactNode;
@@ -354,7 +399,7 @@ export function InactivityScan({
                     {fmtDuration(u.daysInactive)}
                   </td>
                   <td>
-                    <NoticeCell row={u} eligible={eligible} />
+                    <NoticeCell row={u} eligible={eligible} graceDays={grace} />
                   </td>
                   <td style={{ textAlign: "right" }}>{actionCell}</td>
                 </tr>

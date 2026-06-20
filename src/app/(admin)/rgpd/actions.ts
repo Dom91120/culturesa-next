@@ -11,6 +11,7 @@ import { z } from "zod";
 type CountResult = ActionState & { count?: number };
 
 const yearsSchema = z.coerce.number().int().min(0).max(50);
+const graceSchema = z.coerce.number().int().min(1).max(365);
 
 /** Enregistre la durée de rétention RGPD (clé app_config `rgpd.retentionYears`). */
 export async function setRetentionYearsAction(years: number): Promise<ActionState> {
@@ -18,6 +19,16 @@ export async function setRetentionYearsAction(years: number): Promise<ActionStat
   const parsed = yearsSchema.safeParse(years);
   if (!parsed.success) return { ok: false, error: "Valeur invalide (0–50)." };
   await setConfig("rgpd.retentionYears", String(parsed.data));
+  revalidatePath("/rgpd");
+  return { ok: true };
+}
+
+/** Enregistre le délai de grâce RGPD après préavis (clé app_config `rgpd.graceDays`). */
+export async function setGraceDaysAction(days: number): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = graceSchema.safeParse(days);
+  if (!parsed.success) return { ok: false, error: "Valeur invalide (1–365)." };
+  await setConfig("rgpd.graceDays", String(parsed.data));
   revalidatePath("/rgpd");
   return { ok: true };
 }

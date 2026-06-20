@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db";
-import { getRetentionYears, listInactiveScan } from "@/server/services/rgpd";
+import { requireRole } from "@/server/guards";
+import { getGraceDays, getRetentionYears, listInactiveScan } from "@/server/services/rgpd";
 import { type AuditEntry, AuditLog, type AuditParty } from "./audit-log";
 import { type InactiveRow, InactivityScan } from "./inactivity-scan";
 
@@ -12,10 +13,13 @@ const dtFmt = new Intl.DateTimeFormat("fr-FR", {
 });
 
 export default async function RgpdAdminPage() {
-  const [logs, scan, retentionYears] = await Promise.all([
+  // Administration réservée aux administrateurs (les gestionnaires n'y ont pas accès).
+  await requireRole("administrateur");
+  const [logs, scan, retentionYears, graceDays] = await Promise.all([
     prisma.rgpdLog.findMany({ orderBy: { createdAt: "desc" }, take: 500 }),
     listInactiveScan(),
     getRetentionYears(),
+    getGraceDays(),
   ]);
 
   // Seuls les usagers cités (cible/acteur) par les logs chargés sont nécessaires à la
@@ -73,7 +77,7 @@ export default async function RgpdAdminPage() {
 
   return (
     <div>
-      <InactivityScan rows={scanRows} retentionYears={retentionYears} />
+      <InactivityScan rows={scanRows} retentionYears={retentionYears} graceDays={graceDays} />
 
       <AuditLog entries={auditEntries} />
     </div>
