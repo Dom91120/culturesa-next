@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CultuRésa — bande-annonce</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
+<style>
+:root{--font-sans:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#0b0d12;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;font-family:var(--font-sans)}
+.cr-reel *{box-sizing:border-box}
+.cr-scene{position:absolute;inset:0;display:flex;opacity:0;transition:opacity .55s ease;pointer-events:none;padding:18px 26px}
+.cr-scene.active{opacity:1;pointer-events:auto}
+.cr-anim{opacity:0}
+.cr-scene.active .cr-anim{animation:crUp .6s ease forwards}
+.cr-scene.active .cr-d1{animation-delay:.1s}.cr-scene.active .cr-d2{animation-delay:.2s}.cr-scene.active .cr-d3{animation-delay:.3s}.cr-scene.active .cr-d4{animation-delay:.4s}.cr-scene.active .cr-d5{animation-delay:.5s}
+.cr-scene.active .cr-pop{animation:crPop .5s .45s cubic-bezier(.2,1.3,.5,1) backwards}
+@keyframes crUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes crPop{0%{opacity:0;transform:scale(.4)}100%{opacity:1;transform:scale(1)}}
+.cr-cell{display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;background:#1f2435;border:1px solid rgba(255,255,255,.08);color:#9aa0b5;font-size:11px}
+.cr-cell.full{opacity:.32}
+.cr-tg{background:rgba(44,175,127,.14);border-color:#2caf7f;color:#2caf7f}
+.cr-bk{background:rgba(153,153,255,.22);border-color:#9999ff;color:#c9c9ff;font-size:10px;gap:3px}
+.cr-hd,.cr-tm{font-size:11px;color:#7a8099;display:flex;align-items:center;justify-content:center}
+.cr-tm{justify-content:flex-start}
+.cr-row{display:flex;align-items:center;gap:12px;background:#181c27;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:11px 14px}
+.cr-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);border:none;cursor:pointer;padding:0;transition:width .25s,background .25s}
+.cr-dot.on{background:#2caf7f;width:18px;border-radius:4px}
+.cr-pill{display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:8px 10px;border-radius:9px;background:#1f2435;border:1px solid rgba(255,255,255,.08);color:#9aa0b5}
+@media (prefers-reduced-motion:reduce){.cr-anim{animation:none!important;opacity:1!important}.cr-scene{transition:none!important}.cr-scene.active .cr-pop{animation:none!important}}
+</style>
+</head>
+<body>
+ <div class="cr-reel" style="width:100%;max-width:920px;aspect-ratio:16/9;position:relative;background:#0f1117;border:1px solid rgba(255,255,255,.1);border-radius:16px;overflow:hidden;color:#e8e4da">
+
+  <div style="position:absolute;top:0;left:0;right:0;height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#181c27;border-bottom:1px solid rgba(255,255,255,.08);z-index:5">
+   <span style="width:9px;height:9px;border-radius:50%;background:#2caf7f"></span>
+   <span style="font-size:13px;font-weight:500;letter-spacing:.2px">Cultu<span style="color:#2caf7f">Résa</span></span>
+   <span style="margin-left:auto;font-size:11px;color:#7a8099">Espace usager</span>
+  </div>
+
+  <div class="cr-stage" style="position:absolute;top:34px;left:0;right:0;bottom:42px;z-index:2">
+
+   <div class="cr-scene active" style="flex-direction:column;align-items:center;justify-content:center;text-align:center">
+    <div class="cr-anim" style="width:60px;height:60px;border-radius:16px;background:#2caf7f;display:flex;align-items:center;justify-content:center;color:#0f1117;font-size:30px;margin-bottom:16px"><i class="ti ti-calendar-event" aria-hidden="true"></i></div>
+    <div class="cr-anim cr-d1" style="font-size:31px;font-weight:500;letter-spacing:.3px">Cultu<span style="color:#2caf7f">Résa</span></div>
+    <div class="cr-anim cr-d2" style="font-size:15px;color:#7a8099;margin-top:6px">Réservation d'activités culturelles</div>
+   </div>
+
+   <div class="cr-scene" style="flex-direction:column;justify-content:center">
+    <div class="cr-anim" style="font-size:18px;font-weight:500;margin-bottom:16px">Découvrez les activités de votre commune</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+     <div class="cr-anim cr-d1" style="background:#181c27;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px 8px;text-align:center"><div style="width:40px;height:40px;margin:0 auto 9px;border-radius:11px;background:rgba(44,175,127,.14);color:#2caf7f;display:flex;align-items:center;justify-content:center;font-size:22px"><i class="ti ti-book" aria-hidden="true"></i></div><div style="font-size:13px;line-height:1.3">Médiathèque</div></div>
+     <div class="cr-anim cr-d2" style="background:#181c27;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px 8px;text-align:center"><div style="width:40px;height:40px;margin:0 auto 9px;border-radius:11px;background:rgba(44,175,127,.14);color:#2caf7f;display:flex;align-items:center;justify-content:center;font-size:22px"><i class="ti ti-puzzle" aria-hidden="true"></i></div><div style="font-size:13px;line-height:1.3">Ludothèque</div></div>
+     <div class="cr-anim cr-d3" style="background:#181c27;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px 8px;text-align:center"><div style="width:40px;height:40px;margin:0 auto 9px;border-radius:11px;background:rgba(44,175,127,.14);color:#2caf7f;display:flex;align-items:center;justify-content:center;font-size:22px"><i class="ti ti-run" aria-hidden="true"></i></div><div style="font-size:13px;line-height:1.3">Maison des Enfants</div></div>
+     <div class="cr-anim cr-d4" style="background:#181c27;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px 8px;text-align:center"><div style="width:40px;height:40px;margin:0 auto 9px;border-radius:11px;background:rgba(44,175,127,.14);color:#2caf7f;display:flex;align-items:center;justify-content:center;font-size:22px"><i class="ti ti-palette" aria-hidden="true"></i></div><div style="font-size:13px;line-height:1.3">Maison des Arts</div></div>
+    </div>
+   </div>
+
+   <div class="cr-scene" style="flex-direction:column;justify-content:center">
+    <div class="cr-anim" style="font-size:18px;font-weight:500;margin-bottom:14px">Choisissez votre créneau</div>
+    <div class="cr-anim cr-d1" style="display:grid;grid-template-columns:46px repeat(6,1fr);gap:6px">
+     <div></div><div class="cr-hd">Lun</div><div class="cr-hd">Mar</div><div class="cr-hd">Mer</div><div class="cr-hd">Jeu</div><div class="cr-hd">Ven</div><div class="cr-hd">Sam</div>
+     <div class="cr-tm">10:00</div><div class="cr-cell">3</div><div class="cr-cell full">0</div><div class="cr-cell">5</div><div class="cr-cell">2</div><div class="cr-cell full">0</div><div class="cr-cell">4</div>
+     <div class="cr-tm">14:00</div><div class="cr-cell">1</div><div class="cr-cell">4</div><div class="cr-cell cr-tg cr-pop"><i class="ti ti-hand-finger" aria-hidden="true"></i></div><div class="cr-cell">3</div><div class="cr-cell">2</div><div class="cr-cell full">0</div>
+     <div class="cr-tm">16:00</div><div class="cr-cell full">0</div><div class="cr-cell">2</div><div class="cr-cell">4</div><div class="cr-cell">1</div><div class="cr-cell">3</div><div class="cr-cell">2</div>
+    </div>
+    <div class="cr-anim cr-d2" style="display:flex;gap:16px;margin-top:13px;font-size:11px;color:#7a8099">
+     <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#1f2435;border:1px solid #2caf7f"></span>Disponible</span>
+     <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#1f2435;opacity:.4"></span>Complet</span>
+     <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:rgba(153,153,255,.22);border:1px solid #9999ff"></span>Ma réservation</span>
+    </div>
+   </div>
+
+   <div class="cr-scene" style="flex-direction:column;justify-content:center">
+    <div class="cr-anim" style="font-size:18px;font-weight:500;margin-bottom:14px">Réservez en un clic</div>
+    <div class="cr-anim cr-d1" style="display:grid;grid-template-columns:46px repeat(6,1fr);gap:6px">
+     <div></div><div class="cr-hd">Lun</div><div class="cr-hd">Mar</div><div class="cr-hd">Mer</div><div class="cr-hd">Jeu</div><div class="cr-hd">Ven</div><div class="cr-hd">Sam</div>
+     <div class="cr-tm">10:00</div><div class="cr-cell">3</div><div class="cr-cell full">0</div><div class="cr-cell">5</div><div class="cr-cell">2</div><div class="cr-cell full">0</div><div class="cr-cell">4</div>
+     <div class="cr-tm">14:00</div><div class="cr-cell">1</div><div class="cr-cell">4</div><div class="cr-cell cr-bk cr-pop"><i class="ti ti-check" aria-hidden="true"></i>Moi</div><div class="cr-cell">3</div><div class="cr-cell">2</div><div class="cr-cell full">0</div>
+     <div class="cr-tm">16:00</div><div class="cr-cell full">0</div><div class="cr-cell">2</div><div class="cr-cell">4</div><div class="cr-cell">1</div><div class="cr-cell">3</div><div class="cr-cell">2</div>
+    </div>
+    <div class="cr-anim cr-d2" style="margin-top:13px;font-size:12px;color:#2caf7f;display:flex;align-items:center;gap:7px"><i class="ti ti-circle-check" aria-hidden="true"></i>Réservation enregistrée — confirmation par e-mail</div>
+   </div>
+
+   <div class="cr-scene" style="flex-direction:column;justify-content:center;gap:10px">
+    <div class="cr-anim" style="font-size:18px;font-weight:500;margin-bottom:4px">Suivez vos réservations</div>
+    <div class="cr-anim cr-d1 cr-row">
+     <div style="width:38px;height:38px;border-radius:11px;background:rgba(44,175,127,.14);color:#2caf7f;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="ti ti-book" aria-hidden="true"></i></div>
+     <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">Médiathèque</div><div style="font-size:12px;color:#7a8099">mercredi · 14:00 – 16:00</div></div>
+     <span style="font-size:11px;padding:3px 11px;border-radius:20px;background:rgba(44,175,127,.14);color:#2caf7f">Confirmée</span>
+     <span style="display:flex;gap:8px;color:#7a8099;font-size:17px"><i class="ti ti-edit" aria-hidden="true"></i><i class="ti ti-x" aria-hidden="true"></i></span>
+    </div>
+    <div class="cr-anim cr-d2 cr-row">
+     <div style="width:38px;height:38px;border-radius:11px;background:rgba(44,175,127,.14);color:#2caf7f;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="ti ti-puzzle" aria-hidden="true"></i></div>
+     <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">Ludothèque</div><div style="font-size:12px;color:#7a8099">samedi · 10:00 – 11:00</div></div>
+     <span style="font-size:11px;padding:3px 11px;border-radius:20px;background:rgba(224,179,65,.16);color:#e0b341">En attente</span>
+     <span style="display:flex;gap:8px;color:#7a8099;font-size:17px"><i class="ti ti-edit" aria-hidden="true"></i><i class="ti ti-x" aria-hidden="true"></i></span>
+    </div>
+   </div>
+
+   <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center">
+    <div class="cr-anim" style="font-size:18px;font-weight:500;margin-bottom:14px">Sur ordinateur comme sur smartphone</div>
+    <div class="cr-anim cr-d1" style="width:166px;background:#181c27;border:6px solid #262c3e;border-radius:26px;padding:0;overflow:hidden">
+     <div style="height:22px;display:flex;align-items:center;justify-content:center;gap:6px;background:#0f1117;border-bottom:1px solid rgba(255,255,255,.08)"><span style="width:7px;height:7px;border-radius:50%;background:#2caf7f"></span><span style="font-size:11px;font-weight:500">Cultu<span style="color:#2caf7f">Résa</span></span></div>
+     <div style="padding:10px;display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:11px;color:#7a8099">Médiathèque · mercredi</div>
+      <div class="cr-pill"><span>10:00</span><span style="color:#7a8099">3 places</span></div>
+      <div class="cr-pill" style="background:rgba(153,153,255,.22);border-color:#9999ff;color:#c9c9ff"><span style="display:flex;align-items:center;gap:5px"><i class="ti ti-check" aria-hidden="true"></i>14:00</span><span>Ma réservation</span></div>
+      <div class="cr-pill"><span>16:00</span><span style="color:#7a8099">4 places</span></div>
+      <div style="margin-top:3px;height:30px;border-radius:9px;background:#2caf7f;color:#0f1117;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Réserver</div>
+     </div>
+    </div>
+   </div>
+
+   <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center;text-align:center">
+    <div class="cr-anim" style="width:52px;height:52px;border-radius:14px;background:#2caf7f;display:flex;align-items:center;justify-content:center;color:#0f1117;font-size:26px;margin-bottom:14px"><i class="ti ti-calendar-event" aria-hidden="true"></i></div>
+    <div class="cr-anim cr-d1" style="font-size:22px;font-weight:500">Vos activités culturelles, en quelques clics</div>
+    <div class="cr-anim cr-d2" style="margin-top:16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:#0f1117;background:#2caf7f;padding:9px 18px;border-radius:22px"><i class="ti ti-login-2" aria-hidden="true"></i>Connectez-vous et réservez</div>
+   </div>
+
+  </div>
+
+  <div style="position:absolute;left:0;right:0;bottom:0;z-index:6">
+   <div style="height:3px;background:rgba(255,255,255,.08)"><div id="crFill" style="height:100%;width:0;background:#2caf7f"></div></div>
+   <div style="display:flex;align-items:center;gap:12px;padding:7px 14px;background:#181c27;border-top:1px solid rgba(255,255,255,.08)">
+    <button id="crPlay" aria-label="Pause" style="background:none;border:none;color:#e8e4da;cursor:pointer;font-size:18px;display:flex;padding:0"><i class="ti ti-player-pause" aria-hidden="true"></i></button>
+    <div id="crDots" style="display:flex;gap:6px;align-items:center"></div>
+    <span id="crCap" style="margin-left:auto;font-size:12px;color:#7a8099;text-align:right;max-width:62%"></span>
+   </div>
+  </div>
+ </div>
+<script>
+(function(){
+ var scenes=[].slice.call(document.querySelectorAll('.cr-reel .cr-scene'));
+ var fill=document.getElementById('crFill');var dotsWrap=document.getElementById('crDots');
+ var cap=document.getElementById('crCap');var playBtn=document.getElementById('crPlay');
+ if(!scenes.length||!fill)return;
+ var caps=["Réservation d'activités culturelles de votre commune","Découvrez toutes les activités proposées","Choisissez le jour et le créneau qui vous arrangent","Réservez votre place en un clic","Suivez et gérez vos réservations à tout moment","Sur ordinateur comme sur smartphone","CultuRésa — vos activités culturelles en quelques clics"];
+ var durs=[3000,4400,4800,4400,4400,4400,3800];
+ var i=0,paused=false,elapsed=0,prev=0;
+ var dots=scenes.map(function(s,n){var b=document.createElement('button');b.className='cr-dot';b.setAttribute('aria-label','Scène '+(n+1));b.onclick=function(){i=n;elapsed=0;show(n)};dotsWrap.appendChild(b);return b;});
+ function show(n){scenes.forEach(function(s,k){s.classList.toggle('active',k===n);dots[k].classList.toggle('on',k===n);});cap.textContent=caps[n]||"";}
+ function frame(now){if(!prev)prev=now;var dt=now-prev;prev=now;if(!paused){elapsed+=dt;var d=durs[i]||4000;var t=elapsed/d;if(t>1)t=1;fill.style.width=(t*100)+'%';if(elapsed>=d){i=(i+1)%scenes.length;elapsed=0;show(i);}}requestAnimationFrame(frame);}
+ playBtn.onclick=function(){paused=!paused;playBtn.innerHTML=paused?'<i class="ti ti-player-play" aria-hidden="true"></i>':'<i class="ti ti-player-pause" aria-hidden="true"></i>';playBtn.setAttribute('aria-label',paused?'Lecture':'Pause');};
+ show(0);requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
