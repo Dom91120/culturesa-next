@@ -241,7 +241,7 @@ export default async function StatsPage({
         <StatCard value={stats.total} label="Réservations" />
         <StatCard value={stats.distinctUsers} label="Usagers distincts" />
         {stats.pending > 0 && (
-          <StatCard value={stats.pending} label="En attente" color="var(--warn)" />
+          <StatCard value={stats.pending} label="Demandes en attente" color="var(--warn)" />
         )}
         <StatCard value={stats.enfants} label="Enfants" />
         {stats.accompagnants > 0 && <StatCard value={stats.accompagnants} label="Accompagnants" />}

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
+import { decryptSecret } from "@/server/secret-crypto";
 import nodemailer from "nodemailer";
 
 // Logo embarqué en pièce jointe inline (CID) dans chaque e-mail — déposé sous
@@ -68,7 +69,7 @@ export async function getMailSettings(): Promise<MailSettings> {
     port,
     security: cfg["mail.security"].trim(),
     username: pick(cfg["mail.username"], process.env.SMTP_USER),
-    password: pick(cfg["mail.password"], process.env.SMTP_PASSWORD),
+    password: pick(decryptSecret(cfg["mail.password"]), process.env.SMTP_PASSWORD),
   };
 }
 

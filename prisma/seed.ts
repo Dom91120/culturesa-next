@@ -1,10 +1,12 @@
-import { auth } from "@/server/auth";
 /**
  * Seed CultuRésa — données de démonstration (équivalent à install/culturesa.sql).
  * Idempotent : peut être relancé sans dupliquer.
  *   pnpm db:seed
  */
+import { defaultMailTypes } from "@/app/(admin)/echanges/mail-rows";
+import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
+import { defaultMailTriggers } from "@/server/services/mail-prefs";
 
 async function main() {
   // ── Demandeurs ──
@@ -277,8 +279,22 @@ async function main() {
   // enfants/accompagnants ≥ 1 : un compte « utilisateur » doit toujours en déclarer
   // au moins 1 de chaque (cf. validation côté inscription et gestion des comptes).
   const demoUsers = [
-    { email: "huppert@demo.fr", prenom: "Isabelle", nom: "HUPPERT", demandeurId: 5, enfants: 4, accompagnants: 1 },
-    { email: "adjani@demo.fr", prenom: "Isabelle", nom: "ADJANI", demandeurId: 5, enfants: 9, accompagnants: 1 },
+    {
+      email: "huppert@demo.fr",
+      prenom: "Isabelle",
+      nom: "HUPPERT",
+      demandeurId: 5,
+      enfants: 4,
+      accompagnants: 1,
+    },
+    {
+      email: "adjani@demo.fr",
+      prenom: "Isabelle",
+      nom: "ADJANI",
+      demandeurId: 5,
+      enfants: 9,
+      accompagnants: 1,
+    },
   ];
   const userIds: Record<string, string> = {};
   for (const u of demoUsers) {
@@ -461,6 +477,28 @@ async function main() {
   console.log(
     `✓ ${loginEmails.length} comptes de test connectables (mot de passe : ${TEST_PASSWORD}).`,
   );
+
+  // ── Déclencheurs d'e-mails (référentiel persisté en base) ──
+  const triggers = defaultMailTriggers();
+  for (const t of triggers) {
+    await prisma.mailTrigger.upsert({
+      where: { key: t.key },
+      update: { label: t.label, defaultKind: t.defaultKind, position: t.position },
+      create: { key: t.key, label: t.label, defaultKind: t.defaultKind, position: t.position },
+    });
+  }
+  console.log(`✓ ${triggers.length} déclencheurs d'e-mails (référentiel).`);
+
+  // ── Métadonnées des types d'e-mail intégrés (référentiel persisté en base) ──
+  const mailTypes = defaultMailTypes();
+  for (const { key, meta } of mailTypes) {
+    await prisma.mailType.upsert({
+      where: { key },
+      update: { label: meta.label, description: meta.description, recipient: meta.recipient },
+      create: { key, label: meta.label, description: meta.description, recipient: meta.recipient },
+    });
+  }
+  console.log(`✓ ${mailTypes.length} types d'e-mail intégrés (métadonnées).`);
 
   // ── Resync des séquences d'auto-increment ──
   // Les blocs ci-dessus insèrent des id EXPLICITES (1, 2, 3…) sans faire avancer

@@ -11,7 +11,7 @@ import {
 } from "@/server/services/booking-mail";
 import { BookingError, assertSlotCapacity } from "@/server/services/bookings";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
-import { isMailEnabled } from "@/server/services/mail-prefs";
+import { isTriggerEnabled, resolveTriggerKind } from "@/server/services/mail-prefs";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import {
@@ -119,7 +119,8 @@ export async function setBookingValidatedAction(
       userId: b.userId,
       serviceId,
       serviceLabel: b.service?.label ?? "",
-      validated,
+      // Validation → « Réservation confirmée » ; dévalidation → « Réservation remise en attente ».
+      trigger: validated ? "confirm_validate" : "unvalidate",
       slot: b.slot,
       periodId: b.periodId,
       enfants: b.enfants,
@@ -424,8 +425,10 @@ export async function deleteBookingAdminAction(
   const email = booking?.user?.email?.trim();
   if (booking && email?.includes("@")) {
     const wasValidated = booking.validated;
-    // Préférence « Échanges » du service : ce type d'e-mail est-il activé ?
-    if (!(await isMailEnabled(wasValidated ? "booking_cancelled" : "booking_refused", serviceId))) {
+    // Action : suppression d'une réservation validée vs refus d'une demande en attente.
+    const trigger = wasValidated ? "cancel_manager" : "refuse";
+    // Préférence « Envoyer » de cette action activée ?
+    if (!(await isTriggerEnabled(trigger, serviceId))) {
       return { ok: true };
     }
     const serviceLabel = booking.service?.label ?? "";
@@ -447,9 +450,10 @@ export async function deleteBookingAdminAction(
     };
     // Best-effort : en cas d'échec, l'e-mail est mis en file (renvoyable depuis
     // Administration > Messagerie). N'interrompt jamais la suppression.
+    const kind = await resolveTriggerKind(trigger, serviceId);
     await sendTemplatedMail({
       to: email,
-      kind: wasValidated ? "booking_cancelled" : "booking_refused",
+      kind,
       vars,
       serviceId,
     });
@@ -732,7 +736,7 @@ export async function createRecurringBookingAction(input: {
       userId: d.userId,
       serviceId: d.serviceId,
       serviceLabel: slot.service.label,
-      validated: true,
+      trigger: "confirm_manager_create",
       slot: {
         startTime: slot.startTime,
         endTime: slot.endTime,
@@ -840,7 +844,7 @@ export async function createUniqueBookingAction(input: {
     userId: d.userId,
     serviceId: d.serviceId,
     serviceLabel: slot.service.label,
-    validated: true,
+    trigger: "confirm_manager_create",
     slot: {
       startTime: slot.startTime,
       endTime: slot.endTime,

@@ -86,6 +86,8 @@ model User {
   accompagnants Int      @default(0) @db.SmallInt
   role          Role     @default(utilisateur)
   rgpdOk        Boolean  @default(false)
+  // Onboarding : date de complétion de la modale de bienvenue (null = jamais vue).
+  onboardedAt   DateTime? @db.Timestamptz
 
   demandeurId   Int?
   structureId   Int?
@@ -510,4 +512,33 @@ model FailedMail {
 
   @@index([createdAt])
   @@map("failed_mails")
+}
+
+// Référentiel des déclencheurs d'e-mails de réservation (actions métier affichées dans
+// « Échanges par mail »). La CLÉ reste le contrat avec le code (chaque déclencheur
+// correspond à un point d'envoi précis) ; seuls le libellé, le type d'e-mail par défaut
+// et l'ordre d'affichage sont des données. Peuplé au seed (cf. defaultMailTriggers()).
+model MailTrigger {
+  key         String   @id
+  label       String
+  defaultKind String   @map("default_kind")
+  position    Int      @db.SmallInt
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@map("mail_triggers")
+}
+
+// Référentiel des métadonnées des types d'e-mail INTÉGRÉS (libellé, description,
+// destinataire affichés). La CLÉ reste le contrat avec le code (gabarit par défaut,
+// variables et logique d'envoi restent codés) ; seules les métadonnées sont des données.
+// Peuplé au seed (cf. defaultMailTypes()). Les types PERSONNALISÉS ont leur propre registre
+// par service (app_config `mail.custom.types.<serviceId>`).
+model MailType {
+  key         String   @id
+  label       String
+  description String   @default("")
+  recipient   String   @default("")
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@map("mail_types")
 }

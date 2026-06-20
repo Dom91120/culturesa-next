@@ -205,7 +205,7 @@ export async function listEditionRows(serviceId: string, userId?: string): Promi
       jour: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),
       jourDate: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),
       theme: b.themeLabel,
-      statut: b.validated ? "Validée" : "En attente",
+      statut: b.validated ? "Réservation validée" : "Demande en attente de validation",
       pointage: b.pointage === "present" ? "Présent" : b.pointage === "absent" ? "Absent" : "",
       createdAt: b.createdAt.toISOString().slice(0, 16).replace("T", " "),
     };

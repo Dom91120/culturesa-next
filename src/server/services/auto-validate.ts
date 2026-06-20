@@ -283,7 +283,7 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
         userId: c.userId,
         serviceId: svc.id,
         serviceLabel: svc.label,
-        validated: true,
+        trigger: "confirm_autovalidate",
         slot: {
           startTime: c.slot.startTime,
           endTime: c.slot.endTime,

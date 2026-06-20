@@ -4,7 +4,12 @@ import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
-import { htmlToText } from "@/server/services/mail-templates";
+import {
+  getMailTemplate,
+  htmlToText,
+  renderHtmlTemplate,
+  renderSubjectTemplate,
+} from "@/server/services/mail-templates";
 
 // ════════════════════════════════════════════════════════════
 //  Digest de notification des gestionnaires sur les AUTO-VALIDATIONS.
@@ -120,6 +125,9 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
   });
 
   const appUrl = await getAppUrl();
+  // Gabarit éditable « Auto-validations » (Messagerie > E-mails automatiques), portée
+  // globale. La liste des réservations est injectée via la variable BRUTE {{liste}}.
+  const digestTpl = await getMailTemplate("manager_digest");
   let notified = 0;
   let emails = 0;
 
@@ -168,11 +176,10 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
         const periode = periodLabels[idx] ?? "";
         return `<li style="margin:.2rem 0">${escapeHtml(name)} — ${escapeHtml(creneau)}${periode ? ` · ${escapeHtml(periode)}` : ""}</li>`;
       });
-      const inner = `<p>Bonjour,</p>
-<p>${bookings.length} réservation(s) ont été <strong>validées automatiquement</strong> pour « ${escapeHtml(svc.label)} » depuis la dernière notification :</p>
-<ul style="padding-left:1.2em">${items.join("")}</ul>
-<p>Vous pouvez les consulter dans l'agenda du service sur CultuRésa.</p>`;
-      const subject = `Auto-validations — ${svc.label}`;
+      const liste = `<ul style="padding-left:1.2em">${items.join("")}</ul>`;
+      const vars = { service: svc.label, nombre: String(bookings.length) };
+      const subject = renderSubjectTemplate(digestTpl.subject, vars);
+      const inner = renderHtmlTemplate(digestTpl.html, vars, { liste });
       const html = wrapEmailHtml(inner, { preheader: subject, appUrl });
       const text = htmlToText(inner);
       for (const to of managers) {

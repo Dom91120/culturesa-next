@@ -161,7 +161,8 @@ async function reserveRecurringInTx(
     userId,
     serviceId,
     serviceLabel: slot.service.label,
-    validated,
+    // Création par l'usager : confirmée d'emblée (validation off) ou demande en attente.
+    trigger: validated ? "confirm_create" : "pending_create",
     slot: {
       startTime: slot.startTime,
       endTime: slot.endTime,
@@ -262,7 +263,8 @@ async function reservePonctuelInTx(
     userId,
     serviceId,
     serviceLabel: slot.service.label,
-    validated,
+    // Création par l'usager : confirmée d'emblée (validation off) ou demande en attente.
+    trigger: validated ? "confirm_create" : "pending_create",
     slot: {
       startTime: slot.startTime,
       endTime: slot.endTime,

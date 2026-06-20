@@ -305,7 +305,7 @@ export function ReservationsPanel(props: Props) {
         Auto-validation
       </div>
       <label
-        title="Les réservations en attente sont validées automatiquement après ce délai, sauf si la séance est déjà passée"
+        title="Les demandes de réservation en attente sont validées automatiquement après ce délai, sauf si la séance est déjà passée"
         style={{
           display: "flex",
           alignItems: "center",

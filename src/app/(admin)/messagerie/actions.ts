@@ -5,6 +5,7 @@ import { setConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { sendMail } from "@/server/mailer";
+import { encryptSecret } from "@/server/secret-crypto";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -48,7 +49,8 @@ export async function saveMailConfigAction(input: MailConfigInput): Promise<Acti
     "mail.username": d.username,
   };
   // Mot de passe laissé vide => on conserve l'actuel (on n'écrit pas la clé).
-  if (d.password !== "") entries["mail.password"] = d.password;
+  // Sinon on le stocke CHIFFRÉ (jamais en clair en base / dans les dumps).
+  if (d.password !== "") entries["mail.password"] = encryptSecret(d.password);
 
   await setConfigMany(entries);
   revalidatePath("/configuration");

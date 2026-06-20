@@ -1,17 +1,28 @@
 "use client";
 
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { setMailPrefAction, setMailTemplateAction } from "./actions";
+import {
+  createMailTypeAction,
+  deleteMailTypeAction,
+  setMailTemplateAction,
+  updateMailTypeAction,
+} from "./actions";
 import { RichTextEditor } from "./rich-text-editor";
 
 export type KindData = {
   kind: string;
   label: string;
   description: string;
-  enabled: boolean;
-  // Verrouillé : e-mail toujours envoyé (case « Envoyer » cochée et non modifiable).
+  // Destinataire de l'e-mail (affiché en colonne quand `showRecipient`).
+  recipient: string;
+  // Verrouillé : e-mail système, toujours envoyé (case « Envoyer » cochée et non modifiable).
   locked: boolean;
+  // Type d'e-mail personnalisé (modifiable/supprimable). Absent/false → type intégré.
+  deletable?: boolean;
+  // Routé par au moins un service → suppression interdite (bouton désactivé).
+  used?: boolean;
   subject: string;
   html: string;
   defaultSubject: string;
@@ -23,6 +34,7 @@ export type KindData = {
 const SAMPLE: Record<string, string> = {
   salutation: "Bonjour Marie,",
   prenom: "Marie",
+  usager: "Marie Martin",
   service: "Atelier poterie",
   creneau: "lundi 15 juin 2026 · 10:00 – 12:00",
   periode: "Vacances de printemps",
@@ -32,10 +44,13 @@ const SAMPLE: Record<string, string> = {
   url: "https://culturesa.exemple/lien",
   annees: "2 an(s)",
   delai: "30 jours",
+  nombre: "3",
 };
 // Variables BRUTES (HTML non échappé) pour l'aperçu — miroir du serveur.
 const SAMPLE_RAW: Record<string, string> = {
   bouton: emailButton("#", "Bouton d'action"),
+  liste:
+    '<ul style="padding-left:1.2em"><li style="margin:.2rem 0">Marie Martin — lundi 09:00 – 10:30 · Vacances de printemps</li><li style="margin:.2rem 0">Paul Durand — mardi 14:00 – 15:30</li></ul>',
 };
 
 function esc(s: string): string {
@@ -68,7 +83,13 @@ export function EchangesConfig({
   intro,
   panelId = "echanges-panel",
   serviceId,
+  showRecipient = false,
+  showSend = true,
+  allowCreate = false,
+  contentLabel = "Contenu",
 }: {
+  // Une ligne par TYPE d'e-mail (label + destinataire + contenu éditable). Utilisé pour
+  // « Modèles d'e-mails » (par service) et « E-mails automatiques » (système, Messagerie).
   rows: KindData[];
   // Titre du panel + intro + id : permet de réutiliser cette table pour un autre groupe
   // d'e-mails (ex. panel « E-mails automatiques » de l'onglet Messagerie).
@@ -78,10 +99,18 @@ export function EchangesConfig({
   // Fourni → gabarits/préférences réglés PAR SERVICE (e-mails de réservation) ; absent →
   // portée globale (e-mails système).
   serviceId?: string;
+  // Affiche une colonne « Destinataire » (panel « E-mails automatiques »).
+  showRecipient?: boolean;
+  // Affiche la colonne « Envoyer » (masquée dans « Modèles d'e-mails » : l'envoi est réglé
+  // par action dans « Échanges par mail »).
+  showSend?: boolean;
+  // Autorise la création/suppression de types d'e-mails personnalisés (admin, « Modèles »).
+  allowCreate?: boolean;
+  // Libellé de l'en-tête de la colonne d'édition (« Contenu » par défaut, « Modèle » dans
+  // « Modèles d'e-mails »).
+  contentLabel?: string;
 }) {
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(
-    Object.fromEntries(rows.map((r) => [r.kind, r.enabled])),
-  );
+  const router = useRouter();
   const [saved, setSaved] = useState<Record<string, { subject: string; html: string }>>(
     Object.fromEntries(rows.map((r) => [r.kind, { subject: r.subject, html: r.html }])),
   );
@@ -93,17 +122,58 @@ export function EchangesConfig({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // Incrémenté lors d'une réinitialisation pour forcer le remontage de l'éditeur WYSIWYG.
   const [editorNonce, setEditorNonce] = useState(0);
+  // Création/suppression de types personnalisés (mode « Modèles d'e-mails », admin).
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Modale création/édition d'un type personnalisé : `kind === null` → création.
+  const [metaEdit, setMetaEdit] = useState<{
+    kind: string | null;
+    label: string;
+    description: string;
+    recipient: string;
+  } | null>(null);
+  const isCreating = metaEdit?.kind === null;
 
-  function toggleSend(kind: string, value: boolean) {
+  // Ouvre la modale en mode création (champs vierges + destinataire par défaut).
+  function openCreate() {
     setMsg(null);
-    setEnabled((s) => ({ ...s, [kind]: value }));
+    // `recipient` conservé dans le type mais non éditable ici (réglé par action,
+    // cf. « Échanges par mail ») — valeur neutre par défaut.
+    setMetaEdit({ kind: null, label: "", description: "", recipient: "" });
+  }
+
+  function saveMeta() {
+    if (!metaEdit) return;
+    const m = metaEdit;
+    // serviceId omis ⇒ portée globale (admin) ; l'action serveur applique le contrôle d'accès.
+    setMsg(null);
     startTransition(async () => {
-      const res = await setMailPrefAction(kind, value, serviceId);
+      const res =
+        m.kind === null
+          ? await createMailTypeAction(serviceId, m.label, m.description, m.recipient)
+          : await updateMailTypeAction(serviceId, m.kind, m.label, m.description, m.recipient);
       if (res && !res.ok) {
-        setEnabled((s) => ({ ...s, [kind]: !value }));
         setMsg({ ok: false, text: res.error ?? "Échec de l'enregistrement." });
       } else {
-        setMsg({ ok: true, text: "Préférence enregistrée ✓" });
+        setMetaEdit(null);
+        setMsg({
+          ok: true,
+          text: m.kind === null ? "Type d'e-mail créé ✓" : "Type d'e-mail mis à jour ✓",
+        });
+        router.refresh();
+      }
+    });
+  }
+
+  function deleteType(kind: string) {
+    setConfirmDelete(null);
+    setMsg(null);
+    startTransition(async () => {
+      const res = await deleteMailTypeAction(serviceId, kind);
+      if (res && !res.ok) {
+        setMsg({ ok: false, text: res.error ?? "Échec de la suppression." });
+      } else {
+        setMsg({ ok: true, text: "Type d'e-mail supprimé ✓" });
+        router.refresh();
       }
     });
   }
@@ -159,16 +229,17 @@ export function EchangesConfig({
       </div>
 
       <p style={{ fontSize: ".85rem", lineHeight: 1.5, color: "var(--muted)", margin: "0 0 1rem" }}>
-        {intro ??
-          "Personnalisez le contenu (objet + corps) de chaque e-mail lié aux réservations via l'éditeur, et choisissez ceux que l'application envoie. Décocher « Envoyer » désactive l'envoi de ce type d'e-mail (les réservations continuent de fonctionner)."}
+        {intro ?? "Personnalisez le contenu (objet + corps) de chaque e-mail via l'éditeur."}
       </p>
 
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
         <thead>
           <tr>
             <th style={th("left")}>Type d&apos;e-mail</th>
-            <th style={{ ...th("center"), width: 90 }}>Envoyer</th>
-            <th style={{ ...th("center"), width: 140 }}>Contenu</th>
+            {showRecipient && <th style={{ ...th("left"), width: 200 }}>Destinataire</th>}
+            {showSend && <th style={{ ...th("center"), width: 90 }}>Envoyer</th>}
+            <th style={{ ...th("center"), width: 140 }}>{contentLabel}</th>
+            {allowCreate && <th style={{ ...th("center"), width: 180 }}>Action</th>}
           </tr>
         </thead>
         <tbody>
@@ -176,14 +247,38 @@ export function EchangesConfig({
             <Row
               key={r.kind}
               r={r}
-              enabled={enabled[r.kind] ?? true}
-              pending={pending}
-              onToggleSend={(v) => toggleSend(r.kind, v)}
+              showRecipient={showRecipient}
+              showSend={showSend}
+              showAction={allowCreate}
+              editable={allowCreate && !!r.deletable}
               onEdit={() => setEditing(r.kind)}
+              onEditMeta={() =>
+                setMetaEdit({
+                  kind: r.kind,
+                  label: r.label,
+                  description: r.description,
+                  recipient: r.recipient,
+                })
+              }
+              onAskDelete={() => setConfirmDelete(r.kind)}
             />
           ))}
         </tbody>
       </table>
+
+      {allowCreate && (
+        <div style={{ marginTop: "1rem" }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={openCreate}
+            disabled={pending}
+            style={{ fontSize: ".78rem", whiteSpace: "nowrap" }}
+          >
+            ＋ Ajouter un type d&apos;e-mail
+          </button>
+        </div>
+      )}
 
       {msg && (
         <span
@@ -231,6 +326,129 @@ export function EchangesConfig({
           </div>
         </div>
       )}
+
+      {/* Modale création / édition d'un type personnalisé (nom / description / destinataire). */}
+      {metaEdit && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
+        <div
+          className="modal-overlay open"
+          style={{ display: "flex" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMetaEdit(null);
+          }}
+        >
+          <div className="modal-box" style={{ maxWidth: 480, width: "95vw" }}>
+            <div className="modal-title">
+              {isCreating ? "Créer un type d'e-mail" : "Modifier le type d'e-mail"}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: ".7rem" }}>
+              <label style={{ fontSize: ".78rem", fontWeight: 600 }}>
+                Nom
+                <input
+                  type="text"
+                  value={metaEdit.label}
+                  maxLength={100}
+                  onChange={(e) => setMetaEdit({ ...metaEdit, label: e.target.value })}
+                  style={{ width: "100%", boxSizing: "border-box", marginTop: ".2rem" }}
+                />
+              </label>
+              <label style={{ fontSize: ".78rem", fontWeight: 600 }}>
+                Description
+                <input
+                  type="text"
+                  value={metaEdit.description}
+                  maxLength={300}
+                  onChange={(e) => setMetaEdit({ ...metaEdit, description: e.target.value })}
+                  style={{ width: "100%", boxSizing: "border-box", marginTop: ".2rem" }}
+                />
+              </label>
+              {/* Le destinataire ne dépend plus du modèle mais de l'ACTION : il se règle
+                  dans « Échanges par mail » (colonne Destinataire). */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setMetaEdit(null)}
+                  style={{ fontSize: ".78rem" }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={saveMeta}
+                  disabled={pending || !metaEdit.label.trim()}
+                  style={{ fontSize: ".78rem" }}
+                >
+                  {isCreating ? "＋ Créer" : "💾 Enregistrer"}
+                </button>
+              </div>
+            </div>
+            <button type="button" className="modal-close" onClick={() => setMetaEdit(null)}>
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modale de confirmation de suppression d'un type personnalisé (--danger). */}
+      {confirmDelete && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
+        <div
+          className="modal-overlay open"
+          style={{ display: "flex" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmDelete(null);
+          }}
+        >
+          <div className="modal-box" style={{ maxWidth: 460, width: "95vw" }}>
+            <div className="modal-title" style={{ color: "var(--danger)" }}>
+              🗑️ Supprimer le type d&apos;e-mail
+            </div>
+            <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+              Vous êtes sur le point de supprimer le type{" "}
+              <strong>« {rows.find((r) => r.kind === confirmDelete)?.label ?? ""} »</strong>.
+            </p>
+            <p
+              style={{
+                fontSize: ".78rem",
+                color: "var(--danger)",
+                fontWeight: 600,
+                margin: "0 0 1rem",
+              }}
+            >
+              ⚠️ Cette action est irréversible.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setConfirmDelete(null)}
+                style={{ fontSize: ".78rem" }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => deleteType(confirmDelete)}
+                disabled={pending}
+                style={{
+                  fontSize: ".78rem",
+                  background: "var(--danger)",
+                  border: "none",
+                  color: "var(--text)",
+                }}
+              >
+                🗑️ Supprimer
+              </button>
+            </div>
+            <button type="button" className="modal-close" onClick={() => setConfirmDelete(null)}>
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -247,16 +465,25 @@ function th(align: "left" | "center"): React.CSSProperties {
 
 function Row({
   r,
-  enabled,
-  pending,
-  onToggleSend,
+  showRecipient,
+  showSend = true,
+  showAction = false,
+  editable = false,
   onEdit,
+  onEditMeta,
+  onAskDelete,
 }: {
   r: KindData;
-  enabled: boolean;
-  pending: boolean;
-  onToggleSend: (v: boolean) => void;
+  showRecipient: boolean;
+  showSend?: boolean;
+  // Affiche la colonne « Action » (admin, « Modèles d'e-mails »).
+  showAction?: boolean;
+  // Type personnalisé : modifiable (métadonnées) et supprimable.
+  editable?: boolean;
   onEdit: () => void;
+  onEditMeta?: () => void;
+  // Demande la suppression : ouvre la modale de confirmation (--danger) au niveau du parent.
+  onAskDelete?: () => void;
 }) {
   const cell: React.CSSProperties = {
     padding: ".55rem .6rem",
@@ -266,26 +493,27 @@ function Row({
     <tr>
       <td style={cell}>
         <div style={{ fontWeight: 600 }}>{r.label}</div>
-        <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
-          {r.description}
-        </div>
+        {r.description && (
+          <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
+            {r.description}
+          </div>
+        )}
       </td>
-      <td style={{ ...cell, textAlign: "center" }}>
-        <input
-          type="checkbox"
-          aria-label={`Envoyer : ${r.label}`}
-          // Verrouillé → toujours coché et non modifiable (e-mail obligatoire).
-          checked={r.locked ? true : enabled}
-          disabled={pending || r.locked}
-          title={r.locked ? "Cet e-mail est toujours envoyé (non désactivable)." : undefined}
-          onChange={(e) => onToggleSend(e.target.checked)}
-          style={{
-            width: 18,
-            height: 18,
-            cursor: pending || r.locked ? "default" : "pointer",
-          }}
-        />
-      </td>
+      {showRecipient && <td style={{ ...cell, fontSize: ".82rem" }}>{r.recipient}</td>}
+      {showSend && (
+        <td style={{ ...cell, textAlign: "center" }}>
+          {/* E-mails système : toujours envoyés (affichage en lecture seule). */}
+          <input
+            type="checkbox"
+            aria-label={`Envoyer : ${r.label}`}
+            checked
+            disabled
+            readOnly
+            title="Cet e-mail est toujours envoyé (non désactivable)."
+            style={{ width: 18, height: 18, cursor: "default" }}
+          />
+        </td>
+      )}
       <td style={{ ...cell, textAlign: "center" }}>
         <button
           type="button"
@@ -296,6 +524,47 @@ function Row({
           ✏️ Modifier
         </button>
       </td>
+      {showAction && (
+        <td style={{ ...cell, textAlign: "center" }}>
+          {!editable ? (
+            <span style={{ color: "var(--muted)" }}>—</span>
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: ".35rem" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={onEditMeta}
+                title="Modifier le nom, la description et le destinataire"
+                aria-label={`Modifier le type : ${r.label}`}
+                style={{ padding: ".25rem .5rem", fontSize: ".76rem" }}
+              >
+                ✏️
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={onAskDelete}
+                disabled={r.used}
+                title={
+                  r.used
+                    ? "Type utilisé par au moins un service : retirez-le des actions avant de le supprimer."
+                    : "Supprimer ce type d'e-mail"
+                }
+                aria-label={`Supprimer le type : ${r.label}`}
+                style={{
+                  padding: ".25rem .45rem",
+                  fontSize: ".76rem",
+                  color: r.used ? "var(--muted)" : "#e05555",
+                  borderColor: r.used ? "var(--border)" : "rgba(220,80,80,.4)",
+                  cursor: r.used ? "not-allowed" : "pointer",
+                }}
+              >
+                🗑️
+              </button>
+            </span>
+          )}
+        </td>
+      )}
     </tr>
   );
 }

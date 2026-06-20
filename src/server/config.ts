@@ -24,6 +24,12 @@ export async function getAppUrl(): Promise<string> {
   return (cfg || fromEnv).replace(/\/$/, "");
 }
 
+/** Existe-t-il une clé `<prefix>…` dont la valeur vaut exactement `value` ? */
+export async function isConfigValueUsed(prefix: string, value: string): Promise<boolean> {
+  const n = await prisma.appConfig.count({ where: { key: { startsWith: prefix }, value } });
+  return n > 0;
+}
+
 /** Écrit une clé de configuration applicative. */
 export async function setConfig(key: string, value: string): Promise<void> {
   await prisma.appConfig.upsert({
@@ -43,4 +49,10 @@ export async function setConfigMany(entries: Record<string, string>): Promise<vo
     }),
   );
   await prisma.$transaction(ops);
+}
+
+/** Supprime une ou plusieurs clés de configuration applicative (no-op si liste vide). */
+export async function deleteConfig(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  await prisma.appConfig.deleteMany({ where: { key: { in: keys } } });
 }

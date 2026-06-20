@@ -1749,7 +1749,8 @@ export function UserAgendaGrid({
         month: "2-digit",
         year: "numeric",
       });
-    const statutOf = (v: boolean) => (v ? "Validée" : "En attente");
+    const statutOf = (v: boolean) =>
+      v ? "Réservation validée" : "Demande en attente de validation";
     const pointageOf = (p?: string | null) =>
       p === "present" ? "Présent" : p === "absent" ? "Absent" : "—";
 
@@ -2578,9 +2579,11 @@ export function UserAgendaGrid({
                   accompagnants={mb.accompagnants}
                   theme={mb.theme}
                   remaining={0}
-                  stateLabel={mb.validated ? "Validé" : "En attente de validation"}
+                  stateLabel={
+                    mb.validated ? "Réservation validée" : "Demande en attente de validation"
+                  }
                   title={`${tipTime}\n${
-                    mb.validated ? "✅ Réservé (validé)" : "⏳ Réservé (en attente)"
+                    mb.validated ? "✅ Réservation validée" : "⏳ Demande en attente de validation"
                   }\n${participantsLabel(mb.enfants, mb.accompagnants)}`}
                   closeIcon="×"
                   locked
@@ -2608,8 +2611,8 @@ export function UserAgendaGrid({
                   ? "Déplacement en cours…"
                   : noWidgets
                     ? mb.validated
-                      ? "Validé"
-                      : "En attente de validation"
+                      ? "Réservation validée"
+                      : "Demande en attente de validation"
                     : "";
               // Place dispo pour CE booking = libre + sa propre occupation déjà comptée
               // (enfants + adultes en jauge ; 1 réservation hors jauge).
@@ -2628,8 +2631,8 @@ export function UserAgendaGrid({
                 : isMoving
                   ? "↔️ Déplacement en cours"
                   : mb.validated
-                    ? "✅ Réservé (validé)"
-                    : "⏳ Réservé (en attente)";
+                    ? "✅ Réservation validée"
+                    : "⏳ Demande en attente de validation";
               const tipWeek =
                 abMode && (mb.week === "A" || mb.week === "B") ? `\nSemaine ${mb.week}` : "";
               return (
@@ -2701,7 +2704,7 @@ export function UserAgendaGrid({
                   accompagnants={add.accompagnants}
                   theme={add.theme}
                   remaining={remaining}
-                  stateLabel={noWidgets ? "En attente de validation" : ""}
+                  stateLabel={noWidgets ? "Demande en attente de validation" : ""}
                   title={`${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
                     add.enfants,
                     add.accompagnants,
@@ -2759,9 +2762,10 @@ export function UserAgendaGrid({
               );
             }
             // Créneau libre (pas de réservation de l'usager) : style legacy
-            // (.user-agenda-block-inner) = icône agenda 24px + places disponibles
-            // (.slot-spots, .62rem) en dessous.
+            // (.user-agenda-block-inner) = icône agenda + places disponibles (.slot-spots).
+            // Taille de l'icône selon la durée : masquée ≤ 30 min, 20px à 45 min, 24px au-delà.
             const remaining = Math.max(0, b.capacity - b.used);
+            const slotIconPx = !b.isAllDay && b.endMin - b.startMin <= 45 ? 20 : 24;
             return (
               <div
                 aria-hidden="true"
@@ -2776,20 +2780,23 @@ export function UserAgendaGrid({
                   color: "var(--muted)",
                 }}
               >
-                <span
-                  className="slot-icon"
-                  style={{
-                    fontSize: 24,
-                    lineHeight: 1,
-                    width: 24,
-                    height: 24,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  📆
-                </span>
+                {/* Créneaux ≤ 30 min : pas d'icône (place insuffisante), seulement les places. */}
+                {!shortSlot && (
+                  <span
+                    className="slot-icon"
+                    style={{
+                      fontSize: slotIconPx,
+                      lineHeight: 1,
+                      width: slotIconPx,
+                      height: slotIconPx,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    📆
+                  </span>
+                )}
                 <span
                   className="slot-spots"
                   style={{
@@ -3326,7 +3333,7 @@ export function UserAgendaGrid({
                 ⏳
               </span>
             </span>
-            En attente de validation
+            Demande en attente de validation
           </span>
           {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
           <div
@@ -3399,7 +3406,7 @@ export function UserAgendaGrid({
                 ✔
               </span>
             </span>
-            Validée
+            Réservation validée
           </span>
           {/* Compteur du brouillon (aligné à droite). */}
           <p

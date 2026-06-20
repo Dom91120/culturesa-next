@@ -3,7 +3,13 @@ import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
-import { isMailEnabled } from "@/server/services/mail-prefs";
+import {
+  type ResolvedRecipient,
+  getTriggerRecipient,
+  isTriggerEnabled,
+  resolveTriggerKind,
+  resolveTriggerRecipients,
+} from "@/server/services/mail-prefs";
 import {
   getMailTemplate,
   htmlToText,
@@ -73,7 +79,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
         slotId: true,
         serviceId: true,
         periodId: true,
-        user: { select: { email: true, prenom: true } },
+        user: { select: { email: true, prenom: true, nom: true } },
         service: { select: { label: true } },
       },
     });
@@ -91,14 +97,25 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
     const serviceIds = [...new Set(bookings.map((b) => b.serviceId))];
     const tplByService = new Map<string, { subject: string; html: string }>();
     const enabledByService = new Map<string, boolean>();
+    // Destinataire de l'action « rappel » par service (défaut « usager »). Pour les autres
+    // portées (gestionnaires/admins/fixe), la liste est la même pour toutes les réservations
+    // du service → résolue UNE fois ici (anti-N+1).
+    const recipKindByService = new Map<string, string>();
+    const svcRecipientsByService = new Map<string, ResolvedRecipient[]>();
     await Promise.all(
       serviceIds.map(async (sid) => {
-        const [enabled, t] = await Promise.all([
-          isMailEnabled("booking_reminder", sid),
-          getMailTemplate("booking_reminder", sid),
+        // Type d'e-mail EFFECTIF de l'action « rappel » (re-routage éventuel du service).
+        const [enabled, kindForSvc, rec] = await Promise.all([
+          isTriggerEnabled("reminder", sid),
+          resolveTriggerKind("reminder", sid),
+          getTriggerRecipient("reminder", sid),
         ]);
         enabledByService.set(sid, enabled);
-        tplByService.set(sid, t);
+        tplByService.set(sid, await getMailTemplate(kindForSvc, sid));
+        recipKindByService.set(sid, rec.kind);
+        if (rec.kind !== "usager") {
+          svcRecipientsByService.set(sid, await resolveTriggerRecipients("reminder", sid, {}));
+        }
       }),
     );
 
@@ -128,34 +145,51 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
       const occ = dated.find((s) => s.id === b.slotId);
       if (!occ) continue;
 
-      const email = b.user?.email?.trim();
-      if (!email?.includes("@")) continue;
+      // Destinataire(s) selon le réglage de l'action « rappel » (défaut = l'usager concerné).
+      const recipKind = recipKindByService.get(b.serviceId) ?? "usager";
+      let recipients: ResolvedRecipient[];
+      if (recipKind === "usager") {
+        const email = b.user?.email?.trim();
+        if (!email?.includes("@")) continue;
+        recipients = [{ email, prenom: b.user?.prenom?.trim() ?? "", personal: true }];
+      } else {
+        recipients = svcRecipientsByService.get(b.serviceId) ?? [];
+        if (recipients.length === 0) continue;
+      }
 
-      const prenom = b.user?.prenom?.trim() ?? "";
+      const usager = `${b.user?.prenom ?? ""} ${b.user?.nom ?? ""}`.trim();
       const periode = periodByBooking.get(b.id) ?? "";
-      const vars: Record<string, string> = {
-        salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
-        prenom,
+      const creneau = formatSlotLabel({
+        startTime: occ.startTime,
+        endTime: occ.endTime,
+        slotDate: targetDate,
+        slotDay: null,
+      });
+      const baseVars: Record<string, string> = {
+        usager,
         service: b.service?.label ?? "",
-        creneau: formatSlotLabel({
-          startTime: occ.startTime,
-          endTime: occ.endTime,
-          slotDate: targetDate,
-          slotDay: null,
-        }),
+        creneau,
         periode,
         echeance: ECHEANCE[kind],
       };
 
-      const inner = renderHtmlTemplate(tpl.html, vars);
-      const subject = renderSubjectTemplate(tpl.subject, vars);
       try {
-        await sendMailOrQueue({
-          to: email,
-          subject,
-          html: wrapEmailHtml(inner, { preheader: subject, appUrl }),
-          text: htmlToText(inner),
-        });
+        for (const r of recipients) {
+          const prenom = r.personal ? r.prenom : "";
+          const vars = {
+            ...baseVars,
+            salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
+            prenom,
+          };
+          const inner = renderHtmlTemplate(tpl.html, vars);
+          const subject = renderSubjectTemplate(tpl.subject, vars);
+          await sendMailOrQueue({
+            to: r.email,
+            subject,
+            html: wrapEmailHtml(inner, { preheader: subject, appUrl }),
+            text: htmlToText(inner),
+          });
+        }
         // Journalise l'envoi (best-effort déjà géré par la file). La contrainte
         // unique protège des doublons en cas de concurrence.
         await prisma.bookingReminder.create({

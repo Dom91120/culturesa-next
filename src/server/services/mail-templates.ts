@@ -1,4 +1,4 @@
-import { getConfigMany, setConfigMany } from "@/server/config";
+import { deleteConfig, getConfigMany, isConfigValueUsed, setConfigMany } from "@/server/config";
 
 // Gabarits (sujet + corps HTML) éditables des e-mails. Stockés dans app_config (clés
 // `mail.tpl.<kind>.subject` / `.html`) ; à défaut, le gabarit par défaut ci-dessous est
@@ -11,6 +11,7 @@ import { getConfigMany, setConfigMany } from "@/server/config";
 export const TEMPLATE_KINDS = [
   "booking_confirmed",
   "booking_pending",
+  "booking_unvalidated",
   "booking_cancelled",
   "booking_refused",
   "booking_reminder",
@@ -19,6 +20,7 @@ export const TEMPLATE_KINDS = [
   "account_deletion_request",
   "account_deletion_notice",
   "email_test",
+  "manager_digest",
 ] as const;
 
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
@@ -31,6 +33,7 @@ export type MailVar = { name: string; desc: string };
 const COMMON_VARS: MailVar[] = [
   { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, » sans prénom)" },
   { name: "prenom", desc: "Prénom de l'usager" },
+  { name: "usager", desc: "Nom complet de l'usager concerné (utile pour gestionnaires/admins)" },
   { name: "service", desc: "Nom du service / de l'activité" },
   { name: "creneau", desc: "Créneau : date+heure (ponctuel) ou jour+heure (récurrent)" },
   { name: "periode", desc: "Libellé de la période (peut être vide)" },
@@ -48,6 +51,7 @@ const DELETE_VARS: MailVar[] = [
 const REMINDER_VARS: MailVar[] = [
   { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, »)" },
   { name: "prenom", desc: "Prénom de l'usager" },
+  { name: "usager", desc: "Nom complet de l'usager concerné (utile pour gestionnaires/admins)" },
   { name: "service", desc: "Nom du service / de l'activité" },
   {
     name: "creneau",
@@ -66,6 +70,7 @@ const LINK_VARS: MailVar[] = [
 export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
   booking_confirmed: BOOKING_VARS,
   booking_pending: BOOKING_VARS,
+  booking_unvalidated: BOOKING_VARS,
   booking_cancelled: DELETE_VARS,
   booking_refused: DELETE_VARS,
   booking_reminder: REMINDER_VARS,
@@ -79,6 +84,14 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
     { name: "delai", desc: "Délai avant suppression, ex. « 30 jours »" },
   ],
   email_test: [],
+  manager_digest: [
+    { name: "service", desc: "Nom du service / de l'activité" },
+    { name: "nombre", desc: "Nombre de réservations auto-validées dans ce récapitulatif" },
+    {
+      name: "liste",
+      desc: "Liste (générée) des réservations auto-validées — à placer où vous voulez",
+    },
+  ],
 };
 
 const DETAILS_CONFIRMATION = `<p><strong>Détail de votre réservation :</strong></p>
@@ -107,6 +120,14 @@ ${DETAILS_CONFIRMATION}
 <p>Un gestionnaire va examiner votre demande : vous recevrez un e-mail dès qu'elle aura été validée ou refusée. Vous pouvez suivre son état depuis votre espace CultuRésa.</p>
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
+  booking_unvalidated: {
+    subject: "Réservation remise en attente — {{service}}",
+    html: `<p>{{salutation}}</p>
+<p>Votre réservation pour « {{service}} » a été <strong>remise en attente de validation</strong> par un gestionnaire.</p>
+${DETAILS_CONFIRMATION}
+<p>Un gestionnaire va la réexaminer : vous recevrez un e-mail dès qu'elle aura été validée ou refusée. Vous pouvez suivre son état depuis votre espace CultuRésa.</p>
+<p>Cordialement,<br>L'équipe CultuRésa</p>`,
+  },
   booking_cancelled: {
     subject: "Réservation annulée — {{service}}",
     html: `<p>{{salutation}}</p>
@@ -117,9 +138,9 @@ ${DETAILS_CONFIRMATION}
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
   booking_refused: {
-    subject: "Réservation non validée — {{service}}",
+    subject: "Demande de réservation refusée — {{service}}",
     html: `<p>{{salutation}}</p>
-<p>Nous vous informons que votre réservation <strong>n'a pas été validée</strong>{{#if service}} pour « {{service}} »{{/if}}.</p>
+<p>Nous vous informons que votre demande de réservation <strong>n'a pas été validée</strong>{{#if service}} pour « {{service}} »{{/if}}.</p>
 {{#if creneau}}<p><strong>Créneau concerné :</strong> {{creneau}}</p>{{/if}}
 {{#if periode}}<p><strong>Période :</strong> {{periode}}</p>{{/if}}
 {{#if motif}}<p><strong>Motif :</strong><br>{{motif}}</p>{{/if}}
@@ -170,52 +191,187 @@ ${DETAILS_CONFIRMATION}
 <p>Si vous voyez cet habillage (logo, couleurs, mise en page), la configuration e-mail fonctionne correctement.</p>
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
+  manager_digest: {
+    subject: "Auto-validations — {{service}}",
+    html: `<p>Bonjour,</p>
+<p>{{nombre}} réservation(s) ont été <strong>validées automatiquement</strong> pour « {{service}} » depuis la dernière notification :</p>
+{{liste}}
+<p>Vous pouvez les consulter dans l'agenda du service sur CultuRésa.</p>`,
+  },
 };
 
-// Clés app_config. Avec `serviceId` → surcharge PAR SERVICE (e-mails de réservation,
-// onglet Paramètres › Échanges) ; sans → surcharge GLOBALE (e-mails système, Messagerie).
-function subjectKey(kind: TemplateKind, serviceId?: string) {
+// Clés app_config. Avec `serviceId` → surcharge PAR SERVICE ; sans → couche GLOBALE.
+// `kind` est un TemplateKind intégré OU une clé de type personnalisé (« custom_… »).
+function subjectKey(kind: string, serviceId?: string) {
   return serviceId ? `mail.tpl.${serviceId}.${kind}.subject` : `mail.tpl.${kind}.subject`;
 }
-function htmlKey(kind: TemplateKind, serviceId?: string) {
+function htmlKey(kind: string, serviceId?: string) {
   return serviceId ? `mail.tpl.${serviceId}.${kind}.html` : `mail.tpl.${kind}.html`;
 }
 
+const builtinDefault = (kind: string): MailTemplate | undefined =>
+  (DEFAULT_TEMPLATES as Record<string, MailTemplate>)[kind];
+
 /**
- * Gabarit effectif d'un type d'e-mail : surcharge enregistrée, sinon défaut intégré.
- * `serviceId` → gabarit propre au service ; absent → gabarit global. Le repli est
- * toujours le défaut intégré (pas de couche globale derrière le service).
+ * Gabarit effectif d'un type d'e-mail. Repli en cascade :
+ *   surcharge service → couche globale → défaut intégré (s'il existe).
+ * Les types INTÉGRÉS de réservation n'ont pas de couche globale (jamais écrite) → ils
+ * retombent sur le défaut. Les types PERSONNALISÉS (« custom_… ») n'ont pas de défaut
+ * intégré → leur contenu « par défaut » est leur couche globale (créée à l'ajout).
  */
-export async function getMailTemplate(
-  kind: TemplateKind,
-  serviceId?: string,
-): Promise<MailTemplate> {
-  const sk = subjectKey(kind, serviceId);
-  const hk = htmlKey(kind, serviceId);
-  const cfg = await getConfigMany([sk, hk]);
-  const subject = cfg[sk].trim() || DEFAULT_TEMPLATES[kind].subject;
-  const html = cfg[hk].trim() || DEFAULT_TEMPLATES[kind].html;
+export async function getMailTemplate(kind: string, serviceId?: string): Promise<MailTemplate> {
+  const keys = [subjectKey(kind), htmlKey(kind)];
+  if (serviceId) keys.push(subjectKey(kind, serviceId), htmlKey(kind, serviceId));
+  const cfg = await getConfigMany(keys);
+  const svcSub = serviceId ? cfg[subjectKey(kind, serviceId)].trim() : "";
+  const svcHtml = serviceId ? cfg[htmlKey(kind, serviceId)].trim() : "";
+  const def = builtinDefault(kind);
+  const subject = svcSub || cfg[subjectKey(kind)].trim() || def?.subject || "";
+  const html = svcHtml || cfg[htmlKey(kind)].trim() || def?.html || "";
   return { subject, html };
 }
 
 /**
- * Enregistre la surcharge d'un gabarit (par service si `serviceId`, sinon globale). Si
- * le contenu est identique au défaut (ou vide), on efface la surcharge (retour au défaut,
- * propagation des évolutions).
+ * Enregistre la surcharge d'un gabarit (par service si `serviceId`, sinon couche globale).
+ * Pour un type INTÉGRÉ, si le contenu == défaut (ou vide) la surcharge est EFFACÉE (la clé
+ * `app_config` est supprimée, pas laissée vide) → retour au défaut, sans ligne résiduelle.
+ * Pour un type PERSONNALISÉ (sans défaut intégré), vide ⇒ efface aussi.
  */
 export async function setMailTemplate(
-  kind: TemplateKind,
+  kind: string,
   subject: string,
   html: string,
   serviceId?: string,
 ): Promise<void> {
-  const def = DEFAULT_TEMPLATES[kind];
+  const def = builtinDefault(kind);
   const s = subject.trim();
   const h = html.trim();
+  const subjVal = s && (!def || s !== def.subject.trim()) ? subject : "";
+  const htmlVal = h && (!def || h !== def.html.trim()) ? html : "";
+
+  const toSet: Record<string, string> = {};
+  const toDel: string[] = [];
+  if (subjVal) toSet[subjectKey(kind, serviceId)] = subjVal;
+  else toDel.push(subjectKey(kind, serviceId));
+  if (htmlVal) toSet[htmlKey(kind, serviceId)] = htmlVal;
+  else toDel.push(htmlKey(kind, serviceId));
+
+  if (Object.keys(toSet).length > 0) await setConfigMany(toSet);
+  if (toDel.length > 0) await deleteConfig(toDel);
+}
+
+// ── Types d'e-mails PERSONNALISÉS ───────────────────────────────────────────────────
+//  Deux portées, même mécanique (serviceId optionnel) :
+//   - PAR SERVICE  : registre `mail.custom.types.<serviceId>`, contenu `mail.tpl.<serviceId>.<key>.*`
+//                    (créés par le gestionnaire dans « Modèles d'e-mails » du service) ;
+//   - GLOBAL (admin): registre `mail.custom.types`, contenu `mail.tpl.<key>.*` (couche globale)
+//                    (créés dans Messagerie « Modèles d'e-mails (tous services) »), routables partout.
+//  serviceId omis ⇒ portée GLOBALE.
+export type CustomMailType = { key: string; label: string; description: string; recipient: string };
+const customTypesKey = (serviceId?: string) =>
+  serviceId ? `mail.custom.types.${serviceId}` : "mail.custom.types";
+const DEFAULT_CUSTOM_RECIPIENT = "L'usager concerné";
+
+/** Gabarit de départ d'un type personnalisé (sert aussi de cible au bouton « Réinitialiser »). */
+export function customStarterTemplate(label: string): MailTemplate {
+  return {
+    subject: `${label} — {{service}}`,
+    html: `<p>{{salutation}}</p>\n<p>Votre message pour « {{service}} ».</p>\n<p>Cordialement,<br>L'équipe CultuRésa</p>`,
+  };
+}
+
+/** Variables disponibles pour un type personnalisé (union des variables de réservation). */
+export const CUSTOM_MAIL_VARS: MailVar[] = [
+  { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, »)" },
+  { name: "prenom", desc: "Prénom de l'usager" },
+  { name: "usager", desc: "Nom complet de l'usager concerné (utile pour gestionnaires/admins)" },
+  { name: "service", desc: "Nom du service / de l'activité" },
+  { name: "creneau", desc: "Créneau concerné (selon l'action)" },
+  { name: "periode", desc: "Libellé de la période (peut être vide)" },
+  { name: "participants", desc: "Ex. « 2 enfants, 1 accompagnant » (si disponible)" },
+  { name: "theme", desc: "Thème (si disponible)" },
+  { name: "motif", desc: "Motif (si l'action en fournit un)" },
+  { name: "echeance", desc: "Échéance (rappels uniquement)" },
+];
+
+export async function listCustomMailTypes(serviceId?: string): Promise<CustomMailType[]> {
+  const key = customTypesKey(serviceId);
+  const cfg = await getConfigMany([key]);
+  try {
+    const arr = JSON.parse(cfg[key] || "[]");
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((t) => !!t?.key && typeof t.label === "string")
+      .map((t) => ({
+        key: t.key as string,
+        label: t.label as string,
+        description: typeof t.description === "string" ? t.description : "",
+        recipient: typeof t.recipient === "string" ? t.recipient : DEFAULT_CUSTOM_RECIPIENT,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export async function isCustomMailType(key: string, serviceId?: string): Promise<boolean> {
+  return (await listCustomMailTypes(serviceId)).some((t) => t.key === key);
+}
+
+/**
+ * Ce type personnalisé est-il routé par un service (clés `mail.route.*`) ?
+ * Portée service → routes de CE service ; portée globale → routes de N'IMPORTE quel service.
+ */
+export async function isCustomMailTypeUsed(key: string, serviceId?: string): Promise<boolean> {
+  return isConfigValueUsed(serviceId ? `mail.route.${serviceId}.` : "mail.route.", key);
+}
+
+/** Crée un type personnalisé (clé unique + libellé) avec un gabarit de départ. serviceId omis ⇒ global. */
+export async function createCustomMailType(
+  serviceId: string | undefined,
+  label: string,
+  description = "",
+  recipient: string = DEFAULT_CUSTOM_RECIPIENT,
+): Promise<CustomMailType> {
+  const types = await listCustomMailTypes(serviceId);
+  const key = `custom_${crypto.randomUUID().slice(0, 8)}`;
+  const t: CustomMailType = { key, label, description, recipient };
+  await setConfigMany({ [customTypesKey(serviceId)]: JSON.stringify([...types, t]) });
+  // Gabarit de départ stocké au niveau du service (modifiable ensuite).
+  const starter = customStarterTemplate(label);
+  await setMailTemplate(key, starter.subject, starter.html, serviceId);
+  return t;
+}
+
+/** Met à jour les métadonnées (nom / description / destinataire) d'un type personnalisé. serviceId omis ⇒ global. */
+export async function updateCustomMailType(
+  serviceId: string | undefined,
+  key: string,
+  fields: { label: string; description: string; recipient: string },
+): Promise<void> {
+  const types = await listCustomMailTypes(serviceId);
   await setConfigMany({
-    [subjectKey(kind, serviceId)]: s && s !== def.subject.trim() ? subject : "",
-    [htmlKey(kind, serviceId)]: h && h !== def.html.trim() ? html : "",
+    [customTypesKey(serviceId)]: JSON.stringify(
+      types.map((t) => (t.key === key ? { ...t, ...fields } : t)),
+    ),
   });
+}
+
+/**
+ * Supprime un type personnalisé du service : retire l'entrée du registre ET efface son
+ * contenu de gabarit propre au service (`mail.tpl.<svc>.<key>.subject/html`), pour ne pas
+ * laisser de lignes `app_config` orphelines. Les routages le pointant retombent sur le défaut.
+ */
+export async function deleteCustomMailType(
+  serviceId: string | undefined,
+  key: string,
+): Promise<void> {
+  const types = (await listCustomMailTypes(serviceId)).filter((t) => t.key !== key);
+  const regKey = customTypesKey(serviceId);
+  // Registre : on réécrit s'il reste des types, sinon on supprime la clé (pas de « [] » résiduel).
+  if (types.length > 0) await setConfigMany({ [regKey]: JSON.stringify(types) });
+  else await deleteConfig([regKey]);
+  // Contenu de gabarit propre au service (évite les lignes app_config orphelines).
+  await deleteConfig([subjectKey(key, serviceId), htmlKey(key, serviceId)]);
 }
 
 function escapeHtml(s: string): string {

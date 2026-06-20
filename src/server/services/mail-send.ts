@@ -2,7 +2,6 @@ import { wrapEmailHtml } from "@/lib/email-theme";
 import { getAppUrl } from "@/server/config";
 import { sendMail, sendMailOrQueue } from "@/server/mailer";
 import {
-  type TemplateKind,
   getMailTemplate,
   htmlToText,
   renderHtmlTemplate,
@@ -18,7 +17,8 @@ import {
 // boucle pour éviter un N+1) : ces cas gardent leur pipeline déroulé.
 export async function sendTemplatedMail(opts: {
   to: string;
-  kind: TemplateKind;
+  // TemplateKind intégré OU clé de type personnalisé (« custom_… »).
+  kind: string;
   /** Variables échappées (texte). */
   vars?: Record<string, string>;
   /** Variables HTML de confiance (boutons…), injectées sans échappement. */

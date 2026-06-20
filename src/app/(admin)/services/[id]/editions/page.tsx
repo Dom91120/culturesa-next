@@ -86,7 +86,7 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
                 <td>{r.enfants}</td>
                 <td>
                   <span
-                    className={`role-pill ${r.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                    className={`role-pill ${r.statut === "Réservation validée" ? "role-utilisateur" : "role-gestionnaire"}`}
                   >
                     {r.statut}
                   </span>

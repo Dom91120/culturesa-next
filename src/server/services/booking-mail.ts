@@ -1,6 +1,11 @@
 import { DAY_NAMES } from "@/lib/agenda-core";
 import { prisma } from "@/server/db";
-import { isMailEnabled } from "@/server/services/mail-prefs";
+import {
+  type BookingTrigger,
+  isTriggerEnabled,
+  resolveTriggerKind,
+  resolveTriggerRecipients,
+} from "@/server/services/mail-prefs";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 
 // Notification e-mail envoyée à l'usager lors de la création d'une réservation.
@@ -117,8 +122,9 @@ export type BookingConfirmationParams = {
   userId: string;
   serviceId: string;
   serviceLabel: string;
-  // validated=true → réservation confirmée ; false → demande en attente de validation.
-  validated: boolean;
+  // Déclencheur (action) à l'origine de l'envoi : détermine À LA FOIS le type d'e-mail
+  // (donc le contenu) ET la préférence « Envoyer » consultée (contrôle par action).
+  trigger: BookingTrigger;
   slot: { startTime: string; endTime: string; slotDate: Date | null; slotDay: string | null };
   periodId?: number | null;
   enfants: number;
@@ -135,21 +141,21 @@ export async function sendBookingConfirmationMail(
   params: BookingConfirmationParams,
 ): Promise<void> {
   try {
-    // Préférence « Échanges » du service : ce type d'e-mail est-il activé ?
-    if (
-      !(await isMailEnabled(
-        params.validated ? "booking_confirmed" : "booking_pending",
-        params.serviceId,
-      ))
-    )
-      return;
+    // Préférence « Échanges » du service : cette ACTION envoie-t-elle un e-mail ?
+    if (!(await isTriggerEnabled(params.trigger, params.serviceId))) return;
 
-    const user = await prisma.user.findUnique({
-      where: { id: params.userId },
-      select: { email: true, prenom: true },
+    // Destinataire(s) selon le réglage de l'action (défaut = l'usager concerné).
+    const recipients = await resolveTriggerRecipients(params.trigger, params.serviceId, {
+      userId: params.userId,
     });
-    const email = user?.email?.trim();
-    if (!email?.includes("@")) return;
+    if (recipients.length === 0) return;
+
+    // Nom de l'usager concerné (variable {{usager}}, utile quand le destinataire ≠ usager).
+    const concerned = await prisma.user.findUnique({
+      where: { id: params.userId },
+      select: { prenom: true, nom: true },
+    });
+    const usager = `${concerned?.prenom ?? ""} ${concerned?.nom ?? ""}`.trim();
 
     const periodLabel = await resolvePeriodLabel({
       serviceId: params.serviceId,
@@ -157,7 +163,6 @@ export async function sendBookingConfirmationMail(
       slotDate: params.slot.slotDate,
     });
 
-    const prenom = user?.prenom?.trim() ?? "";
     const participants = [
       `${params.enfants} enfant${params.enfants > 1 ? "s" : ""}`,
       params.accompagnants > 0
@@ -167,9 +172,9 @@ export async function sendBookingConfirmationMail(
       .filter(Boolean)
       .join(", ");
 
-    const vars: Record<string, string> = {
-      salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
-      prenom,
+    // Variables indépendantes du destinataire (contexte de la réservation).
+    const baseVars: Record<string, string> = {
+      usager,
       service: params.serviceLabel,
       creneau: formatSlotLabel(params.slot),
       periode: periodLabel,
@@ -177,8 +182,18 @@ export async function sendBookingConfirmationMail(
       theme: params.theme.trim(),
     };
 
-    const kind = params.validated ? "booking_confirmed" : "booking_pending";
-    await sendTemplatedMail({ to: email, kind, vars, serviceId: params.serviceId });
+    // Type d'e-mail EFFECTIF (re-routage éventuel du service, cf. « Échanges par mail »).
+    const kind = await resolveTriggerKind(params.trigger, params.serviceId);
+    for (const r of recipients) {
+      // Salutation personnalisée uniquement pour l'usager concerné.
+      const prenom = r.personal ? r.prenom : "";
+      await sendTemplatedMail({
+        to: r.email,
+        kind,
+        vars: { ...baseVars, salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom },
+        serviceId: params.serviceId,
+      });
+    }
   } catch (e) {
     console.error("[sendBookingConfirmationMail] erreur:", e);
   }
@@ -203,13 +218,12 @@ export async function sendBookingCancellationMail(
   params: BookingCancellationParams,
 ): Promise<void> {
   try {
-    if (!(await isMailEnabled("booking_cancelled", params.serviceId))) return;
+    // Annulation par l'usager lui-même (l'annulation/suppression par un gestionnaire
+    // passe par un autre chemin avec son propre déclencheur).
+    if (!(await isTriggerEnabled("cancel_user", params.serviceId))) return;
 
-    const [user, slot] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: params.userId },
-        select: { email: true, prenom: true },
-      }),
+    const [recipients, slot, concerned] = await Promise.all([
+      resolveTriggerRecipients("cancel_user", params.serviceId, { userId: params.userId }),
       prisma.slot.findUnique({
         where: { id: params.slotId },
         select: {
@@ -220,9 +234,12 @@ export async function sendBookingCancellationMail(
           service: { select: { label: true } },
         },
       }),
+      prisma.user.findUnique({
+        where: { id: params.userId },
+        select: { prenom: true, nom: true },
+      }),
     ]);
-    const email = user?.email?.trim();
-    if (!email?.includes("@")) return;
+    if (recipients.length === 0) return;
 
     const periodLabel = await resolvePeriodLabel({
       serviceId: params.serviceId,
@@ -230,22 +247,24 @@ export async function sendBookingCancellationMail(
       slotDate: slot?.slotDate ?? null,
     });
 
-    const prenom = user?.prenom?.trim() ?? "";
-    const vars: Record<string, string> = {
-      salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
-      prenom,
+    const baseVars: Record<string, string> = {
+      usager: `${concerned?.prenom ?? ""} ${concerned?.nom ?? ""}`.trim(),
       service: slot?.service.label ?? "",
       creneau: slot ? formatSlotLabel(slot) : "",
       periode: periodLabel,
       motif: params.motif,
     };
 
-    await sendTemplatedMail({
-      to: email,
-      kind: "booking_cancelled",
-      vars,
-      serviceId: params.serviceId,
-    });
+    const kind = await resolveTriggerKind("cancel_user", params.serviceId);
+    for (const r of recipients) {
+      const prenom = r.personal ? r.prenom : "";
+      await sendTemplatedMail({
+        to: r.email,
+        kind,
+        vars: { ...baseVars, salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom },
+        serviceId: params.serviceId,
+      });
+    }
   } catch (e) {
     console.error("[sendBookingCancellationMail] erreur:", e);
   }

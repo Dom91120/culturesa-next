@@ -1,13 +1,16 @@
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
+import { requireRole } from "@/server/guards";
 import { EchangesConfig } from "../echanges/echanges-config";
-import { SYSTEM_MAIL_KINDS, getMailRows } from "../echanges/mail-rows";
+import { SYSTEM_MAIL_KINDS, getGlobalModeleRows, getMailRows } from "../echanges/mail-rows";
 import { FailedMailsPanel } from "./failed-mails";
 import { MessagingConfig } from "./messaging-config";
 
 export default async function MessageriePage() {
+  // Administration réservée aux administrateurs (les gestionnaires n'y ont pas accès).
+  await requireRole("administrateur");
   // Le mot de passe (mail.password) n'est jamais renvoyé au client.
-  const [cfg, failedMails, autoMailRows] = await Promise.all([
+  const [cfg, failedMails, autoMailRows, globalModeleRows] = await Promise.all([
     getConfigMany([
       "mail.driver",
       "mail.from",
@@ -30,6 +33,7 @@ export default async function MessageriePage() {
       },
     }),
     getMailRows(SYSTEM_MAIL_KINDS),
+    getGlobalModeleRows(),
   ]);
 
   return (
@@ -49,12 +53,31 @@ export default async function MessageriePage() {
         rows={autoMailRows}
         title="E-mails automatiques"
         panelId="auto-mails-panel"
+        showRecipient
         intro={
           <>
             E-mails de <strong>compte&nbsp;/&nbsp;sécurité</strong> (confirmation d&apos;adresse,
             mot de passe, suppression de compte, préavis RGPD) et e-mail de test. Ils sont{" "}
             <strong>toujours envoyés</strong> : leur case « Envoyer » est verrouillée, mais leur
             contenu reste modifiable.
+          </>
+        }
+      />
+      <EchangesConfig
+        // Remonte le composant quand l'ensemble des types change (création/suppression).
+        key={globalModeleRows.map((r) => r.kind).join(",")}
+        rows={globalModeleRows}
+        title="Modèles d'e-mails (tous services)"
+        panelId="global-modeles-panel"
+        showSend={false}
+        allowCreate
+        contentLabel="Modèle"
+        intro={
+          <>
+            Contenu <strong>de base</strong> des e-mails de réservation, valable pour{" "}
+            <strong>tous les services</strong> (chaque service peut le surcharger dans ses propres «
+            Modèles d&apos;e-mails »). Vous pouvez aussi créer des types <strong>globaux</strong>,
+            routables vers une action dans n&apos;importe quel service.
           </>
         }
       />
