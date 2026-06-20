@@ -21,15 +21,16 @@ import {
 } from "@/server/services/mail-templates";
 import type { KindData } from "./echanges-config";
 
-// E-mails « système » (compte / sécurité + test) : toujours envoyés, contenu modifiable.
-// Affichés dans l'onglet Messagerie (panel « E-mails automatiques »), pas dans Échanges.
+// E-mails « système » (compte / sécurité + test) + digest, contenu modifiable. Cet ordre
+// détermine l'affichage dans Administration › Échanges. « E-mail de test » est placé après
+// le préavis RGPD ; « Auto-validations » (digest, réglé par service) figure en dernier.
 export const SYSTEM_MAIL_KINDS = [
   "email_verification",
   "password_reset",
   "account_deletion_request",
   "account_deletion_notice",
-  "manager_digest",
   "email_test",
+  "manager_digest",
 ] as const satisfies readonly TemplateKind[];
 
 // Libellés / descriptions / destinataire PAR DÉFAUT des types d'e-mail intégrés (repli code).
