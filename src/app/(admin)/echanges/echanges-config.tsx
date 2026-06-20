@@ -101,8 +101,8 @@ export function EchangesConfig({
   serviceId?: string;
   // Affiche une colonne « Destinataire » (panel « E-mails automatiques »).
   showRecipient?: boolean;
-  // Affiche la colonne « Envoyer » (masquée dans « Modèles d'e-mails » : l'envoi est réglé
-  // par action dans « Échanges par mail »).
+  // Affiche la colonne « Envoyer » (masquée dans « Modèles d'e-mails » : l'envoi se règle
+  // via la case « Envoyer » d'« Échanges par mail », par service).
   showSend?: boolean;
   // Autorise la création/suppression de types d'e-mails personnalisés (admin, « Modèles »).
   allowCreate?: boolean;
@@ -136,7 +136,7 @@ export function EchangesConfig({
   // Ouvre la modale en mode création (champs vierges + destinataire par défaut).
   function openCreate() {
     setMsg(null);
-    // `recipient` conservé dans le type mais non éditable ici (réglé par action,
+    // `recipient` conservé dans le type mais non éditable ici (réglé par service,
     // cf. « Échanges par mail ») — valeur neutre par défaut.
     setMetaEdit({ kind: null, label: "", description: "", recipient: "" });
   }
@@ -519,9 +519,18 @@ function Row({
       </td>
       {showRecipient && (
         <td style={{ ...cell, fontSize: ".82rem" }}>
-          {/* Destinataire intrinsèque (e-mails système) ; pour les e-mails de réservation il
-              dépend de l'ACTION (réglé dans « Échanges par mail » de chaque service). */}
-          {r.locked ? r.recipient : <span style={{ color: "var(--muted)" }}>— (par action)</span>}
+          {/* Destinataire intrinsèque (e-mails système) ; pour les e-mails de réservation il se
+              règle PAR SERVICE (onglet « Échanges par mail » de chaque service, colonne Destinataire). */}
+          {r.locked ? (
+            r.recipient
+          ) : (
+            <span
+              style={{ color: "var(--muted)" }}
+              title="Défini par service dans « Échanges par mail » (colonne Destinataire)."
+            >
+              — (par service)
+            </span>
+          )}
         </td>
       )}
       {showSend && (

@@ -33,8 +33,8 @@ export default async function EchangesAdminPage() {
           <strong>système</strong> (compte/sécurité, test) sont <strong>toujours envoyés</strong> ;
           les e-mails de <strong>réservation</strong> servent de base à{" "}
           <strong>tous les services</strong> (surchargeable par service) — leur destinataire et leur
-          envoi se règlent <strong>par action</strong> dans « Échanges par mail ». Vous pouvez aussi
-          créer des types <strong>personnalisés globaux</strong>, routables partout.
+          envoi se règlent <strong>par service</strong> dans « Échanges par mail ». Vous pouvez
+          aussi créer des types <strong>personnalisés globaux</strong>, routables partout.
         </>
       }
     />
