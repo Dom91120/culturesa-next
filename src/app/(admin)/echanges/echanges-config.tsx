@@ -492,14 +492,38 @@ function Row({
   return (
     <tr>
       <td style={cell}>
-        <div style={{ fontWeight: 600 }}>{r.label}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: ".4rem", flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 600 }}>{r.label}</span>
+          {/* E-mail système : toujours envoyé (remplace l'ancienne case « Envoyer » verrouillée). */}
+          {r.locked && (
+            <span
+              title="Cet e-mail est toujours envoyé (non désactivable)."
+              style={{
+                fontSize: ".66rem",
+                color: "var(--muted)",
+                border: "1px solid var(--border)",
+                borderRadius: "999px",
+                padding: ".02rem .4rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              toujours envoyé
+            </span>
+          )}
+        </div>
         {r.description && (
           <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
             {r.description}
           </div>
         )}
       </td>
-      {showRecipient && <td style={{ ...cell, fontSize: ".82rem" }}>{r.recipient}</td>}
+      {showRecipient && (
+        <td style={{ ...cell, fontSize: ".82rem" }}>
+          {/* Destinataire intrinsèque (e-mails système) ; pour les e-mails de réservation il
+              dépend de l'ACTION (réglé dans « Échanges par mail » de chaque service). */}
+          {r.locked ? r.recipient : <span style={{ color: "var(--muted)" }}>— (par action)</span>}
+        </td>
+      )}
       {showSend && (
         <td style={{ ...cell, textAlign: "center" }}>
           {/* E-mails système : toujours envoyés (affichage en lecture seule). */}

@@ -80,7 +80,6 @@ export function EchangesTabs({
           serviceId={serviceId}
           showSend={false}
           allowCreate={canManage}
-          contentLabel="Modèle"
           title="Modèles d'e-mails"
           panelId="modeles-panel"
           intro={

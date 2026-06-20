@@ -12,6 +12,7 @@ type Tab = { href: string; label: string; icon: string };
 const ADMIN_TABS: Tab[] = [
   { href: "/configuration", label: "Configuration", icon: "⚙️" },
   { href: "/users", label: "Utilisateurs", icon: "👥" },
+  { href: "/echanges", label: "Échanges", icon: "📨" },
   { href: "/messagerie", label: "Messagerie", icon: "✉️" },
   { href: "/rgpd", label: "RGPD", icon: "🛡️" },
 ];
