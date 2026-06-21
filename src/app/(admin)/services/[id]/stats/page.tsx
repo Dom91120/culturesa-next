@@ -90,11 +90,12 @@ function MetricCard({
 /** Anneau SVG multi-segments (server-rendered, sans dépendance). */
 function Donut({
   segments,
-  size = 156,
-  thickness = 20,
+  size = 120,
+  thickness = 16,
   centerValue,
   centerLabel,
   centerColor,
+  centerValueSize = "1.3rem",
 }: {
   segments: { value: number; color: string }[];
   size?: number;
@@ -102,6 +103,7 @@ function Donut({
   centerValue?: string;
   centerLabel?: string;
   centerColor?: string;
+  centerValueSize?: string;
 }) {
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
@@ -160,7 +162,7 @@ function Donut({
           {centerValue && (
             <div
               style={{
-                fontSize: "1.55rem",
+                fontSize: centerValueSize,
                 fontWeight: 700,
                 lineHeight: 1,
                 color: centerColor ?? "var(--text)",
@@ -239,6 +241,7 @@ function DonutPanel({
   centerValue,
   centerLabel,
   centerColor,
+  centerValueSize,
   palette = PALETTE,
 }: {
   title: string;
@@ -246,6 +249,7 @@ function DonutPanel({
   centerValue?: string;
   centerLabel?: string;
   centerColor?: string;
+  centerValueSize?: string;
   palette?: string[];
 }) {
   const colored = data.map((d, i) => ({ ...d, color: d.color ?? palette[i % palette.length] }));
@@ -259,12 +263,15 @@ function DonutPanel({
       {empty ? (
         <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune donnée.</p>
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: "1.1rem", flexWrap: "wrap" }}>
+        <div
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: ".85rem" }}
+        >
           <Donut
             segments={colored.map((d) => ({ value: d.value, color: d.color }))}
             centerValue={centerValue}
             centerLabel={centerLabel}
             centerColor={centerColor}
+            centerValueSize={centerValueSize}
           />
           <Legend
             items={colored.map((d) => ({ label: d.label, value: d.value, color: d.color }))}
@@ -287,7 +294,7 @@ function BarRow({
     <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: ".5rem" }}>
       <div
         style={{
-          width: 120,
+          width: 96,
           fontSize: ".75rem",
           color: "var(--muted)",
           flexShrink: 0,
@@ -439,7 +446,6 @@ export default async function StatsPage({
     dateEnd: p.dateEnd ? p.dateEnd.toISOString().slice(0, 10) : null,
   }));
 
-  const structMax = Math.max(1, ...stats.fillByStructure.map((r) => r.value));
   const niveauMax = Math.max(1, ...stats.topNiveaux.map((r) => r.value));
   const effMax = Math.max(1, ...stats.effectifsByExercice.map((r) => r.value));
 
@@ -504,13 +510,13 @@ export default async function StatsPage({
         )}
       </div>
 
-      {/* Anneaux */}
+      {/* Grille unique : anneaux (4, ou 3 sans présence) PUIS panneaux — tout s'enchaîne
+          sur 4 colonnes, sans colonne vide entre les deux sections. */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
           gap: ".85rem",
-          marginBottom: ".85rem",
         }}
       >
         {stats.prevu > 0 && (
@@ -540,8 +546,9 @@ export default async function StatsPage({
         <DonutPanel
           title="Répartition par jour"
           data={forDonut(stats.byDay, 6)}
-          centerValue={peakDay ? peakDay.label.slice(0, 3) : "—"}
+          centerValue={peakDay ? peakDay.label : "—"}
           centerLabel="jour fort"
+          centerValueSize=".95rem"
         />
 
         <DonutPanel
@@ -550,16 +557,6 @@ export default async function StatsPage({
           centerValue={String(stats.distinctUsers)}
           centerLabel="usagers"
         />
-      </div>
-
-      {/* Évolution + barres */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))",
-          gap: ".85rem",
-        }}
-      >
         <Panel title="Évolution mensuelle" empty={stats.byMonth.length === 0}>
           <AreaChart data={stats.byMonth} color="#e8a45a" />
         </Panel>
@@ -592,18 +589,6 @@ export default async function StatsPage({
         >
           {stats.effectifsByExercice.map((r) => (
             <BarRow key={r.label} label={r.label} value={r.value} max={effMax} color="#6dceaa" />
-          ))}
-        </Panel>
-
-        <Panel title="Top structures (volume)" empty={stats.topStructures.length === 0}>
-          {stats.topStructures.map((r) => (
-            <BarRow
-              key={r.label}
-              label={r.label}
-              value={r.value}
-              max={Math.max(1, ...stats.topStructures.map((s) => s.value))}
-              color="#e06b6b"
-            />
           ))}
         </Panel>
       </div>
