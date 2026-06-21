@@ -1,16 +1,15 @@
-// Habillage HTML des e-mails — thème « Ville de Châtillon » (vert foncé + vert anis
-// + fond vert pâle). Mise en page table + styles inline pour la compatibilité des
-// clients mail, avec un <style> complémentaire pour les clients qui le supportent.
-// Module pur (aucune dépendance serveur) : utilisable côté serveur (envoi) ET client
-// (aperçu de l'éditeur). Le `innerHtml` est le corps du message (rendu des gabarits).
+// Habillage HTML des e-mails — thème « Ville de Châtillon » (vert foncé + fond vert pâle).
+// Mise en page table + styles inline pour la compatibilité des clients mail, avec un
+// <style> complémentaire pour les clients qui le supportent. Module pur (aucune dépendance
+// serveur) : utilisable côté serveur (envoi) ET client (aperçu de l'éditeur). Le `innerHtml`
+// est le corps du message (rendu des gabarits).
 
 const THEME = {
   pageBg: "#f4f6ec",
   card: "#ffffff",
   border: "#e3e8d2",
-  accent: "#9fc93c", // vert anis (feuille)
   headerBg: "#eef3d6", // vert pâle (panneau)
-  green: "#1e6b47", // vert foncé (titres / pied)
+  green: "#1e6b47", // vert foncé (filet, titres, pied)
   text: "#1f2a22",
   muted: "#5a7a4f",
 };
@@ -50,7 +49,7 @@ export function wrapEmailHtml(
   .em-body p { margin: 0 0 12px; }
   .em-body ul, .em-body ol { margin: 0 0 12px 20px; padding: 0; }
   .em-body li { margin: 4px 0; }
-  .em-body blockquote { margin: 0 0 12px; padding-left: 12px; border-left: 3px solid ${t.accent}; color: ${t.muted}; }
+  .em-body blockquote { margin: 0 0 12px; padding-left: 12px; border-left: 3px solid ${t.green}; color: ${t.muted}; }
   .em-body table { border-collapse: collapse; }
   .em-body td, .em-body th { border: 1px solid ${t.border}; padding: 6px 10px; }
   .em-body img { max-width: 100%; height: auto; }
@@ -61,7 +60,7 @@ ${preheader}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${t.pageBg};padding:24px 12px;">
   <tr><td align="center">
     <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${t.card};border:1px solid ${t.border};border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
-      <tr><td style="height:6px;background:${t.accent};font-size:0;line-height:0;">&nbsp;</td></tr>
+      <tr><td style="height:6px;background:${t.green};font-size:0;line-height:0;">&nbsp;</td></tr>
       <tr><td style="background:${t.headerBg};padding:18px 28px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
           <td style="vertical-align:middle;width:1px;white-space:nowrap;"><img src="${logoSrc}" alt="Ville de Châtillon" height="54" style="display:block;border:0;height:54px;width:auto;"></td>
