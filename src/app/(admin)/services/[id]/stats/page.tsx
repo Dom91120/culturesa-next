@@ -17,6 +17,8 @@ function StatCard({
 }) {
   return (
     <div
+      // Détail du calcul affiché en info-bulle au survol (ex. « présents / prévu »).
+      title={hint}
       style={{
         flex: 1,
         minWidth: 130,
@@ -24,6 +26,7 @@ function StatCard({
         border: "1px solid var(--border)",
         borderRadius: "var(--radius)",
         padding: "1rem 1.1rem",
+        cursor: hint ? "help" : undefined,
       }}
     >
       <div
@@ -38,7 +41,7 @@ function StatCard({
       </div>
       <div
         style={{
-          fontSize: ".72rem",
+          fontSize: ".62rem",
           color: "var(--muted)",
           textTransform: "uppercase",
           letterSpacing: ".08em",
@@ -47,9 +50,6 @@ function StatCard({
       >
         {label}
       </div>
-      {hint && (
-        <div style={{ fontSize: ".68rem", color: "var(--muted)", marginTop: ".15rem" }}>{hint}</div>
-      )}
     </div>
   );
 }
