@@ -207,14 +207,15 @@ function Legend({
       {items.map((it) => (
         <div
           key={it.label}
-          style={{ display: "flex", alignItems: "center", gap: ".5rem", fontSize: ".76rem" }}
+          style={{ display: "flex", alignItems: "center", gap: ".4rem", fontSize: ".71rem" }}
         >
           <span
-            style={{ width: 10, height: 10, borderRadius: 3, background: it.color, flexShrink: 0 }}
+            style={{ width: 9, height: 9, borderRadius: 3, background: it.color, flexShrink: 0 }}
           />
           <span
             style={{
               color: "var(--muted)",
+              letterSpacing: "-.2px",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -226,7 +227,7 @@ function Legend({
             {it.value}
             {it.suffix ?? ""}
           </span>
-          <span style={{ color: "var(--muted)", width: 38, textAlign: "right", flexShrink: 0 }}>
+          <span style={{ color: "var(--muted)", width: 32, textAlign: "right", flexShrink: 0 }}>
             {Math.round((100 * it.value) / tot)}%
           </span>
         </div>
