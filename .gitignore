@@ -26,3 +26,6 @@ prisma/generated
 
 # Sauvegardes de la base (dumps produits par le conteneur cron)
 backups/
+
+# config locale Claude Code
+.claude/settings.local.json
