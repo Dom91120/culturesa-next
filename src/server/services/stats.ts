@@ -28,6 +28,11 @@ export type ServiceStats = {
   pending: number;
   enfants: number;
   accompagnants: number;
+  // Répartition par type (volume, hors miroirs) — pour l'anneau « Type de réservation ».
+  recurringCount: number;
+  uniqueCount: number;
+  // Remplissage moyen GLOBAL des créneaux réservés (%, unités de jauge) ; null si aucun.
+  avgFill: number | null;
   // Prévu / réalisé (séances datées passées, validées)
   prevu: number;
   presents: number;
@@ -165,6 +170,8 @@ export async function getServiceStats(
   const pending = vol.filter((b) => !b.validated).length;
   const enfants = vol.reduce((s, b) => s + b.enfants, 0);
   const accompagnants = vol.reduce((s, b) => s + b.accompagnants, 0);
+  const recurringCount = vol.filter((b) => b.bookingType === "recurring").length;
+  const uniqueCount = vol.filter((b) => b.bookingType === "unique").length;
 
   const dayMap = new Map<string, number>();
   const monthMap = new Map<string, number>();
@@ -223,6 +230,19 @@ export async function getServiceStats(
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
 
+  // Remplissage moyen GLOBAL : moyenne, sur les créneaux réservés distincts, de
+  // min(100, occupation jauge / capacité).
+  let fillTotG = 0;
+  let fillNG = 0;
+  for (const [slotId, occ] of occBySlot) {
+    const cap = capBySlot.get(slotId) ?? 0;
+    if (cap > 0) {
+      fillTotG += Math.min(100, (100 * occ) / cap);
+      fillNG++;
+    }
+  }
+  const avgFill = fillNG > 0 ? Math.round(fillTotG / fillNG) : null;
+
   // Effectifs (enfants) par exercice — TOUS exercices (pas de filtre de dates), filtre type.
   const exoMap = new Map<string, number>();
   for (const b of volumeRows) {
@@ -279,6 +299,9 @@ export async function getServiceStats(
     pending,
     enfants,
     accompagnants,
+    recurringCount,
+    uniqueCount,
+    avgFill,
     prevu,
     presents,
     absents,
