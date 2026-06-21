@@ -2507,31 +2507,31 @@ export function AgendaGrid({
         <div className="panel-title" style={{ marginBottom: 0 }}>
           <span className="dot" />
           Agenda
-          {exercices.length > 0 && (
-            <span className="exercice-nav-inline">
-              <span className="ex-nav-label">{exLabel}</span>
-              <span className="ex-nav-arrows">
-                <button
-                  type="button"
-                  className="ex-arrow"
-                  aria-label="Exercice précédent"
-                  disabled={!canExPrev}
-                  onClick={() => canExPrev && gotoExercice(exercices[exIdx - 1].id)}
-                >
-                  ◀
-                </button>
-                <button
-                  type="button"
-                  className="ex-arrow"
-                  aria-label="Exercice suivant"
-                  disabled={!canExNext}
-                  onClick={() => canExNext && gotoExercice(exercices[exIdx + 1].id)}
-                >
-                  ▶
-                </button>
-              </span>
+          {/* Barre d'exercice toujours présente (parité legacy, y compris en ponctuel) :
+              label « — » et flèches désactivées quand le service n'a aucun exercice. */}
+          <span className="exercice-nav-inline">
+            <span className="ex-nav-label">{exLabel}</span>
+            <span className="ex-nav-arrows">
+              <button
+                type="button"
+                className="ex-arrow"
+                aria-label="Exercice précédent"
+                disabled={!canExPrev}
+                onClick={() => canExPrev && gotoExercice(exercices[exIdx - 1].id)}
+              >
+                ◀
+              </button>
+              <button
+                type="button"
+                className="ex-arrow"
+                aria-label="Exercice suivant"
+                disabled={!canExNext}
+                onClick={() => canExNext && gotoExercice(exercices[exIdx + 1].id)}
+              >
+                ▶
+              </button>
             </span>
-          )}
+          </span>
         </div>
         {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
             titre et le sélecteur. */}
