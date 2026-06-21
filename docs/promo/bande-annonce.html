@@ -24,8 +24,9 @@ body{background:var(--bg);display:flex;align-items:center;justify-content:center
 @keyframes crUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 /* Carte « navigateur » thème e-mail */
 .cr-win{width:min(840px,94%);background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 12px 30px rgba(30,107,71,.14)}
-.cr-win .bar{height:6px;background:var(--green)}
-.cr-win .chrome{background:var(--hdr);padding:8px 14px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
+.cr-win .chrome{background:#fff;padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
+.cr-win .dot{width:11px;height:11px;border-radius:50%}
+.cr-win .pill{margin-left:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 14px}
 .cr-win .shot{height:320px;overflow:hidden}
 .cr-win .shot img{width:100%;display:block}
 /* Téléphone à coque verte */
@@ -60,7 +61,7 @@ body{background:var(--bg);display:flex;align-items:center;justify-content:center
    </div>
 
    <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center;gap:14px">
-    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--green)"></span>culturesa · Réservations</div><div class="shot"><img src="web-agenda.png" alt="Agenda de réservation"></div></div>
+    <div class="cr-anim cr-win"><div class="chrome"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="pill">culturesa · Réservations</span></div><div class="shot"><img src="web-agenda.png" alt="Agenda de réservation"></div></div>
     <div class="cr-anim cr-d1 cr-h"><b>Réservez vos activités en ligne</b><span>Choisissez votre service, votre semaine et votre créneau</span></div>
    </div>
 
@@ -70,12 +71,12 @@ body{background:var(--bg);display:flex;align-items:center;justify-content:center
    </div>
 
    <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center;gap:14px">
-    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--green)"></span>culturesa · Mon compte</div><div class="shot"><img src="web-mon-compte.png" alt="Mon compte"></div></div>
+    <div class="cr-anim cr-win"><div class="chrome"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="pill">culturesa · Mon compte</span></div><div class="shot"><img src="web-mon-compte.png" alt="Mon compte"></div></div>
     <div class="cr-anim cr-d1 cr-h"><b>Gérez votre compte et vos données</b><span>Profil, mot de passe et suppression conforme au RGPD</span></div>
    </div>
 
    <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center;gap:14px">
-    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--green)"></span>culturesa · Statistiques</div><div class="shot"><img src="stats-tab.png" alt="Statistiques"></div></div>
+    <div class="cr-anim cr-win"><div class="chrome"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="pill">culturesa · Statistiques</span></div><div class="shot"><img src="stats-tab.png" alt="Statistiques"></div></div>
     <div class="cr-anim cr-d1 cr-h"><b>Pilotez votre service avec les statistiques</b><span>Anneaux, présence, structures — export CSV</span></div>
    </div>
 
