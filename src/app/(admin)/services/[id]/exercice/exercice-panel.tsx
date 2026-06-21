@@ -1,5 +1,6 @@
 "use client";
 
+import { ModalOverlay } from "@/components/agenda-shared";
 import type { ExercicePaneData } from "@/server/services/exercice";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -23,6 +24,8 @@ export function ExercicePanel({ serviceId, data }: Props) {
   const [recreateSlots, setRecreateSlots] = useState(true);
   const [undoAck, setUndoAck] = useState(false);
   const [showPrevious, setShowPrevious] = useState(data.showPreviousExercices);
+  // Modale de confirmation ouverte (port des modales legacy exercice-create/delete-confirm).
+  const [confirm, setConfirm] = useState<"create" | "undo" | null>(null);
 
   const bookingsCount = data.undo.bookingsCount;
   const undoButtonReady = bookingsCount === 0 || undoAck;
@@ -34,14 +37,16 @@ export function ExercicePanel({ serviceId, data }: Props) {
     setMode((prev) => (prev === next ? "none" : next));
   }
 
-  function handleCreate() {
+  // Ouvre la modale de confirmation de création (remplace window.confirm).
+  function askCreate() {
     setError(null);
     setInfo(null);
     if (!data.hasActivePeriods) return;
-    const ok = window.confirm(
-      `Créer l'exercice ${data.nextName} ? Pour chaque période active, une nouvelle période sera créée (dates décalées d'un an) et l'originale sera désactivée.`,
-    );
-    if (!ok) return;
+    setConfirm("create");
+  }
+
+  function doCreate() {
+    setConfirm(null);
     startTransition(async () => {
       const res = await cycleAction(serviceId, recreatePeriods, recreateSlots);
       if (!res.ok) {
@@ -56,13 +61,15 @@ export function ExercicePanel({ serviceId, data }: Props) {
     });
   }
 
-  function handleUndo() {
+  // Ouvre la modale de confirmation de suppression (remplace window.confirm).
+  function askUndo() {
     setError(null);
     setInfo(null);
-    const ok = window.confirm(
-      `Supprimer l'exercice ${data.currentName} ? Cette action supprime définitivement les périodes, créneaux et ${bookingsCount} réservation(s), puis restaure l'exercice précédent.`,
-    );
-    if (!ok) return;
+    setConfirm("undo");
+  }
+
+  function doUndo() {
+    setConfirm(null);
     startTransition(async () => {
       const res = await undoCycleAction(serviceId);
       if (!res || !res.ok) {
@@ -220,7 +227,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
               className="btn primary"
               style={{ background: "var(--accent)", borderColor: "var(--accent)" }}
               disabled={isPending || !data.hasActivePeriods}
-              onClick={handleCreate}
+              onClick={askCreate}
             >
               Créer l&apos;exercice {data.nextName}
             </button>
@@ -272,13 +279,95 @@ export function ExercicePanel({ serviceId, data }: Props) {
                   : undefined
               }
               disabled={isPending || !undoButtonReady}
-              onClick={handleUndo}
+              onClick={askUndo}
             >
               Supprimer l&apos;exercice {data.currentName}
             </button>
           </div>
         ) : null}
       </div>
+
+      {confirm === "create" ? (
+        <ModalOverlay onClose={() => setConfirm(null)}>
+          <div className="modal-title" style={{ color: "var(--accent)" }}>
+            🔄 Créer un nouvel exercice
+          </div>
+          <p style={{ fontSize: ".85rem", lineHeight: 1.5, marginBottom: ".75rem" }}>
+            Vous êtes sur le point de créer <strong>l&apos;exercice {data.nextName}</strong>. Les
+            périodes actives de l&apos;exercice actuel seront recréées avec les dates décalées
+            d&apos;un an, et l&apos;exercice en cours sera désactivé (mais conservé dans
+            l&apos;historique).
+          </p>
+          <p
+            style={{
+              fontSize: ".78rem",
+              color: "var(--accent)",
+              fontWeight: 600,
+              marginBottom: "1rem",
+            }}
+          >
+            Confirmer la création ?
+          </p>
+          <div className="btn-row">
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirm(null)}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={doCreate}
+              style={{ background: "var(--accent)", borderColor: "var(--accent)" }}
+            >
+              Créer
+            </button>
+          </div>
+        </ModalOverlay>
+      ) : null}
+
+      {confirm === "undo" ? (
+        <ModalOverlay onClose={() => setConfirm(null)}>
+          <div
+            className="modal-title"
+            style={{ color: bookingsCount > 0 ? "var(--danger)" : "var(--warn)" }}
+          >
+            ↩ Supprimer l&apos;exercice en cours
+          </div>
+          <p style={{ fontSize: ".85rem", lineHeight: 1.5, marginBottom: ".75rem" }}>
+            Vous êtes sur le point de supprimer définitivement{" "}
+            <strong>l&apos;exercice {data.currentName}</strong>. Toutes ses périodes et créneaux
+            récurrents seront perdus
+            {bookingsCount > 0 ? `, ainsi que ${bookingsCount} réservation(s)` : ""}, et
+            l&apos;exercice précédent sera restauré.
+          </p>
+          <p
+            style={{
+              fontSize: ".78rem",
+              color: bookingsCount > 0 ? "var(--danger)" : "var(--warn)",
+              fontWeight: 600,
+              marginBottom: "1rem",
+            }}
+          >
+            ⚠️ Cette action est irréversible. Confirmer la suppression ?
+          </p>
+          <div className="btn-row">
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirm(null)}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={doUndo}
+              style={{
+                background: bookingsCount > 0 ? "var(--danger)" : "var(--warn)",
+                border: "none",
+                color: "var(--text)",
+              }}
+            >
+              🗑️ Supprimer
+            </button>
+          </div>
+        </ModalOverlay>
+      ) : null}
     </div>
   );
 }
