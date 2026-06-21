@@ -7,8 +7,10 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css">
 <style>
 :root{
-  --bg:#f4f6ec;--card:#ffffff;--border:#e3e8d2;--accent:#9fc93c;--hdr:#eef3d6;
+  --bg:#f4f6ec;--card:#ffffff;--border:#e3e8d2;--hdr:#efebe1;
   --green:#1e6b47;--text:#1f2a22;--muted:#5a7a4f;--font:Arial,Helvetica,sans-serif;
+  /* --hdr : panneaux clairs (en-tête, barres, contrôles) — beige/gris clair ;
+     --green : filets, pastilles, titres, coque téléphone */
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
@@ -22,7 +24,7 @@ body{background:var(--bg);display:flex;align-items:center;justify-content:center
 @keyframes crUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 /* Carte « navigateur » thème e-mail */
 .cr-win{width:min(840px,94%);background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 12px 30px rgba(30,107,71,.14)}
-.cr-win .bar{height:6px;background:var(--accent)}
+.cr-win .bar{height:6px;background:var(--green)}
 .cr-win .chrome{background:var(--hdr);padding:8px 14px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
 .cr-win .shot{height:320px;overflow:hidden}
 .cr-win .shot img{width:100%;display:block}
@@ -41,7 +43,7 @@ body{background:var(--bg);display:flex;align-items:center;justify-content:center
 <body>
  <div class="cr-reel" style="width:100%;max-width:920px;aspect-ratio:16/9;position:relative;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;color:var(--text);box-shadow:0 16px 44px rgba(30,107,71,.12)">
 
-  <div style="position:absolute;top:0;left:0;right:0;height:6px;background:var(--accent);z-index:6"></div>
+  <div style="position:absolute;top:0;left:0;right:0;height:6px;background:var(--green);z-index:6"></div>
   <div style="position:absolute;top:6px;left:0;right:0;height:34px;display:flex;align-items:center;gap:8px;padding:0 16px;background:var(--hdr);border-bottom:1px solid var(--border);z-index:5">
    <span style="width:9px;height:9px;border-radius:50%;background:var(--green)"></span>
    <span style="font-size:13px;font-weight:bold;color:var(--green)">Ville de Châtillon</span>
@@ -54,11 +56,11 @@ body{background:var(--bg);display:flex;align-items:center;justify-content:center
     <div class="cr-anim" style="width:62px;height:62px;border-radius:16px;background:var(--green);display:flex;align-items:center;justify-content:center;color:#fff;font-size:31px;margin-bottom:16px"><i class="ti ti-calendar-event" aria-hidden="true"></i></div>
     <div class="cr-anim cr-d1" style="font-size:31px;font-weight:bold;color:var(--green)">CultuRésa</div>
     <div class="cr-anim cr-d2" style="font-size:15px;color:var(--muted);margin-top:6px">Réservation d'activités culturelles — Ville de Châtillon</div>
-    <div class="cr-anim cr-d2" style="width:64px;height:4px;background:var(--accent);border-radius:2px;margin:18px auto 0"></div>
+    <div class="cr-anim cr-d2" style="width:64px;height:4px;background:var(--green);border-radius:2px;margin:18px auto 0"></div>
    </div>
 
    <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center;gap:14px">
-    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>culturesa · Réservations</div><div class="shot"><img src="web-agenda.png" alt="Agenda de réservation"></div></div>
+    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--green)"></span>culturesa · Réservations</div><div class="shot"><img src="web-agenda.png" alt="Agenda de réservation"></div></div>
     <div class="cr-anim cr-d1 cr-h"><b>Réservez vos activités en ligne</b><span>Choisissez votre service, votre semaine et votre créneau</span></div>
    </div>
 
@@ -68,12 +70,12 @@ body{background:var(--bg);display:flex;align-items:center;justify-content:center
    </div>
 
    <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center;gap:14px">
-    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>culturesa · Mon compte</div><div class="shot"><img src="web-mon-compte.png" alt="Mon compte"></div></div>
+    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--green)"></span>culturesa · Mon compte</div><div class="shot"><img src="web-mon-compte.png" alt="Mon compte"></div></div>
     <div class="cr-anim cr-d1 cr-h"><b>Gérez votre compte et vos données</b><span>Profil, mot de passe et suppression conforme au RGPD</span></div>
    </div>
 
    <div class="cr-scene" style="flex-direction:column;align-items:center;justify-content:center;gap:14px">
-    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>culturesa · Statistiques</div><div class="shot"><img src="stats-tab.png" alt="Statistiques"></div></div>
+    <div class="cr-anim cr-win"><div class="bar"></div><div class="chrome"><span style="width:9px;height:9px;border-radius:50%;background:var(--green)"></span>culturesa · Statistiques</div><div class="shot"><img src="stats-tab.png" alt="Statistiques"></div></div>
     <div class="cr-anim cr-d1 cr-h"><b>Pilotez votre service avec les statistiques</b><span>Anneaux, présence, structures — export CSV</span></div>
    </div>
 

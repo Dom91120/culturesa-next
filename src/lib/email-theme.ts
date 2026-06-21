@@ -8,7 +8,7 @@ const THEME = {
   pageBg: "#f4f6ec",
   card: "#ffffff",
   border: "#e3e8d2",
-  headerBg: "#e6f0ea", // vert pâle (panneau) — déclinaison claire du vert du filet
+  headerBg: "#efebe1", // beige/gris clair (panneau d'en-tête + texte du pied)
   green: "#1e6b47", // vert foncé (filet, titres, pied)
   text: "#1f2a22",
   muted: "#5a7a4f",
