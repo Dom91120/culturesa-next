@@ -7,28 +7,58 @@ Stack de prod : **Next.js standalone** + **PostgreSQL 17** + **Caddy** (reverse 
 - Ports **80** et **443** ouverts (firewall)
 - Un nom de domaine pointant (enregistrement A/AAAA) vers l'IP du VPS
 
-## Mise en route
+## Mise en route — installation automatisée (recommandé)
+
+Sur un serveur vierge, le script `scripts/install.sh` fait tout : génération des
+secrets dans `.env`, build et démarrage de la stack, migrations Prisma, puis
+**initialisation d'une base vierge avec UNIQUEMENT le compte administrateur**.
 
 ```bash
 # 1. Récupérer le code
 git clone <ton-repo> culturesa && cd culturesa
 
-# 2. Configurer l'environnement
+# 2. Lancer l'installation (interactif : domaine, e-mail admin, mot de passe)
+./scripts/install.sh
+```
+
+Le script est **idempotent** (relançable). Il :
+- crée `.env` depuis `.env.example` et génère `BETTER_AUTH_SECRET`, `CRON_SECRET`,
+  `POSTGRES_PASSWORD` (les valeurs déjà renseignées sont conservées) ;
+- demande le **domaine**, l'**e-mail admin** (= identifiant de connexion) et le
+  **mot de passe admin** (généré et affiché si non fourni) ;
+- construit et démarre `app + db + caddy + cron`, applique les migrations, puis
+  crée le compte admin et les référentiels système d'e-mails (`db:init`).
+
+En non-interactif (CI) : `APP_DOMAIN=… ADMIN_EMAIL=… ADMIN_PASSWORD=… ./scripts/install.sh`.
+
+> ⚠️ Le seed d'installation ne crée **aucune** donnée métier (demandeurs,
+> structures, niveaux, vacances, services, créneaux). Tout cela se configure
+> ensuite depuis l'interface d'administration.
+
+### Mise en route manuelle (équivalent)
+
+```bash
 cp .env.example .env
-nano .env            # renseigne domaine, mots de passe, SMTP...
+nano .env                       # domaine, mots de passe, SMTP, ADMIN_EMAIL/ADMIN_PASSWORD
+openssl rand -base64 32         # -> BETTER_AUTH_SECRET
+openssl rand -hex 24            # -> CRON_SECRET
 
-# Générer les secrets :
-openssl rand -base64 32   # -> BETTER_AUTH_SECRET
-
-# 3. Construire et lancer
-docker compose up -d --build
-
-# 4. Suivre les logs
+docker compose up -d --build    # build + démarrage (migrations jouées à l'entrypoint)
+docker compose run --rm init    # crée le compte admin + référentiels e-mails (db:init)
 docker compose logs -f app
 ```
 
 Au démarrage, `docker-entrypoint.sh` applique automatiquement les migrations
 Prisma (`prisma migrate deploy`), puis lance le serveur Node.
+
+### Données de démonstration (optionnel, hors prod)
+
+Pour un jeu de démo complet (services, créneaux, usagers fictifs, réservations) à
+la place de l'init minimal :
+
+```bash
+docker compose run --rm init pnpm db:seed
+```
 
 ## Opérations courantes
 
@@ -88,7 +118,10 @@ cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_D
 |---|---|
 | `Dockerfile` | Build multi-stage Next.js standalone + Prisma |
 | `docker-entrypoint.sh` | Migrations Prisma puis démarrage |
-| `docker-compose.yml` | app + db + caddy |
+| `docker-compose.yml` | app + db + caddy + cron + `init` (one-shot) |
 | `Caddyfile` | Reverse proxy + HTTPS |
 | `.env.example` | Modèle de configuration |
+| `scripts/install.sh` | Installation automatisée sur serveur vierge |
+| `prisma/seed-init.ts` | Init minimal : compte admin + référentiels e-mails (`db:init`) |
+| `prisma/seed.ts` | Jeu de démonstration complet (`db:seed`, hors prod) |
 | `.dockerignore` / `.gitignore` | Exclusions build/git |
