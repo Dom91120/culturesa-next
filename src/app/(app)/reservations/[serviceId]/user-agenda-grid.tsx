@@ -1373,6 +1373,8 @@ export function UserAgendaGrid({
     () => new Set(uniqueSlots.filter((s) => !s.parentSlotId).map((s) => s.id)),
     [uniqueSlots],
   );
+  // Index slot ponctuel → slot (lookup O(1)), au lieu d'un .find() linéaire répété par bloc.
+  const uniqSlotById = useMemo(() => new Map(uniqueSlots.map((s) => [s.id, s])), [uniqueSlots]);
   // Slots miroirs → parent + date : rattache les réservations-enfants à la cellule du
   // slot parent en « Semaine réelle » (elles y portent le pointage, en lecture seule
   // côté usager).
@@ -2406,23 +2408,33 @@ export function UserAgendaGrid({
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  const concernedDatesForBlock = (slotId: string, dayKey: string): string[] => {
-    const dates = uniqueSlots
-      .filter(
-        (u) => u.parentSlotId === slotId && u.slotDate && dayKeyFromYmd(u.slotDate) === dayKey,
-      )
-      .map((u) => u.slotDate as string)
-      .filter((d) => {
-        // Délai de réservation : occurrences ≥ aujourd'hui + délai seulement.
-        if (d < earliestBookable) return false;
-        if (!abMode || effectiveWeek == null) return true;
-        // Convention UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B
-        // (lib/iso-week). effectiveWeek est dans cette même convention.
-        return slotWeekTag(d) === effectiveWeek;
-      })
-      .sort();
-    return openOnSchoolHolidays ? dates : dates.filter((d) => !isSchoolVacance(d));
-  };
+  // Dates concernées indexées par (slot parent | jour), précalculées une fois par jeu de
+  // miroirs/réglages — au lieu d'un balayage O(uniqueSlots) à CHAQUE appel par bloc, lui-même
+  // déclenché à chaque survol/pas de drag (onAgendaTip/canDropItem) : O(blocs×uniqueSlots).
+  const concernedDatesByKey = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const u of uniqueSlots) {
+      if (!u.parentSlotId || !u.slotDate) continue;
+      const d = u.slotDate;
+      // Délai de réservation : occurrences ≥ aujourd'hui + délai seulement.
+      if (d < earliestBookable) continue;
+      // Convention UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B (lib/iso-week).
+      if (abMode && effectiveWeek != null && slotWeekTag(d) !== effectiveWeek) continue;
+      // Vacances scolaires exclues si le demandeur ferme alors.
+      if (!openOnSchoolHolidays && inSchoolHolidayRange(d, schoolHolidays ?? [])) continue;
+      const key = `${u.parentSlotId}|${dayKeyFromYmd(d)}`;
+      const arr = m.get(key);
+      if (arr) arr.push(d);
+      else m.set(key, [d]);
+    }
+    for (const arr of m.values()) arr.sort();
+    return m;
+  }, [uniqueSlots, earliestBookable, abMode, effectiveWeek, openOnSchoolHolidays, schoolHolidays]);
+
+  // Dates concrètes couvertes par un créneau récurrent un jour donné (cf. memo ci-dessus).
+  // Port _predictedDatesForCurrentUser.
+  const concernedDatesForBlock = (slotId: string, dayKey: string): string[] =>
+    concernedDatesByKey.get(`${slotId}|${dayKey}`) ?? [];
 
   // Créneau « clôturé » par le délai de réservation → non réservable, création bloquée.
   //   • Ponctuel  → sa date est antérieure à la 1re date réservable (aujourd'hui + délai).
@@ -2430,7 +2442,7 @@ export function UserAgendaGrid({
   //     + vacances) ; réserver le récurrent ne matérialiserait aucune occurrence.
   const isSlotClosed = (b: Block): boolean => {
     if (uniqueIdSet.has(b.slotId)) {
-      const u = uniqueSlots.find((s) => s.id === b.slotId);
+      const u = uniqSlotById.get(b.slotId);
       return !!u?.slotDate && u.slotDate < earliestBookable;
     }
     return concernedDatesForBlock(b.slotId, b.dayKey).length === 0;

@@ -1664,14 +1664,23 @@ export function AgendaGrid({
     if (hd.curDay !== hd.fromDay) finalizeHResize(hd);
   }
 
+  // Parents récurrents ayant AU MOINS un enfant/miroir pointé — précalculé une fois par
+  // jeu de réservations (au lieu d'un balayage O(bookings) à chaque appel de lockedByPointage,
+  // lui-même invoqué plusieurs fois par badge dans la modale pile : O(badges×bookings×~5)).
+  const parentsWithPointedChild = useMemo(() => {
+    const s = new Set<number>();
+    for (const c of bookings) {
+      if (c.parentBookingId != null && c.pointage != null) s.add(c.parentBookingId);
+    }
+    return s;
+  }, [bookings]);
+
   // Clic rapide sur un bloc en mode validation / pointage (sinon : ouvre le menu).
   // Réservation verrouillée par le pointage : elle-même pointée (ponctuelle/miroir),
   // OU parent récurrent dont un miroir est pointé. Verrouillée = ni validation, ni
   // déplacement, ni suppression, ni copie (cf. règles métier).
   const lockedByPointage = (bk: Booking): boolean =>
-    bk.pointage != null ||
-    (bk.bookingType === "recurring" &&
-      bookings.some((c) => c.parentBookingId === bk.id && c.pointage != null));
+    bk.pointage != null || (bk.bookingType === "recurring" && parentsWithPointedChild.has(bk.id));
 
   function onBlockQuickAction(bk: Booking): boolean {
     if (validation) {
