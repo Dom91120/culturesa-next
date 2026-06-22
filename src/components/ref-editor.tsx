@@ -1,17 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import {
-  type CSSProperties,
-  type ReactNode,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
+import { type CSSProperties, type ReactNode, useState } from "react";
 
-/** Résultat des server actions de référentiel (contrat {ok,error} partagé). */
-export type RefActionResult = { ok: boolean; error?: string };
+// Contrat {ok,error} partagé des server actions de référentiel — réexporté pour les
+// consommateurs (demandeurs/structures-editor) qui l'importaient depuis ce module.
+export type { RefActionResult };
 
 type RowBase = { id: number | null; label: string };
 
@@ -77,114 +71,27 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
   addDisabled?: boolean;
   onClose?: () => void;
 }) {
-  type Keyed = Row & { key: string };
-  const counter = useRef(0);
-  const [rows, setRows] = useState<Keyed[]>(() =>
-    initial.map((d) => ({ ...fromInitial(d), key: `db-${d.id}` })),
-  );
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-  const [saving, startSaving] = useTransition();
+  // Logique « mode tampon » mutualisée (état des lignes, dirty, resync, saveAll, cancel).
+  const { rows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
+    useBufferedRows<Init, Row>({
+      initial,
+      fromInitial,
+      isValid,
+      isDirty,
+      onCreate,
+      onUpdate,
+      onDelete,
+      onSyncReset: () => setConfirmKey(null),
+    });
 
-  function patch(key: string, p: Partial<Row>) {
-    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
-  }
   function add() {
-    const key = `new-${counter.current++}`;
-    setRows((rs) => [...rs, { ...blankRow(), key }]);
+    addRow(blankRow());
     setConfirmKey(null);
   }
   function remove(key: string) {
     setConfirmKey(null);
-    setRows((rs) => rs.filter((r) => r.key !== key));
-  }
-
-  // Réinitialise le tampon sur l'état serveur courant.
-  function resetRows() {
-    setRows(initial.map((d) => ({ ...fromInitial(d), key: `db-${d.id}` })));
-  }
-
-  // « Modification/création en cours » : une ligne nouvelle, une suppression en attente
-  // ou une ligne modifiée par rapport à l'état initial. Pilote l'affichage du pied :
-  // « Fermer » au repos, « Annuler / Enregistrer » dès qu'il y a une modification.
-  const initialById = new Map(initial.map((d) => [d.id, d]));
-  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
-  const dirty =
-    rows.some((r) => r.id == null) ||
-    initial.some((d) => !currentIds.has(d.id)) ||
-    rows.some((r) => {
-      const init = r.id != null ? initialById.get(r.id) : undefined;
-      return !!init && isDirty(r, init);
-    });
-
-  // Resynchronise le tampon sur les données serveur après un enregistrement
-  // (réconcilie les nouveaux id ⇒ évite une re-création au prochain save) ou lors d'un
-  // rafraîchissement externe sans modification locale en cours.
-  const dirtyRef = useRef(dirty);
-  dirtyRef.current = dirty;
-  const justSaved = useRef(false);
-  const initSig = JSON.stringify(initial);
-  const lastSig = useRef(initSig);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resync piloté par la signature des données serveur
-  useEffect(() => {
-    if (initSig === lastSig.current) return;
-    lastSig.current = initSig;
-    if (justSaved.current || !dirtyRef.current) {
-      resetRows();
-      setConfirmKey(null);
-      setError(null);
-    }
-    justSaved.current = false;
-  }, [initSig]);
-
-  // Annule les modifications en cours (revient au tampon serveur), sans fermer la modale.
-  function cancelEdits() {
-    resetRows();
-    setConfirmKey(null);
-    setError(null);
-  }
-
-  // Applique en lot suppressions / créations / mises à jour, puis laisse la modale ouverte
-  // (le pied repasse sur « Fermer » une fois le tampon resynchronisé).
-  function saveAll() {
-    const toDelete = initial.filter((d) => !currentIds.has(d.id));
-    const toCreate = rows.filter((r) => r.id == null && isValid(r));
-    const toUpdate = rows.filter((r) => {
-      if (r.id == null || !isValid(r)) return false;
-      const init = initialById.get(r.id);
-      return !!init && isDirty(r, init);
-    });
-
-    // Rien à enregistrer (ex. ligne vierge ajoutée puis laissée vide) : on nettoie le
-    // tampon et on repasse en lecture sans appel serveur.
-    if (toDelete.length === 0 && toCreate.length === 0 && toUpdate.length === 0) {
-      setRows((rs) => rs.filter((r) => r.id != null));
-      setConfirmKey(null);
-      return;
-    }
-
-    startSaving(async () => {
-      try {
-        for (const d of toDelete) {
-          const res = await onDelete(d.id);
-          if (!res.ok) throw new Error(res.error);
-        }
-        for (const r of toCreate) {
-          const res = await onCreate(r);
-          if (!res.ok) throw new Error(res.error);
-        }
-        for (const r of toUpdate) {
-          const res = await onUpdate(r.id as number, r);
-          if (!res.ok) throw new Error(res.error);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
-        return;
-      }
-      justSaved.current = true;
-      router.refresh();
-    });
+    removeRow(key);
   }
 
   // Confirmation : la cellule s'étend du libellé+1 jusqu'à la fin (colonnes = libellé

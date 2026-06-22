@@ -1,18 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useBufferedRows } from "@/components/use-buffered-rows";
+import { useState } from "react";
 import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
 
 type DemandeurOption = { id: number; label: string };
 type Initial = { id: number; label: string; demandeurId: number | null; position: number };
-type Row = {
-  id: number | null;
-  label: string;
-  demandeurId: number | null;
-  position: number;
-  key: string;
-};
+type Row = { id: number | null; label: string; demandeurId: number | null; position: number };
 
 // Poignée · Demandeur · Position · Niveau · Action.
 const GRID = "28px 180px 72px 1fr 96px";
@@ -50,16 +44,51 @@ export function NiveauxEditor({
   demandeurs: DemandeurOption[];
   onClose?: () => void;
 }) {
-  const counter = useRef(0);
-  const [rows, setRows] = useState<Row[]>(() => initial.map((n) => ({ ...n, key: `db-${n.id}` })));
   const [editKey, setEditKey] = useState<string | null>(null);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [dragAfter, setDragAfter] = useState(false); // dépôt après la ligne survolée ?
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-  const [saving, startSaving] = useTransition();
+
+  // Logique « mode tampon » mutualisée avec RefEditor (état, dirty, resync, saveAll).
+  // L'état UI propre aux niveaux (édition par ligne, confirmation, drag) reste ici et est
+  // remis à zéro via onSyncReset ; `extraDirty` signale qu'une ligne est en édition.
+  const { rows, setRows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
+    useBufferedRows<Initial, Row>({
+      initial,
+      fromInitial: (n) => ({
+        id: n.id,
+        label: n.label,
+        demandeurId: n.demandeurId,
+        position: n.position,
+      }),
+      isValid: (r) => r.label.trim() !== "",
+      isDirty: (r, init) =>
+        init.label !== r.label.trim() ||
+        init.demandeurId !== r.demandeurId ||
+        init.position !== r.position,
+      onCreate: (r) =>
+        createNiveauAction({
+          label: r.label.trim(),
+          demandeurId: r.demandeurId,
+          position: r.position,
+        }),
+      onUpdate: (id, r) =>
+        updateNiveauAction(id, {
+          label: r.label.trim(),
+          demandeurId: r.demandeurId,
+          position: r.position,
+        }),
+      onDelete: (id) => deleteNiveauAction(id),
+      extraDirty: editKey !== null,
+      onSyncReset: () => {
+        setEditKey(null);
+        setConfirmKey(null);
+        setDragKey(null);
+        setDragOverKey(null);
+        setDragAfter(false);
+      },
+    });
 
   const demLabel = new Map(demandeurs.map((d) => [d.id, d.label]));
   const demandeurOf = (id: number | null) => (id != null ? (demLabel.get(id) ?? "—") : "—");
@@ -90,19 +119,15 @@ export function NiveauxEditor({
     );
   };
 
-  function patch(key: string, p: Partial<Row>) {
-    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
-  }
   function add() {
-    const key = `new-${counter.current++}`;
-    setRows((rs) => [...rs, { id: null, label: "", demandeurId: null, position: 0, key }]);
+    const key = addRow({ id: null, label: "", demandeurId: null, position: 0 });
     setConfirmKey(null);
     setEditKey(key); // la nouvelle ligne démarre en édition
   }
   function remove(key: string) {
     setConfirmKey(null);
     if (editKey === key) setEditKey(null);
-    setRows((rs) => rs.filter((r) => r.key !== key));
+    removeRow(key);
   }
 
   // Glisser-déposer : réordonne DANS le même demandeur (ignoré sinon), puis renumérote
@@ -126,115 +151,6 @@ export function NiveauxEditor({
         posByKey.set(r.key, n);
       }
       return rs.map((r) => ({ ...r, position: posByKey.get(r.key) ?? r.position }));
-    });
-  }
-
-  function resetRows() {
-    setRows(initial.map((n) => ({ ...n, key: `db-${n.id}` })));
-  }
-
-  // « Modification/création en cours » : une ligne en édition (✏️), une ligne nouvelle,
-  // une suppression en attente ou une ligne (libellé/demandeur/position) modifiée. Pilote
-  // le pied : « Fermer » au repos, « Annuler / Enregistrer » sinon.
-  const initialById = new Map(initial.map((n) => [n.id, n]));
-  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
-  const dirty =
-    editKey !== null ||
-    rows.some((r) => r.id == null) ||
-    initial.some((n) => !currentIds.has(n.id)) ||
-    rows.some((r) => {
-      if (r.id == null) return false;
-      const init = initialById.get(r.id);
-      return (
-        !!init &&
-        (init.label !== r.label.trim() ||
-          init.demandeurId !== r.demandeurId ||
-          init.position !== r.position)
-      );
-    });
-
-  // Resynchronise le tampon après un enregistrement (réconcilie les nouveaux id) ou lors
-  // d'un rafraîchissement externe sans modification locale en cours.
-  const dirtyRef = useRef(dirty);
-  dirtyRef.current = dirty;
-  const justSaved = useRef(false);
-  const initSig = JSON.stringify(initial);
-  const lastSig = useRef(initSig);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resync piloté par la signature des données serveur
-  useEffect(() => {
-    if (initSig === lastSig.current) return;
-    lastSig.current = initSig;
-    if (justSaved.current || !dirtyRef.current) {
-      resetRows();
-      setEditKey(null);
-      setConfirmKey(null);
-      setError(null);
-    }
-    justSaved.current = false;
-  }, [initSig]);
-
-  // Annule les modifications en cours (revient au tampon serveur), sans fermer la modale.
-  function cancelEdits() {
-    resetRows();
-    setEditKey(null);
-    setConfirmKey(null);
-    setDragKey(null);
-    setDragOverKey(null);
-    setDragAfter(false);
-    setError(null);
-  }
-
-  function saveAll() {
-    const toDelete = initial.filter((n) => !currentIds.has(n.id));
-    const toCreate = rows.filter((r) => r.id == null && r.label.trim() !== "");
-    const toUpdate = rows.filter((r) => {
-      if (r.id == null || r.label.trim() === "") return false;
-      const init = initialById.get(r.id);
-      return (
-        !!init &&
-        (init.label !== r.label.trim() ||
-          init.demandeurId !== r.demandeurId ||
-          init.position !== r.position)
-      );
-    });
-
-    // Rien à enregistrer (ex. ligne vierge laissée vide) : on nettoie et on repasse en
-    // lecture sans appel serveur.
-    if (toDelete.length === 0 && toCreate.length === 0 && toUpdate.length === 0) {
-      setRows((rs) => rs.filter((r) => r.id != null));
-      setEditKey(null);
-      setConfirmKey(null);
-      return;
-    }
-
-    startSaving(async () => {
-      try {
-        for (const n of toDelete) {
-          const res = await deleteNiveauAction(n.id);
-          if (!res.ok) throw new Error(res.error);
-        }
-        for (const r of toCreate) {
-          const res = await createNiveauAction({
-            label: r.label.trim(),
-            demandeurId: r.demandeurId,
-            position: r.position,
-          });
-          if (!res.ok) throw new Error(res.error);
-        }
-        for (const r of toUpdate) {
-          const res = await updateNiveauAction(r.id as number, {
-            label: r.label.trim(),
-            demandeurId: r.demandeurId,
-            position: r.position,
-          });
-          if (!res.ok) throw new Error(res.error);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Échec de l'enregistrement.");
-        return;
-      }
-      justSaved.current = true;
-      router.refresh();
     });
   }
 
