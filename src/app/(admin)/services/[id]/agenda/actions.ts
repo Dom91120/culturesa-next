@@ -2,6 +2,7 @@
 
 import { todayParisISO } from "@/lib/booking-delay";
 import { DAYS } from "@/schemas/config";
+import { recurringSlotCreateSchema, uniqueSlotCreateSchema } from "@/schemas/slot";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import {
@@ -281,16 +282,20 @@ export async function createRecurringSlotAction(input: {
   demandeurIds?: number[];
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
-  if (!(DAYS as readonly string[]).includes(input.dayKey)) {
-    return { ok: false, error: "Jour invalide." };
+  // Validation de la frontière : horaires (HH:MM, fin > début), capacité (entier ≥ 1),
+  // jour et identifiants. Le typage TS ne protège pas une server action des entrées brutes.
+  const parsed = recurringSlotCreateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
   }
-  const res = await addRecurringSlot(input.serviceId, input.periodId, {
-    startTime: input.startTime,
-    endTime: input.endTime,
-    weeks: input.weeks,
-    dayKey: input.dayKey as DayKeyT,
-    capacity: input.capacity,
-    demandeurIds: input.demandeurIds,
+  const d = parsed.data;
+  const res = await addRecurringSlot(d.serviceId, d.periodId, {
+    startTime: d.startTime,
+    endTime: d.endTime,
+    weeks: d.weeks,
+    dayKey: d.dayKey,
+    capacity: d.capacity,
+    demandeurIds: d.demandeurIds,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
@@ -306,12 +311,19 @@ export async function createUniqueSlotAction(input: {
   demandeurIds?: number[];
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
-  const res = await addUniqueSlot(input.serviceId, {
-    slotDate: input.slotDate,
-    startTime: input.startTime,
-    endTime: input.endTime,
-    capacity: input.capacity,
-    demandeurIds: input.demandeurIds,
+  // Validation de la frontière : date (AAAA-MM-JJ), horaires (HH:MM, fin > début),
+  // capacité (entier ≥ 1) et identifiants — avant toute écriture en base.
+  const parsed = uniqueSlotCreateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+  }
+  const d = parsed.data;
+  const res = await addUniqueSlot(d.serviceId, {
+    slotDate: d.slotDate,
+    startTime: d.startTime,
+    endTime: d.endTime,
+    capacity: d.capacity,
+    demandeurIds: d.demandeurIds,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };

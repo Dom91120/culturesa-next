@@ -121,8 +121,16 @@ export async function assertSlotCapacity(
   });
   if (!slot) throw new BookingError("Créneau introuvable.");
   const capacity = slot.capacity ?? slot.service.capacity;
+  // Jauge per-MODE (cf. deriveServiceModes : gaugeRec = récurrent ∧ jauge ; gaugePonct =
+  // ponctuel ∧ jauge). Le décompte en unités-jauge ne s'applique qu'au mode de CETTE
+  // réservation : un service où seuls les demandeurs PONCTUELS ont la jauge ne jauge pas
+  // les réservations récurrentes (et inversement) — sinon décompte « 1 par réservation ».
   const gaugeOn = !!(await db.serviceDemandeurSettings.findFirst({
-    where: { serviceId: params.serviceId, jauge: true },
+    where: {
+      serviceId: params.serviceId,
+      jauge: true,
+      recurrent: params.bookingType === "recurring",
+    },
     select: { serviceId: true },
   }));
   const occWhere: Prisma.BookingWhereInput =
