@@ -44,7 +44,10 @@ function ResetForm() {
     if (pwd !== confirm) return "Les deux mots de passe ne correspondent pas.";
     const res = await authClient.resetPassword({ newPassword: pwd, token });
     if (res.error)
-      return res.error.message || "Échec de la réinitialisation. Le lien a peut-être expiré.";
+      // Message générique (on n'expose pas le libellé interne de Better Auth).
+      return res.error.status === 429
+        ? "Trop de tentatives. Réessayez dans une minute."
+        : "Échec de la réinitialisation. Le lien a peut-être expiré.";
     router.push("/auth/login");
   });
 

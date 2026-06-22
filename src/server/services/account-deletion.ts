@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { emailButton } from "@/lib/email-theme";
+import { hmacSign, timingSafeEqualStr } from "@/server/crypto";
 import { prisma } from "@/server/db";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { RgpdError, anonymizeUser, assertNotLastActiveAdmin } from "@/server/services/rgpd";
@@ -15,15 +15,9 @@ import { RgpdError, anonymizeUser, assertNotLastActiveAdmin } from "@/server/ser
 
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 h
 
-function secret(): string {
-  const s = process.env.BETTER_AUTH_SECRET;
-  if (!s)
-    throw new Error("BETTER_AUTH_SECRET manquant : requis pour signer le lien de suppression.");
-  return s;
-}
-
+// Signature du lien sous une clé dédiée à la suppression (séparation de domaine, server/crypto).
 function sign(userId: string, exp: number): string {
-  return createHmac("sha256", secret()).update(`${userId}|${exp}`).digest("base64url");
+  return hmacSign("account-deletion", `${userId}|${exp}`);
 }
 
 /** Token signé `${b64(userId)}.${exp}.${sig}` valable TTL_MS. */
@@ -46,10 +40,7 @@ function readToken(token: string | null | undefined): string | null {
   } catch {
     return null;
   }
-  const expected = sign(userId, exp);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  if (!timingSafeEqualStr(sig, sign(userId, exp))) return null;
   return userId;
 }
 

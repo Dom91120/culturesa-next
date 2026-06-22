@@ -1,4 +1,5 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { hmacSign, timingSafeEqualStr } from "@/server/crypto";
 import { create } from "svg-captcha";
 
 /**
@@ -18,18 +19,22 @@ const TTL_MS = 5 * 60 * 1000; // 5 minutes
 // Jeu de caractères non ambigu (ni 0/O, ni 1/I/L) — comme le legacy.
 const CHAR_PRESET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-function secret(): string {
-  const s = process.env.BETTER_AUTH_SECRET;
-  if (!s) throw new Error("BETTER_AUTH_SECRET manquant : requis pour signer le captcha.");
-  return s;
-}
-
 const normalize = (s: string) => s.trim().toUpperCase();
 
+// Signature du défi sous une clé dédiée au captcha (séparation de domaine, cf. server/crypto).
 function sign(answer: string, exp: number, nonce: string): string {
-  return createHmac("sha256", secret())
-    .update(`${normalize(answer)}|${exp}|${nonce}`)
-    .digest("base64url");
+  return hmacSign("captcha", `${normalize(answer)}|${exp}|${nonce}`);
+}
+
+// Anti-rejeu : un défi résolu ne doit être accepté qu'UNE fois. On mémorise les nonces
+// déjà consommés (nonce → expiration) en mémoire — suffisant pour ce déploiement mono-
+// instance, à l'image du rate-limit Better Auth (lui aussi en mémoire). Sans cela, un
+// même couple {token, réponse} restait valide pendant tout le TTL → création de comptes
+// en boucle avec un seul captcha résolu.
+const consumed = new Map<string, number>();
+function pruneConsumed(now: number): void {
+  if (consumed.size < 1024) return; // purge paresseuse pour éviter une croissance illimitée
+  for (const [n, exp] of consumed) if (exp <= now) consumed.delete(n);
 }
 
 export function createCaptcha(): { svg: string; token: string } {
@@ -58,11 +63,14 @@ export function verifyCaptcha(
   if (parts.length !== 3) return false;
   const [expStr, nonce, sig] = parts;
   const exp = Number(expStr);
-  if (!Number.isFinite(exp) || Date.now() > exp) return false;
+  const now = Date.now();
+  if (!Number.isFinite(exp) || now > exp) return false;
 
-  const expected = sign(answer, exp, nonce);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  // timingSafeEqual exige des buffers de même longueur.
-  return a.length === b.length && timingSafeEqual(a, b);
+  if (!timingSafeEqualStr(sig, sign(answer, exp, nonce))) return false;
+
+  // Signature valide : on consomme le nonce. S'il a déjà servi, on refuse (anti-rejeu).
+  if (consumed.has(nonce)) return false;
+  consumed.set(nonce, exp);
+  pruneConsumed(now);
+  return true;
 }

@@ -20,11 +20,12 @@ export default function LoginPage() {
       // On ne déduit plus « e-mail non confirmé » de TOUT 403 : Better Auth renvoie
       // aussi 403 pour une origine non autorisée (ex. accès LAN). On se fie au code.
       const code = res.error.code;
-      return code === "EMAIL_NOT_VERIFIED"
-        ? "Adresse e-mail non confirmée. Vérifiez votre boîte mail."
-        : code === "INVALID_EMAIL_OR_PASSWORD"
-          ? "E-mail ou mot de passe incorrect."
-          : res.error.message || "Connexion impossible. Réessayez.";
+      if (code === "EMAIL_NOT_VERIFIED")
+        return "Adresse e-mail non confirmée. Vérifiez votre boîte mail.";
+      if (code === "INVALID_EMAIL_OR_PASSWORD") return "E-mail ou mot de passe incorrect.";
+      if (res.error.status === 429) return "Trop de tentatives. Réessayez dans une minute.";
+      // Cas non identifié : message générique (on n'expose pas le libellé interne de la lib).
+      return "Connexion impossible. Réessayez.";
     }
     // Redirection selon le rôle déléguée à « / » (gestionnaire → Administration,
     // sinon → réservation).

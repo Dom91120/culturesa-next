@@ -677,6 +677,17 @@ export async function createRecurringBookingAction(input: {
   try {
     await prisma.$transaction(
       async (tx) => {
+        // Défense en profondeur : le créneau cible doit être un récurrent ACTIF du service
+        // (comme createUniqueBookingInTx pour le ponctuel). Évite une récurrente posée sur
+        // un créneau ponctuel/désactivé via un slotId forgé, que syncRecurringChildren
+        // propagerait ensuite. (assertSlotCapacity ne contrôle que le couple slot/service.)
+        const target = await tx.slot.findFirst({
+          where: { id: d.slotId, serviceId: d.serviceId },
+          select: { slotType: true, state: true },
+        });
+        if (!target || target.slotType !== "recurring" || target.state !== "actif") {
+          throw new BookingError("Ce créneau n'est pas disponible.");
+        }
         // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.
         // (pas de délai de réservation côté gestionnaire, mais la capacité s'applique.)
         await assertSlotCapacity(tx, {
