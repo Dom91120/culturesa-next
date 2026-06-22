@@ -1,3 +1,4 @@
+import { ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { prisma } from "@/server/db";
 import { sendBookingConfirmationMailsBatch } from "@/server/services/booking-mail";
 
@@ -14,7 +15,6 @@ import { sendBookingConfirmationMailsBatch } from "@/server/services/booking-mai
 // ════════════════════════════════════════════════════════════
 
 const TZ = "Europe/Paris";
-const DOW_KEY = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"] as const;
 
 // Heures ouvrées exprimées en heure murale FR : on isole la conversion instant ↔
 // heure murale Paris pour ne PAS dépendre du fuseau du serveur (Node tourne en UTC).
@@ -103,7 +103,7 @@ function businessDeadline(
   let { y, mo, da, min } = toParisWall(from);
   let iter = 366 * 4; // garde-fou (~1 an)
   while (remaining > 0 && iter-- > 0) {
-    if (!activeDays.includes(DOW_KEY[wallDow(y, mo, da)])) {
+    if (!activeDays.includes(ISO_DAY_KEYS[wallDow(y, mo, da)])) {
       ({ y, mo, da } = nextWallDay(y, mo, da));
       min = 0;
       continue;

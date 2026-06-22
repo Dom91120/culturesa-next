@@ -1,4 +1,4 @@
-import { DAY_NAMES } from "@/lib/agenda-core";
+import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { gaugeUnits } from "@/lib/gauge";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
@@ -57,7 +57,6 @@ function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-const ISO_DAYKEY = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
 const MONTH_NAMES = [
   "Janv.",
@@ -81,7 +80,7 @@ function inRange(d: string, from: string | null, to: string | null): boolean {
 /** Jour de la semaine ('lun'..'dim') d'une réservation : slotDay (récurrent) ou date. */
 function dayKeyOf(slotDay: string | null, slotDate: Date | null): string | null {
   if (slotDay) return slotDay;
-  if (slotDate) return ISO_DAYKEY[slotDate.getUTCDay()];
+  if (slotDate) return ISO_DAY_KEYS[slotDate.getUTCDay()];
   return null;
 }
 

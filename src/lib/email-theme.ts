@@ -14,6 +14,18 @@ const THEME = {
   muted: "#5a7a4f",
 };
 
+/**
+ * Échappement HTML des valeurs de confiance limitée injectées dans un e-mail (corps,
+ * préheader, digest). Source UNIQUE — échappe & < > et " (sûr en contenu comme en attribut).
+ */
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /** Bouton d'action (CTA) thématisé pour les e-mails — injecté en variable brute `{{bouton}}`. */
 export function emailButton(href: string, label: string): string {
   const safe = href.replace(/"/g, "%22");
@@ -36,10 +48,8 @@ export function wrapEmailHtml(
   const logoSrc = opts?.logoSrc ?? "cid:culturesa-logo";
   // Le préheader (= sujet rendu) peut contenir des variables non échappées (nom d'usager,
   // libellé de service) : on l'échappe avant injection dans le balisage de l'e-mail.
-  const escapePreheader = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const preheader = opts?.preheader
-    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapePreheader(opts.preheader)}</div>`
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapeHtml(opts.preheader)}</div>`
     : "";
   return `<!doctype html>
 <html lang="fr">

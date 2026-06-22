@@ -1,4 +1,4 @@
-import { wrapEmailHtml } from "@/lib/email-theme";
+import { escapeHtml, wrapEmailHtml } from "@/lib/email-theme";
 import { DAYS } from "@/schemas/config";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -88,9 +88,6 @@ export function isDigestDue(cfg: DueConfig, now: Date): boolean {
   if (cfg.mode === "daily") return np.hour >= cfg.hour && !sentToday;
   return np.weekday === cfg.weekday && np.hour >= cfg.hour && !sentToday; // weekly
 }
-
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const setCursor = (serviceId: string, at: Date) =>
   prisma.service.update({ where: { id: serviceId }, data: { mgrNoticeLastSentAt: at } });

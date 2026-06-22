@@ -30,6 +30,11 @@ export const DAY_NAMES: Record<string, string> = {
   dim: "Dimanche",
 };
 
+// Index getUTCDay()/getDay() (0=dim..6=sam) → clé jour. Source unique côté serveur
+// (stats, éditions, auto-validation) — évite de recopier ce tableau. NB : distinct de
+// l'index ISO 1=lun..7=dim utilisé par la génération de miroirs (slots.ts).
+export const ISO_DAY_KEYS = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"] as const;
+
 export function ymd(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;

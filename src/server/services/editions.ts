@@ -1,4 +1,4 @@
-import { DAY_NAMES } from "@/lib/agenda-core";
+import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { prisma } from "@/server/db";
 
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
@@ -54,8 +54,6 @@ export type DatedSession = {
   attendees: SessionAttendee[];
 };
 
-const ISO_DAYKEY = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
-
 /**
  * Sessions DATÉES (occurrences) d'un service sur une plage [from, to], groupées par
  * date + créneau, avec leurs participants. Inclut les ponctuels autonomes ET les miroirs
@@ -98,7 +96,7 @@ export async function listDatedSessions(
     const key = `${date}|${b.slot.startTime}|${b.slot.endTime}`;
     let s = map.get(key);
     if (!s) {
-      const dayKey = ISO_DAYKEY[b.slot.slotDate.getUTCDay()];
+      const dayKey = ISO_DAY_KEYS[b.slot.slotDate.getUTCDay()];
       s = {
         date,
         dateLabel: dateFmt.format(b.slot.slotDate),
@@ -134,7 +132,7 @@ export async function listDatedSessions(
 function jourDateOf(bookingType: string, slotDate: Date | null, slotDay: string | null): string {
   if (bookingType === "unique") {
     if (!slotDate) return "—";
-    const day = DAY_NAMES[ISO_DAYKEY[slotDate.getUTCDay()]] ?? "";
+    const day = DAY_NAMES[ISO_DAY_KEYS[slotDate.getUTCDay()]] ?? "";
     return `${day} ${dateFmt.format(slotDate)}`.trim();
   }
   return DAY_NAMES[slotDay ?? ""] ?? slotDay ?? "—";

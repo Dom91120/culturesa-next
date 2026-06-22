@@ -1,3 +1,4 @@
+import { escapeHtml } from "@/lib/email-theme";
 import { isConfigValueUsed } from "@/server/config";
 import { prisma } from "@/server/db";
 
@@ -368,14 +369,6 @@ export async function deleteCustomMailType(
 ): Promise<void> {
   if (scopeOf(serviceId) === "") await prisma.mailType.deleteMany({ where: { key } });
   else await prisma.mailType.deleteMany({ where: { serviceId, key } });
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /** Résout les blocs conditionnels {{#if nom}}…{{/if}} (gardés si la variable est non vide). */
