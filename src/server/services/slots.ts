@@ -1,6 +1,7 @@
 import { slotWeekTag } from "@/lib/iso-week";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import { Prisma } from "@prisma/client";
 
 // Helpers de l'agenda admin (mode « Création de créneau ») : ajout/copie/déplacement/
 // suppression de créneaux + génération de leurs miroirs. L'API « upsert en masse »
@@ -497,10 +498,6 @@ export async function moveUniqueSlot(
   });
   if (!slot) return { ok: false, error: "Créneau introuvable" };
   if (slot.parentSlotId) return { ok: false, error: "Un miroir ne se déplace pas directement." };
-  const bookingCount = await prisma.booking.count({ where: { slotId } });
-  if (bookingCount > 0) {
-    return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
-  }
   const period = await prisma.period.findFirst({
     where: {
       serviceId,
@@ -511,10 +508,33 @@ export async function moveUniqueSlot(
     select: { id: true },
   });
   if (!period) return { ok: false, error: `Aucune période active ne couvre la date ${slotDate}` };
-  await prisma.slot.update({
-    where: { id: slotId },
-    data: { startTime, endTime, slotDate: fromISO(slotDate), periodId: period.id },
-  });
+  // Vérif « réservé » + update dans UNE transaction sérialisable : une réservation créée
+  // entre le count et l'update ne peut plus passer inaperçue (cohérent avec les autres
+  // mutations de slot, toutes transactionnelles).
+  let blocked = false;
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        if ((await tx.booking.count({ where: { slotId } })) > 0) {
+          blocked = true;
+          return;
+        }
+        await tx.slot.update({
+          where: { id: slotId },
+          data: { startTime, endTime, slotDate: fromISO(slotDate), periodId: period.id },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
+  if (blocked) {
+    return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
+  }
   return { ok: true };
 }
 

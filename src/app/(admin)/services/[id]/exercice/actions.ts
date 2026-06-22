@@ -21,13 +21,14 @@ export async function setShowPreviousExercicesAction(
   serviceId: string,
   value: boolean,
 ): Promise<ActionState> {
-  await requireServiceManager(serviceId);
+  // Valider d'abord (valeur normalisée) puis garder avec le serviceId validé.
   const parsed = z
     .object({ serviceId: z.string().trim().min(1), value: z.boolean() })
     .safeParse({ serviceId, value });
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };
   }
+  await requireServiceManager(parsed.data.serviceId);
   try {
     await setShowPreviousExercices(parsed.data.serviceId, parsed.data.value);
     revalidate(parsed.data.serviceId);
@@ -48,11 +49,11 @@ export async function cycleAction(
   recreatePeriods: boolean,
   recreateSlots: boolean,
 ): Promise<CycleActionState> {
-  await requireServiceManager(serviceId);
   const parsed = cycleSchema.safeParse({ serviceId, recreatePeriods, recreateSlots });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
   }
+  await requireServiceManager(parsed.data.serviceId);
   try {
     const res = await cycleService(parsed.data.serviceId, {
       recreatePeriods: parsed.data.recreatePeriods,
@@ -68,11 +69,11 @@ export async function cycleAction(
 const undoSchema = z.object({ serviceId: z.string().trim().min(1) });
 
 export async function undoCycleAction(serviceId: string): Promise<ActionState> {
-  await requireServiceManager(serviceId);
   const parsed = undoSchema.safeParse({ serviceId });
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };
   }
+  await requireServiceManager(parsed.data.serviceId);
   try {
     await undoCycle(parsed.data.serviceId);
     revalidate(parsed.data.serviceId);

@@ -1,4 +1,5 @@
 import { emailButton } from "@/lib/email-theme";
+import { getAppUrl } from "@/server/config";
 import { hmacSign, timingSafeEqualStr } from "@/server/crypto";
 import { prisma } from "@/server/db";
 import { sendTemplatedMail } from "@/server/services/mail-send";
@@ -44,15 +45,6 @@ function readToken(token: string | null | undefined): string | null {
   return userId;
 }
 
-function appUrl(): string {
-  return (
-    process.env.BETTER_AUTH_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.APP_URL ??
-    ""
-  ).replace(/\/$/, "");
-}
-
 /**
  * Envoie à l'usager l'e-mail de confirmation de suppression (lien 24 h). Best-effort.
  * No-op silencieux si le compte est introuvable / déjà anonymisé / sans e-mail.
@@ -68,7 +60,8 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
   // Le dernier administrateur actif ne peut pas demander sa propre suppression.
   await assertNotLastActiveAdmin(prisma, userId);
 
-  const url = `${appUrl()}/auth/supprimer-compte?token=${encodeURIComponent(makeToken(userId))}`;
+  const base = await getAppUrl();
+  const url = `${base}/auth/supprimer-compte?token=${encodeURIComponent(makeToken(userId))}`;
   const prenom = user.prenom?.trim() ?? "";
   const vars = { salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom, url };
 
