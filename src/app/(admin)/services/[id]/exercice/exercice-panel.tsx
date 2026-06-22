@@ -29,6 +29,9 @@ export function ExercicePanel({ serviceId, data }: Props) {
 
   const bookingsCount = data.undo.bookingsCount;
   const undoButtonReady = bookingsCount === 0 || undoAck;
+  // Teinte de la section « supprimer le dernier exercice » : danger (rouge) si la
+  // suppression entraîne la perte de réservations, warn (orange) sinon (port legacy).
+  const undoAccent = bookingsCount > 0 ? "var(--danger)" : "var(--warn)";
 
   function toggleMode(next: Exclude<Mode, "none">) {
     setError(null);
@@ -98,7 +101,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
     flexWrap: "wrap" as const,
   };
   const columnStyle = {
-    background: "var(--surface-2)",
+    background: "var(--surface2)",
     flex: 1,
     minWidth: 280,
   };
@@ -235,54 +238,105 @@ export function ExercicePanel({ serviceId, data }: Props) {
         ) : null}
 
         {mode === "undo" && data.undo.hasUndo ? (
-          <div className="panel" style={columnStyle}>
-            <div className="panel-title">Retour à l&apos;année précédente</div>
-            <p style={{ fontSize: ".85rem", color: "var(--muted)", marginTop: 6 }}>
-              Supprime entièrement l&apos;exercice en cours (périodes, créneaux ET réservations) et
-              restaure le précédent.
-            </p>
-            <p
+          <div style={{ flex: 1, minWidth: 280 }}>
+            {/* Libellé « utilisateur expérimenté » au-dessus de la boîte, affiché
+                seulement si des réservations seront perdues (port legacy #pc-undo-label). */}
+            {bookingsCount > 0 ? (
+              <div
+                style={{
+                  fontWeight: 700,
+                  color: "var(--danger)",
+                  fontSize: ".78rem",
+                  margin: "0 0 .35rem",
+                }}
+              >
+                ⚠️ Utilisateur expérimenté :
+              </div>
+            ) : null}
+            {/* Boîte (port legacy #pc-undo-section) : bordure + fond surface2. */}
+            <div
               style={{
-                color: bookingsCount > 0 ? "var(--danger)" : "var(--ok)",
-                border: `1px solid ${bookingsCount > 0 ? "var(--danger)" : "var(--ok)"}`,
-                borderRadius: "var(--radius)",
-                padding: "8px 12px",
-                fontSize: ".85rem",
-                margin: "12px 0",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--rad-sm)",
+                padding: ".75rem 1rem",
+                background: "var(--surface2)",
               }}
             >
-              {bookingsCount > 0
-                ? `${bookingsCount} réservation(s) seront supprimées`
-                : "Aucune réservation existante"}
-            </p>
-            {bookingsCount > 0 ? (
-              <label className="check" style={{ marginBottom: 12 }}>
-                <input
-                  type="checkbox"
-                  checked={undoAck}
-                  disabled={isPending}
-                  onChange={(e) => setUndoAck(e.target.checked)}
-                />{" "}
-                J&apos;ai compris : {bookingsCount} réservations seront supprimées
-              </label>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn-danger"
-              style={
-                bookingsCount === 0
-                  ? {
-                      background: "var(--warn)",
-                      borderColor: "var(--warn)",
-                      color: "#1b1300",
-                    }
-                  : undefined
-              }
-              disabled={isPending || !undoButtonReady}
-              onClick={askUndo}
-            >
-              Supprimer l&apos;exercice {data.currentName}
-            </button>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: ".85rem",
+                  color: undoAccent,
+                  marginBottom: ".4rem",
+                }}
+              >
+                ↩ Retour à l&apos;année précédente
+              </div>
+              <p
+                style={{
+                  fontSize: ".85rem",
+                  lineHeight: 1.55,
+                  color: "var(--text)",
+                  marginBottom: ".5rem",
+                }}
+              >
+                Supprime entièrement l&apos;exercice en cours (périodes, créneaux et réservations
+                compris). Restaure l&apos;exercice précédent.
+              </p>
+              <p
+                style={{
+                  fontSize: ".78rem",
+                  lineHeight: 1.5,
+                  marginBottom: ".6rem",
+                  color: bookingsCount > 0 ? "var(--danger)" : "var(--accent)",
+                }}
+              >
+                {bookingsCount > 0
+                  ? `⚠️ ${bookingsCount} réservation${bookingsCount > 1 ? "s" : ""} seront supprimées.`
+                  : "✓ Aucune réservation existante."}
+              </p>
+              {bookingsCount > 0 ? (
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: ".5rem",
+                    fontSize: ".78rem",
+                    color: "var(--text)",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    marginBottom: ".6rem",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={undoAck}
+                    disabled={isPending}
+                    onChange={(e) => setUndoAck(e.target.checked)}
+                    style={{ accentColor: "var(--danger)", cursor: "pointer" }}
+                  />
+                  <span>
+                    J&apos;ai compris : {bookingsCount} réservation{bookingsCount > 1 ? "s" : ""}{" "}
+                    seront supprimées.
+                  </span>
+                </label>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{
+                  fontSize: ".7rem",
+                  padding: ".3rem .7rem",
+                  background: undoAccent,
+                  border: "none",
+                  color: "var(--text)",
+                }}
+                disabled={isPending || !undoButtonReady}
+                onClick={askUndo}
+              >
+                Supprimer l&apos;exercice {data.currentName}
+              </button>
+            </div>
           </div>
         ) : null}
       </div>
