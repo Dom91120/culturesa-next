@@ -1375,6 +1375,8 @@ export function UserAgendaGrid({
   );
   // Index slot ponctuel → slot (lookup O(1)), au lieu d'un .find() linéaire répété par bloc.
   const uniqSlotById = useMemo(() => new Map(uniqueSlots.map((s) => [s.id, s])), [uniqueSlots]);
+  // Idem pour les créneaux récurrents.
+  const recurSlotById = useMemo(() => new Map(slots.map((s) => [s.id, s])), [slots]);
   // Slots miroirs → parent + date : rattache les réservations-enfants à la cellule du
   // slot parent en « Semaine réelle » (elles y portent le pointage, en lecture seule
   // côté usager).
@@ -1925,13 +1927,11 @@ export function UserAgendaGrid({
     return ponctuel ? `u:${slotId}` : `r:${slotId}|${dayKey}`;
   }
   function slotTime(slotId: string, ponctuel: boolean) {
-    const s = ponctuel
-      ? uniqueSlots.find((x) => x.id === slotId)
-      : slots.find((x) => x.id === slotId);
+    const s = ponctuel ? uniqSlotById.get(slotId) : recurSlotById.get(slotId);
     return s ? `${s.startTime}–${s.endTime}` : "";
   }
   function ponctuelDateLabel(slotId: string) {
-    const u = uniqueSlots.find((x) => x.id === slotId);
+    const u = uniqSlotById.get(slotId);
     return u?.slotDate
       ? new Date(`${u.slotDate}T00:00:00`).toLocaleDateString("fr-FR", {
           weekday: "long",
