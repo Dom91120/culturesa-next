@@ -35,6 +35,29 @@ export async function effectiveDemandeurId(
 }
 
 /**
+ * Ouverture vacances scolaires du demandeur EFFECTIF (le sien, sinon celui de sa
+ * structure ; défaut « ouvert » si aucun demandeur effectif) — même règle de repli que
+ * effectiveDemandeurId. Source unique pour toutes les évaluations « vacances ».
+ * L'appelant doit avoir chargé `demandeur.openOnSchoolHolidays` ET
+ * `structure.demandeur.openOnSchoolHolidays`.
+ */
+export function effectiveOpenOnSchoolHolidays(
+  user:
+    | {
+        demandeur?: { openOnSchoolHolidays: boolean } | null;
+        structure?: { demandeur?: { openOnSchoolHolidays: boolean } | null } | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  return (
+    user?.demandeur?.openOnSchoolHolidays ??
+    user?.structure?.demandeur?.openOnSchoolHolidays ??
+    true
+  );
+}
+
+/**
  * L'usager a-t-il accès à ce service ? Accès = son demandeur effectif est référencé
  * dans `service_demandeur_settings`. Sans demandeur effectif (ex. administrateur) →
  * accès libre (voit/réserve tout). Port legacy `require_service_access` (scoping par
@@ -246,9 +269,12 @@ export async function assertNotSchoolHolidayForUser(
 ) {
   const u = await db.user.findUnique({
     where: { id: userId },
-    select: { demandeur: { select: { openOnSchoolHolidays: true } } },
+    select: {
+      demandeur: { select: { openOnSchoolHolidays: true } },
+      structure: { select: { demandeur: { select: { openOnSchoolHolidays: true } } } },
+    },
   });
-  const demandeurOpen = u?.demandeur?.openOnSchoolHolidays ?? true;
+  const demandeurOpen = effectiveOpenOnSchoolHolidays(u);
   if (serviceOpenOnSchoolHolidays && demandeurOpen) return;
   const zone = (await getConfigMany(["school.zone"]))["school.zone"] || "A";
   const ranges = (
@@ -468,7 +494,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     select: {
       demandeurId: true,
       demandeur: { select: { label: true, openOnSchoolHolidays: true } },
-      structure: { select: { demandeurId: true } },
+      structure: {
+        select: { demandeurId: true, demandeur: { select: { openOnSchoolHolidays: true } } },
+      },
       nom: true,
       prenom: true,
       email: true,
@@ -666,11 +694,11 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     themes: themeRows.map((t) => t.label),
     // Libellé du demandeur de l'usager (bandeau debug, cf. legacy #dem-info).
     demandeurLabel: user?.demandeur?.label ?? null,
-    // Ouvert pendant les vacances scolaires ? Combinaison SERVICE ∧ DEMANDEUR : il faut que
-    // les deux acceptent les vacances pour que les jours de vacances restent réservables.
-    // (Demandeur : défaut true si non rattaché, comme legacy. Service : défaut false.)
-    openOnSchoolHolidays:
-      service.openOnSchoolHolidays && (user?.demandeur?.openOnSchoolHolidays ?? true),
+    // Ouvert pendant les vacances scolaires ? Combinaison SERVICE ∧ DEMANDEUR EFFECTIF :
+    // il faut que les deux acceptent les vacances pour que les jours de vacances restent
+    // réservables. (Demandeur effectif = le sien, sinon celui de sa structure ; défaut true
+    // si aucun. Service : défaut false.)
+    openOnSchoolHolidays: service.openOnSchoolHolidays && effectiveOpenOnSchoolHolidays(user),
     // Plages de vacances scolaires (YYYY-MM-DD) de la zone configurée.
     schoolHolidays,
     // Infos usager pour le récapitulatif de la modale de confirmation (legacy).

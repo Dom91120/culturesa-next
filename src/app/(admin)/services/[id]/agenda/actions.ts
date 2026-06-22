@@ -10,7 +10,11 @@ import {
   resolvePeriodLabel,
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
-import { BookingError, assertSlotCapacity } from "@/server/services/bookings";
+import {
+  BookingError,
+  assertSlotCapacity,
+  effectiveOpenOnSchoolHolidays,
+} from "@/server/services/bookings";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
 import { isTriggerEnabled, resolveTriggerKind } from "@/server/services/mail-prefs";
 import { sendTemplatedMail } from "@/server/services/mail-send";
@@ -257,7 +261,9 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
       nom: true,
       prenom: true,
       demandeur: { select: { label: true, openOnSchoolHolidays: true } },
-      structure: { select: { label: true } },
+      structure: {
+        select: { label: true, demandeur: { select: { openOnSchoolHolidays: true } } },
+      },
     },
   });
   return users.map((u) => ({
@@ -265,8 +271,9 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
     label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
     demandeur: u.demandeur?.label ?? "",
     structure: u.structure?.label ?? "",
-    // Politique vacances scolaires du demandeur (false = fermé → occurrences exclues).
-    openOnSchoolHolidays: u.demandeur?.openOnSchoolHolidays ?? true,
+    // Politique vacances scolaires du demandeur EFFECTIF (direct, sinon structure ; false =
+    // fermé → occurrences exclues).
+    openOnSchoolHolidays: effectiveOpenOnSchoolHolidays(u),
   }));
 }
 

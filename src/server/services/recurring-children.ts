@@ -2,6 +2,7 @@ import { earliestBookableISO } from "@/lib/booking-delay";
 import { slotWeekTag } from "@/lib/iso-week";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { getConfigMany } from "@/server/config";
+import { effectiveOpenOnSchoolHolidays } from "@/server/services/bookings";
 import type { Prisma } from "@prisma/client";
 
 // ════════════════════════════════════════════════════════════
@@ -60,15 +61,17 @@ export async function syncRecurringChildren(
   const [user, svc] = await Promise.all([
     tx.user.findUnique({
       where: { id: parent.userId },
-      select: { demandeur: { select: { openOnSchoolHolidays: true } } },
+      select: {
+        demandeur: { select: { openOnSchoolHolidays: true } },
+        structure: { select: { demandeur: { select: { openOnSchoolHolidays: true } } } },
+      },
     }),
     tx.service.findUnique({
       where: { id: parent.serviceId },
       select: { openOnSchoolHolidays: true },
     }),
   ]);
-  const openOnSchool =
-    (svc?.openOnSchoolHolidays ?? false) && (user?.demandeur?.openOnSchoolHolidays ?? true);
+  const openOnSchool = (svc?.openOnSchoolHolidays ?? false) && effectiveOpenOnSchoolHolidays(user);
   let schoolRanges: { dateStart: string; dateEnd: string }[] = [];
   if (!openOnSchool) {
     const zone = opts?.schoolZone ?? (await getSchoolZone());
