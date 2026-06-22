@@ -57,11 +57,12 @@ export async function setMailTriggerAction(
 /** Re-route une action vers un autre type d'e-mail (menu « Type d'e-mail », global). */
 export async function setTriggerKindAction(trigger: string, kind: string): Promise<ActionState> {
   if (!isBookingTrigger(trigger)) return { ok: false, error: "Action inconnue." };
+  // Autorisation AVANT toute requête en base (la validation de la cible fait un I/O DB).
+  await requireRole("administrateur");
   // Cible valide : type intégré OU type personnalisé GLOBAL (le routage est global).
   if (!isBookingKind(kind) && !(await isCustomMailType(kind))) {
     return { ok: false, error: "Type d'e-mail inconnu." };
   }
-  await requireRole("administrateur");
   await setTriggerKind(trigger, kind);
   revalidatePath("/echanges");
   return { ok: true };
@@ -97,6 +98,8 @@ export async function setMailTemplateAction(
   html: string,
   serviceId?: string,
 ): Promise<ActionState> {
+  // Autorisation AVANT toute requête en base (la résolution du type custom fait un I/O DB).
+  await authorizeScope(serviceId);
   const builtin = (TEMPLATE_KINDS as readonly string[]).includes(kind);
   // Custom : serviceId présent → type DU SERVICE ; absent → type GLOBAL (admin).
   const custom = !builtin && (await isCustomMailType(kind, serviceId));
@@ -112,7 +115,6 @@ export async function setMailTemplateAction(
   if (subject.length > 500 || html.length > 50000) {
     return { ok: false, error: "Contenu trop long." };
   }
-  await authorizeScope(serviceId);
   await setMailTemplate(kind, subject, html, serviceId);
   revalidateScope(serviceId);
   return { ok: true };

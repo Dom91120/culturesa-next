@@ -34,8 +34,12 @@ export function wrapEmailHtml(
   // Source du logo : par défaut la pièce jointe inline CID (e-mails réels) ; l'aperçu
   // de l'éditeur passe l'URL publique "/email-logo.png".
   const logoSrc = opts?.logoSrc ?? "cid:culturesa-logo";
+  // Le préheader (= sujet rendu) peut contenir des variables non échappées (nom d'usager,
+  // libellé de service) : on l'échappe avant injection dans le balisage de l'e-mail.
+  const escapePreheader = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const preheader = opts?.preheader
-    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${opts.preheader}</div>`
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapePreheader(opts.preheader)}</div>`
     : "";
   return `<!doctype html>
 <html lang="fr">

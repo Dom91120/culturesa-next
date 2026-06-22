@@ -3,6 +3,7 @@
 import type { ActionState } from "@/lib/action-state";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
+import { rateLimit } from "@/server/rate-limit";
 import { requestAccountDeletion } from "@/server/services/account-deletion";
 import { RgpdError } from "@/server/services/rgpd";
 import { revalidatePath } from "next/cache";
@@ -46,6 +47,11 @@ export async function updateProfileAction(
  */
 export async function requestAccountDeletionAction(): Promise<ActionState> {
   const session = await requireUser();
+  // Anti-abus : chaque appel envoie un e-mail. On limite à 3 demandes / 15 min par usager
+  // (l'endpoint est une server action, hors du rate-limit Better Auth des routes /api/auth).
+  if (!rateLimit(`acct-del:${session.user.id}`, 3, 15 * 60_000)) {
+    return { ok: false, error: "Trop de demandes. Réessayez dans quelques minutes." };
+  }
   try {
     await requestAccountDeletion(session.user.id);
   } catch (e) {

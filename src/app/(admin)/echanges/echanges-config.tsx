@@ -675,6 +675,9 @@ function Editor({
           </div>
           <iframe
             title="Aperçu de l'e-mail"
+            // sandbox sans allow-scripts : l'aperçu rend du HTML d'éditeur (Tiptap) mais
+            // n'exécute aucun script éventuellement collé dans le contenu.
+            sandbox=""
             srcDoc={wrapEmailHtml(previewHtml, { preheader: "", logoSrc: "/email-logo.png" })}
             style={{
               width: "100%",

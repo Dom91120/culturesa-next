@@ -82,10 +82,13 @@ export async function GET(req: Request) {
     user,
   };
 
+  // Nom assaini avant injection dans l'en-tête (cf. editions/export) : `nom` est un champ
+  // libre ; un guillemet/CR-LF casserait le header (réponse 500) ou injecterait un en-tête.
+  const safeName = (user.nom || "usager").replace(/[^a-zA-Z0-9-_]+/g, "_").slice(0, 40);
   return new Response(JSON.stringify(payload, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="rgpd_${user.nom || "usager"}_${user.id}.json"`,
+      "Content-Disposition": `attachment; filename="rgpd_${safeName}_${user.id}.json"`,
     },
   });
 }

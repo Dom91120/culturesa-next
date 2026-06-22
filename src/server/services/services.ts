@@ -18,8 +18,11 @@ export async function listServicesForCurrentAdmin() {
   const session = await getSession();
   const role = (session?.user as { role?: Role } | undefined)?.role ?? "utilisateur";
   const userId = session?.user?.id;
+  // Deny par défaut : seul l'administrateur voit TOUS les services (where undefined). Un
+  // gestionnaire ne voit que les siens ; sans session (userId absent), `userId ?? ""` ne
+  // matche aucun ServiceManager → aucun service (et non plus « tous » comme auparavant).
   const where =
-    role === "administrateur" || !userId ? undefined : { managers: { some: { userId } } };
+    role === "administrateur" ? undefined : { managers: { some: { userId: userId ?? "" } } };
   return prisma.service.findMany({
     where,
     orderBy: [{ position: "asc" }, { label: "asc" }],
