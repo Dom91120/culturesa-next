@@ -1,12 +1,23 @@
 import { DAY_NAMES } from "@/lib/agenda-core";
+import { wrapEmailHtml } from "@/lib/email-theme";
+import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
+import { sendMailOrQueue } from "@/server/mailer";
 import {
   type BookingTrigger,
+  type ResolvedRecipient,
+  getTriggerRecipient,
   isTriggerEnabled,
   resolveTriggerKind,
   resolveTriggerRecipients,
 } from "@/server/services/mail-prefs";
 import { sendTemplatedMail } from "@/server/services/mail-send";
+import {
+  getMailTemplate,
+  htmlToText,
+  renderHtmlTemplate,
+  renderSubjectTemplate,
+} from "@/server/services/mail-templates";
 
 // Notification e-mail envoyée à l'usager lors de la création d'une réservation.
 // Best-effort : ne lève jamais (les échecs d'envoi partent en file via sendMailOrQueue).
@@ -163,22 +174,13 @@ export async function sendBookingConfirmationMail(
       slotDate: params.slot.slotDate,
     });
 
-    const participants = [
-      `${params.enfants} enfant${params.enfants > 1 ? "s" : ""}`,
-      params.accompagnants > 0
-        ? `${params.accompagnants} accompagnant${params.accompagnants > 1 ? "s" : ""}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(", ");
-
     // Variables indépendantes du destinataire (contexte de la réservation).
     const baseVars: Record<string, string> = {
       usager,
       service: params.serviceLabel,
       creneau: formatSlotLabel(params.slot),
       periode: periodLabel,
-      participants,
+      participants: participantsLabel(params.enfants, params.accompagnants),
       theme: params.theme.trim(),
     };
 
@@ -196,6 +198,119 @@ export async function sendBookingConfirmationMail(
     }
   } catch (e) {
     console.error("[sendBookingConfirmationMail] erreur:", e);
+  }
+}
+
+/** Participants lisibles (« 2 enfants, 1 accompagnant »). */
+function participantsLabel(enfants: number, accompagnants: number): string {
+  return [
+    `${enfants} enfant${enfants > 1 ? "s" : ""}`,
+    accompagnants > 0 ? `${accompagnants} accompagnant${accompagnants > 1 ? "s" : ""}` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/**
+ * Version BATCH de {@link sendBookingConfirmationMail} pour les crons (auto-validation) :
+ * tous les e-mails d'un lot partagent le même déclencheur, donc les réglages d'action
+ * (envoi / type / destinataire) et l'URL de l'app sont chargés UNE fois, le gabarit et la
+ * liste de destinataires (hors « usager ») une fois PAR SERVICE, les usagers concernés et
+ * les libellés de période en une requête chacun — au lieu de N requêtes par e-mail.
+ * Best-effort (chaque échec part en file via sendMailOrQueue ; n'interrompt pas le lot).
+ */
+export async function sendBookingConfirmationMailsBatch(
+  items: ReadonlyArray<BookingConfirmationParams>,
+): Promise<void> {
+  if (items.length === 0) return;
+  // Le lot est homogène en déclencheur (ex. confirm_autovalidate) : réglages chargés 1×.
+  const trigger = items[0].trigger;
+  try {
+    const [enabled, kind, rec, appUrl] = await Promise.all([
+      isTriggerEnabled(trigger),
+      resolveTriggerKind(trigger),
+      getTriggerRecipient(trigger),
+      getAppUrl(),
+    ]);
+    if (!enabled) return;
+
+    // Gabarit (cascade service→global→défaut) + destinataires non-usager : 1× par service.
+    const serviceIds = [...new Set(items.map((i) => i.serviceId))];
+    const tplByService = new Map<string, { subject: string; html: string }>();
+    const recipientsByService = new Map<string, ResolvedRecipient[]>();
+    await Promise.all(
+      serviceIds.map(async (sid) => {
+        tplByService.set(sid, await getMailTemplate(kind, sid));
+        if (rec.kind !== "usager") {
+          recipientsByService.set(sid, await resolveTriggerRecipients(trigger, sid, {}));
+        }
+      }),
+    );
+
+    // Usagers concernés (nom + email/prénom si destinataire = usager) : une requête.
+    const userIds = [...new Set(items.map((i) => i.userId))];
+    const usersById = new Map(
+      (
+        await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, prenom: true, nom: true, email: true },
+        })
+      ).map((u) => [u.id, u]),
+    );
+
+    // Libellés de période : résolus en batch (2 requêtes au plus).
+    const periodLabels = await resolvePeriodLabels(
+      items.map((i) => ({
+        serviceId: i.serviceId,
+        periodId: i.periodId,
+        slotDate: i.slot.slotDate,
+      })),
+    );
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const params = items[idx];
+      const tpl = tplByService.get(params.serviceId);
+      if (!tpl) continue;
+      const concerned = usersById.get(params.userId);
+
+      let recipients: ResolvedRecipient[];
+      if (rec.kind === "usager") {
+        const email = concerned?.email?.trim();
+        if (!email?.includes("@")) continue;
+        recipients = [{ email, prenom: concerned?.prenom?.trim() ?? "", personal: true }];
+      } else {
+        recipients = recipientsByService.get(params.serviceId) ?? [];
+        if (recipients.length === 0) continue;
+      }
+
+      const baseVars: Record<string, string> = {
+        usager: `${concerned?.prenom ?? ""} ${concerned?.nom ?? ""}`.trim(),
+        service: params.serviceLabel,
+        creneau: formatSlotLabel(params.slot),
+        periode: periodLabels[idx] ?? "",
+        participants: participantsLabel(params.enfants, params.accompagnants),
+        theme: params.theme.trim(),
+      };
+
+      for (const r of recipients) {
+        const prenom = r.personal ? r.prenom : "";
+        const vars = {
+          ...baseVars,
+          salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
+          prenom,
+        };
+        const inner = renderHtmlTemplate(tpl.html, vars);
+        const subject = renderSubjectTemplate(tpl.subject, vars);
+        await sendMailOrQueue({
+          to: r.email,
+          subject,
+          html: wrapEmailHtml(inner, { preheader: subject, appUrl }),
+          text: htmlToText(inner),
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[sendBookingConfirmationMailsBatch] erreur:", e);
   }
 }
 

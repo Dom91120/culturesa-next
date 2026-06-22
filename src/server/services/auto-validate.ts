@@ -1,5 +1,5 @@
 import { prisma } from "@/server/db";
-import { sendBookingConfirmationMail } from "@/server/services/booking-mail";
+import { sendBookingConfirmationMailsBatch } from "@/server/services/booking-mail";
 
 // ════════════════════════════════════════════════════════════
 //  Auto-validation des réservations (port du legacy auto_validate_bookings.php)
@@ -171,7 +171,7 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
   // best-effort, comme avant.
   const dueIds: number[] = [];
   const dueRecurringIds: number[] = [];
-  const mails: Parameters<typeof sendBookingConfirmationMail>[0][] = [];
+  const mails: Parameters<typeof sendBookingConfirmationMailsBatch>[0][number][] = [];
 
   const svcIds = services.map((s) => s.id);
 
@@ -310,7 +310,8 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
         data: { validated: true },
       }),
     ]);
-    for (const m of mails) await sendBookingConfirmationMail(m);
+    // Envois après commit, best-effort : réglages/template/appUrl chargés une fois (anti-N+1).
+    await sendBookingConfirmationMailsBatch(mails);
   }
 
   return stats;

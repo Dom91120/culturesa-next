@@ -1,9 +1,9 @@
 import { isConfigValueUsed } from "@/server/config";
 import { prisma } from "@/server/db";
 
-// Gabarits (sujet + corps HTML) éditables des e-mails. Stockés dans app_config (clés
-// `mail.tpl.<kind>.subject` / `.html`) ; à défaut, le gabarit par défaut ci-dessous est
-// utilisé. Les valeurs dynamiques sont injectées via des variables `{{nom}}` (échappées),
+// Gabarits (sujet + corps HTML) éditables des e-mails. Stockés dans la table `mail_types`
+// (cf. getMailTemplate, cascade service→global) ; à défaut, le gabarit par défaut ci-dessous
+// est utilisé. Les valeurs dynamiques sont injectées via des variables `{{nom}}` (échappées),
 // la variable BRUTE `{{bouton}}` (lien d'action), et des blocs conditionnels
 // `{{#if nom}}…{{/if}}` (n'affiche le bloc que si la variable est renseignée).
 
