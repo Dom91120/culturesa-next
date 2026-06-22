@@ -312,7 +312,7 @@ export function InactivityScan({
             disabled={pending || canAnonymizeCount === 0}
             title={
               canAnonymizeCount === 0
-                ? "Aucun compte éligible n'a de préavis ≥ 30 jours envoyé"
+                ? `Aucun compte éligible n'a de préavis ≥ ${grace} jours envoyé`
                 : undefined
             }
             style={{
@@ -371,7 +371,7 @@ export function InactivityScan({
                 actionCell = (
                   <span
                     style={{ color: "var(--muted)" }}
-                    title="Le préavis doit avoir été envoyé il y a au moins 30 jours"
+                    title={`Le préavis doit avoir été envoyé il y a au moins ${grace} jours`}
                   >
                     ⏳ préavis requis
                   </span>

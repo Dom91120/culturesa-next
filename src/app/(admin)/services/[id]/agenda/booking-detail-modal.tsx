@@ -11,6 +11,15 @@ import { plural } from "./agenda-format";
 import type { Booking } from "./agenda-grid";
 import { OccurrencesField } from "./occurrences-field";
 
+// Titre d'un champ en lecture seule (≠ <label>, qui doit cibler un contrôle).
+const FIELD_TITLE_STYLE: React.CSSProperties = {
+  fontSize: ".65rem",
+  fontWeight: 600,
+  letterSpacing: ".1em",
+  textTransform: "uppercase",
+  color: "var(--muted)",
+};
+
 /**
  * Modale d'édition « 📋 Réservation » (port du legacy `#booking-detail-modal`).
  * - Demandeur en lecture seule.
@@ -152,38 +161,24 @@ export function BookingDetailModal({
       )}
 
       <div className="form-grid">
+        {/* Champs en lecture seule : titre rendu en <span> (pas un <label>, qui doit être
+            associé à un contrôle) — même style que le titre « Participants » ci-dessous. */}
         <div className="field full">
-          <label htmlFor="bdet-demandeur-type">Type de demandeur</label>
-          <div className="bdet-readonly" id="bdet-demandeur-type">
-            {booking.demandeur || "—"}
-          </div>
+          <span style={FIELD_TITLE_STYLE}>Type de demandeur</span>
+          <div className="bdet-readonly">{booking.demandeur || "—"}</div>
         </div>
         {booking.structure && (
           <div className="field full">
-            <label htmlFor="bdet-structure">Structure</label>
-            <div className="bdet-readonly" id="bdet-structure">
-              {booking.structure}
-            </div>
+            <span style={FIELD_TITLE_STYLE}>Structure</span>
+            <div className="bdet-readonly">{booking.structure}</div>
           </div>
         )}
         <div className="field full">
-          <label htmlFor="bdet-demandeur">Demandeur</label>
-          <div className="bdet-readonly" id="bdet-demandeur">
-            {booking.name || "—"}
-          </div>
+          <span style={FIELD_TITLE_STYLE}>Demandeur</span>
+          <div className="bdet-readonly">{booking.name || "—"}</div>
         </div>
         <div className="field full">
-          <span
-            style={{
-              fontSize: ".65rem",
-              fontWeight: 600,
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
-              color: "var(--muted)",
-            }}
-          >
-            Participants
-          </span>
+          <span style={FIELD_TITLE_STYLE}>Participants</span>
           <div className="pcm-counters">
             <label className="pcm-counter" htmlFor="bdet-enfants">
               <span className="pcm-counter-icon" aria-hidden="true">

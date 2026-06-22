@@ -20,6 +20,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // `light` = mode clair par défaut (le CSS legacy bascule via html.light).
     <html lang="fr" className="light">
       <head>
+        {/* Applique le thème sombre AVANT le premier paint (anti-FOUC) : sans ce script,
+            un utilisateur en mode sombre voyait un flash clair tant que le useEffect de
+            ThemeToggle n'avait pas retiré la classe. */}
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: script inline statique, sans donnée externe.
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.remove('light');}catch(e){}",
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
