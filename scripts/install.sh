@@ -81,7 +81,9 @@ if [ -z "$DOMAIN" ]; then
   read -r -p "Domaine public [${cur_domain:-localhost}] : " DOMAIN || true
   DOMAIN="${DOMAIN:-${cur_domain:-localhost}}"
 fi
-if [ "$DOMAIN" = "localhost" ]; then SCHEME="https"; else SCHEME="https"; fi
+# HTTPS systématique : domaine public → certificat Let's Encrypt ; "localhost" →
+# certificat interne auto-signé généré par Caddy.
+SCHEME="https"
 set_env APP_DOMAIN "$DOMAIN"
 set_env APP_URL "${SCHEME}://${DOMAIN}"
 set_env NEXT_PUBLIC_APP_URL "${SCHEME}://${DOMAIN}"

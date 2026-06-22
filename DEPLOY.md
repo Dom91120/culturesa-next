@@ -2,10 +2,18 @@
 
 Stack de prod : **Next.js standalone** + **PostgreSQL 17** + **Caddy** (reverse proxy + HTTPS auto), orchestrés par Docker Compose.
 
+> 📘 Ce document couvre l'**installation** et les opérations de base. Pour l'**exploitation au
+> quotidien** (supervision, durcissement, sauvegarde hors-site, test de restauration, dépannage),
+> voir le runbook **[docs/EXPLOITATION.md](docs/EXPLOITATION.md)**.
+
 ## Prérequis sur le VPS
-- Docker + plugin Compose (`docker compose version`)
-- Ports **80** et **443** ouverts (firewall)
-- Un nom de domaine pointant (enregistrement A/AAAA) vers l'IP du VPS
+- **OS** : Linux 64 bits récent (Debian 12 / Ubuntu 22.04+ recommandés).
+- **Docker Engine ≥ 24** + plugin Compose v2 (`docker compose version`).
+- **Dimensionnement minimal** : 2 vCPU, 2 Go RAM, 20 Go SSD. **Recommandé** : 2 vCPU, 4 Go RAM,
+  40 Go SSD (le build de l'image Next.js et PostgreSQL sont les postes les plus gourmands ;
+  prévoir de la marge disque pour `pgdata` + `./backups`).
+- Ports **80** et **443** ouverts (firewall) — `443/udp` aussi pour HTTP/3.
+- Un nom de domaine pointant (enregistrement A/AAAA) vers l'IP du VPS.
 
 ## Mise en route — installation automatisée (recommandé)
 
@@ -70,6 +78,29 @@ docker compose down                    # tout arrêter (données conservées)
 docker compose up -d --build           # redéployer après un git pull
 ```
 
+## Mise à jour de l'application
+
+```bash
+# 1. SAUVEGARDER d'abord (les migrations de schéma ne sont pas réversibles automatiquement)
+docker compose exec cron /usr/local/bin/backup.sh
+
+# 2. Récupérer la nouvelle version
+git pull
+
+# 3. Reconstruire et redémarrer (les migrations Prisma sont jouées à l'entrypoint)
+docker compose up -d --build
+
+# 4. Vérifier
+docker compose ps
+docker compose logs -f app
+```
+
+**Rollback** : il n'y a pas de « down-migration » automatique. Pour revenir en arrière :
+`git checkout <tag/commit précédent>` puis `docker compose up -d --build`. Si la nouvelle
+version avait appliqué une migration **incompatible** avec l'ancien code, restaurer aussi la
+base depuis le dump pris à l'étape 1 (cf. § Sauvegarde / restauration). Tester les MAJ sur un
+environnement de pré-prod quand c'est possible.
+
 ## Sauvegarde de la base
 
 ### Automatique (quotidienne)
@@ -107,7 +138,7 @@ cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_D
 ```
 
 ## Points d'attention
-- `next.config.ts` **doit** contenir `output: "standalone"` (sera ajouté à l'étape projet).
+- `next.config.ts` contient `output: "standalone"` (requis pour l'image Docker).
 - Le conteneur `app` tourne en utilisateur non-root (`nextjs`).
 - HTTP/3 est activé (port 443/udp).
 - Pour le dev local sans domaine : mets `APP_DOMAIN=localhost` dans `.env`
