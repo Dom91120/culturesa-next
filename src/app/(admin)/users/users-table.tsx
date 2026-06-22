@@ -14,7 +14,6 @@ export type UserRow = {
   email: string;
   tel: string;
   role: Role;
-  rgpdOk: boolean;
   emailVerified: boolean;
   niveau: string;
   enfants: number;

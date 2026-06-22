@@ -176,7 +176,8 @@ function capForDay(slot: SlotSnapshot, iso: number): number | null {
  * Génère les miroirs uniques (« u_<slotId>_<date> ») d'un créneau récurrent
  * cloné sur [rangeStart, rangeEnd], pour chaque jour actif du service, en
  * excluant les fériés si !openOnHolidays et en respectant le filtre semaines
- * A/B (A = semaine ISO paire, B = impaire). Capacité miroir = cap du jour.
+ * A/B (convention UNIQUE de l'app, cf. lib/iso-week : A = semaine ISO IMPAIRE,
+ * B = paire). Capacité miroir = cap du jour.
  * Renvoie les ids créés.
  */
 async function generateMirrorSlots(

@@ -6,7 +6,8 @@ export function plural(n: number, singular: string, plural: string): string {
 }
 
 // Heure « 9h » / « 9h30 » (port legacy _fmtHourFr : pas de zéro initial, « h » au lieu de « : »).
-export function fmtHourFr(t: string): string {
+// Usage interne au module (fmtSlotHoursFr) → non exporté.
+function fmtHourFr(t: string): string {
   const [h, m] = t.split(":");
   const hh = String(Number(h));
   return m && m !== "00" ? `${hh}h${m}` : `${hh}h`;
