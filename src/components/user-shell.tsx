@@ -3,17 +3,11 @@
 import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
+import { initialsOf } from "@/lib/format";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type ServiceItem = { id: string; label: string; icon: string | null };
-
-function initialsOf(name: string, email: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  if (parts.length === 1 && parts[0]) return parts[0].slice(0, 2).toUpperCase();
-  return (email[0] || "?").toUpperCase();
-}
 
 export function UserShell({
   user,
