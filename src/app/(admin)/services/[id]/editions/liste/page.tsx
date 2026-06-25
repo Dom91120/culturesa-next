@@ -4,6 +4,7 @@ import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-
 import {
   type DatedSession,
   type EditionRow,
+  type SessionAttendee,
   listDatedSessions,
   listEditionRows,
 } from "@/server/services/editions";
@@ -40,6 +41,7 @@ export default async function EditionsListePage({
     week?: string;
     periodId?: string;
     page?: string;
+    ruptures?: string;
   }>;
 }) {
   const { id } = await params;
@@ -193,10 +195,55 @@ export default async function EditionsListePage({
   const periods = await fetchEditionPeriods(id);
   const range = resolveRange(id, "liste", sp, periods);
   const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd);
-  const buckets = bucketSessions(range.mode, sessions);
-  const withSubtotals = buckets.length > 1;
+  // Ruptures (case « avec ruptures ») OFF par défaut → un seul bloc sans sous-total.
+  const withRuptures = sp.ruptures === "1";
+  const buckets = withRuptures
+    ? bucketSessions(range.mode, sessions)
+    : sessions.length > 0
+      ? [{ key: "all", label: "", sessions }]
+      : [];
+  const withSubtotals = withRuptures && buckets.length > 1;
 
-  const renderOccTable = (list: DatedSession[]) => (
+  // Lignes plates (1 par participant d'occurrence) + index global, pour paginer (20/page).
+  type OccRow = { gi: number; bucketKey: string; s: DatedSession; a: SessionAttendee };
+  const flat: OccRow[] = [];
+  const bucketInfo = new Map<
+    string,
+    { label: string; first: number; last: number; sessions: DatedSession[] }
+  >();
+  for (const b of buckets) {
+    for (const s of b.sessions) {
+      for (const a of s.attendees) {
+        const gi = flat.length;
+        flat.push({ gi, bucketKey: b.key, s, a });
+        const info = bucketInfo.get(b.key);
+        if (info) info.last = gi;
+        else bucketInfo.set(b.key, { label: b.label, first: gi, last: gi, sessions: b.sessions });
+      }
+    }
+  }
+
+  const pages = Math.max(1, Math.ceil(flat.length / PER_PAGE));
+  const page = Math.min(Math.max(1, Number(sp.page) || 1), pages);
+  const pageRows = flat.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  // Groupes consécutifs (même rupture) dans la page courante.
+  const groups: { key: string; rows: OccRow[] }[] = [];
+  for (const f of pageRows) {
+    const last = groups[groups.length - 1];
+    if (last && last.key === f.bucketKey) last.rows.push(f);
+    else groups.push({ key: f.bucketKey, rows: [f] });
+  }
+
+  // Lien de page (conserve vue / plage / ruptures).
+  const pageParams = new URLSearchParams({ tri: "date", mode: range.mode });
+  if (range.mode === "period" && range.periodId) pageParams.set("periodId", String(range.periodId));
+  else pageParams.set("date", range.dateParam);
+  if (withRuptures) pageParams.set("ruptures", "1");
+  const dateHref = (n: number) =>
+    `/services/${id}/editions/liste?${pageParams.toString()}&page=${n}`;
+
+  const renderOccRows = (rows: OccRow[]) => (
     <div className="admin-table-wrap">
       <table className="admin-table">
         <thead>
@@ -212,24 +259,22 @@ export default async function EditionsListePage({
           </tr>
         </thead>
         <tbody>
-          {list.flatMap((s) =>
-            s.attendees.map((a, i) => (
-              <tr key={`${s.date}-${s.startTime}-${a.nom}-${a.prenom}-${i}`}>
-                <td>
-                  {s.dayLabel} {s.dateLabel}
-                </td>
-                <td>
-                  {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
-                </td>
-                <td>{a.demandeur || "—"}</td>
-                <td style={{ fontWeight: 600 }}>{a.nom || "—"}</td>
-                <td>{a.prenom || "—"}</td>
-                <td>{a.theme || "—"}</td>
-                <td>{a.enfants}</td>
-                <td>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
-              </tr>
-            )),
-          )}
+          {rows.map(({ gi, s, a }) => (
+            <tr key={gi}>
+              <td>
+                {s.dayLabel} {s.dateLabel}
+              </td>
+              <td>
+                {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
+              </td>
+              <td>{a.demandeur || "—"}</td>
+              <td style={{ fontWeight: 600 }}>{a.nom || "—"}</td>
+              <td>{a.prenom || "—"}</td>
+              <td>{a.theme || "—"}</td>
+              <td>{a.enfants}</td>
+              <td>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -242,37 +287,55 @@ export default async function EditionsListePage({
         screen="liste"
         range={range}
         extra={<ListeSortSelect serviceId={id} tri={tri} />}
+        ruptures={withRuptures}
       />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
         Liste des réservations — {service.label}
       </h2>
 
-      {sessions.length === 0 ? (
+      {flat.length === 0 ? (
         <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
           Aucune occurrence sur cette période.
         </p>
       ) : (
         <>
-          {buckets.map((b) => (
-            <div key={b.key}>
-              {b.label && <RuptureHeading>{b.label}</RuptureHeading>}
-              {renderOccTable(b.sessions)}
-              {withSubtotals && (
-                <TotalsLine
-                  label={`Sous-total — ${b.label}`}
-                  totals={computeTotals(b.sessions)}
-                  variant="planning"
-                />
-              )}
-            </div>
-          ))}
-          <TotalsLine
-            label="Total général"
-            totals={computeTotals(sessions)}
-            variant="planning"
-            strong
-          />
+          {groups.map((g) => {
+            const info = bucketInfo.get(g.key);
+            const label = info?.label ?? "";
+            const isContinuation = !!info && g.rows[0].gi > info.first;
+            const endsHere = !!info && g.rows[g.rows.length - 1].gi === info.last;
+            return (
+              <div key={`${g.key}-${g.rows[0].gi}`}>
+                {label && (
+                  <RuptureHeading>
+                    {label}
+                    {isContinuation ? " (suite)" : ""}
+                  </RuptureHeading>
+                )}
+                {renderOccRows(g.rows)}
+                {withSubtotals && endsHere && info && (
+                  <TotalsLine
+                    label={`Sous-total — ${label}`}
+                    totals={computeTotals(info.sessions)}
+                    variant="planning"
+                  />
+                )}
+              </div>
+            );
+          })}
+
+          {pager(page, pages, flat.length, dateHref)}
+
+          {/* Total général sur la dernière page (cumul de toute la plage). */}
+          {page === pages && (
+            <TotalsLine
+              label="Total général"
+              totals={computeTotals(sessions)}
+              variant="planning"
+              strong
+            />
+          )}
         </>
       )}
 

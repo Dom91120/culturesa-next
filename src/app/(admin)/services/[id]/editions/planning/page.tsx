@@ -16,7 +16,13 @@ export default async function PlanningPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string; date?: string; week?: string; periodId?: string }>;
+  searchParams: Promise<{
+    mode?: string;
+    date?: string;
+    week?: string;
+    periodId?: string;
+    ruptures?: string;
+  }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -36,9 +42,15 @@ export default async function PlanningPage({
         : "Planning hebdomadaire";
 
   const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd);
-  // Ruptures : par semaine (vue mensuelle) / par mois (vue période) / aucune (hebdo).
-  const buckets = bucketSessions(range.mode, sessions);
-  const withSubtotals = buckets.length > 1;
+  // Ruptures (case « avec ruptures ») : par semaine (vue mensuelle) / par mois (vue
+  // période). OFF par défaut → un seul bloc sans en-tête ni sous-total.
+  const withRuptures = sp.ruptures === "1";
+  const buckets = withRuptures
+    ? bucketSessions(range.mode, sessions)
+    : sessions.length > 0
+      ? [{ key: "all", label: "", sessions }]
+      : [];
+  const withSubtotals = withRuptures && buckets.length > 1;
 
   const renderSection = (daySessions: DatedSession[]) => {
     const first = daySessions[0];
@@ -78,7 +90,7 @@ export default async function PlanningPage({
 
   return (
     <div>
-      <RangeBar serviceId={id} screen="planning" range={range} />
+      <RangeBar serviceId={id} screen="planning" range={range} ruptures={withRuptures} />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
         {titleLabel} — {service.label}

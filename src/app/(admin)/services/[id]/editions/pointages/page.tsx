@@ -18,7 +18,13 @@ export default async function PointagesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string; date?: string; week?: string; periodId?: string }>;
+  searchParams: Promise<{
+    mode?: string;
+    date?: string;
+    week?: string;
+    periodId?: string;
+    ruptures?: string;
+  }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -38,8 +44,14 @@ export default async function PointagesPage({
         : "Pointages hebdomadaires";
 
   const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd);
-  const buckets = bucketSessions(range.mode, sessions);
-  const withSubtotals = buckets.length > 1;
+  // Ruptures (case « avec ruptures ») OFF par défaut → un seul bloc sans sous-total.
+  const withRuptures = sp.ruptures === "1";
+  const buckets = withRuptures
+    ? bucketSessions(range.mode, sessions)
+    : sessions.length > 0
+      ? [{ key: "all", label: "", sessions }]
+      : [];
+  const withSubtotals = withRuptures && buckets.length > 1;
 
   const th: React.CSSProperties = {
     textAlign: "left",
@@ -96,7 +108,7 @@ export default async function PointagesPage({
 
   return (
     <div>
-      <RangeBar serviceId={id} screen="pointages" range={range} />
+      <RangeBar serviceId={id} screen="pointages" range={range} ruptures={withRuptures} />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
         {titleLabel} — {service.label}
