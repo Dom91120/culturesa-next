@@ -1,8 +1,8 @@
-import type { Totals } from "./range";
+import type { RowTotals, Totals } from "./range";
 
 const plural = (n: number) => (n > 1 ? "s" : "");
 
-// En-tête de rupture (semaine / mois) dans une édition multi-périodes.
+// En-tête de rupture (semaine / mois / période) dans une édition.
 export function RuptureHeading({ children }: { children: React.ReactNode }) {
   return (
     <h3
@@ -22,10 +22,36 @@ export function RuptureHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Ligne de total / sous-total. `variant` choisit les compteurs affichés :
-//   planning  → séances, inscrits, enfants, accompagnants
-//   pointages → séances, inscrits, présents, absents
-// `strong` = total général (mise en avant accent).
+// Boîte de total / sous-total (présentation commune). `strong` = total général (accent).
+export function TotalsBar({
+  label,
+  parts,
+  strong = false,
+}: {
+  label: string;
+  parts: string[];
+  strong?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        breakInside: "avoid",
+        margin: strong ? "1rem 0 .5rem" : ".4rem 0 1rem",
+        padding: ".4rem .6rem",
+        fontSize: ".8rem",
+        fontWeight: 600,
+        color: strong ? "var(--accent)" : "var(--text)",
+        background: strong ? "var(--accent-dim)" : "var(--surface2)",
+        border: `1px solid ${strong ? "var(--accent)" : "var(--border)"}`,
+        borderRadius: "var(--rad-sm)",
+      }}
+    >
+      {label} : {parts.join(" · ")}
+    </div>
+  );
+}
+
+// Total de séances (Plannings / Pointages). `variant` choisit les compteurs affichés.
 export function TotalsLine({
   label,
   totals,
@@ -51,21 +77,23 @@ export function TotalsLine({
           `${totals.enfants} enfant${plural(totals.enfants)}`,
           `${totals.accompagnants} accompagnant${plural(totals.accompagnants)}`,
         ];
-  return (
-    <div
-      style={{
-        breakInside: "avoid",
-        margin: strong ? "1rem 0 .5rem" : ".4rem 0 1rem",
-        padding: ".4rem .6rem",
-        fontSize: ".8rem",
-        fontWeight: 600,
-        color: strong ? "var(--accent)" : "var(--text)",
-        background: strong ? "var(--accent-dim)" : "var(--surface2)",
-        border: `1px solid ${strong ? "var(--accent)" : "var(--border)"}`,
-        borderRadius: "var(--rad-sm)",
-      }}
-    >
-      {label} : {parts.join(" · ")}
-    </div>
-  );
+  return <TotalsBar label={label} parts={parts} strong={strong} />;
+}
+
+// Total de réservations (Liste des réservations).
+export function ListeTotalsLine({
+  label,
+  totals,
+  strong = false,
+}: {
+  label: string;
+  totals: RowTotals;
+  strong?: boolean;
+}) {
+  const parts = [
+    `${totals.reservations} réservation${plural(totals.reservations)}`,
+    `${totals.enfants} enfant${plural(totals.enfants)}`,
+    `${totals.accompagnants} accompagnant${plural(totals.accompagnants)}`,
+  ];
+  return <TotalsBar label={label} parts={parts} strong={strong} />;
 }

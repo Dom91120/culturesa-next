@@ -1,5 +1,5 @@
 import { prisma } from "@/server/db";
-import type { DatedSession } from "@/server/services/editions";
+import type { DatedSession, EditionRow } from "@/server/services/editions";
 
 // Plage de dates partagée par les écrans « Plannings » et « Pointages » : vue
 // Hebdomadaire / Mensuelle / par Période (> 1 mois). Tout en UTC (cf. slots /
@@ -29,8 +29,8 @@ const addMonthsExact = (d: Date, n: number): Date =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()));
 
 const fmtShort = new Intl.DateTimeFormat("fr-FR", {
-  day: "numeric",
-  month: "long",
+  day: "2-digit",
+  month: "2-digit",
   year: "numeric",
   timeZone: "UTC",
 });
@@ -217,4 +217,25 @@ export function bucketSessions(mode: RangeMode, sessions: DatedSession[]): Sessi
     else map.set(key, { key, label, sessions: [s] });
   }
   return [...map.values()];
+}
+
+// ── Liste des réservations : vue alphabétique (réservations triées + total) ──
+// (La vue « par date » liste les OCCURRENCES via listDatedSessions + bucketSessions.)
+
+export type RowTotals = { reservations: number; enfants: number; accompagnants: number };
+
+/** Cumul d'une liste de réservations (nb réservations + enfants + accompagnants). */
+export function computeRowTotals(rows: EditionRow[]): RowTotals {
+  const t: RowTotals = { reservations: 0, enfants: 0, accompagnants: 0 };
+  for (const r of rows) {
+    t.reservations += 1;
+    t.enfants += r.enfants;
+    t.accompagnants += r.accompagnants;
+  }
+  return t;
+}
+
+/** Réservations triées alphabétiquement (Nom, Prénom). Ne mute pas l'entrée. */
+export function sortRowsAlpha(rows: EditionRow[]): EditionRow[] {
+  return [...rows].sort((a, z) => a.nom.localeCompare(z.nom) || a.prenom.localeCompare(z.prenom));
 }

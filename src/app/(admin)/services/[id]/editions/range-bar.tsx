@@ -9,10 +9,13 @@ export function RangeBar({
   serviceId,
   screen,
   range,
+  extra,
 }: {
   serviceId: string;
   screen: string;
   range: RangeResult;
+  // Contrôle additionnel placé à gauche du segmented control (ex. tri de la Liste).
+  extra?: React.ReactNode;
 }) {
   const { mode, dateParam, periodId, longPeriods, subtitle, prevHref, nextHref } = range;
   const linkBtn: React.CSSProperties = {
@@ -24,6 +27,8 @@ export function RangeBar({
     color: "var(--text)",
     textDecoration: "none",
   };
+  // Flèches de navigation : plus petites que les autres boutons.
+  const arrowBtn: React.CSSProperties = { ...linkBtn, fontSize: ".62rem", padding: "2px 6px" };
   const prevLabel = mode === "month" ? "Mois précédent" : "Semaine précédente";
   const nextLabel = mode === "month" ? "Mois suivant" : "Semaine suivante";
 
@@ -47,6 +52,7 @@ export function RangeBar({
       </a>
 
       <div className="agenda-mode-toggles-wrap no-print" style={{ marginLeft: "auto" }}>
+        {extra}
         <RangeSelect
           serviceId={serviceId}
           screen={screen}
@@ -75,7 +81,7 @@ export function RangeBar({
           <a
             href={prevHref}
             className="no-print"
-            style={linkBtn}
+            style={arrowBtn}
             title={prevLabel}
             aria-label={prevLabel}
           >
@@ -89,7 +95,7 @@ export function RangeBar({
           <a
             href={nextHref}
             className="no-print"
-            style={linkBtn}
+            style={arrowBtn}
             title={nextLabel}
             aria-label={nextLabel}
           >
