@@ -25,7 +25,7 @@ export function RangeBar({
   // Lien d'export CSV (Liste) → bouton export à gauche de l'impression. Absent ailleurs.
   exportHref?: string;
 }) {
-  const { mode, dateParam, periodId, longPeriods, subtitle, prevHref, nextHref } = range;
+  const { mode, dateParam, periodId, periods, showMensuel, subtitle, prevHref, nextHref } = range;
   const rq = ruptures ? "&ruptures=1" : "";
   const linkBtn: React.CSSProperties = {
     fontSize: ".78rem",
@@ -138,7 +138,8 @@ export function RangeBar({
           mode={mode}
           date={dateParam}
           periodId={periodId}
-          periods={longPeriods}
+          periods={periods}
+          showMensuel={showMensuel}
           ruptures={ruptures}
         />
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>

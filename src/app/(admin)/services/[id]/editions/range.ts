@@ -76,7 +76,12 @@ export type RangeResult = {
   dateParam: string;
   periodId: number | null;
   periodLabel: string | null;
-  longPeriods: { id: number; label: string }[];
+  // Périodes proposées en boutons du sélecteur (périodes > 1 mois, ou périodes-mois si
+  // le service est découpé en mois — cf. `showMensuel`).
+  periods: { id: number; label: string }[];
+  // Afficher le bouton générique « Mensuel » ? Masqué quand les périodes SONT des mois
+  // (le bouton ferait doublon : on liste alors les périodes-mois à la place).
+  showMensuel: boolean;
   subtitle: string;
   prevHref: string | null;
   nextHref: string | null;
@@ -94,9 +99,17 @@ export function resolveRange(
   periods: EditionPeriod[],
 ): RangeResult {
   const base = `/services/${serviceId}/editions/${screen}`;
-  const longPeriods = periods.filter(
+  const dated = periods.filter((p) => p.dateStart && p.dateEnd);
+  // Période « longue » = plus d'un mois (trimestre, année scolaire…).
+  const longPeriods = dated.filter(
     (p) => p.dateStart && p.dateEnd && p.dateEnd > addMonthsExact(p.dateStart, 1),
   );
+  // Périodes-mois : le service est découpé en mois ⇔ il a des périodes datées et AUCUNE
+  // n'excède un mois. On masque alors « Mensuel » et on liste ces périodes comme boutons.
+  const periodsAreMonths = dated.length > 0 && longPeriods.length === 0;
+  const buttonPeriods = periodsAreMonths ? dated : longPeriods;
+  const showMensuel = !periodsAreMonths;
+  const periodList = buttonPeriods.map((p) => ({ id: p.id, label: p.label }));
 
   const dateParam =
     sp.date && reIso.test(sp.date)
@@ -107,7 +120,7 @@ export function resolveRange(
   const ref = parseYmd(dateParam);
 
   const periodId = sp.periodId ? Number(sp.periodId) : null;
-  const selected = sp.mode === "period" ? longPeriods.find((p) => p.id === periodId) : undefined;
+  const selected = sp.mode === "period" ? buttonPeriods.find((p) => p.id === periodId) : undefined;
 
   if (sp.mode === "period" && selected?.dateStart && selected.dateEnd) {
     return {
@@ -117,7 +130,8 @@ export function resolveRange(
       dateParam,
       periodId,
       periodLabel: selected.label,
-      longPeriods: longPeriods.map((p) => ({ id: p.id, label: p.label })),
+      periods: periodList,
+      showMensuel,
       subtitle: `du ${fmtShort.format(selected.dateStart)} au ${fmtShort.format(selected.dateEnd)}`,
       prevHref: null,
       nextHref: null,
@@ -134,7 +148,8 @@ export function resolveRange(
       dateParam,
       periodId: null,
       periodLabel: null,
-      longPeriods: longPeriods.map((p) => ({ id: p.id, label: p.label })),
+      periods: periodList,
+      showMensuel,
       subtitle: cap(fmtMonth.format(from)),
       prevHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, -1))}`,
       nextHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, 1))}`,
@@ -150,7 +165,8 @@ export function resolveRange(
     dateParam,
     periodId: null,
     periodLabel: null,
-    longPeriods: longPeriods.map((p) => ({ id: p.id, label: p.label })),
+    periods: periodList,
+    showMensuel,
     subtitle: `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
     prevHref: `${base}?mode=week&date=${ymd(addDays(from, -7))}`,
     nextHref: `${base}?mode=week&date=${ymd(addDays(from, 7))}`,

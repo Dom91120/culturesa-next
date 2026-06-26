@@ -12,6 +12,7 @@ export function RangeSelect({
   date,
   periodId,
   periods,
+  showMensuel = true,
   ruptures = false,
 }: {
   serviceId: string;
@@ -20,6 +21,8 @@ export function RangeSelect({
   date: string;
   periodId: number | null;
   periods: { id: number; label: string }[];
+  // Masqué quand les périodes du service SONT des mois (doublon avec les boutons période).
+  showMensuel?: boolean;
   ruptures?: boolean;
 }) {
   const router = useRouter();
@@ -44,14 +47,16 @@ export function RangeSelect({
       >
         Hebdomadaire
       </button>
-      <button
-        type="button"
-        className={`agenda-mode-btn${mode === "month" ? " active" : ""}`}
-        style={btnStyle}
-        onClick={() => go(`mode=month&date=${date}`)}
-      >
-        Mensuel
-      </button>
+      {showMensuel && (
+        <button
+          type="button"
+          className={`agenda-mode-btn${mode === "month" ? " active" : ""}`}
+          style={btnStyle}
+          onClick={() => go(`mode=month&date=${date}`)}
+        >
+          Mensuel
+        </button>
+      )}
       {periods.map((p) => (
         <button
           key={p.id}
