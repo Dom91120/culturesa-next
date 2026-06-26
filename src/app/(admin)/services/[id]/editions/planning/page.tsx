@@ -11,6 +11,8 @@ import {
 import { RangeBar } from "../range-bar";
 import { RuptureHeading, TotalsLine } from "../totals";
 
+export const metadata = { title: "CultuRésa — Plannings" };
+
 export default async function PlanningPage({
   params,
   searchParams,

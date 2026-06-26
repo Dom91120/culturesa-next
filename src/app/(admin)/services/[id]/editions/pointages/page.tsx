@@ -13,6 +13,8 @@ import { RuptureHeading, TotalsLine } from "../totals";
 
 const POINTAGE_LABEL: Record<string, string> = { present: "Présent", absent: "Absent" };
 
+export const metadata = { title: "CultuRésa — Pointages" };
+
 export default async function PointagesPage({
   params,
   searchParams,
