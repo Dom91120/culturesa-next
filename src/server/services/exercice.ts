@@ -39,6 +39,8 @@ type CycleEventData = {
   newRecurringSlotIds: string[];
   newMirrorSlotIds: string[];
   oldDeactivatedPeriodIds: number[];
+  // Exercice créé par la bascule (par service) → supprimé tel quel à l'annulation.
+  newExerciceId: number | null;
 };
 
 // =====================================================================================
@@ -107,19 +109,9 @@ function schoolYearLabel(startYmd: string): string {
   return `${ssy}-${ssy + 1}`;
 }
 
-/**
- * Upsert d'un exercice par libellé dans une transaction. Renvoie son id.
- * (Variante transactionnelle de `ensureExercice` de periods.ts, qui n'accepte
- * qu'une année de début ; ici le libellé peut être « Y » ou « Y1-Y2 ».)
- */
-async function ensureExerciceTx(tx: Prisma.TransactionClient, label: string): Promise<number> {
-  const existing = await tx.exercice.findFirst({
-    where: { label },
-    select: { id: true },
-  });
-  if (existing) return existing.id;
-  const created = await tx.exercice.create({ data: { label }, select: { id: true } });
-  return created.id;
+/** Libellé d'exercice selon le type : civile → année « 2026 » ; scolaire → « 2025-2026 ». */
+function exerciceLabel(type: "civile" | "scolaire", startYmd: string): string {
+  return type === "civile" ? startYmd.slice(0, 4) : schoolYearLabel(startYmd);
 }
 
 /**
@@ -300,15 +292,43 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         });
       }
 
-      // 5. label du nouvel exercice (dates décalées +1 an)
-      // Nouvel exercice = ANNÉE SCOLAIRE des périodes décalées (+1 an), même convention que
-      // la création/édition manuelle (periods.ts) → un exercice unique par année scolaire.
+      // 5. Nouvel exercice PAR SERVICE : on reconduit l'exercice courant en copiant son
+      // type et en décalant ses dates d'un an (repli sur les dates des périodes décalées).
+      const currentExoId = actives.find((p) => p.exerciceId != null)?.exerciceId ?? null;
+      const currentExo = currentExoId
+        ? await tx.exercice.findUnique({
+            where: { id: currentExoId },
+            select: { type: true, dateStart: true, dateEnd: true },
+          })
+        : null;
       const shiftedStarts = actives
         .map((p) => shiftDateOneYear(fmtDateUtc(p.dateStart)))
         .filter((d): d is string => d !== null)
         .sort();
-      const refStart = shiftedStarts[0] ?? `${new Date().getUTCFullYear() + 1}-09-01`;
-      const exId = await ensureExerciceTx(tx, schoolYearLabel(refStart));
+      const shiftedEnds = actives
+        .map((p) => shiftDateOneYear(fmtDateUtc(p.dateEnd)))
+        .filter((d): d is string => d !== null)
+        .sort();
+      const exoStart =
+        shiftDateOneYear(fmtDateUtc(currentExo?.dateStart ?? null)) ??
+        shiftedStarts[0] ??
+        `${new Date().getUTCFullYear() + 1}-09-01`;
+      const exoEnd =
+        shiftDateOneYear(fmtDateUtc(currentExo?.dateEnd ?? null)) ??
+        shiftedEnds[shiftedEnds.length - 1] ??
+        null;
+      const exoType = currentExo?.type ?? "scolaire";
+      const newExo = await tx.exercice.create({
+        data: {
+          serviceId,
+          label: exerciceLabel(exoType, exoStart),
+          type: exoType,
+          dateStart: dateFromYmd(exoStart),
+          dateEnd: exoEnd ? dateFromYmd(exoEnd) : null,
+        },
+        select: { id: true },
+      });
+      const exId = newExo.id;
 
       // 6. recopie des périodes
       const activeDays = parseActiveDays(service.activeDays);
@@ -395,6 +415,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         newRecurringSlotIds,
         newMirrorSlotIds,
         oldDeactivatedPeriodIds: actives.map((p) => p.id),
+        newExerciceId: exId,
       };
       await tx.cycleEvent.create({
         data: { serviceId, data: payload as unknown as Prisma.InputJsonValue },
@@ -475,16 +496,19 @@ export async function undoCycle(serviceId: string): Promise<void> {
       // 6. supprimer l'événement
       await tx.cycleEvent.delete({ where: { id: ev.id } });
 
-      // 7. nettoyer les exercices orphelins (sans période rattachée)
-      const referenced = await tx.period.findMany({
-        where: { exerciceId: { not: null } },
-        select: { exerciceId: true },
-        distinct: ["exerciceId"],
-      });
-      const keep = referenced.map((r) => r.exerciceId).filter((x): x is number => x !== null);
-      await tx.exercice.deleteMany({
-        where: keep.length > 0 ? { id: { notIn: keep } } : {},
-      });
+      // 7. supprimer UNIQUEMENT l'exercice créé par cette bascule (devenu sans période).
+      // (On ne balaye plus tous les orphelins : un exercice vide créé à la main par un
+      // gestionnaire doit être préservé.)
+      const newExerciceId = data.newExerciceId ?? null;
+      if (newExerciceId != null) {
+        const exo = await tx.exercice.findUnique({
+          where: { id: newExerciceId },
+          select: { _count: { select: { periods: true } } },
+        });
+        if (exo && exo._count.periods === 0) {
+          await tx.exercice.delete({ where: { id: newExerciceId } });
+        }
+      }
       // Timeout élargi : suppressions en masse (miroirs + réservations d'un exercice entier).
     },
     { timeout: 120_000, maxWait: 10_000 },
@@ -531,40 +555,41 @@ export async function setShowPreviousExercices(serviceId: string, value: boolean
 }
 
 export async function getExercicePaneData(serviceId: string): Promise<ExercicePaneData> {
-  const [actives, svc] = await Promise.all([
-    prisma.period.findMany({
-      where: { serviceId, state: "actif" },
-      select: { dateStart: true, dateEnd: true },
+  const [exercices, activeCount, svc] = await Promise.all([
+    prisma.exercice.findMany({
+      where: { serviceId },
+      select: { label: true, type: true, dateStart: true, dateEnd: true },
     }),
+    prisma.period.count({ where: { serviceId, state: "actif" } }),
     prisma.service.findUnique({
       where: { id: serviceId },
       select: { showPreviousExercices: true },
     }),
   ]);
 
-  const starts = actives
-    .map((p) => fmtDateUtc(p.dateStart))
-    .filter((d): d is string => d !== null)
-    .sort();
-  const ends = actives
-    .map((p) => fmtDateUtc(p.dateEnd))
-    .filter((d): d is string => d !== null)
-    .sort();
+  // Exercice courant = le plus récent (date de début la plus tardive, nulls en dernier).
+  const sorted = exercices.slice().sort((a, b) => {
+    const as = a.dateStart?.getTime();
+    const bs = b.dateStart?.getTime();
+    if (as != null && bs != null) return bs - as;
+    if (as != null) return -1;
+    if (bs != null) return 1;
+    return b.label.localeCompare(a.label);
+  });
+  const current = sorted[0] ?? null;
 
-  let currentName = "—";
-  let currentRange: { start: string; end: string } | null = null;
-  if (starts.length > 0) {
-    const startYmd = starts[0];
-    const endYmd = ends.length > 0 ? ends[ends.length - 1] : startYmd;
-    currentName = schoolYearLabel(startYmd);
-    currentRange = { start: startYmd, end: endYmd };
-  }
+  const currentName = current?.label ?? "—";
+  const startYmd = fmtDateUtc(current?.dateStart ?? null);
+  const endYmd = fmtDateUtc(current?.dateEnd ?? null);
+  const currentRange = startYmd && endYmd ? { start: startYmd, end: endYmd } : null;
 
   let nextName: string;
-  if (currentRange) {
-    // Exercice suivant = année scolaire de la date de début décalée d'un an.
-    const nextStart = shiftDateOneYear(currentRange.start) ?? currentRange.start;
-    nextName = schoolYearLabel(nextStart);
+  if (current && startYmd) {
+    // Exercice suivant = dates de l'exercice courant décalées d'un an (libellé selon le type).
+    const nextStart = shiftDateOneYear(startYmd) ?? startYmd;
+    nextName = exerciceLabel(current.type, nextStart);
+  } else if (current) {
+    nextName = `${current.label} (suivant)`;
   } else {
     const ssy = new Date().getUTCFullYear() + 1;
     nextName = `${ssy}-${ssy + 1}`;
@@ -576,7 +601,7 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
     currentName,
     nextName,
     currentRange,
-    hasActivePeriods: actives.length > 0,
+    hasActivePeriods: activeCount > 0,
     showPreviousExercices: svc?.showPreviousExercices ?? false,
     undo,
   };

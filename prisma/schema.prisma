@@ -45,6 +45,13 @@ enum BookingType {
   unique
 }
 
+// Type d'exercice : année CIVILE (calendaire, ex. « 2025 » 01/01→31/12) ou
+// SCOLAIRE (ex. « 2025-2026 » 01/09→31/08). Pilote le libellé + les dates par défaut.
+enum ExerciceType {
+  civile
+  scolaire
+}
+
 enum Pointage {
   present
   absent
@@ -208,6 +215,7 @@ model Service {
 
   slots             Slot[]
   periods           Period[]
+  exercices         Exercice[]
   cycleEvents       CycleEvent[]
   themes            ServiceTheme[]
   demandeurSettings ServiceDemandeurSettings[]
@@ -266,13 +274,22 @@ model Slot {
   @@map("slots")
 }
 
+// Exercice = cadre temporel d'un service, créé EXPLICITEMENT avant ses périodes
+// (libellé, type civile/scolaire, dates de début/fin). Les périodes s'y rattachent et
+// doivent tomber dans [dateStart, dateEnd]. Propre à un service (serviceId).
 model Exercice {
-  id        Int      @id @default(autoincrement())
+  id        Int          @id @default(autoincrement())
+  serviceId String?
   label     String
-  createdAt DateTime @default(now()) @db.Timestamptz
+  type      ExerciceType @default(scolaire)
+  dateStart DateTime?    @db.Date
+  dateEnd   DateTime?    @db.Date
+  createdAt DateTime     @default(now()) @db.Timestamptz
 
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   periods Period[]
 
+  @@index([serviceId])
   @@map("exercice")
 }
 

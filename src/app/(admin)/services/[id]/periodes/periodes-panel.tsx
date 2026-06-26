@@ -4,12 +4,17 @@ import { TimeStepper } from "@/components/time-stepper";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
+  createExerciceAction,
   createPeriodAction,
+  deleteExerciceAction,
   deletePeriodAction,
   reactivatePeriodsAction,
   saveOpeningConfigAction,
+  updateExerciceAction,
   updatePeriodAction,
 } from "./actions";
+
+type ExerciceType = "civile" | "scolaire";
 
 type PeriodState = "actif" | "desactive" | "archive";
 
@@ -24,7 +29,13 @@ export type UiPeriod = {
   exerciceId: number | null;
 };
 
-type Exercice = { id: number; label: string };
+type Exercice = {
+  id: number;
+  label: string;
+  type: ExerciceType;
+  dateStart: string; // "YYYY-MM-DD" ou ""
+  dateEnd: string;
+};
 
 type Opening = {
   activeDays: string[];
@@ -105,6 +116,34 @@ const EMPTY_FORM: ModalForm = {
   dateEnd: "",
   color: "#6dceaa",
 };
+
+type ExerciceForm = {
+  id: number | null;
+  label: string;
+  type: ExerciceType;
+  dateStart: string;
+  dateEnd: string;
+};
+
+/** Libellé + dates par défaut selon le type d'exercice (année en cours).
+ *  Civile → « 2025 » (01/01→31/12) ; Scolaire → « 2025-2026 » (01/09→31/08, mois ≥ août). */
+function exerciceDefaults(type: ExerciceType): {
+  label: string;
+  dateStart: string;
+  dateEnd: string;
+} {
+  const now = new Date();
+  const y = now.getFullYear();
+  if (type === "civile") {
+    return { label: `${y}`, dateStart: `${y}-01-01`, dateEnd: `${y}-12-31` };
+  }
+  const ssy = now.getMonth() + 1 >= 8 ? y : y - 1;
+  return { label: `${ssy}-${ssy + 1}`, dateStart: `${ssy}-09-01`, dateEnd: `${ssy + 1}-08-31` };
+}
+
+function emptyExerciceForm(): ExerciceForm {
+  return { id: null, ...exerciceDefaults("scolaire"), type: "scolaire" };
+}
 
 export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }: Props) {
   const router = useRouter();
@@ -201,6 +240,10 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
       setModalError("Le libellé est requis.");
       return;
     }
+    if (form.id == null && currentExerciceId == null) {
+      setModalError("Créez d'abord un exercice.");
+      return;
+    }
     const base = {
       serviceId,
       label,
@@ -212,7 +255,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
     startTransition(async () => {
       const res =
         form.id == null
-          ? await createPeriodAction(base)
+          ? await createPeriodAction({ ...base, exerciceId: currentExerciceId as number })
           : await updatePeriodAction({ ...base, id: form.id });
       if (res && !res.ok) {
         setModalError(res.error ?? "Échec de l'enregistrement.");
@@ -220,6 +263,105 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
       }
       setModalOpen(false);
       setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  // ── Modale exercice (création / édition). ───────────────────────────────────
+  const hasExercices = sortedExercices.length > 0;
+  const currentExercice = exerciceIndex >= 0 ? sortedExercices[exerciceIndex] : null;
+  const [exoModalOpen, setExoModalOpen] = useState(false);
+  const [exoForm, setExoForm] = useState<ExerciceForm>(emptyExerciceForm);
+  const [exoError, setExoError] = useState<string | null>(null);
+  // Après création d'un exercice : sélectionner le plus récent une fois la liste rafraîchie.
+  const [pendingSelectNewest, setPendingSelectNewest] = useState(false);
+
+  // Garde-fou de sélection : applique « sélectionner le nouvel exercice », sinon recale
+  // sur un exercice valide (le dernier) si la sélection courante a disparu.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: piloté par la liste d'exercices
+  useEffect(() => {
+    if (pendingSelectNewest && sortedExercices.length > 0) {
+      const newest = sortedExercices.reduce((a, b) => (b.id > a.id ? b : a));
+      setCurrentExerciceId(newest.id);
+      setSelected(new Set());
+      setPendingSelectNewest(false);
+      return;
+    }
+    if (currentExerciceId != null && !sortedExercices.some((e) => e.id === currentExerciceId)) {
+      setCurrentExerciceId(hasExercices ? sortedExercices[sortedExercices.length - 1].id : null);
+    }
+  }, [sortedExercices]);
+
+  function openCreateExercice() {
+    setExoError(null);
+    setExoForm(emptyExerciceForm());
+    setExoModalOpen(true);
+  }
+
+  function openEditExercice() {
+    if (!currentExercice) return;
+    setExoError(null);
+    setExoForm({
+      id: currentExercice.id,
+      label: currentExercice.label,
+      type: currentExercice.type,
+      dateStart: currentExercice.dateStart,
+      dateEnd: currentExercice.dateEnd,
+    });
+    setExoModalOpen(true);
+  }
+
+  function changeExoType(type: ExerciceType) {
+    // En création, le type pré-remplit libellé + dates ; en édition, on ne touche qu'au type.
+    setExoForm((f) => (f.id == null ? { ...f, type, ...exerciceDefaults(type) } : { ...f, type }));
+  }
+
+  function saveExercice() {
+    setExoError(null);
+    const label = exoForm.label.trim();
+    if (!label) {
+      setExoError("Le libellé est requis.");
+      return;
+    }
+    const base = {
+      serviceId,
+      label,
+      type: exoForm.type,
+      dateStart: exoForm.dateStart || null,
+      dateEnd: exoForm.dateEnd || null,
+    };
+    startTransition(async () => {
+      const res =
+        exoForm.id == null
+          ? await createExerciceAction(base)
+          : await updateExerciceAction({ ...base, id: exoForm.id });
+      if (res && !res.ok) {
+        setExoError(res.error ?? "Échec de l'enregistrement.");
+        return;
+      }
+      if (exoForm.id == null) setPendingSelectNewest(true);
+      setExoModalOpen(false);
+      router.refresh();
+    });
+  }
+
+  function deleteExercice() {
+    if (!currentExercice) return;
+    if (
+      !window.confirm(
+        `Supprimer l'exercice « ${currentExercice.label} » ? (uniquement s'il n'a aucune période)`,
+      )
+    ) {
+      return;
+    }
+    setListError(null);
+    startTransition(async () => {
+      const res = await deleteExerciceAction({ serviceId, id: currentExercice.id });
+      if (res && !res.ok) {
+        setListError(res.error ?? "Échec de la suppression.");
+        return;
+      }
+      setCurrentExerciceId(null);
       router.refresh();
     });
   }
@@ -355,26 +497,89 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
           </span>
         </div>
 
-        <div className="periode-nav">
-          <button
-            type="button"
-            className="ex-arrow"
-            onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
-            disabled={!canPrev}
-            aria-label="Exercice précédent"
-          >
-            ◀
-          </button>
-          <span className="ex-nav-label">{exerciceLabel}</span>
-          <button
-            type="button"
-            className="ex-arrow"
-            onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
-            disabled={!canNext}
-            aria-label="Exercice suivant"
-          >
-            ▶
-          </button>
+        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
+          {hasExercices ? (
+            <div className="periode-nav">
+              <button
+                type="button"
+                className="ex-arrow"
+                onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
+                disabled={!canPrev}
+                aria-label="Exercice précédent"
+              >
+                ◀
+              </button>
+              <span className="ex-nav-label">{exerciceLabel}</span>
+              <button
+                type="button"
+                className="ex-arrow"
+                onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
+                disabled={!canNext}
+                aria-label="Exercice suivant"
+              >
+                ▶
+              </button>
+            </div>
+          ) : (
+            <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucun exercice</span>
+          )}
+
+          {currentExercice && (currentExercice.dateStart || currentExercice.dateEnd) && (
+            <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+              {currentExercice.type === "civile" ? "Civile" : "Scolaire"} ·{" "}
+              {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
+            </span>
+          )}
+
+          <div style={{ display: "flex", gap: ".4rem", alignItems: "center" }}>
+            {currentExercice && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={openEditExercice}
+                  title="Modifier l'exercice"
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                    color: "var(--accent)",
+                    padding: ".18rem .5rem",
+                    fontSize: ".62rem",
+                  }}
+                >
+                  ✏️
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={deleteExercice}
+                  disabled={pending}
+                  title="Supprimer l'exercice"
+                  style={{
+                    borderColor: "rgba(220,80,80,.4)",
+                    color: "#e05555",
+                    padding: ".18rem .5rem",
+                    fontSize: ".62rem",
+                  }}
+                >
+                  🗑️
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={openCreateExercice}
+              style={{
+                borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
+                color: "var(--warn)",
+                padding: ".18rem .5rem",
+                fontSize: ".62rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ＋ Nouvel exercice
+            </button>
+          </div>
         </div>
       </div>
 
@@ -499,6 +704,8 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             type="button"
             className="btn btn-ghost"
             onClick={openCreate}
+            disabled={!hasExercices}
+            title={hasExercices ? undefined : "Créez d'abord un exercice."}
             style={{
               marginLeft: "auto",
               borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
@@ -506,6 +713,8 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
               padding: ".18rem .5rem",
               fontSize: ".62rem",
               whiteSpace: "nowrap",
+              opacity: hasExercices ? 1 : 0.5,
+              cursor: hasExercices ? "pointer" : "not-allowed",
             }}
           >
             ＋ Ajouter une période
@@ -685,6 +894,108 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
           Vacances scolaires
         </label>
       </div>
+
+      {/* ── Modale exercice (création / édition) ───────────────────────────── */}
+      {exoModalOpen && (
+        <div className="modal-overlay open">
+          <div className="modal-box" aria-labelledby="exo-modal-title">
+            <div className="modal-title" id="exo-modal-title">
+              <span>{exoForm.id == null ? "➕ Nouvel exercice" : "✏️ Modifier l'exercice"}</span>
+              <button type="button" className="modal-close" onClick={() => setExoModalOpen(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: ".3rem" }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Type</span>
+                <div style={{ display: "flex", gap: "1rem" }}>
+                  {(["scolaire", "civile"] as ExerciceType[]).map((t) => (
+                    <label
+                      key={t}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: ".35rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="exo-type"
+                        checked={exoForm.type === t}
+                        onChange={() => changeExoType(t)}
+                      />
+                      <span style={{ fontSize: ".82rem" }}>
+                        {t === "scolaire" ? "Scolaire" : "Civile"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Libellé *</span>
+                <input
+                  type="text"
+                  value={exoForm.label}
+                  onChange={(e) => setExoForm((f) => ({ ...f, label: e.target.value }))}
+                  placeholder="Ex. 2025-2026"
+                />
+              </label>
+              <div style={{ display: "flex", gap: ".75rem" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Début</span>
+                  <input
+                    type="date"
+                    value={exoForm.dateStart}
+                    onChange={(e) => setExoForm((f) => ({ ...f, dateStart: e.target.value }))}
+                  />
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Fin</span>
+                  <input
+                    type="date"
+                    value={exoForm.dateEnd}
+                    onChange={(e) => setExoForm((f) => ({ ...f, dateEnd: e.target.value }))}
+                  />
+                </label>
+              </div>
+
+              {exoError && (
+                <div className="field-error" style={{ display: "block" }}>
+                  {exoError}
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: ".5rem",
+                  marginTop: ".5rem",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setExoModalOpen(false)}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={saveExercice}
+                  disabled={pending}
+                  style={{ background: "var(--warn)", color: "#0f1117" }}
+                >
+                  {pending ? "Enregistrement…" : "Enregistrer"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modale création / édition ──────────────────────────────────────── */}
       {modalOpen && (

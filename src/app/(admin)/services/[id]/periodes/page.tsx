@@ -35,13 +35,21 @@ export default async function PeriodesPage({
     exerciceId: p.exerciceId,
   }));
 
+  const uiExercices = exercices.map((e) => ({
+    id: e.id,
+    label: e.label,
+    type: e.type,
+    dateStart: toISODate(e.dateStart),
+    dateEnd: toISODate(e.dateEnd),
+  }));
+
   return (
     <div>
       <ParamsSubnav serviceId={id} />
       <PeriodesPanel
         serviceId={id}
         initialPeriods={initialPeriods}
-        exercices={exercices}
+        exercices={uiExercices}
         opening={
           opening ?? {
             activeDays: [],
