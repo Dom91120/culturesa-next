@@ -1,3 +1,4 @@
+import { ExportButton } from "./export-button";
 import { PrintButton } from "./print-button";
 import type { RangeResult } from "./range";
 import { RangeSelect } from "./range-select";
@@ -12,6 +13,7 @@ export function RangeBar({
   range,
   extra,
   ruptures = false,
+  exportHref,
 }: {
   serviceId: string;
   screen: string;
@@ -20,6 +22,8 @@ export function RangeBar({
   extra?: React.ReactNode;
   // État de la case « avec ruptures » — propagé aux navigations pour le conserver.
   ruptures?: boolean;
+  // Lien d'export CSV (Liste) → bouton export à gauche de l'impression. Absent ailleurs.
+  exportHref?: string;
 }) {
   const { mode, dateParam, periodId, longPeriods, subtitle, prevHref, nextHref } = range;
   const rq = ruptures ? "&ruptures=1" : "";
@@ -139,6 +143,7 @@ export function RangeBar({
         />
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
           <RupturesToggle />
+          {exportHref && <ExportButton href={exportHref} />}
           <PrintButton iconOnly />
         </div>
       </div>

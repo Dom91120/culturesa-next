@@ -9,6 +9,7 @@ import {
   listEditionRows,
 } from "@/server/services/editions";
 import { notFound } from "next/navigation";
+import { ExportButton } from "../export-button";
 import { PrintButton } from "../print-button";
 import {
   bucketSessions,
@@ -131,6 +132,7 @@ export default async function EditionsListePage({
           </a>
           <div className="agenda-mode-toggles-wrap no-print" style={{ marginLeft: "auto" }}>
             <ListeSortSelect serviceId={id} tri={tri} />
+            <ExportButton href={`/services/${id}/editions/export`} />
             <PrintButton iconOnly />
           </div>
         </div>
@@ -297,6 +299,7 @@ export default async function EditionsListePage({
         range={range}
         extra={<ListeSortSelect serviceId={id} tri={tri} />}
         ruptures={withRuptures}
+        exportHref={`/services/${id}/editions/export`}
       />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
