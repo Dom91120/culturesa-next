@@ -48,7 +48,11 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     dateEnd: true,
     exerciceId: true,
   } as const;
-  const periodOrder = [{ position: "asc" as const }, { id: "asc" as const }];
+  // Onglets de périodes triés par DATE de début (nulls en dernier), puis id.
+  const periodOrder = [
+    { dateStart: { sort: "asc" as const, nulls: "last" as const } },
+    { id: "asc" as const },
+  ];
   // Avec « Afficher les exercices précédents », on inclut aussi les périodes
   // désactivées (celles des exercices passés) pour permettre la nav ◀ exercice.
   const periodStates = service.showPreviousExercices

@@ -532,7 +532,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   // Chargées AVANT les créneaux/réservations : elles servent de borne de chargement.
   let periods = await prisma.period.findMany({
     where: { serviceId, state: "actif" },
-    orderBy: [{ position: "asc" }, { id: "asc" }],
+    orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
     select: periodSelect,
   });
   if (periods.length === 0) {
