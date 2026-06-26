@@ -79,14 +79,14 @@ export default async function PointagesPage({
           ({s.attendees.length} inscrit{s.attendees.length > 1 ? "s" : ""})
         </span>
       </h3>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={th}>Nom</th>
-            <th style={th}>Prénom</th>
+            <th style={{ ...th, width: "18%" }}>Nom</th>
+            <th style={{ ...th, width: "16%" }}>Prénom</th>
             <th style={th}>Structure</th>
-            <th style={{ ...th, textAlign: "center" }}>Pointage</th>
-            <th style={{ ...th, width: 160 }}>Émargement</th>
+            <th style={{ ...th, textAlign: "center", width: 110 }}>Pointage</th>
+            <th style={{ ...th, width: 180 }}>Émargement</th>
           </tr>
         </thead>
         <tbody>

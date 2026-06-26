@@ -64,6 +64,15 @@ export default async function EditionsListePage({
     textDecoration: "none",
   };
   const navBtn: React.CSSProperties = { ...linkBtn, padding: "3px 9px", fontSize: ".8rem" };
+  const thC: React.CSSProperties = { textAlign: "center" }; // en-têtes centrées
+  // 2 premières colonnes : contenu sur une seule ligne (largeur = au contenu, sans wrap).
+  const thNoWrap: React.CSSProperties = { ...thC, whiteSpace: "nowrap" };
+  const tdNoWrap: React.CSSProperties = { whiteSpace: "nowrap" };
+  const tdCenter: React.CSSProperties = { textAlign: "center", whiteSpace: "nowrap" };
+  // Colonnes « Identité » et « Thème » : même largeur, elles se partagent l'espace
+  // restant à parts égales (au détriment de date/créneau/demandeur, compactés).
+  const thIdentite: React.CSSProperties = { ...thC, width: "50%" };
+  const thTheme: React.CSSProperties = thIdentite;
 
   // Barre de pagination (20 lignes/page).
   const pager = (page: number, pages: number, total: number, href: (n: number) => string) =>
@@ -140,31 +149,31 @@ export default async function EditionsListePage({
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Période</th>
-                    <th>Jour / Date</th>
-                    <th>Créneau</th>
-                    <th>Demandeur</th>
-                    <th>Nom</th>
-                    <th>Prénom</th>
-                    <th>Thème</th>
-                    <th>Enfants</th>
-                    <th>Statut</th>
-                    <th>Pointage</th>
+                    <th style={thNoWrap}>Période</th>
+                    <th style={thNoWrap}>Jour / Date</th>
+                    <th style={thNoWrap}>Créneau</th>
+                    <th style={thNoWrap}>Demandeur</th>
+                    <th style={thIdentite}>Identité</th>
+                    <th style={thTheme}>Thème</th>
+                    <th style={thC}>Participants</th>
+                    <th style={thC}>Statut</th>
+                    <th style={thC}>Pointage</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map((r) => (
                     <tr key={r.id}>
-                      <td>{r.periode}</td>
-                      <td>{r.jour}</td>
-                      <td>
+                      <td style={tdNoWrap}>{r.periode}</td>
+                      <td style={tdNoWrap}>{r.jour}</td>
+                      <td style={tdNoWrap}>
                         {r.debut}–{r.fin}
                       </td>
-                      <td>{r.demandeur || "—"}</td>
-                      <td style={{ fontWeight: 600 }}>{r.nom || "—"}</td>
-                      <td>{r.prenom || "—"}</td>
+                      <td style={tdNoWrap}>{r.demandeur || "—"}</td>
+                      <td style={{ fontWeight: 600 }}>{`${r.nom} ${r.prenom}`.trim() || "—"}</td>
                       <td>{r.theme || "—"}</td>
-                      <td>{r.enfants}</td>
+                      <td style={tdCenter}>
+                        {r.enfants} + {r.accompagnants}
+                      </td>
                       <td>
                         <span
                           className={`role-pill ${r.statut === "Réservation validée" ? "role-utilisateur" : "role-gestionnaire"}`}
@@ -172,7 +181,7 @@ export default async function EditionsListePage({
                           {r.statut}
                         </span>
                       </td>
-                      <td>{r.pointage || "—"}</td>
+                      <td style={tdCenter}>{r.pointage || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -248,31 +257,31 @@ export default async function EditionsListePage({
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Créneau</th>
-            <th>Demandeur</th>
-            <th>Nom</th>
-            <th>Prénom</th>
-            <th>Thème</th>
-            <th>Enfants</th>
-            <th>Pointage</th>
+            <th style={thNoWrap}>Date</th>
+            <th style={thNoWrap}>Créneau</th>
+            <th style={thNoWrap}>Demandeur</th>
+            <th style={thIdentite}>Identité</th>
+            <th style={thTheme}>Thème</th>
+            <th style={thC}>Participants</th>
+            <th style={thC}>Pointage</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ gi, s, a }) => (
             <tr key={gi}>
-              <td>
+              <td style={tdNoWrap}>
                 {s.dayLabel} {s.dateLabel}
               </td>
-              <td>
+              <td style={tdNoWrap}>
                 {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
               </td>
-              <td>{a.demandeur || "—"}</td>
-              <td style={{ fontWeight: 600 }}>{a.nom || "—"}</td>
-              <td>{a.prenom || "—"}</td>
+              <td style={tdNoWrap}>{a.demandeur || "—"}</td>
+              <td style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>
               <td>{a.theme || "—"}</td>
-              <td>{a.enfants}</td>
-              <td>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
+              <td style={tdCenter}>
+                {a.enfants} + {a.accompagnants}
+              </td>
+              <td style={tdCenter}>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
             </tr>
           ))}
         </tbody>

@@ -26,11 +26,16 @@ export function RangeSelect({
   const base = `/services/${serviceId}/editions/${screen}`;
   const rq = ruptures ? "&ruptures=1" : "";
   const go = (qs: string) => router.push(`${base}?${qs}${rq}`);
-  // Police plus petite que le segmented control de l'agenda (override de .agenda-mode-btn).
-  const btnStyle: React.CSSProperties = { fontSize: ".56rem" };
+  // Police du segmented control (override de .agenda-mode-btn, un peu plus grand).
+  // whiteSpace nowrap : un libellé long (« Année scolaire 2025 - 2026 ») reste sur une ligne.
+  const btnStyle: React.CSSProperties = {
+    fontSize: ".68rem",
+    letterSpacing: "-.02em",
+    whiteSpace: "nowrap",
+  };
 
   return (
-    <div className="agenda-mode-toggle" role="tablist" aria-label="Vue">
+    <div className="agenda-mode-toggle no-print" role="tablist" aria-label="Vue">
       <button
         type="button"
         className={`agenda-mode-btn${mode === "week" ? " active" : ""}`}

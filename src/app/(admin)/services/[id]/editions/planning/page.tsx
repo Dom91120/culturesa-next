@@ -52,6 +52,13 @@ export default async function PlanningPage({
       : [];
   const withSubtotals = withRuptures && buckets.length > 1;
 
+  const td: React.CSSProperties = {
+    borderBottom: "1px solid var(--border)",
+    padding: "3px 6px",
+    fontSize: ".82rem",
+    verticalAlign: "top",
+  };
+
   const renderSection = (daySessions: DatedSession[]) => {
     const first = daySessions[0];
     return (
@@ -69,19 +76,29 @@ export default async function PlanningPage({
         </h3>
         {daySessions.map((s) => (
           <div key={`${s.startTime}-${s.endTime}`} style={{ marginBottom: ".6rem" }}>
-            <div style={{ fontWeight: 600, fontSize: ".85rem" }}>
+            <div style={{ fontWeight: 600, fontSize: ".85rem", marginBottom: ".15rem" }}>
               {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}{" "}
               <span style={{ color: "var(--muted)", fontWeight: 400 }}>({s.attendees.length})</span>
             </div>
-            <ul style={{ margin: ".2rem 0 0 1rem", fontSize: ".82rem", lineHeight: 1.5 }}>
-              {s.attendees.map((a, i) => (
-                <li key={`${a.nom}-${a.prenom}-${i}`}>
-                  {a.nom} {a.prenom}
-                  {a.structure ? ` — ${a.structure}` : ""}
-                  {a.theme ? ` · ${a.theme}` : ""}
-                </li>
-              ))}
-            </ul>
+            {/* Colonnes fixes (table-layout) → alignées d'une séance à l'autre. */}
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "33%" }} />
+                <col />
+              </colgroup>
+              <tbody>
+                {s.attendees.map((a, i) => (
+                  <tr key={`${a.nom}-${a.prenom}-${i}`}>
+                    <td style={{ ...td, fontWeight: 600 }}>{a.nom || "—"}</td>
+                    <td style={td}>{a.prenom || "—"}</td>
+                    <td style={td}>{a.structure || "—"}</td>
+                    <td style={td}>{a.theme || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ))}
       </section>

@@ -39,12 +39,11 @@ export function RangeBar({
 
   return (
     <div style={{ marginBottom: "1rem" }}>
-      {/* Ligne 1 : ← Éditions · plage centrée (absolu) · tri + segmented control à droite. */}
+      {/* Ligne 1 : ← Éditions (gauche) · plage ◀…▶ centrée (absolu, .app-main) · tri à droite. */}
       <div
         style={{
           position: "relative",
           display: "flex",
-          gap: ".5rem",
           alignItems: "center",
           minHeight: "2rem",
         }}
@@ -52,25 +51,25 @@ export function RangeBar({
         <a
           href={`/services/${serviceId}/editions`}
           className="no-print"
-          style={{ ...linkBtn, fontSize: ".7rem", padding: "3px 8px" }}
+          style={{
+            ...linkBtn,
+            fontSize: ".7rem",
+            padding: "3px 8px",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
         >
           ← Éditions
         </a>
 
-        <div className="agenda-mode-toggles-wrap no-print" style={{ marginLeft: "auto" }}>
-          {extra}
-          <RangeSelect
-            serviceId={serviceId}
-            screen={screen}
-            mode={mode}
-            date={dateParam}
-            periodId={periodId}
-            periods={longPeriods}
-            ruptures={ruptures}
-          />
-        </div>
+        {/* Sélecteur de tri (Alphabétique|Par date) : toujours ligne 1, à droite. */}
+        {extra && (
+          <div className="no-print" style={{ marginLeft: "auto", display: "flex" }}>
+            {extra}
+          </div>
+        )}
 
-        {/* Centre (absolu) : ◀ <plage> ▶ — la plage reste imprimée. */}
+        {/* Plage ◀ <plage> ▶ : centrée en absolu sur .app-main ; reste imprimée. */}
         <div
           style={{
             position: "absolute",
@@ -94,7 +93,14 @@ export function RangeBar({
               ◀
             </a>
           )}
-          <span style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--muted)" }}>
+          <span
+            style={{
+              fontSize: ".72rem",
+              fontWeight: 600,
+              letterSpacing: "-.02em",
+              color: "var(--muted)",
+            }}
+          >
             {subtitle}
           </span>
           {nextHref && (
@@ -111,19 +117,30 @@ export function RangeBar({
         </div>
       </div>
 
-      {/* Ligne 2 : checkbox « avec ruptures » + impression, alignées à droite. */}
+      {/* Ligne 2 : sélecteur de vue (Hebdo|Mensuel|Année) à GAUCHE ; checkbox « avec ruptures »
+          + impression à DROITE. */}
       <div
         className="no-print"
         style={{
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
-          justifyContent: "flex-end",
           gap: ".6rem",
-          marginTop: ".4rem",
         }}
       >
-        <RupturesToggle />
-        <PrintButton iconOnly />
+        <RangeSelect
+          serviceId={serviceId}
+          screen={screen}
+          mode={mode}
+          date={dateParam}
+          periodId={periodId}
+          periods={longPeriods}
+          ruptures={ruptures}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
+          <RupturesToggle />
+          <PrintButton iconOnly />
+        </div>
       </div>
     </div>
   );

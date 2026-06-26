@@ -25,7 +25,7 @@ export function RupturesToggle() {
         display: "flex",
         alignItems: "center",
         gap: ".3rem",
-        fontSize: ".66rem",
+        fontSize: ".6rem",
         color: "var(--muted)",
         cursor: "pointer",
         whiteSpace: "nowrap",

@@ -706,6 +706,22 @@ textarea:focus {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
+/* Cases à cocher / boutons radio : contrôle natif. On annule le padding, la bordure et le
+   fond (y compris au focus) hérités de la règle `input` ci-dessus — sinon le fond coloré du
+   focus remplissait le padding et la case semblait « grossir » une fraction de seconde. */
+input[type="checkbox"],
+input[type="radio"] {
+  padding: 0;
+  border: none;
+  background: transparent;
+  transition: none;
+  accent-color: var(--accent);
+  vertical-align: middle;
+}
+input[type="checkbox"]:focus,
+input[type="radio"]:focus {
+  background: transparent;
+}
 input::placeholder {
   color: var(--muted);
 }
@@ -1260,6 +1276,8 @@ textarea.theme-pending:focus::placeholder {
   border-radius: 6px;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
+  /* Ligne de fermeture en bas du tableau (les lignes n'ont pas de bordure basse). */
+  border-bottom: 1px solid var(--border);
 }
 .admin-table {
   border-collapse: collapse;
