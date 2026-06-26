@@ -99,7 +99,7 @@ export function RangeBar({
           )}
           <span
             style={{
-              fontSize: ".72rem",
+              fontSize: ".8rem",
               fontWeight: 600,
               letterSpacing: "-.02em",
               color: "var(--muted)",
