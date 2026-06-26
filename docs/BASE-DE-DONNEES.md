@@ -328,9 +328,23 @@ Déclencheurs d'e-mails de réservation (la **clé** = contrat code ; libellé/d
 - **Slots miroirs** : un créneau récurrent (`recurring`) « projette » des créneaux datés
   (`unique`, `parentSlotId` renseigné) sur sa période, hors fériés / hors parité exclue. Supprimer
   le parent supprime ses miroirs (cascade).
-- **Réservations-enfants** : symétriquement, une réservation récurrente possède une réservation
-  enfant datée par occurrence (`parentBookingId`), porteuse du `pointage`. Cf.
-  `server/services/recurring-children.ts`.
+- **Réservations-enfants (occurrences)** : symétriquement, une réservation récurrente possède une
+  réservation enfant datée par occurrence (`bookingType=unique`, `parentBookingId`), porteuse du
+  `pointage`. Ce sont **ces enfants** que lisent les éditions datées (Liste « par date », Plannings,
+  Pointages) et le cron de rappels — une récurrente sans enfants matérialisés n'apparaît donc dans
+  aucune vue datée. Matérialisation par `syncRecurringChildren`
+  (`server/services/recurring-children.ts`), appelée à la **création / au déplacement** d'une
+  réservation :
+  - **cutoff** : on ne *crée* que les occurrences ≥ cutoff (= aujourd'hui pour le gestionnaire ;
+    aujourd'hui + délai de réservation du service pour l'usager). Les enfants passés déjà créés ne
+    sont **jamais** supprimés (préserve l'historique + le `pointage`) ; seules les occurrences
+    devenues invalides (parité A/B, fériés, vacances) le sont.
+  - **vacances scolaires** : une occurrence en vacances n'est matérialisée que si le **service ET le
+    demandeur effectif** acceptent les vacances (cf. `effectiveOpenOnSchoolHolidays`).
+  - **back-fill** : `scripts/backfill-recurring-children.ts` matérialise en masse (idempotent),
+    mais **borné au présent** → il ne recrée pas les occurrences de **périodes déjà écoulées**.
+    Pour repeupler une base de démo / un historique, relancer `syncRecurringChildren` avec un
+    `cutoffISO` antérieur (ex. `"2000-01-01"`).
 - **Demandeur effectif** : `user.demandeurId ?? user.structure.demandeurId`. Sert au contrôle
   d'accès, aux modes et à la politique vacances scolaires (cf. `effectiveDemandeurId` /
   `effectiveOpenOnSchoolHolidays` dans `server/services/bookings.ts`).
