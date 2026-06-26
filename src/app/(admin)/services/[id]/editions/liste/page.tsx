@@ -254,18 +254,21 @@ export default async function EditionsListePage({
   const dateHref = (n: number) =>
     `/services/${id}/editions/liste?${pageParams.toString()}&page=${n}`;
 
+  // Vue « par date » avec ruptures = un tableau par mois. Colonnes FIXES (table-layout +
+  // largeurs en %) + minWidth → les colonnes ont la même largeur d'un mois à l'autre
+  // (sinon chaque tableau se dimensionne sur son propre contenu). Identité = Thème.
   const renderOccRows = (rows: OccRow[]) => (
     <div className="admin-table-wrap">
-      <table className="admin-table">
+      <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 920 }}>
         <thead>
           <tr>
-            <th style={thNoWrap}>Date</th>
-            <th style={thNoWrap}>Créneau</th>
-            <th style={thNoWrap}>Demandeur</th>
-            <th style={thIdentite}>Identité</th>
-            <th style={thTheme}>Thème</th>
-            <th style={thC}>Participants</th>
-            <th style={thC}>Pointage</th>
+            <th style={{ ...thNoWrap, width: "14%" }}>Date</th>
+            <th style={{ ...thNoWrap, width: "11%" }}>Créneau</th>
+            <th style={{ ...thC, width: "15%" }}>Demandeur</th>
+            <th style={{ ...thC, width: "20%" }}>Identité</th>
+            <th style={{ ...thC, width: "20%" }}>Thème</th>
+            <th style={{ ...thC, width: "11%" }}>Participants</th>
+            <th style={{ ...thC, width: "9%" }}>Pointage</th>
           </tr>
         </thead>
         <tbody>
@@ -277,7 +280,7 @@ export default async function EditionsListePage({
               <td style={tdNoWrap}>
                 {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
               </td>
-              <td style={tdNoWrap}>{a.demandeur || "—"}</td>
+              <td>{a.demandeur || "—"}</td>
               <td style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>
               <td>{a.theme || "—"}</td>
               <td style={tdCenter}>
