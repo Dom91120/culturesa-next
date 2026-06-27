@@ -6,7 +6,7 @@
 // service × demandeur en respectant les règles de synchro (semaineAb uniforme entre
 // récurrents, jauge uniforme par mode).
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Switch } from "@/components/switch";
 import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
@@ -177,7 +177,12 @@ export function ConfigPanel({
   );
 
   // Autosave Demandeurs + Globaux (débounce). Signature de la dernière sauvegarde.
-  const lastSavedSig = useRef(matrixSig(buildMatrix(rows, semaineAb, jaugeRec, jaugePonct)));
+  // Init paresseuse (sentinelle null) : éviter de relancer buildMatrix+matrixSig à CHAQUE
+  // rendu (l'argument de useRef est évalué à chaque rendu même s'il n'est utilisé qu'une fois).
+  const lastSavedSig = useRef<string | null>(null);
+  if (lastSavedSig.current === null) {
+    lastSavedSig.current = matrixSig(buildMatrix(rows, semaineAb, jaugeRec, jaugePonct));
+  }
   const [savedFlash, setSavedFlash] = useState(false);
   const flashTimer = useRef<number | null>(null);
   const [demError, setDemError] = useState<string | null>(null);
@@ -219,9 +224,12 @@ export function ConfigPanel({
   const [themesError, setThemesError] = useState<string | null>(null);
   const [themesPending, startThemes] = useTransition();
   const nextThemeId = () => `new-${counter.current++}`;
-  const themesDirty =
-    JSON.stringify([themeMode, themes.map((t) => t.label)]) !==
-    JSON.stringify([savedThemeMode, savedThemes]);
+  const themesDirty = useMemo(
+    () =>
+      JSON.stringify([themeMode, themes.map((t) => t.label)]) !==
+      JSON.stringify([savedThemeMode, savedThemes]),
+    [themeMode, themes, savedThemeMode, savedThemes],
+  );
 
   function saveThemes() {
     const cleaned = cleanLabels(themes.map((t) => t.label));
@@ -243,11 +251,23 @@ export function ConfigPanel({
     setThemes(savedThemes.map((label, i) => ({ key: `db-${i}`, label })));
   }
 
-  // ── Demandeurs : helpers ──
-  const usedIds = new Set(rows.map((r) => r.demandeurId).filter((id) => id > 0));
-  const available = allDemandeurs.filter((d) => !usedIds.has(d.id));
-  const hasRecurrent = rows.some((r) => r.demandeurId > 0 && r.mode === "recurrent");
-  const labelFor = (id: number) => allDemandeurs.find((d) => d.id === id)?.label ?? "";
+  // ── Demandeurs : helpers (mémoïsés : recalcul seulement quand rows/allDemandeurs changent) ──
+  const usedIds = useMemo(
+    () => new Set(rows.map((r) => r.demandeurId).filter((id) => id > 0)),
+    [rows],
+  );
+  const available = useMemo(
+    () => allDemandeurs.filter((d) => !usedIds.has(d.id)),
+    [allDemandeurs, usedIds],
+  );
+  const hasRecurrent = useMemo(
+    () => rows.some((r) => r.demandeurId > 0 && r.mode === "recurrent"),
+    [rows],
+  );
+  const labelFor = useCallback(
+    (id: number) => allDemandeurs.find((d) => d.id === id)?.label ?? "",
+    [allDemandeurs],
+  );
 
   function patch(key: string, p: Partial<DemRow>) {
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
