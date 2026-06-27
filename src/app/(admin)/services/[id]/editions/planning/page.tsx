@@ -82,7 +82,9 @@ export default async function PlanningPage({
           <div key={`${s.startTime}-${s.endTime}`} style={{ marginBottom: ".6rem" }}>
             <div style={{ fontWeight: 600, fontSize: ".85rem", marginBottom: ".15rem" }}>
               {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}{" "}
-              <span style={{ color: "var(--muted)", fontWeight: 400 }}>({s.attendees.length})</span>
+              <span style={{ color: "var(--muted)", fontWeight: 400 }}>
+                ({s.attendees.length} inscrit{s.attendees.length > 1 ? "s" : ""})
+              </span>
             </div>
             {/* Colonnes fixes (table-layout) → alignées d'une séance à l'autre. */}
             <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
