@@ -28,54 +28,71 @@ const dateString = z
   .nullable()
   .optional();
 
+// Refine partagé : si les deux dates sont fournies, début ≤ fin (comparaison
+// lexicographique valide sur des dates ISO YYYY-MM-DD).
+const dateOrderOk = (d: { dateStart?: string | null; dateEnd?: string | null }) =>
+  !d.dateStart || !d.dateEnd || d.dateStart <= d.dateEnd;
+const dateOrderError = {
+  message: "La date de fin doit être postérieure ou égale à la date de début.",
+  path: ["dateEnd"] as [string],
+};
+
 const colorString = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "Couleur invalide.")
   .default("#6dceaa");
 
-const createSchema = z.object({
-  serviceId: z.string().trim().min(1),
-  exerciceId: z.number().int().positive(),
-  label: z.string().trim().min(1, "Le libellé est requis."),
-  etiquette: z.string().trim().max(120).optional().default(""),
-  dateStart: dateString,
-  dateEnd: dateString,
-  color: colorString,
-});
+const createSchema = z
+  .object({
+    serviceId: z.string().trim().min(1),
+    exerciceId: z.number().int().positive(),
+    label: z.string().trim().min(1, "Le libellé est requis."),
+    etiquette: z.string().trim().max(120).optional().default(""),
+    dateStart: dateString,
+    dateEnd: dateString,
+    color: colorString,
+  })
+  .refine(dateOrderOk, dateOrderError);
 
 const exerciceTypeEnum = z.enum(["civile", "scolaire"]);
 
-const createExerciceSchema = z.object({
-  serviceId: z.string().trim().min(1),
-  label: z.string().trim().min(1, "Le libellé est requis.").max(120),
-  type: exerciceTypeEnum,
-  dateStart: dateString,
-  dateEnd: dateString,
-});
+const createExerciceSchema = z
+  .object({
+    serviceId: z.string().trim().min(1),
+    label: z.string().trim().min(1, "Le libellé est requis.").max(120),
+    type: exerciceTypeEnum,
+    dateStart: dateString,
+    dateEnd: dateString,
+  })
+  .refine(dateOrderOk, dateOrderError);
 
-const updateExerciceSchema = z.object({
-  serviceId: z.string().trim().min(1),
-  id: z.number().int().positive(),
-  label: z.string().trim().min(1, "Le libellé est requis.").max(120),
-  type: exerciceTypeEnum,
-  dateStart: dateString,
-  dateEnd: dateString,
-});
+const updateExerciceSchema = z
+  .object({
+    serviceId: z.string().trim().min(1),
+    id: z.number().int().positive(),
+    label: z.string().trim().min(1, "Le libellé est requis.").max(120),
+    type: exerciceTypeEnum,
+    dateStart: dateString,
+    dateEnd: dateString,
+  })
+  .refine(dateOrderOk, dateOrderError);
 
 const deleteExerciceSchema = z.object({
   serviceId: z.string().trim().min(1),
   id: z.number().int().positive(),
 });
 
-const updateSchema = z.object({
-  id: z.number().int().positive(),
-  serviceId: z.string().trim().min(1),
-  label: z.string().trim().min(1, "Le libellé est requis."),
-  etiquette: z.string().trim().max(120).optional().default(""),
-  dateStart: dateString,
-  dateEnd: dateString,
-  color: colorString,
-});
+const updateSchema = z
+  .object({
+    id: z.number().int().positive(),
+    serviceId: z.string().trim().min(1),
+    label: z.string().trim().min(1, "Le libellé est requis."),
+    etiquette: z.string().trim().max(120).optional().default(""),
+    dateStart: dateString,
+    dateEnd: dateString,
+    color: colorString,
+  })
+  .refine(dateOrderOk, dateOrderError);
 
 const reactivateSchema = z.object({
   serviceId: z.string().trim().min(1),
