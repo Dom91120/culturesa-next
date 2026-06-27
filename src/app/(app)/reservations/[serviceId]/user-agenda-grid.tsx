@@ -1466,14 +1466,20 @@ export function UserAgendaGrid({
   ]);
 
   // Géométrie de la grille (quarts visibles + mapping minute↔pixel) mutualisée.
+  // Mémoïsée : `mapMinToY` doit rester stable d'un rendu à l'autre pour que la mémo
+  // des blocs par jour tienne (sinon recréée à chaque rendu = mémo invalide).
   // `occupiedQ` (compactage hideNoSlot) est construit ci-dessus côté usager.
-  const { quarters, qIdx, totalH, mapMinToY, yToMin } = gridGeometry({
-    gridStartMin,
-    gridEndMin,
-    lunchStart,
-    lunchEnd,
-    occupiedQ: hideNoSlot ? occupiedQ : null,
-  });
+  const { quarters, qIdx, totalH, mapMinToY, yToMin } = useMemo(
+    () =>
+      gridGeometry({
+        gridStartMin,
+        gridEndMin,
+        lunchStart,
+        lunchEnd,
+        occupiedQ: hideNoSlot ? occupiedQ : null,
+      }),
+    [gridStartMin, gridEndMin, lunchStart, lunchEnd, hideNoSlot, occupiedQ],
+  );
 
   const slotsParsed = useMemo(
     () =>
@@ -2457,372 +2463,452 @@ export function UserAgendaGrid({
     );
   };
 
-  const renderBlock = (b: Block, allday: boolean) => {
-    // Info-bulle « Journées concernées » : créneaux RÉCURRENTS en vue Modèle de période
-    // uniquement (en Semaine réelle, les dates sont déjà visibles → inutile).
-    const isRecurringModel = mode === "model" && !uniqueIdSet.has(b.slotId);
-    const posStyle: React.CSSProperties = allday
-      ? {}
-      : (() => {
-          // top/height dérivés des minutes via mapMinToY (compactage pause).
-          // Bornage à la plage visible + 2px de gap haut/bas (cf. legacy).
-          const ys = mapMinToY(Math.max(b.startMin, gridStartMin));
-          const ye = mapMinToY(Math.min(b.endMin, gridEndMin));
-          return {
-            top: ys + 2,
-            height: Math.max(14, ye - ys - 4),
-            left: `calc(${b.leftPct}% + 2px)`,
-            width: `calc(${b.widthPct}% - 4px)`,
-          };
-        })();
-    // Clôturé par le délai → bloc non réservable (grisé, clic ignoré, libellé « Clôturé »).
-    const closed = isSlotClosed(b);
-    return (
-      // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
-      <div
-        key={`${b.dayKey}|${b.slotId}`}
-        // data-* pour l'info-bulle déléguée « Journées concernées » (créneau récurrent).
-        data-slot-tip={isRecurringModel ? "" : undefined}
-        data-slotid={b.slotId}
-        data-daykey={b.dayKey}
-        // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
-        // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
-        // et leurs miroirs (cf. légende Récurrent/Ponctuel).
-        className={`agenda-block${allday ? " is-allday" : ""}${
-          dropKey === `${b.dayKey}|${b.slotId}` && canDropOn(b) ? " slot-user-drop-target" : ""
-        }`}
-        style={{
-          ...posStyle,
-          // Centrage vertical des badges dans le créneau (inline = priorité
-          // sur les feuilles concurrentes GRID_CSS / app-legacy.css).
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          // Ponctuel autonome (non miroir) → couleur distinctive pilotée par
-          // --slot-uniq-color (cf. .agenda-block.is-uniq) : fond = color-mix 25 %,
-          // bordure = couleur pleine.
-          ...(uniqueIdSet.has(b.slotId)
-            ? {
-                background: "color-mix(in srgb, var(--slot-uniq-color) 25%, transparent)",
-                borderColor: "var(--slot-uniq-color)",
-              }
-            : {}),
-          // Créneau clôturé (délai) : grisé + curseur « interdit ».
-          ...(closed ? { opacity: 0.6, cursor: "not-allowed" } : {}),
-        }}
-        onClick={(e) => {
-          // Clic sur un créneau → coche/décoche pour réservation (brouillon).
-          // (Si c'est ma résa, le badge interne gère l'annulation et stoppe la propagation.)
-          e.stopPropagation();
-          if (b.full || closed) return;
-          const ponctuel = uniqueIdSet.has(b.slotId);
-          if (!ponctuel && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
-          togglePendingAdd(b.slotId, b.dayKey, ponctuel);
-        }}
-      >
-        {/* Badges centrés via le parent .agenda-block (justify-content:center).
-          Le chips ne grandit pas pour que le centrage opère ; la jauge est
-          sortie du flux (position absolue en bas). */}
+  // Handlers d'événements de renderBlock via un ref STABLE : réassignés à chaque rendu
+  // (toujours frais) mais HORS des déps du useCallback → permet la mémo des blocs par jour
+  // (perf, port du pattern de l'agenda admin). N'y mettre QUE des handlers exécutés sur
+  // interaction (clic/drag/saisie), jamais des lectures faites pendant le rendu.
+  const blockApi = {
+    togglePendingAdd,
+    togglePendingRemoval,
+    bumpMyCount,
+    setMyCount,
+    setMyTheme,
+    bumpAddCount,
+    setAddCount,
+    setPendingAdds,
+    beginDrag,
+  };
+  const blockApiRef = useRef(blockApi);
+  blockApiRef.current = blockApi;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: déps maintenues à la main — les handlers d'événements passent par blockApiRef (hors déps), et les helpers appelés AU RENDU (isSlotClosed/canDropOn/myCounts/slotTime/bookingLocked, recréés à chaque rendu) ont leurs entrées RÉELLES listées en primitives (uniqSlotById, recurSlotById, earliestBookable, concernedDatesByKey, pendingUpdates, service, modes…) → renderBlock se recrée quand elles changent, capturant des helpers frais. pendKey/participantsLabel sont purs.
+  const renderBlock = useCallback(
+    (b: Block, allday: boolean) => {
+      const {
+        togglePendingAdd,
+        togglePendingRemoval,
+        bumpMyCount,
+        setMyCount,
+        setMyTheme,
+        bumpAddCount,
+        setAddCount,
+        setPendingAdds,
+        beginDrag,
+      } = blockApiRef.current;
+      // Info-bulle « Journées concernées » : créneaux RÉCURRENTS en vue Modèle de période
+      // uniquement (en Semaine réelle, les dates sont déjà visibles → inutile).
+      const isRecurringModel = mode === "model" && !uniqueIdSet.has(b.slotId);
+      const posStyle: React.CSSProperties = allday
+        ? {}
+        : (() => {
+            // top/height dérivés des minutes via mapMinToY (compactage pause).
+            // Bornage à la plage visible + 2px de gap haut/bas (cf. legacy).
+            const ys = mapMinToY(Math.max(b.startMin, gridStartMin));
+            const ye = mapMinToY(Math.min(b.endMin, gridEndMin));
+            return {
+              top: ys + 2,
+              height: Math.max(14, ye - ys - 4),
+              left: `calc(${b.leftPct}% + 2px)`,
+              width: `calc(${b.widthPct}% - 4px)`,
+            };
+          })();
+      // Clôturé par le délai → bloc non réservable (grisé, clic ignoré, libellé « Clôturé »).
+      const closed = isSlotClosed(b);
+      return (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
         <div
-          className="agenda-block-chips"
-          // Conteneur de requête (cqmin) pour le badge « ma réservation » : il remplit le
-          // bloc-créneau (flex:1) MAIS plafonné à 50px de haut → un créneau d'1h ou plus
-          // (bloc ≳ 52px) donne un badge de 50px centré (le surplus de hauteur est réparti
-          // par justify-content:center) ; un créneau plus court (< 1h) garde la hauteur du
-          // créneau. La taille du badge = celle de la cellule (≤ 50px), et ses éléments
-          // (exprimés en `bu` = cqmin) s'y dimensionnent proportionnellement. Un enfant
-          // court (« Complet », créneau libre) reste centré (justify-content), le badge le
-          // remplit (height:100%). `containerType` n'est posé QUE côté usager (style inline),
-          // pas sur la classe partagée (agenda admin inchangé).
+          key={`${b.dayKey}|${b.slotId}`}
+          // data-* pour l'info-bulle déléguée « Journées concernées » (créneau récurrent).
+          data-slot-tip={isRecurringModel ? "" : undefined}
+          data-slotid={b.slotId}
+          data-daykey={b.dayKey}
+          // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
+          // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
+          // et leurs miroirs (cf. légende Récurrent/Ponctuel).
+          className={`agenda-block${allday ? " is-allday" : ""}${
+            dropKey === `${b.dayKey}|${b.slotId}` && canDropOn(b) ? " slot-user-drop-target" : ""
+          }`}
           style={{
-            flex: "1 1 auto",
-            minHeight: 0,
-            maxHeight: 50,
+            ...posStyle,
+            // Centrage vertical des badges dans le créneau (inline = priorité
+            // sur les feuilles concurrentes GRID_CSS / app-legacy.css).
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            gap: 2,
-            containerType: "size",
+            // Ponctuel autonome (non miroir) → couleur distinctive pilotée par
+            // --slot-uniq-color (cf. .agenda-block.is-uniq) : fond = color-mix 25 %,
+            // bordure = couleur pleine.
+            ...(uniqueIdSet.has(b.slotId)
+              ? {
+                  background: "color-mix(in srgb, var(--slot-uniq-color) 25%, transparent)",
+                  borderColor: "var(--slot-uniq-color)",
+                }
+              : {}),
+            // Créneau clôturé (délai) : grisé + curseur « interdit ».
+            ...(closed ? { opacity: 0.6, cursor: "not-allowed" } : {}),
+          }}
+          onClick={(e) => {
+            // Clic sur un créneau → coche/décoche pour réservation (brouillon).
+            // (Si c'est ma résa, le badge interne gère l'annulation et stoppe la propagation.)
+            e.stopPropagation();
+            if (b.full || closed) return;
+            const ponctuel = uniqueIdSet.has(b.slotId);
+            if (!ponctuel && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
+            togglePendingAdd(b.slotId, b.dayKey, ponctuel);
           }}
         >
-          {(() => {
-            // Agenda usager : MA réservation → badge ✅/⏳ (clic = annuler) ;
-            // sinon complet → « Complet » ; sinon créneau libre → repère « + »
-            // (clic sur le bloc = réserver). On n'affiche jamais les autres réservants.
-            const isPonctuelCell = uniqueIdSet.has(b.slotId);
-            // L'usager n'a qu'UN demandeur : sa jauge est active dès que gaugeRec OU
-            // gaugePonct l'est (peu importe le type du créneau cliqué).
-            const gaugeOn = modes.gaugeRec || modes.gaugePonct;
-            // Badge sans thème NI jauge : on affiche toujours l'état (Validé / En attente).
-            const noWidgets = !modes.themeMode && !gaugeOn;
-            // Créneau court (≤ 30 min) : badge ras → on sort l'icône d'état du flux pour
-            // dégager la place du thème (cf. MineBadge). Durée en minutes, pas un proxy
-            // pixel ; les créneaux « journée entière » non concernés.
-            const shortSlot = !b.isAllDay && b.endMin - b.startMin <= 30;
-            // Créneau très court (≤ 15 min) : décale les compteurs de la jauge vers le bas.
-            const veryShortSlot = !b.isAllDay && b.endMin - b.startMin <= 15;
-            const myBk = b.bookings.find((x) => x.mine);
-            // Brouillon : ma résa marquée pour annulation, ou créneau libre coché.
-            const markedRemoval = myBk
-              ? pendingRemovals.some((r) => r.bookingId === myBk.id)
-              : false;
-            const pendingSel =
-              !myBk &&
-              pendingAdds.some((a) => a.key === pendKey(b.slotId, b.dayKey, isPonctuelCell));
-            if (myBk?.synthetic) {
-              // Occurrence d'une récurrente que je détiens, non matérialisée pour cette
-              // date : badge « ma réservation » EN LECTURE SEULE (pas de ×, d'édition ni
-              // de glisser-déposer ; l'annulation passe par une occurrence matérialisée).
-              const mb = myBk;
-              const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
-              return (
-                <MineBadge
-                  validated={mb.validated}
-                  markedRemoval={false}
-                  gaugeOn={false}
-                  themeMode={false}
-                  themesMode={service.themesMode}
-                  themes={themes}
-                  enfants={mb.enfants}
-                  accompagnants={mb.accompagnants}
-                  theme={mb.theme}
-                  remaining={0}
-                  stateLabel={
-                    mb.validated ? "Réservation validée" : "Demande en attente de validation"
-                  }
-                  title={`${tipTime}\n${
-                    mb.validated ? "✅ Réservation validée" : "⏳ Demande en attente de validation"
-                  }\n${participantsLabel(mb.enfants, mb.accompagnants)}`}
-                  closeIcon="×"
-                  locked
-                  onClose={() => {}}
-                  onBump={() => {}}
-                  onSetCount={() => {}}
-                  onSetTheme={() => {}}
-                  draggable={false}
-                />
-              );
-            }
-            if (myBk) {
-              const mb = myBk;
-              const cur = myCounts(mb);
-              // Déplacement en attente (pendingMove sur CETTE résa) → badge atténué + libellé.
-              const isMoving = pendingMoves[mb.id] != null;
-              // Sans thème ni jauge → on affiche l'état (Validé / En attente). Avec un
-              // thème OU une jauge, l'état est porté par l'icône ✔/⏳ → pas de libellé
-              // (sauf « Suppression en cours… » / « Déplacement en cours… » pour une action en attente).
-              // La suppression PRIME sur le déplacement (deux actions possibles sur le même
-              // élément ; au commit la suppression l'emporte).
-              const stateLabel = markedRemoval
-                ? "Suppression en cours…"
-                : isMoving
-                  ? "Déplacement en cours…"
-                  : noWidgets
-                    ? mb.validated
-                      ? "Réservation validée"
-                      : "Demande en attente de validation"
-                    : "";
-              // Place dispo pour CE booking = libre + sa propre occupation déjà comptée
-              // (enfants + adultes en jauge ; 1 réservation hors jauge).
-              const remaining = Math.max(
-                0,
-                b.capacity -
-                  b.used +
-                  (gaugeOn
-                    ? gaugeUnits(cur.enfants, cur.accompagnants, service.gaugeAccompagnants)
-                    : 1),
-              );
-              // Infobulle (legacy) : horaire + état + participants + semaine.
-              const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
-              const tipState = markedRemoval
-                ? "🗑️ Suppression en cours"
-                : isMoving
-                  ? "↔️ Déplacement en cours"
-                  : mb.validated
-                    ? "✅ Réservation validée"
-                    : "⏳ Demande en attente de validation";
-              const tipWeek =
-                abMode && (mb.week === "A" || mb.week === "B") ? `\nSemaine ${mb.week}` : "";
-              return (
-                <MineBadge
-                  validated={mb.validated}
-                  markedRemoval={markedRemoval}
-                  moving={isMoving}
-                  gaugeOn={gaugeOn}
-                  themeMode={modes.themeMode}
-                  themesMode={service.themesMode}
-                  themes={themes}
-                  enfants={cur.enfants}
-                  accompagnants={cur.accompagnants}
-                  theme={cur.theme}
-                  remaining={remaining}
-                  stateLabel={stateLabel}
-                  title={`${tipTime}\n${tipState}\n${participantsLabel(
-                    cur.enfants,
-                    cur.accompagnants,
-                  )}${tipWeek}`}
-                  closeIcon="×"
-                  locked={bookingLocked(mb)}
-                  onClose={() => togglePendingRemoval(mb)}
-                  onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
-                  onSetCount={(f, v) => setMyCount(mb, f, v, remaining)}
-                  onSetTheme={(v) => setMyTheme(mb, v)}
-                  // Déplaçable par glisser-déposer sauf si VERROUILLÉE (validation
-                  // bloquante active) ou déjà marquée pour suppression. Aligné sur le
-                  // serveur (moveInTx → assertBookingUnlocked) : une résa validée mais
-                  // NON verrouillée reste déplaçable, comme elle reste annulable (croix ×).
-                  // (Auparavant gaté sur `!mb.validated`, plus restrictif que le serveur.)
-                  draggable={!bookingLocked(mb) && !markedRemoval}
-                  dragFullSurface={isMobile}
-                  // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
-                  mobile
-                  shortSlot={shortSlot}
-                  veryShortSlot={veryShortSlot}
-                  dragging={dragItem?.kind === "booking" && dragItem.bookingId === mb.id}
-                  onDragPointerDown={(e) =>
-                    beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e)
-                  }
-                />
-              );
-            }
-            if (pendingSel) {
-              // Sélection en brouillon : LE MÊME badge que « ma réservation », alimenté
-              // par l'entrée pendingAdds. Jamais validé → orange « En attente » ; le ×
-              // (et le clic hors jauge) retire le brouillon de la sélection.
-              const add = pendingAdds.find(
-                (a) => a.key === pendKey(b.slotId, b.dayKey, isPonctuelCell),
-              );
-              if (!add) return null;
-              const remaining = Math.max(0, b.capacity - b.used);
-              const removeDraft = () =>
-                setPendingAdds((prev) => prev.filter((a) => a.key !== add.key));
-              // Infobulle (legacy) : horaire + état brouillon + participants + semaine.
-              const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
-              const tipWeek =
-                abMode && (add.week === "A" || add.week === "B") ? `\nSemaine ${add.week}` : "";
-              return (
-                <MineBadge
-                  validated={false}
-                  markedRemoval={false}
-                  gaugeOn={gaugeOn}
-                  themeMode={modes.themeMode}
-                  themesMode={service.themesMode}
-                  themes={themes}
-                  enfants={add.enfants}
-                  accompagnants={add.accompagnants}
-                  theme={add.theme}
-                  remaining={remaining}
-                  stateLabel={noWidgets ? "Demande en attente de validation" : ""}
-                  title={`${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
-                    add.enfants,
-                    add.accompagnants,
-                  )}${tipWeek}`}
-                  closeIcon="×"
-                  onClose={removeDraft}
-                  onBump={(f, d) => bumpAddCount(add.key, f, d, remaining)}
-                  onSetCount={(f, v) => setAddCount(add.key, f, v, remaining)}
-                  onSetTheme={(v) =>
-                    setPendingAdds((prev) =>
-                      prev.map((x) => (x.key === add.key ? { ...x, theme: v } : x)),
-                    )
-                  }
-                  // Brouillon : toujours déplaçable (relocalise simplement l'ajout).
-                  draggable
-                  dragFullSurface={isMobile}
-                  // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
-                  mobile
-                  shortSlot={shortSlot}
-                  veryShortSlot={veryShortSlot}
-                  dragging={dragItem?.kind === "draft" && dragItem.key === add.key}
-                  onDragPointerDown={(e) =>
-                    beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e)
-                  }
-                />
-              );
-            }
-            if (closed) {
-              // Délai de réservation dépassé (ponctuel) ou aucun miroir réservable (récurrent).
-              return (
-                <div
-                  style={{
-                    textAlign: "center",
-                    color: "var(--muted)",
-                    fontWeight: 600,
-                    fontSize: ".62rem",
-                  }}
-                >
-                  Clôturé
-                </div>
-              );
-            }
-            if (b.full) {
-              return (
-                <div
-                  style={{
-                    textAlign: "center",
-                    color: "var(--danger)",
-                    fontWeight: 600,
-                    fontSize: ".62rem",
-                  }}
-                >
-                  Complet
-                </div>
-              );
-            }
-            // Créneau libre (pas de réservation de l'usager) : style legacy
-            // (.user-agenda-block-inner) = icône agenda + places disponibles (.slot-spots).
-            // Taille de l'icône selon la durée : masquée ≤ 30 min, 20px à 45 min, 24px au-delà.
-            const remaining = Math.max(0, b.capacity - b.used);
-            const slotIconPx = !b.isAllDay && b.endMin - b.startMin <= 45 ? 20 : 24;
-            return (
-              <div
-                aria-hidden="true"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 2,
-                  height: "100%",
-                  textAlign: "center",
-                  color: "var(--muted)",
-                }}
-              >
-                {/* Créneaux ≤ 30 min : pas d'icône (place insuffisante), seulement les places. */}
-                {!shortSlot && (
-                  <span
-                    className="slot-icon"
+          {/* Badges centrés via le parent .agenda-block (justify-content:center).
+          Le chips ne grandit pas pour que le centrage opère ; la jauge est
+          sortie du flux (position absolue en bas). */}
+          <div
+            className="agenda-block-chips"
+            // Conteneur de requête (cqmin) pour le badge « ma réservation » : il remplit le
+            // bloc-créneau (flex:1) MAIS plafonné à 50px de haut → un créneau d'1h ou plus
+            // (bloc ≳ 52px) donne un badge de 50px centré (le surplus de hauteur est réparti
+            // par justify-content:center) ; un créneau plus court (< 1h) garde la hauteur du
+            // créneau. La taille du badge = celle de la cellule (≤ 50px), et ses éléments
+            // (exprimés en `bu` = cqmin) s'y dimensionnent proportionnellement. Un enfant
+            // court (« Complet », créneau libre) reste centré (justify-content), le badge le
+            // remplit (height:100%). `containerType` n'est posé QUE côté usager (style inline),
+            // pas sur la classe partagée (agenda admin inchangé).
+            style={{
+              flex: "1 1 auto",
+              minHeight: 0,
+              maxHeight: 50,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              gap: 2,
+              containerType: "size",
+            }}
+          >
+            {(() => {
+              // Agenda usager : MA réservation → badge ✅/⏳ (clic = annuler) ;
+              // sinon complet → « Complet » ; sinon créneau libre → repère « + »
+              // (clic sur le bloc = réserver). On n'affiche jamais les autres réservants.
+              const isPonctuelCell = uniqueIdSet.has(b.slotId);
+              // L'usager n'a qu'UN demandeur : sa jauge est active dès que gaugeRec OU
+              // gaugePonct l'est (peu importe le type du créneau cliqué).
+              const gaugeOn = modes.gaugeRec || modes.gaugePonct;
+              // Badge sans thème NI jauge : on affiche toujours l'état (Validé / En attente).
+              const noWidgets = !modes.themeMode && !gaugeOn;
+              // Créneau court (≤ 30 min) : badge ras → on sort l'icône d'état du flux pour
+              // dégager la place du thème (cf. MineBadge). Durée en minutes, pas un proxy
+              // pixel ; les créneaux « journée entière » non concernés.
+              const shortSlot = !b.isAllDay && b.endMin - b.startMin <= 30;
+              // Créneau très court (≤ 15 min) : décale les compteurs de la jauge vers le bas.
+              const veryShortSlot = !b.isAllDay && b.endMin - b.startMin <= 15;
+              const myBk = b.bookings.find((x) => x.mine);
+              // Brouillon : ma résa marquée pour annulation, ou créneau libre coché.
+              const markedRemoval = myBk
+                ? pendingRemovals.some((r) => r.bookingId === myBk.id)
+                : false;
+              const pendingSel =
+                !myBk &&
+                pendingAdds.some((a) => a.key === pendKey(b.slotId, b.dayKey, isPonctuelCell));
+              if (myBk?.synthetic) {
+                // Occurrence d'une récurrente que je détiens, non matérialisée pour cette
+                // date : badge « ma réservation » EN LECTURE SEULE (pas de ×, d'édition ni
+                // de glisser-déposer ; l'annulation passe par une occurrence matérialisée).
+                const mb = myBk;
+                const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
+                return (
+                  <MineBadge
+                    validated={mb.validated}
+                    markedRemoval={false}
+                    gaugeOn={false}
+                    themeMode={false}
+                    themesMode={service.themesMode}
+                    themes={themes}
+                    enfants={mb.enfants}
+                    accompagnants={mb.accompagnants}
+                    theme={mb.theme}
+                    remaining={0}
+                    stateLabel={
+                      mb.validated ? "Réservation validée" : "Demande en attente de validation"
+                    }
+                    title={`${tipTime}\n${
+                      mb.validated
+                        ? "✅ Réservation validée"
+                        : "⏳ Demande en attente de validation"
+                    }\n${participantsLabel(mb.enfants, mb.accompagnants)}`}
+                    closeIcon="×"
+                    locked
+                    onClose={() => {}}
+                    onBump={() => {}}
+                    onSetCount={() => {}}
+                    onSetTheme={() => {}}
+                    draggable={false}
+                  />
+                );
+              }
+              if (myBk) {
+                const mb = myBk;
+                const cur = myCounts(mb);
+                // Déplacement en attente (pendingMove sur CETTE résa) → badge atténué + libellé.
+                const isMoving = pendingMoves[mb.id] != null;
+                // Sans thème ni jauge → on affiche l'état (Validé / En attente). Avec un
+                // thème OU une jauge, l'état est porté par l'icône ✔/⏳ → pas de libellé
+                // (sauf « Suppression en cours… » / « Déplacement en cours… » pour une action en attente).
+                // La suppression PRIME sur le déplacement (deux actions possibles sur le même
+                // élément ; au commit la suppression l'emporte).
+                const stateLabel = markedRemoval
+                  ? "Suppression en cours…"
+                  : isMoving
+                    ? "Déplacement en cours…"
+                    : noWidgets
+                      ? mb.validated
+                        ? "Réservation validée"
+                        : "Demande en attente de validation"
+                      : "";
+                // Place dispo pour CE booking = libre + sa propre occupation déjà comptée
+                // (enfants + adultes en jauge ; 1 réservation hors jauge).
+                const remaining = Math.max(
+                  0,
+                  b.capacity -
+                    b.used +
+                    (gaugeOn
+                      ? gaugeUnits(cur.enfants, cur.accompagnants, service.gaugeAccompagnants)
+                      : 1),
+                );
+                // Infobulle (legacy) : horaire + état + participants + semaine.
+                const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
+                const tipState = markedRemoval
+                  ? "🗑️ Suppression en cours"
+                  : isMoving
+                    ? "↔️ Déplacement en cours"
+                    : mb.validated
+                      ? "✅ Réservation validée"
+                      : "⏳ Demande en attente de validation";
+                const tipWeek =
+                  abMode && (mb.week === "A" || mb.week === "B") ? `\nSemaine ${mb.week}` : "";
+                return (
+                  <MineBadge
+                    validated={mb.validated}
+                    markedRemoval={markedRemoval}
+                    moving={isMoving}
+                    gaugeOn={gaugeOn}
+                    themeMode={modes.themeMode}
+                    themesMode={service.themesMode}
+                    themes={themes}
+                    enfants={cur.enfants}
+                    accompagnants={cur.accompagnants}
+                    theme={cur.theme}
+                    remaining={remaining}
+                    stateLabel={stateLabel}
+                    title={`${tipTime}\n${tipState}\n${participantsLabel(
+                      cur.enfants,
+                      cur.accompagnants,
+                    )}${tipWeek}`}
+                    closeIcon="×"
+                    locked={bookingLocked(mb)}
+                    onClose={() => togglePendingRemoval(mb)}
+                    onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
+                    onSetCount={(f, v) => setMyCount(mb, f, v, remaining)}
+                    onSetTheme={(v) => setMyTheme(mb, v)}
+                    // Déplaçable par glisser-déposer sauf si VERROUILLÉE (validation
+                    // bloquante active) ou déjà marquée pour suppression. Aligné sur le
+                    // serveur (moveInTx → assertBookingUnlocked) : une résa validée mais
+                    // NON verrouillée reste déplaçable, comme elle reste annulable (croix ×).
+                    // (Auparavant gaté sur `!mb.validated`, plus restrictif que le serveur.)
+                    draggable={!bookingLocked(mb) && !markedRemoval}
+                    dragFullSurface={isMobile}
+                    // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
+                    mobile
+                    shortSlot={shortSlot}
+                    veryShortSlot={veryShortSlot}
+                    dragging={dragItem?.kind === "booking" && dragItem.bookingId === mb.id}
+                    onDragPointerDown={(e) =>
+                      beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e)
+                    }
+                  />
+                );
+              }
+              if (pendingSel) {
+                // Sélection en brouillon : LE MÊME badge que « ma réservation », alimenté
+                // par l'entrée pendingAdds. Jamais validé → orange « En attente » ; le ×
+                // (et le clic hors jauge) retire le brouillon de la sélection.
+                const add = pendingAdds.find(
+                  (a) => a.key === pendKey(b.slotId, b.dayKey, isPonctuelCell),
+                );
+                if (!add) return null;
+                const remaining = Math.max(0, b.capacity - b.used);
+                const removeDraft = () =>
+                  setPendingAdds((prev) => prev.filter((a) => a.key !== add.key));
+                // Infobulle (legacy) : horaire + état brouillon + participants + semaine.
+                const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
+                const tipWeek =
+                  abMode && (add.week === "A" || add.week === "B") ? `\nSemaine ${add.week}` : "";
+                return (
+                  <MineBadge
+                    validated={false}
+                    markedRemoval={false}
+                    gaugeOn={gaugeOn}
+                    themeMode={modes.themeMode}
+                    themesMode={service.themesMode}
+                    themes={themes}
+                    enfants={add.enfants}
+                    accompagnants={add.accompagnants}
+                    theme={add.theme}
+                    remaining={remaining}
+                    stateLabel={noWidgets ? "Demande en attente de validation" : ""}
+                    title={`${tipTime}\n📝 Brouillon — à enregistrer\n${participantsLabel(
+                      add.enfants,
+                      add.accompagnants,
+                    )}${tipWeek}`}
+                    closeIcon="×"
+                    onClose={removeDraft}
+                    onBump={(f, d) => bumpAddCount(add.key, f, d, remaining)}
+                    onSetCount={(f, v) => setAddCount(add.key, f, v, remaining)}
+                    onSetTheme={(v) =>
+                      setPendingAdds((prev) =>
+                        prev.map((x) => (x.key === add.key ? { ...x, theme: v } : x)),
+                      )
+                    }
+                    // Brouillon : toujours déplaçable (relocalise simplement l'ajout).
+                    draggable
+                    dragFullSurface={isMobile}
+                    // Jauge/thème agrandis aussi sur desktop (« pareil qu'en mobile »).
+                    mobile
+                    shortSlot={shortSlot}
+                    veryShortSlot={veryShortSlot}
+                    dragging={dragItem?.kind === "draft" && dragItem.key === add.key}
+                    onDragPointerDown={(e) =>
+                      beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e)
+                    }
+                  />
+                );
+              }
+              if (closed) {
+                // Délai de réservation dépassé (ponctuel) ou aucun miroir réservable (récurrent).
+                return (
+                  <div
                     style={{
-                      fontSize: slotIconPx,
-                      lineHeight: 1,
-                      width: slotIconPx,
-                      height: slotIconPx,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      textAlign: "center",
+                      color: "var(--muted)",
+                      fontWeight: 600,
+                      fontSize: ".62rem",
                     }}
                   >
-                    📆
-                  </span>
-                )}
-                <span
-                  className="slot-spots"
+                    Clôturé
+                  </div>
+                );
+              }
+              if (b.full) {
+                return (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      color: "var(--danger)",
+                      fontWeight: 600,
+                      fontSize: ".62rem",
+                    }}
+                  >
+                    Complet
+                  </div>
+                );
+              }
+              // Créneau libre (pas de réservation de l'usager) : style legacy
+              // (.user-agenda-block-inner) = icône agenda + places disponibles (.slot-spots).
+              // Taille de l'icône selon la durée : masquée ≤ 30 min, 20px à 45 min, 24px au-delà.
+              const remaining = Math.max(0, b.capacity - b.used);
+              const slotIconPx = !b.isAllDay && b.endMin - b.startMin <= 45 ? 20 : 24;
+              return (
+                <div
+                  aria-hidden="true"
                   style={{
-                    fontSize: ".62rem",
-                    letterSpacing: ".04em",
-                    lineHeight: 1.3,
-                    background: "none",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 2,
+                    height: "100%",
+                    textAlign: "center",
+                    color: "var(--muted)",
                   }}
                 >
-                  {remaining} place{remaining > 1 ? "s" : ""}
-                </span>
-              </div>
-            );
-          })()}
+                  {/* Créneaux ≤ 30 min : pas d'icône (place insuffisante), seulement les places. */}
+                  {!shortSlot && (
+                    <span
+                      className="slot-icon"
+                      style={{
+                        fontSize: slotIconPx,
+                        lineHeight: 1,
+                        width: slotIconPx,
+                        height: slotIconPx,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      📆
+                    </span>
+                  )}
+                  <span
+                    className="slot-spots"
+                    style={{
+                      fontSize: ".62rem",
+                      letterSpacing: ".04em",
+                      lineHeight: 1.3,
+                      background: "none",
+                    }}
+                  >
+                    {remaining} place{remaining > 1 ? "s" : ""}
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
         </div>
-      </div>
-    );
-  };
+      );
+      // Déps = lectures réactives de renderBlock UNIQUEMENT (handlers via blockApiRef,
+      // donc exclus). Énumérées à la main + vérifiées : une omission ⇒ badge figé.
+    },
+    [
+      mode,
+      uniqueIdSet,
+      uniqSlotById,
+      recurSlotById,
+      earliestBookable,
+      concernedDatesByKey,
+      mapMinToY,
+      gridStartMin,
+      gridEndMin,
+      dropKey,
+      effectivePeriodId,
+      modes,
+      pendingRemovals,
+      pendingAdds,
+      pendingMoves,
+      pendingUpdates,
+      service,
+      themes,
+      abMode,
+      dragItem,
+      isMobile,
+    ],
+  );
+
+  // Éléments JSX des blocs par jour, mémoïsés : renderBlock/isDayDisabled/blocksByDay
+  // étant stables, ces éléments gardent la MÊME référence d'un rendu à l'autre tant que
+  // données et mode ne changent pas → React bypasse la reconciliation des blocs pendant
+  // un survol / glisser-déposer / saisie (perf, port de l'agenda admin).
+  const dayBlockEls = useMemo(() => {
+    const timed = new Map<string, React.ReactNode[]>();
+    const allday = new Map<string, React.ReactNode[]>();
+    for (const d of displayDays) {
+      const bl: Block[] = isDayDisabled(d) ? [] : (blocksByDay[d] ?? []);
+      timed.set(
+        d,
+        bl.filter((b) => !b.isAllDay).map((b) => renderBlock(b, false)),
+      );
+      allday.set(
+        d,
+        bl.filter((b) => b.isAllDay).map((b) => renderBlock(b, true)),
+      );
+    }
+    return { timed, allday };
+  }, [displayDays, isDayDisabled, blocksByDay, renderBlock]);
 
   return (
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
@@ -3169,9 +3255,7 @@ export function UserAgendaGrid({
               </div>
               {displayDays.map((d) => (
                 <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
-                  {dayBlocks(d)
-                    .filter((b) => b.isAllDay)
-                    .map((b) => renderBlock(b, true))}
+                  {dayBlockEls.allday.get(d)}
                 </div>
               ))}
             </>
@@ -3215,13 +3299,12 @@ export function UserAgendaGrid({
                 lunchEnd={lunchEnd}
                 mapMinToY={mapMinToY}
               />
-              {dayBlocks(d)
-                // Grille horaire : uniquement les créneaux horaires (les « journée
-                // entière » sont rendus dans la bande dédiée en haut). On affiche TOUS
-                // les créneaux (réservés ou vides réservables) ; « Masquer les horaires
-                // sans créneau » ne compacte que des heures, pas des créneaux.
-                .filter((b) => !b.isAllDay)
-                .map((b) => renderBlock(b, false))}
+              {/* Grille horaire : uniquement les créneaux horaires (les « journée
+                  entière » sont rendus dans la bande dédiée en haut). On affiche TOUS
+                  les créneaux (réservés ou vides réservables) ; « Masquer les horaires
+                  sans créneau » ne compacte que des heures, pas des créneaux. Blocs
+                  mémoïsés via dayBlockEls (perf). */}
+              {dayBlockEls.timed.get(d)}
             </div>
           ))}
         </div>
