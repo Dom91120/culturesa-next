@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { csvCell } from "@/lib/csv";
 
 /** Personne (cible ou acteur) résolue côté serveur. */
 export type AuditParty = {
@@ -62,11 +63,6 @@ function PartyCell({ party, anonTag }: { party: AuditParty; anonTag: boolean }) 
   );
 }
 
-/** Échappe une valeur pour le CSV (guillemets + séparateur). */
-function csvCell(v: string): string {
-  return /[",\n;]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-}
-
 export function AuditLog({ entries }: { entries: AuditEntry[] }) {
   const router = useRouter();
   const [page, setPage] = useState(0);
@@ -95,9 +91,10 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
         e.ip ?? "",
       ]
         .map(csvCell)
-        .join(","),
+        .join(";"),
     );
-    const csv = `﻿${[header.join(","), ...lines].join("\r\n")}`;
+    // En-tête échappé comme les données ; séparateur « ; » + BOM (cohérent avec lib/csv).
+    const csv = `﻿${[header.map(csvCell).join(";"), ...lines].join("\r\n")}`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
