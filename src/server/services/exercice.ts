@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
 import { holidaysInRange } from "@/lib/french-holidays";
 import { slotWeekTag } from "@/lib/iso-week";
+import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";
 
 // =====================================================================================
@@ -95,19 +96,6 @@ function isoDay(d: Date): number {
 // =====================================================================================
 // Helpers — exercice (label) + activeDays + capacités
 // =====================================================================================
-
-/**
- * Libellé d'exercice « ANNÉE SCOLAIRE » (Y-Y+1) à partir d'une date de début YYYY-MM-DD :
- * Y = année si mois ≥ août, sinon année-1. Convention UNIQUE avec la création/édition
- * manuelle (periods.ts schoolStartYear / exerciceLabelForYear) — évite que la bascule
- * crée des exercices labellisés différemment (incohérence corrigée 2026-06).
- */
-function schoolYearLabel(startYmd: string): string {
-  const y = Number.parseInt(startYmd.slice(0, 4), 10);
-  const m = Number.parseInt(startYmd.slice(5, 7), 10);
-  const ssy = m >= 8 ? y : y - 1;
-  return `${ssy}-${ssy + 1}`;
-}
 
 /** Libellé d'exercice selon le type : civile → année « 2026 » ; scolaire → « 2025-2026 ». */
 function exerciceLabel(type: "civile" | "scolaire", startYmd: string): string {

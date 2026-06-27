@@ -1,5 +1,6 @@
 import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { gaugeUnits } from "@/lib/gauge";
+import { schoolYearLabel } from "@/lib/school-year";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 
@@ -82,13 +83,6 @@ function dayKeyOf(slotDay: string | null, slotDate: Date | null): string | null 
   if (slotDay) return slotDay;
   if (slotDate) return ISO_DAY_KEYS[slotDate.getUTCDay()];
   return null;
-}
-
-/** Libellé d'exercice « année scolaire » Y-Y+1 d'une date (mois ≥ août → Y, sinon Y-1). */
-function schoolYearLabel(d: Date): string {
-  const y = d.getUTCFullYear();
-  const ssy = d.getUTCMonth() + 1 >= 8 ? y : y - 1;
-  return `${ssy}-${ssy + 1}`;
 }
 
 function topN(map: Map<string, number>, n: number): LabeledCount[] {
