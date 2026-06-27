@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useBufferedRows } from "@/components/use-buffered-rows";
 import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
 
@@ -27,6 +27,19 @@ const ACTION_BTN = {
   padding: ".15rem .4rem",
   lineHeight: 1,
 } as const;
+
+// Helpers de tri PURS (hors composant : pas de recréation par rendu).
+// Rang pédagogique d'un libellé de demandeur : « maternel(le) » avant « élémentaire ».
+const levelRank = (l: string) =>
+  /maternel/i.test(l) ? 0 : /élémentaire|elementaire/i.test(l) ? 1 : 2;
+// Famille du demandeur = libellé sans le descripteur de niveau (regroupe p. ex.
+// « Ecole maternelle » et « Ecole élémentaire » sous « ecole »).
+const family = (l: string) =>
+  l
+    .toLowerCase()
+    .replace(/maternel(le)?|élémentaire|elementaire/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /**
  * Éditeur des niveaux scolaires (modale du référentiel, Administration > Configuration).
@@ -90,34 +103,29 @@ export function NiveauxEditor({
       },
     });
 
-  const demLabel = new Map(demandeurs.map((d) => [d.id, d.label]));
-  const demandeurOf = (id: number | null) => (id != null ? (demLabel.get(id) ?? "—") : "—");
-  // Rang pédagogique d'un libellé de demandeur : « maternel(le) » avant « élémentaire ».
-  const levelRank = (l: string) =>
-    /maternel/i.test(l) ? 0 : /élémentaire|elementaire/i.test(l) ? 1 : 2;
-  // Famille du demandeur = libellé sans le descripteur de niveau (regroupe p. ex.
-  // « Ecole maternelle » et « Ecole élémentaire » sous « ecole »).
-  const family = (l: string) =>
-    l
-      .toLowerCase()
-      .replace(/maternel(le)?|élémentaire|elementaire/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+  const demLabel = useMemo(() => new Map(demandeurs.map((d) => [d.id, d.label])), [demandeurs]);
+  const demandeurOf = useCallback(
+    (id: number | null) => (id != null ? (demLabel.get(id) ?? "—") : "—"),
+    [demLabel],
+  );
   // Ordre d'affichage : par famille de demandeur, « maternelle » avant « élémentaire »,
   // puis position (ordre manuel dans le demandeur), puis libellé.
-  const sortRows = (a: Row, z: Row) => {
-    // Lignes non enregistrées (« + Ajouter ») toujours en fin de tableau.
-    if ((a.id == null) !== (z.id == null)) return a.id == null ? 1 : -1;
-    const la = demandeurOf(a.demandeurId);
-    const lz = demandeurOf(z.demandeurId);
-    return (
-      family(la).localeCompare(family(lz)) ||
-      levelRank(la) - levelRank(lz) ||
-      la.localeCompare(lz) ||
-      a.position - z.position ||
-      a.label.localeCompare(z.label)
-    );
-  };
+  const sortRows = useCallback(
+    (a: Row, z: Row) => {
+      // Lignes non enregistrées (« + Ajouter ») toujours en fin de tableau.
+      if ((a.id == null) !== (z.id == null)) return a.id == null ? 1 : -1;
+      const la = demandeurOf(a.demandeurId);
+      const lz = demandeurOf(z.demandeurId);
+      return (
+        family(la).localeCompare(family(lz)) ||
+        levelRank(la) - levelRank(lz) ||
+        la.localeCompare(lz) ||
+        a.position - z.position ||
+        a.label.localeCompare(z.label)
+      );
+    },
+    [demandeurOf],
+  );
 
   function add() {
     const key = addRow({ id: null, label: "", demandeurId: null, position: 0 });
@@ -154,8 +162,9 @@ export function NiveauxEditor({
     });
   }
 
-  // Tri d'affichage (source `rows` inchangée).
-  const sorted = [...rows].sort(sortRows);
+  // Tri d'affichage mémoïsé (source `rows` inchangée) : évite un O(n log n) + regex à
+  // chaque rendu (frappe, drag…).
+  const sorted = useMemo(() => [...rows].sort(sortRows), [rows, sortRows]);
 
   return (
     <div>
