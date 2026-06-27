@@ -57,6 +57,32 @@ function affiliation(u: UserRow): string {
   return "—";
 }
 
+// En-tête de colonne triable. Défini HORS du composant : sinon recréé à chaque rendu
+// (nouveau type de composant) → les <th> sont démontés/remontés à chaque rendu.
+function SortTh({
+  label,
+  sk,
+  sortKey,
+  onSort,
+  minWidth,
+}: {
+  label: string;
+  sk: SortKey;
+  sortKey: SortKey;
+  onSort: (k: SortKey) => void;
+  minWidth?: number;
+}) {
+  return (
+    <th
+      className={sortKey === sk ? "sorted" : undefined}
+      style={{ minWidth, textAlign: "center", cursor: "pointer" }}
+      onClick={() => onSort(sk)}
+    >
+      {label} <span className="sort-arrow">↕</span>
+    </th>
+  );
+}
+
 export function UsersTable({
   users,
   demandeurs,
@@ -106,7 +132,9 @@ export function UsersTable({
   const from = current * PAGE_SIZE;
   const pageRows = filtered.slice(from, from + PAGE_SIZE);
 
-  const selected = selectedId ? (users.find((u) => u.id === selectedId) ?? null) : null;
+  // Résolu dans `filtered` (pas `users`) : si la recherche exclut la ligne sélectionnée,
+  // la barre d'actions disparaît au lieu d'agir sur une ligne devenue invisible.
+  const selected = selectedId ? (filtered.find((u) => u.id === selectedId) ?? null) : null;
 
   function sortBy(key: SortKey) {
     setSortKey(key);
@@ -162,17 +190,6 @@ export function UsersTable({
     });
   }
 
-  // En-tête de colonne triable. Un clic (ou Entrée/Espace) fixe la clé de tri.
-  const SortTh = ({ label, sk, minWidth }: { label: string; sk: SortKey; minWidth?: number }) => (
-    <th
-      className={sortKey === sk ? "sorted" : undefined}
-      style={{ minWidth, textAlign: "center", cursor: "pointer" }}
-      onClick={() => sortBy(sk)}
-    >
-      {label} <span className="sort-arrow">↕</span>
-    </th>
-  );
-
   return (
     <div>
       <div className="panel-title" style={{ justifyContent: "space-between", gap: ".75rem" }}>
@@ -221,12 +238,12 @@ export function UsersTable({
           <thead>
             <tr>
               <th className="col-check" />
-              <SortTh label="Nom" sk="nom" minWidth={130} />
-              <SortTh label="Prénom" sk="prenom" minWidth={130} />
-              <SortTh label="E-mail" sk="email" />
+              <SortTh label="Nom" sk="nom" minWidth={130} sortKey={sortKey} onSort={sortBy} />
+              <SortTh label="Prénom" sk="prenom" minWidth={130} sortKey={sortKey} onSort={sortBy} />
+              <SortTh label="E-mail" sk="email" sortKey={sortKey} onSort={sortBy} />
               <th style={{ textAlign: "center" }}>Téléphone</th>
               <th style={{ textAlign: "center" }}>Structure / Service</th>
-              <SortTh label="Rôle" sk="role" />
+              <SortTh label="Rôle" sk="role" sortKey={sortKey} onSort={sortBy} />
               <th style={{ textAlign: "center" }} title="Export RGPD">
                 RGPD
               </th>
