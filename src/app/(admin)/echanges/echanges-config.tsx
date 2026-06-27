@@ -123,6 +123,28 @@ export function EchangesConfig({
     Object.fromEntries(rows.map((r) => [r.kind, { subject: r.subject, html: r.html }])),
   );
   const [editing, setEditing] = useState<string | null>(null);
+
+  // Resynchronise saved/draft quand le serveur renvoie de nouvelles `rows` (après un
+  // router.refresh() : création / suppression / mise à jour d'un type d'e-mail). Sans ça,
+  // un type fraîchement créé est absent de `draft` → `draft[kind]` undefined au rendu (et
+  // `isDirty`/la modale plantent). Ajustement PENDANT le rendu (pattern React de sync
+  // état↔prop) pour précéder la lecture de `draft` dans le JSX. Le brouillon de la ligne
+  // en cours d'édition est préservé (saisie non encore enregistrée).
+  const rowsSig = JSON.stringify(rows.map((r) => [r.kind, r.subject, r.html]));
+  const [syncedSig, setSyncedSig] = useState(rowsSig);
+  if (rowsSig !== syncedSig) {
+    setSyncedSig(rowsSig);
+    const fresh = Object.fromEntries(
+      rows.map((r) => [r.kind, { subject: r.subject, html: r.html }]),
+    );
+    setSaved(fresh);
+    setDraft((prev) => {
+      const next: Record<string, { subject: string; html: string }> = { ...fresh };
+      if (editing && prev[editing]) next[editing] = prev[editing];
+      return next;
+    });
+  }
+
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // Incrémenté lors d'une réinitialisation pour forcer le remontage de l'éditeur WYSIWYG.
