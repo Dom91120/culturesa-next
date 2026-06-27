@@ -620,9 +620,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                     </th>
                     <th>Coul</th>
                     <th>Étiq</th>
-                    <th className="td-left" style={{ width: 250 }}>
-                      Libellé
-                    </th>
+                    <th className="td-left">Libellé</th>
                     <th>Début</th>
                     <th>Fin</th>
                   </tr>
