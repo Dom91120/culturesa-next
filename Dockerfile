@@ -16,9 +16,11 @@ WORKDIR /app
 ##########
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
-# Cache du store pnpm pour des rebuilds rapides
+# Cache du store pnpm pour des rebuilds rapides.
+# --ignore-scripts : le postinstall (`prisma generate`) ne peut pas tourner ici (le
+# schéma n'est pas encore copié) ; le client est généré au stage builder.
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --ignore-scripts
 
 ##########
 # 3. Builder : génère le client Prisma + build Next.js (standalone)
