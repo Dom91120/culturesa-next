@@ -50,7 +50,7 @@ export default async function PlanningPage({
   // période). OFF par défaut → un seul bloc sans en-tête ni sous-total.
   const withRuptures = sp.ruptures === "1";
   const buckets = withRuptures
-    ? bucketSessions(range.mode, sessions)
+    ? bucketSessions(range.mode, sessions, range.trimestres)
     : sessions.length > 0
       ? [{ key: "all", label: "", sessions }]
       : [];

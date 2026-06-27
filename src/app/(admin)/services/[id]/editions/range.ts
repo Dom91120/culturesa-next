@@ -106,6 +106,8 @@ export type RangeResult = {
   dateParam: string;
   // Index du trimestre courant (mode "trimester") — conservé pour la pagination.
   trimIndex: number | null;
+  // Trimestres de l'exercice (selon son type) — sert aux ruptures de la vue Annuel.
+  trimestres: { label: string; fromYmd: string; toYmd: string }[];
   subtitle: string;
   prevHref: string | null;
   nextHref: string | null;
@@ -136,6 +138,11 @@ export function resolveRange(
     ? exercice.dateStart.getUTCFullYear()
     : new Date().getUTCFullYear();
   const trimestres = trimestresFor(type, startYear);
+  const trimList = trimestres.map((t) => ({
+    label: t.label,
+    fromYmd: ymd(t.from),
+    toYmd: ymd(t.to),
+  }));
 
   // ── Annuel : plage complète de l'exercice (pas de navigation entre exercices) ──
   if (sp.mode === "year") {
@@ -147,6 +154,7 @@ export function resolveRange(
       toYmd: ymd(to),
       dateParam,
       trimIndex: null,
+      trimestres: trimList,
       subtitle: exercice?.label ?? `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
       prevHref: null,
       nextHref: null,
@@ -167,6 +175,7 @@ export function resolveRange(
       toYmd: ymd(t.to),
       dateParam,
       trimIndex: idx,
+      trimestres: trimList,
       subtitle: t.label,
       prevHref: idx > 0 ? `${base}?mode=trimester&trim=${idx - 1}` : null,
       nextHref: idx < trimestres.length - 1 ? `${base}?mode=trimester&trim=${idx + 1}` : null,
@@ -183,6 +192,7 @@ export function resolveRange(
       toYmd: ymd(to),
       dateParam,
       trimIndex: null,
+      trimestres: trimList,
       subtitle: cap(fmtMonth.format(from)),
       prevHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, -1))}`,
       nextHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, 1))}`,
@@ -198,6 +208,7 @@ export function resolveRange(
     toYmd: ymd(to),
     dateParam,
     trimIndex: null,
+    trimestres: trimList,
     subtitle: `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
     prevHref: `${base}?mode=week&date=${ymd(addDays(from, -7))}`,
     nextHref: `${base}?mode=week&date=${ymd(addDays(from, 7))}`,
@@ -242,10 +253,15 @@ export type SessionBucket = { key: string; label: string; sessions: DatedSession
 
 /**
  * Découpe les séances en « ruptures » selon la vue : par SEMAINE en vue mensuelle,
- * par MOIS en vue trimestrielle/annuelle, et un seul bloc (sans rupture) en vue
- * hebdomadaire. Les séances étant déjà triées chronologiquement, les ruptures aussi.
+ * par TRIMESTRE en vue annuelle (selon `trimestres`), par MOIS en vue trimestrielle,
+ * et un seul bloc (sans rupture) en vue hebdomadaire. Les séances étant déjà triées
+ * chronologiquement, les ruptures aussi.
  */
-export function bucketSessions(mode: RangeMode, sessions: DatedSession[]): SessionBucket[] {
+export function bucketSessions(
+  mode: RangeMode,
+  sessions: DatedSession[],
+  trimestres: { label: string; fromYmd: string; toYmd: string }[] = [],
+): SessionBucket[] {
   if (mode === "week") return sessions.length ? [{ key: "week", label: "", sessions }] : [];
   const map = new Map<string, SessionBucket>();
   for (const s of sessions) {
@@ -255,6 +271,16 @@ export function bucketSessions(mode: RangeMode, sessions: DatedSession[]): Sessi
       const monday = mondayOf(parseYmd(s.date));
       key = ymd(monday);
       label = `Semaine du ${fmtShort.format(monday)} au ${fmtShort.format(addDays(monday, 6))}`;
+    } else if (mode === "year" && trimestres.length > 0) {
+      // Annuel : rupture par TRIMESTRE de l'exercice (repli par mois hors trimestre).
+      const idx = trimestres.findIndex((t) => t.fromYmd <= s.date && s.date <= t.toYmd);
+      if (idx >= 0) {
+        key = `tri-${idx}`;
+        label = trimestres[idx].label;
+      } else {
+        key = s.date.slice(0, 7);
+        label = cap(fmtMonth.format(parseYmd(s.date)));
+      }
     } else {
       key = s.date.slice(0, 7);
       label = cap(fmtMonth.format(parseYmd(s.date)));
