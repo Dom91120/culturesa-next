@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { setConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -7,8 +9,6 @@ import { requireRole } from "@/server/guards";
 import { sendMail } from "@/server/mailer";
 import { encryptSecret } from "@/server/secret-crypto";
 import { sendTemplatedMail } from "@/server/services/mail-send";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 const mailConfigSchema = z.object({
   driver: z.enum(["smtp", "mail", "sendmail"]),

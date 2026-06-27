@@ -1,9 +1,9 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { structureSchema } from "@/schemas/referentiels";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/structures";
-import { revalidatePath } from "next/cache";
 
 // Actions typées (référentiel Structures en modale, mode tampon). Une structure est
 // rattachée à un demandeur (demandeurId obligatoire).

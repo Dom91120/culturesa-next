@@ -1,10 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/lib/action-state";
 import { serviceCreateSchema, stringIdSchema } from "@/schemas/config";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/services";
-import { revalidatePath } from "next/cache";
 
 // Création / édition depuis la modale de l'écran liste (nom + icône uniquement,
 // le reste de la config se fait via « Gérer » → page détail). Pas de redirection :

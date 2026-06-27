@@ -3,7 +3,10 @@
 export function ExportButton({
   href,
   title = "Exporter en CSV",
-}: { href: string; title?: string }) {
+}: {
+  href: string;
+  title?: string;
+}) {
   return (
     <a
       href={href}

@@ -61,7 +61,11 @@ function NoticeCell({
   row,
   eligible,
   graceDays,
-}: { row: InactiveRow; eligible: boolean; graceDays: number }): ReactNode {
+}: {
+  row: InactiveRow;
+  eligible: boolean;
+  graceDays: number;
+}): ReactNode {
   if (!eligible) return <span style={{ color: "var(--muted)" }}>—</span>;
   if (!row.deletionNoticeSentAt) {
     return <span style={{ color: "#e8a45a", fontWeight: 600 }}>à envoyer</span>;

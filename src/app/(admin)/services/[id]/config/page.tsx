@@ -1,8 +1,8 @@
+import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettings } from "@/server/services/demandeur-settings";
 import { getService } from "@/server/services/services";
 import { getServiceThemes } from "@/server/services/themes";
-import { notFound } from "next/navigation";
 import { ParamsSubnav } from "../params-subnav";
 import { ConfigPanel } from "./config-panel";
 

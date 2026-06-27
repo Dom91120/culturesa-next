@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   AgendaDayBackground,
   AgendaTimeColumn,
@@ -10,24 +13,24 @@ import {
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
-  DAY_NAMES,
-  DAY_OFFSET,
-  type LayoutItem,
-  type Pointage,
-  ROW_H,
-  type Slot,
-  type UniqueSlot,
   addDays,
   badgeStyle,
+  DAY_NAMES,
+  DAY_OFFSET,
   dayCap,
   dayKeyFromYmd,
   gridGeometry,
+  type LayoutItem,
   layoutOverlaps,
   mondayOf,
+  type Pointage,
   parseWeeks,
+  ROW_H,
+  type Slot,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
+  type UniqueSlot,
   ymd,
 } from "@/lib/agenda-core";
 import { isFrenchHoliday } from "@/lib/french-holidays";
@@ -36,9 +39,6 @@ import { printHtmlDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import {
   copyBookingAction,
   copyWeekSlotsAction,
@@ -647,7 +647,7 @@ export function AgendaGrid({
 
   const gridStartMin = firstHour * 60;
   const gridEndMin = lastHour * 60;
-  const QUARTER_H = ROW_H / 4; // px par tranche de 15 min
+  const _QUARTER_H = ROW_H / 4; // px par tranche de 15 min
 
   // Ids des créneaux ponctuels AUTONOMES (non miroirs) : affichés en vert et en
   // lecture seule (on neutralise la création/déplacement de résa récurrente dessus ;

@@ -305,7 +305,7 @@ export async function isUserInServicesRgpdScope(
       structure: { select: { demandeurId: true } },
     },
   });
-  if (!u || u.role !== "utilisateur" || u.anonymizedAt) return false;
+  if (u?.role !== "utilisateur" || u.anonymizedAt) return false;
   const effectiveDemandeurId = u.demandeurId ?? u.structure?.demandeurId ?? null;
   if (effectiveDemandeurId == null) return false;
   const setting = await prisma.serviceDemandeurSettings.findFirst({

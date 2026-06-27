@@ -309,7 +309,7 @@ export async function createUniqueBookingInTx(
     where: { id: input.slotId },
     include: { service: true },
   });
-  if (!slot || slot.slotType !== "unique" || slot.state !== "actif") {
+  if (slot?.slotType !== "unique" || slot.state !== "actif") {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
   // Accès service : le demandeur effectif de l'usager doit accepter ce service.

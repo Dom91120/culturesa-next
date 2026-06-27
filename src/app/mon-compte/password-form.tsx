@@ -1,8 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { PWD_RULES } from "@/lib/password";
-import { useState } from "react";
 
 export function PasswordForm() {
   const [current, setCurrent] = useState("");

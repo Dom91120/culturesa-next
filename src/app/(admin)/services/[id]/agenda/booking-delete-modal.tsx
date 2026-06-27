@@ -1,7 +1,7 @@
 "use client";
 
-import { ModalOverlay } from "@/components/agenda-shared";
 import { useState } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 
 /**
  * Modale de confirmation de suppression d'une réservation (port du legacy

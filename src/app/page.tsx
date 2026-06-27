@@ -1,6 +1,6 @@
+import { redirect } from "next/navigation";
 import { getSession } from "@/server/guards";
 import { listServicesForCurrentAdmin } from "@/server/services/services";
-import { redirect } from "next/navigation";
 
 // Page d'accueil : aiguille selon le rôle. C'est aussi la cible du redirect
 // post-connexion et du fallback requireRole(redirect("/")).

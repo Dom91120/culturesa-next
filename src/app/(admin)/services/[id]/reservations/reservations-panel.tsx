@@ -1,7 +1,7 @@
 "use client";
 
-import { TimeStepper } from "@/components/time-stepper";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { TimeStepper } from "@/components/time-stepper";
 import { updateReservationSettingsAction } from "./actions";
 
 /** Heure entière (0-168) → « HH:00 » pour le TimeStepper. */

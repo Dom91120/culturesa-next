@@ -1,6 +1,6 @@
+import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
-import { notFound } from "next/navigation";
 import {
   bucketSessions,
   computeTotals,

@@ -1,23 +1,23 @@
 import { prisma } from "@/server/db";
 import {
   type BookingTrigger,
-  MAIL_KINDS,
-  type MailRecipientKind,
   getTriggerKinds,
   getTriggerPrefs,
   getTriggerRecipients,
   listMailTriggers,
+  MAIL_KINDS,
+  type MailRecipientKind,
 } from "@/server/services/mail-prefs";
 import {
   CUSTOM_MAIL_VARS,
-  DEFAULT_TEMPLATES,
-  MAIL_VARS,
-  TEMPLATE_KINDS,
-  type TemplateKind,
   customStarterTemplate,
+  DEFAULT_TEMPLATES,
   getMailTemplate,
   isCustomMailTypeUsed,
   listCustomMailTypes,
+  MAIL_VARS,
+  TEMPLATE_KINDS,
+  type TemplateKind,
 } from "@/server/services/mail-templates";
 import type { KindData } from "./echanges-config";
 

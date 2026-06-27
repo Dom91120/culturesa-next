@@ -1,6 +1,6 @@
-import { prisma } from "@/server/db";
-import { type LabeledCount, type StatsType, getServiceStats } from "@/server/services/stats";
 import { notFound } from "next/navigation";
+import { prisma } from "@/server/db";
+import { getServiceStats, type LabeledCount, type StatsType } from "@/server/services/stats";
 import { StatsFilters } from "./stats-filters";
 import { StatsToolbar } from "./stats-toolbar";
 
@@ -200,7 +200,9 @@ function forDonut(data: LabeledCount[], k = 5): LabeledCount[] {
 
 function Legend({
   items,
-}: { items: { label: string; value: number; color: string; suffix?: string }[] }) {
+}: {
+  items: { label: string; value: number; color: string; suffix?: string }[];
+}) {
   const tot = items.reduce((s, x) => s + x.value, 0) || 1;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: ".4rem", minWidth: 0, flex: 1 }}>
@@ -289,7 +291,13 @@ function BarRow({
   max,
   color,
   suffix,
-}: { label: string; value: number; max: number; color?: string; suffix?: string }) {
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color?: string;
+  suffix?: string;
+}) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: ".5rem" }}>
@@ -339,7 +347,11 @@ function Panel({
   title,
   empty,
   children,
-}: { title: string; empty: boolean; children: React.ReactNode }) {
+}: {
+  title: string;
+  empty: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="panel">
       <div className="panel-title" style={{ fontSize: ".82rem" }}>

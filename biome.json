@@ -1,24 +1,51 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "ignore": [".next", "node_modules", "prisma/migrations"] },
+  "files": {
+    "includes": [
+      "**",
+      "!**/.next",
+      "!**/node_modules",
+      "!**/prisma/migrations",
+      "!**/docs",
+      "!**/src/app/globals.css"
+    ]
+  },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": {
     "enabled": true,
-    "rules": { "recommended": true }
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "noStaticElementInteractions": "off",
+        "useAriaPropsSupportedByRole": "off"
+      },
+      "complexity": {
+        "noImportantStyles": "off"
+      },
+      "style": {
+        "noDescendingSpecificity": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off"
+      },
+      "performance": {
+        "noImgElement": "off"
+      }
+    }
   },
   "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always" } },
   "overrides": [
     {
-      "include": ["**/services/legacy-icons.ts"],
+      "includes": ["**/services/legacy-icons.ts"],
       "linter": { "enabled": false }
     },
     {
-      "include": ["**/services/services-manager.tsx"],
+      "includes": ["**/services/services-manager.tsx"],
       "linter": { "rules": { "a11y": { "useKeyWithClickEvents": "off" } } }
     },
     {
-      "include": ["**/users/users-table.tsx"],
+      "includes": ["**/users/users-table.tsx"],
       "linter": { "rules": { "a11y": { "useKeyWithClickEvents": "off" } } }
     }
   ]

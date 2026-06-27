@@ -1,7 +1,7 @@
 "use client";
 
-import { ModalOverlay } from "@/components/agenda-shared";
 import { type ReactNode, useEffect, useState } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 import { markOnboardedAction } from "./onboarding-actions";
 
 /** Événement global pour ré-ouvrir l'onboarding (« Revoir la présentation » du user-menu). */

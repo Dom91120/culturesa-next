@@ -4,9 +4,9 @@ import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
 import {
-  type ResolvedRecipient,
   getTriggerRecipient,
   isTriggerEnabled,
+  type ResolvedRecipient,
   resolveTriggerKind,
   resolveTriggerRecipients,
 } from "@/server/services/mail-prefs";

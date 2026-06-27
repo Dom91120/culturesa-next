@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/server/cron";
 import { runRgpdRetention } from "@/server/services/rgpd";
-import { NextResponse } from "next/server";
 
 /**
  * Rétention RGPD : préavis aux comptes inactifs (dernière activité ancienne),

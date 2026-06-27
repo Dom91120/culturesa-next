@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/server/cron";
 import { runBookingReminders } from "@/server/services/booking-reminders";
-import { NextResponse } from "next/server";
 
 /**
  * Rappels de réservation : envoie aux usagers un e-mail une semaine avant (J-7) et

@@ -3,7 +3,7 @@
  * Idempotent : peut être relancé sans dupliquer.
  *   pnpm db:seed
  */
-import { SYSTEM_MAIL_KINDS, defaultMailTypes } from "@/app/(admin)/echanges/mail-rows";
+import { defaultMailTypes, SYSTEM_MAIL_KINDS } from "@/app/(admin)/echanges/mail-rows";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { defaultMailTriggers } from "@/server/services/mail-prefs";

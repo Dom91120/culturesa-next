@@ -1,7 +1,7 @@
 "use client";
 
-import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
 
 // Contrat {ok,error} partagé des server actions de référentiel — réexporté pour les
 // consommateurs (demandeurs/structures-editor) qui l'importaient depuis ce module.
@@ -143,7 +143,6 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
       >
         <span style={{ paddingLeft: ".5rem" }}>{labels.header}</span>
         {extraHeaders.map((h, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: en-têtes statiques
           <span key={i} style={h.style}>
             {h.label}
           </span>

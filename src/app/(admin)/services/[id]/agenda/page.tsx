@@ -1,10 +1,10 @@
+import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { deriveServiceModes } from "@/server/services/service-modes";
-import { notFound } from "next/navigation";
 import { AgendaGrid } from "./agenda-grid";
 
 export default async function AgendaPage({ params }: { params: Promise<{ id: string }> }) {

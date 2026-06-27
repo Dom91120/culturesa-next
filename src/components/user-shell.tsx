@@ -1,11 +1,11 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
 import { initialsOf } from "@/lib/format";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
 
 type ServiceItem = { id: string; label: string; icon: string | null };
 

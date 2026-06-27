@@ -1,12 +1,12 @@
-import { emailButton } from "@/lib/email-theme";
-import { PASSWORD_POLICY_MESSAGE, isPasswordValid } from "@/lib/password";
-import { verifyCaptcha } from "@/server/captcha";
-import { prisma } from "@/server/db";
-import { sendTemplatedMail } from "@/server/services/mail-send";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
+import { emailButton } from "@/lib/email-theme";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/password";
+import { verifyCaptcha } from "@/server/captcha";
+import { prisma } from "@/server/db";
+import { sendTemplatedMail } from "@/server/services/mail-send";
 
 // Endpoints Better Auth qui définissent/changent un mot de passe : on y impose la
 // politique de complexité (Better Auth ne valide nativement que la longueur min).

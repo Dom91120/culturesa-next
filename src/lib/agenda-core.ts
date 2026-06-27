@@ -3,8 +3,8 @@
 // à l'identique des deux copies locales (audit duplication 2026-06). Toute
 // correction ici profite aux deux écrans — ne pas re-dupliquer dans les grilles.
 
-import { slotWeekTag } from "@/lib/iso-week";
 import type { CSSProperties } from "react";
+import { slotWeekTag } from "@/lib/iso-week";
 
 // Parité A/B : convention unique de l'app (lib/iso-week) — ré-exportée pour que
 // les grilles n'aient qu'un seul point d'import du socle.
@@ -239,7 +239,9 @@ export function gridGeometry(args: {
     quarters.push(m);
   }
   const qIdx = new Map<number, number>();
-  quarters.forEach((m, i) => qIdx.set(m, i));
+  quarters.forEach((m, i) => {
+    qIdx.set(m, i);
+  });
   const totalH = quarters.length * QUARTER_H;
   const mapMinToY = (min: number): number => {
     const q = Math.floor(min / 15) * 15;

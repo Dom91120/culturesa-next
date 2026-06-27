@@ -7,7 +7,7 @@
 // template string reste détecté comme vivant.
 // Usage : node scripts/prune-dead-css.mjs [--apply]
 
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");

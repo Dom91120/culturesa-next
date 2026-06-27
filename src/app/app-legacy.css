@@ -129,7 +129,7 @@ header {
 .logo {
   font-size: 1.4rem;
   font-weight: 500;
-  letter-spacing: -.02em;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 .logo em {
@@ -137,9 +137,9 @@ header {
   font-style: italic;
 }
 .tagline {
-  margin-top: .3rem;
-  font-size: .65rem;
-  letter-spacing: .14em;
+  margin-top: 0.3rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -149,22 +149,22 @@ header {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: .75rem;
+  gap: 0.75rem;
   position: fixed;
-  top: .4rem;
+  top: 0.4rem;
   right: 1rem;
-  font-size: .82rem;
+  font-size: 0.82rem;
   color: var(--muted);
   z-index: 200;
 }
 .user-bar .user-pill {
   display: flex;
   align-items: center;
-  gap: .4rem;
+  gap: 0.4rem;
   background: var(--surface2);
   border: 1px solid var(--border);
   height: 32px;
-  padding: 0 .65rem 0 .35rem;
+  padding: 0 0.65rem 0 0.35rem;
   border-radius: 99px;
   cursor: pointer;
   user-select: none;
@@ -199,16 +199,16 @@ header {
 #user-menu button {
   width: 100%;
   text-align: left;
-  padding: .35rem .8rem;
+  padding: 0.35rem 0.8rem;
   background: none;
   border: none;
   color: var(--text);
   font-family: inherit;
-  font-size: .82rem;
+  font-size: 0.82rem;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
   white-space: nowrap;
 }
 #user-menu button:hover {
@@ -227,7 +227,7 @@ header {
   background: var(--accent);
   color: #0f1117;
   font-weight: 700;
-  font-size: .62rem;
+  font-size: 0.62rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -240,9 +240,9 @@ header {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  font-size: .9rem;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: .2s;
+  transition: 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -267,8 +267,8 @@ header {
 .planning-option {
   display: block;
   align-items: center;
-  gap: .4rem;
-  font-size: .65rem;
+  gap: 0.4rem;
+  font-size: 0.65rem;
   white-space: nowrap;
   color: var(--muted);
   cursor: pointer;
@@ -289,7 +289,7 @@ header {
   gap: 0;
   justify-content: flex-start;
   margin: 0 0 1rem;
-  padding: 0 .5rem;
+  padding: 0 0.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
@@ -297,19 +297,22 @@ header {
   position: relative;
   display: flex;
   align-items: center;
-  gap: .3rem;
-  padding: .3rem .8rem .3rem;
+  gap: 0.3rem;
+  padding: 0.3rem 0.8rem 0.3rem;
   background: var(--surface2);
   border: 1px solid var(--surface);
   border-bottom: 1px solid var(--border);
   border-top-left-radius: var(--rad-sm);
   border-top-right-radius: var(--rad-sm);
   font-family: inherit;
-  font-size: .82rem;
+  font-size: 0.82rem;
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
-  transition: color .15s, background .15s, border-color .15s;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
   margin-bottom: -1px;
 }
@@ -336,7 +339,7 @@ header {
   cursor: not-allowed;
 }
 .tab-icon {
-  font-size: .85rem;
+  font-size: 0.85rem;
 }
 .tab-nav-btn.admin-tab {
   color: var(--muted);
@@ -382,17 +385,20 @@ main {
   overflow-y: auto;
   overflow-x: hidden;
   border-radius: var(--radius);
-  transition: width .18s ease, min-width .18s ease, max-width .18s ease;
+  transition:
+    width 0.18s ease,
+    min-width 0.18s ease,
+    max-width 0.18s ease;
 }
 .sidebar-header {
   border-bottom: 1px solid var(--border);
-  padding: .75rem .6rem;
-  margin-bottom: .5rem;
+  padding: 0.75rem 0.6rem;
+  margin-bottom: 0.5rem;
   text-align: center;
 }
 .sidebar-tagline {
-  font-size: .58rem;
-  letter-spacing: .1em;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
   margin-top: 0.3rem;
@@ -423,7 +429,7 @@ main {
   overflow: hidden;
 }
 .sb-icon {
-  margin-right: .4rem;
+  margin-right: 0.4rem;
   font-size: 1.3rem;
 }
 #service-sidebar-wrap.collapsed .sb-icon {
@@ -432,25 +438,30 @@ main {
 }
 #sidebar-toggle {
   position: absolute;
-  top: .8rem;
-  left: .8rem;
+  top: 0.8rem;
+  left: 0.8rem;
   width: 22px;
   height: 22px;
   border-radius: 4px;
   background: var(--sidebar-bg);
   border: 1px solid var(--border);
   color: var(--surface2);
-  font-size: .85rem;
+  font-size: 0.85rem;
   line-height: 1;
   cursor: pointer;
   z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color .12s, border-color .12s, background .12s, left .18s ease, top .18s ease;
+  transition:
+    color 0.12s,
+    border-color 0.12s,
+    background 0.12s,
+    left 0.18s ease,
+    top 0.18s ease;
 }
 #service-sidebar-wrap.collapsed #sidebar-toggle {
-  top: .8rem;
+  top: 0.8rem;
   left: 50%;
   transform: translateX(-50%);
 }
@@ -459,18 +470,18 @@ main {
   border-color: var(--accent);
 }
 #service-sidebar-wrap > .sidebar-label {
-  font-size: .65rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  letter-spacing: .12em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 0 .6rem .85rem;
-  margin-bottom: .35rem;
+  padding: 0 0.6rem 0.85rem;
+  margin-bottom: 0.35rem;
   border-bottom: 1px solid var(--border);
 }
 #service-sidebar,
 #service-sidebar-wrap #sidebar-admin-btn {
-  padding: 0 .6rem;
+  padding: 0 0.6rem;
 }
 #service-sidebar button,
 #service-sidebar .sidebar-compte-btn,
@@ -479,7 +490,7 @@ main {
   align-items: center;
   width: 100%;
   text-align: left;
-  padding: .2rem;
+  padding: 0.2rem;
   border: none;
   /* Bordures gauche + bas toujours présentes (transparentes par défaut) :
      garantit la même boîte de bordure en mode large et condensé,
@@ -488,9 +499,9 @@ main {
   border-bottom: 3px solid transparent;
   border-radius: 0 var(--rad-sm) var(--rad-sm) 0;
   font-family: inherit;
-  font-size: .82rem;
+  font-size: 0.82rem;
   cursor: pointer;
-  transition: all .15s;
+  transition: all 0.15s;
   background: transparent;
   color: var(--muted);
   white-space: nowrap;
@@ -548,17 +559,17 @@ main {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem 1.5rem;
-  margin-bottom: .85rem;
+  margin-bottom: 0.85rem;
 }
 .panel-title {
-  font-size: .95rem;
+  font-size: 0.95rem;
   font-weight: 300;
-  letter-spacing: -.01em;
-  margin-bottom: .85rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.85rem;
   color: var(--text);
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
 }
 /* Pastille ronde générique (utilisée dans .panel-title, .modal-title, etc.) */
 .dot {
@@ -573,14 +584,14 @@ main {
 }
 /* Variante secondaire de panel-title (légère, plus discrète) */
 .panel-subtitle {
-  font-size: .75rem;
+  font-size: 0.75rem;
   font-weight: 300;
-  letter-spacing: -.01em;
-  margin-bottom: .75rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.75rem;
   color: var(--text);
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
 }
 #params-subnav {
   display: flex;
@@ -595,10 +606,10 @@ main {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: .3rem;
-  padding: .3rem .8rem .3rem;
+  gap: 0.3rem;
+  padding: 0.3rem 0.8rem 0.3rem;
   font-family: inherit;
-  font-size: .82rem;
+  font-size: 0.82rem;
   font-weight: 500;
   background: var(--surface2);
   border: 1px solid var(--surface);
@@ -607,7 +618,10 @@ main {
   border-top-right-radius: var(--rad-sm);
   cursor: pointer;
   color: var(--muted);
-  transition: color .15s, background .15s, border-color .15s;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
   margin-bottom: -1px;
 }
@@ -641,7 +655,7 @@ main {
   border-radius: 2px;
   background: var(--surface2);
   color: var(--muted);
-  font-size: .5rem;
+  font-size: 0.5rem;
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
@@ -659,7 +673,7 @@ main {
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: .65rem;
+  gap: 0.65rem;
   margin-bottom: 1.2rem;
 }
 @media (max-width: 540px) {
@@ -670,7 +684,7 @@ main {
 .field {
   display: flex;
   flex-direction: column;
-  gap: .25rem;
+  gap: 0.25rem;
   min-width: 0;
 }
 .field.full {
@@ -682,9 +696,9 @@ main {
   box-sizing: border-box;
 }
 label {
-  font-size: .65rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -694,12 +708,14 @@ textarea {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
-  padding: .2rem .65rem;
+  padding: 0.2rem 0.65rem;
   font-family: inherit;
-  font-size: .82rem;
+  font-size: 0.82rem;
   color: var(--text);
   outline: none;
-  transition: border-color .2s, background .2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
 }
 input:focus,
 select:focus,
@@ -742,29 +758,29 @@ textarea {
   resize: vertical;
 }
 .field-hint {
-  font-size: .72rem;
+  font-size: 0.72rem;
   color: var(--muted);
-  margin-top: .15rem;
+  margin-top: 0.15rem;
 }
 .pwd-checklist {
   list-style: none;
   padding: 0;
-  margin: .25rem 0 0;
-  font-size: .72rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
   color: var(--muted);
   display: flex;
   flex-wrap: wrap;
-  gap: .15rem .8rem;
+  gap: 0.15rem 0.8rem;
 }
 .pwd-checklist li {
   display: inline-flex;
   align-items: center;
-  gap: .25rem;
-  transition: color .15s;
+  gap: 0.25rem;
+  transition: color 0.15s;
 }
 .pwd-checklist li::before {
   content: "○";
-  font-size: .85rem;
+  font-size: 0.85rem;
   line-height: 1;
   opacity: 0.6;
 }
@@ -776,9 +792,9 @@ textarea {
   opacity: 1;
 }
 .field-error {
-  font-size: .72rem;
+  font-size: 0.72rem;
   color: var(--danger);
-  margin-top: .15rem;
+  margin-top: 0.15rem;
   display: none;
 }
 .required-star {
@@ -794,18 +810,18 @@ textarea {
   margin-top: 1.25rem;
 }
 .rgpd-header {
-  font-size: .72rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: .12em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--warn);
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 .rgpd-text {
-  font-size: .82rem;
+  font-size: 0.82rem;
   line-height: 1.7;
   color: #9aa0b8;
   margin-bottom: 1.1rem;
@@ -817,8 +833,8 @@ textarea {
 .check-row {
   display: flex;
   align-items: flex-start;
-  gap: .75rem;
-  margin-bottom: .75rem;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 .custom-check {
   position: relative;
@@ -839,7 +855,7 @@ textarea {
   border: 1.5px solid var(--border-hover);
   border-radius: 4px;
   background: var(--surface);
-  transition: .2s;
+  transition: 0.2s;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -863,7 +879,7 @@ textarea {
   display: block;
 }
 .check-label {
-  font-size: .83rem;
+  font-size: 0.83rem;
   line-height: 1.55;
   color: #9aa0b8;
   cursor: pointer;
@@ -876,21 +892,21 @@ textarea {
 /* ── Buttons ─────────────────────────────────────────────── */
 .btn-row {
   display: flex;
-  gap: .5rem;
+  gap: 0.5rem;
   justify-content: flex-end;
   margin-top: 1rem;
   flex-wrap: wrap;
 }
 .btn {
-  padding: .4rem 1rem;
+  padding: 0.4rem 1rem;
   border: none;
   border-radius: var(--rad-sm);
   font-family: inherit;
-  font-size: .75rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  letter-spacing: .02em;
-  transition: all .2s;
+  letter-spacing: 0.02em;
+  transition: all 0.2s;
 }
 .btn-primary {
   background: var(--accent);
@@ -922,25 +938,25 @@ textarea {
 /* ── Period tabs ─────────────────────────────────────── */
 .period-tabs {
   display: flex;
-  gap: .5rem;
+  gap: 0.5rem;
   margin: 0.5rem 0;
   flex-wrap: wrap;
-  margin-bottom: .75rem;
+  margin-bottom: 0.75rem;
 }
 .period-btn {
-  padding: .4rem 1.0rem;
+  padding: 0.4rem 1rem;
   border: 1px solid var(--border);
   border-radius: 99px;
   background: transparent;
   font-family: inherit;
-  font-size: .8rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
-  transition: .2s;
+  transition: 0.2s;
   display: flex;
   align-items: center;
-  gap: .4rem;
+  gap: 0.4rem;
 }
 .period-btn:hover {
   border-color: var(--border-hover);
@@ -973,7 +989,6 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
   width: 160px;
   height: 44px;
   border: none;
@@ -982,7 +997,7 @@ textarea {
   margin: 4px;
   cursor: pointer;
   font-family: inherit;
-  transition: all .2s;
+  transition: all 0.2s;
   position: relative;
 }
 .slot-btn.selected {
@@ -1075,9 +1090,9 @@ textarea {
   cursor: grabbing;
 }
 .slot-spots {
-  font-size: .75rem;
-  letter-spacing: .04em;
-  padding: .12rem .3rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.3rem;
   border-radius: 99px;
   line-height: 1.3;
   white-space: normal;
@@ -1130,7 +1145,7 @@ textarea.theme-pending:focus::placeholder {
   color: #0f1117;
 }
 .slot-icon {
-  font-size: .85rem;
+  font-size: 0.85rem;
 }
 
 /* ── Gauge badge inputs : spinners natifs masqués, remplacés par .gauge-spin-btn ─ */
@@ -1142,7 +1157,7 @@ textarea.theme-pending:focus::placeholder {
   -webkit-appearance: none;
 }
 .gauge-txt {
-  font-size: .6rem;
+  font-size: 0.6rem;
   width: stretch;
   text-align: center;
 }
@@ -1159,7 +1174,7 @@ textarea.theme-pending:focus::placeholder {
 .recap-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: .75rem;
+  gap: 0.75rem;
 }
 @media (max-width: 480px) {
   .recap-grid {
@@ -1170,18 +1185,18 @@ textarea.theme-pending:focus::placeholder {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
-  padding: .5rem .75rem;
+  padding: 0.5rem 0.75rem;
 }
 .recap-key {
-  font-size: .65rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: .15rem;
+  margin-bottom: 0.15rem;
 }
 .recap-val {
-  font-size: .82rem;
+  font-size: 0.82rem;
   color: var(--text);
   font-weight: 500;
 }
@@ -1189,10 +1204,10 @@ textarea.theme-pending:focus::placeholder {
   background: var(--surface2);
   border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
   border-radius: var(--rad-sm);
-  padding: .5rem .75rem;
+  padding: 0.5rem 0.75rem;
   display: flex;
   align-items: center;
-  gap: .6rem;
+  gap: 0.6rem;
 }
 .recap-period-dot {
   width: 8px;
@@ -1202,27 +1217,27 @@ textarea.theme-pending:focus::placeholder {
   flex-shrink: 0;
 }
 .recap-period-info .key {
-  font-size: .62rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
 }
 .recap-period-info .val {
-  font-size: .8rem;
+  font-size: 0.8rem;
   color: var(--text);
   font-weight: 500;
-  margin-top: .1rem;
+  margin-top: 0.1rem;
 }
 .recap-period-entries {
   display: flex;
   flex-direction: column;
-  gap: .4rem;
-  margin-top: .6rem;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
 }
 .no-booking-msg {
   color: var(--muted);
-  font-size: .85rem;
+  font-size: 0.85rem;
   font-style: italic;
 }
 
@@ -1237,14 +1252,16 @@ textarea.theme-pending:focus::placeholder {
   transform: translateX(-50%) translateY(20px);
   background: var(--accent);
   color: #0f1117;
-  padding: .7rem 1.4rem;
+  padding: 0.7rem 1.4rem;
   border-radius: 99px;
-  font-size: .85rem;
+  font-size: 0.85rem;
   font-weight: 600;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   opacity: 0;
   pointer-events: none;
-  transition: opacity .3s, transform .3s;
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
   z-index: 11000;
   white-space: nowrap;
 }
@@ -1282,17 +1299,17 @@ textarea.theme-pending:focus::placeholder {
 }
 .admin-table {
   border-collapse: collapse;
-  font-size: .75rem;
+  font-size: 0.75rem;
   width: 100%;
   line-height: 1;
 }
 .admin-table th {
-  padding: .3rem .2rem .2rem;
+  padding: 0.3rem 0.2rem 0.2rem;
   text-align: left;
   vertical-align: middle;
-  font-size: .7rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: .09em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: #e8e4da;
   background: var(--admin-th-bg);
@@ -1300,7 +1317,7 @@ textarea.theme-pending:focus::placeholder {
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition: color .2s;
+  transition: color 0.2s;
   line-height: 1.4;
 }
 .admin-table th:hover {
@@ -1315,24 +1332,24 @@ textarea.theme-pending:focus::placeholder {
 /* Liste des réservations (Editions) : compacité via taille + padding (pas de police
    custom — on hérite du body pour rester lisible). Surcharge spécifique via l'id. */
 #admin-table {
-  font-size: .73rem;
+  font-size: 0.73rem;
 }
 #admin-table th {
-  font-size: .68rem;
-  padding: .28rem .2rem .2rem;
-  letter-spacing: .07em;
+  font-size: 0.68rem;
+  padding: 0.28rem 0.2rem 0.2rem;
+  letter-spacing: 0.07em;
 }
 #admin-table td {
-  padding: .18rem .45rem;
+  padding: 0.18rem 0.45rem;
 }
 .periods-table {
   border-collapse: collapse;
 }
 .periods-table th {
-  padding: .25rem .4rem;
-  font-size: .62rem;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
   text-align: center;
@@ -1340,10 +1357,10 @@ textarea.theme-pending:focus::placeholder {
 /* Interligne en-tête → 1re ligne calé sur le rowGap (.3rem) de la grille des plages
    horaires : .18rem (padding-bottom du th) + .12rem (padding-top du td) = .3rem. */
 .periods-table thead th {
-  padding-bottom: .18rem;
+  padding-bottom: 0.18rem;
 }
 .periods-table td {
-  padding: .12rem .4rem;
+  padding: 0.12rem 0.4rem;
   text-align: center;
   vertical-align: middle;
 }
@@ -1357,8 +1374,8 @@ textarea.theme-pending:focus::placeholder {
 }
 .periods-table input[type="text"],
 .periods-table input[type="date"] {
-  padding: 0 .4rem !important;
-  font-size: .72rem !important;
+  padding: 0 0.4rem !important;
+  font-size: 0.72rem !important;
   height: 22px;
   line-height: 22px;
 }
@@ -1392,7 +1409,7 @@ textarea.theme-pending:focus::placeholder {
   align-items: center;
   gap: 1.25rem;
   flex-wrap: wrap;
-  margin-bottom: .85rem;
+  margin-bottom: 0.85rem;
 }
 .pr-head > .pr-title {
   margin-bottom: 0;
@@ -1409,8 +1426,8 @@ textarea.theme-pending:focus::placeholder {
   grid-row: 2;
   display: flex;
   align-items: center;
-  gap: .5rem;
-  margin-top: .5rem;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 /* « Plages horaires » : colonne DROITE de la grille, à côté du tableau Périodes (occupe
    les 2 rangées de la colonne 1, aligné en haut). */
@@ -1421,7 +1438,7 @@ textarea.theme-pending:focus::placeholder {
   min-width: 0; /* autorise le rétrécissement (sinon min-width:auto = contenu → pas de wrap) */
 }
 #periods-row > .pr-hours .defaults-row {
-  margin: .5rem 0 0;
+  margin: 0.5rem 0 0;
 }
 
 /* Barre de navigation entre exercices : ◀ label ▶ — réutilisée par périodes, planning rec et planning ponctuel */
@@ -1429,12 +1446,12 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: .5rem;
-  margin: .35rem 0 .55rem;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.55rem;
 }
 .periode-nav .ex-nav-label {
   font-weight: 600;
-  font-size: .72rem;
+  font-size: 0.72rem;
   color: var(--text);
   min-width: 5rem;
   text-align: center;
@@ -1446,8 +1463,8 @@ textarea.theme-pending:focus::placeholder {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
-  padding: .05rem .4rem;
-  font-size: .7rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.7rem;
   cursor: pointer;
   line-height: 1;
 }
@@ -1464,8 +1481,8 @@ textarea.theme-pending:focus::placeholder {
 .exercice-nav-inline {
   display: inline-flex;
   align-items: center;
-  gap: .3rem;
-  margin-left: -.25rem; /* compense le gap natif du panel-title */
+  gap: 0.3rem;
+  margin-left: -0.25rem; /* compense le gap natif du panel-title */
   font-size: inherit;
   font-weight: inherit;
   color: inherit;
@@ -1490,7 +1507,7 @@ textarea.theme-pending:focus::placeholder {
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0 4px;
-  font-size: .6rem;
+  font-size: 0.6rem;
   cursor: pointer;
   line-height: 1;
   height: 16px;
@@ -1540,13 +1557,13 @@ textarea.theme-pending:focus::placeholder {
 @media (max-width: 600px) {
   .periods-table th,
   .periods-table td {
-    padding: .15rem .3rem;
+    padding: 0.15rem 0.3rem;
   }
   .periods-table th {
-    font-size: .65rem;
+    font-size: 0.65rem;
   }
   .periods-table td {
-    font-size: .78rem;
+    font-size: 0.78rem;
   }
   /* Libellé devient flexible plutôt que 280px fixe */
   .periods-table thead th:nth-child(4) {
@@ -1555,11 +1572,11 @@ textarea.theme-pending:focus::placeholder {
   }
 }
 .sort-arrow {
-  margin-left: .25rem;
+  margin-left: 0.25rem;
   opacity: 0.5;
 }
 .admin-table td {
-  padding: .2rem .6rem;
+  padding: 0.2rem 0.6rem;
   vertical-align: middle;
   color: var(--text);
   overflow: hidden;
@@ -1585,11 +1602,11 @@ textarea.theme-pending:focus::placeholder {
 }
 .search-wrap .search-icon {
   position: absolute;
-  left: .55rem;
+  left: 0.55rem;
   top: 50%;
   transform: translateY(-50%);
-  width: .95rem;
-  height: .95rem;
+  width: 0.95rem;
+  height: 0.95rem;
   color: var(--muted);
   pointer-events: none;
 }
@@ -1600,8 +1617,8 @@ textarea.theme-pending:focus::placeholder {
 }
 .admin-table th.col-check,
 .admin-table td.col-check {
-  padding-left: .5rem;
-  padding-right: .25rem;
+  padding-left: 0.5rem;
+  padding-right: 0.25rem;
 }
 .admin-cb {
   width: 15px;
@@ -1612,8 +1629,8 @@ textarea.theme-pending:focus::placeholder {
 .planning-name-tag {
   background: var(--accent);
   border-radius: 6px;
-  padding: .25rem .5rem;
-  font-size: .72rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
   font-weight: 500;
   color: var(--badge-text);
   width: 100%;
@@ -1636,9 +1653,9 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: .5rem;
+  gap: 0.5rem;
   margin-bottom: 1.5rem;
-  font-size: .84rem;
+  font-size: 0.84rem;
   color: var(--muted);
 }
 .mode-toggle button {
@@ -1646,7 +1663,7 @@ textarea.theme-pending:focus::placeholder {
   border: none;
   color: var(--accent);
   font-family: inherit;
-  font-size: .84rem;
+  font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
@@ -1655,11 +1672,11 @@ textarea.theme-pending:focus::placeholder {
 /* ── Role pills ──────────────────────────────────────────── */
 .role-pill {
   display: inline-block;
-  padding: .15rem .55rem;
+  padding: 0.15rem 0.55rem;
   border-radius: 99px;
-  font-size: .65rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .role-admin {
@@ -1708,8 +1725,8 @@ textarea.theme-pending:focus::placeholder {
 }
 .modal-close {
   position: absolute;
-  top: .75rem;
-  right: .75rem;
+  top: 0.75rem;
+  right: 0.75rem;
   background: none;
   border: none;
   color: var(--muted);
@@ -1724,7 +1741,7 @@ textarea.theme-pending:focus::placeholder {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
-  padding: .35rem 0;
+  padding: 0.35rem 0;
   z-index: 10001;
   min-width: 160px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -1733,14 +1750,14 @@ textarea.theme-pending:focus::placeholder {
   display: block;
   width: 100%;
   text-align: left;
-  padding: .45rem .85rem;
+  padding: 0.45rem 0.85rem;
   background: none;
   border: none;
   font-family: inherit;
-  font-size: .78rem;
+  font-size: 0.78rem;
   color: var(--text);
   cursor: pointer;
-  transition: background .15s;
+  transition: background 0.15s;
 }
 #badge-ctx-menu button:hover {
   background: var(--surface);
@@ -1832,7 +1849,7 @@ textarea.theme-pending:focus::placeholder {
   position: relative;
   cursor: pointer;
   padding: 0;
-  transition: transform .12s;
+  transition: transform 0.12s;
   width: 100%;
 }
 .planning-stack-wrap:hover {
@@ -1878,7 +1895,7 @@ textarea.theme-pending:focus::placeholder {
   background: #ffa500;
   color: #0f1117;
   font-weight: 800;
-  font-size: .62rem;
+  font-size: 0.62rem;
   line-height: 1;
   min-width: 18px;
   height: 18px;
@@ -1895,12 +1912,12 @@ textarea.theme-pending:focus::placeholder {
 .csm-grid-wrap {
   display: flex;
   align-items: stretch;
-  gap: .5rem;
+  gap: 0.5rem;
 }
 .csm-time-col {
   position: relative;
   min-width: 36px;
-  font-size: .62rem;
+  font-size: 0.62rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
@@ -1928,7 +1945,8 @@ textarea.theme-pending:focus::placeholder {
   /* Lignes horaires adaptatives, calees sur les marques d'heures via custom properties
      --quarter-h (pas 15 min) et --hour-h (pas 1h, ligne marquee). Le JS recalcule ces
      valeurs apres rendu pour qu'elles soient proportionnelles a la hauteur reelle. */
-  background-image: repeating-linear-gradient(
+  background-image:
+    repeating-linear-gradient(
       to bottom,
       transparent 0,
       transparent calc(var(--hour-h, 96px) - 1px),
@@ -1950,7 +1968,7 @@ textarea.theme-pending:focus::placeholder {
 .cell-stack-list {
   display: grid;
   grid-template-columns: repeat(3, 160px);
-  gap: .65rem;
+  gap: 0.65rem;
   align-content: flex-start;
   justify-content: start;
   padding: 12px;
@@ -1965,7 +1983,7 @@ textarea.theme-pending:focus::placeholder {
   width: 160px;
   flex-shrink: 0;
   overflow: hidden;
-  font-size: .66rem;
+  font-size: 0.66rem;
   padding: 2px 6px;
 }
 .cell-stack-list .planning-name-tag > span {
@@ -1984,26 +2002,26 @@ textarea.theme-pending:focus::placeholder {
 .csm-gauge-info {
   display: inline-flex;
   align-items: center;
-  gap: .4rem;
-  font-size: .65rem;
+  gap: 0.4rem;
+  font-size: 0.65rem;
 }
 #csm-cap-info {
   display: flex;
   align-items: center;
-  gap: .6rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
-  margin-top: .5rem;
-  margin-left: calc(36px + .5rem);
-  font-size: .78rem;
+  margin-top: 0.5rem;
+  margin-left: calc(36px + 0.5rem);
+  font-size: 0.78rem;
   color: var(--muted);
 }
 .uc-services-list {
   display: flex;
   flex-direction: column;
-  gap: .25rem;
+  gap: 0.25rem;
   max-height: 160px;
   overflow-y: auto;
-  padding: .4rem .6rem;
+  padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
   background: var(--surface2);
@@ -2012,8 +2030,8 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .5rem;
-  font-size: .7rem;
+  gap: 0.5rem;
+  font-size: 0.7rem;
   color: var(--text);
   cursor: pointer;
   text-transform: none;
@@ -2027,12 +2045,12 @@ textarea.theme-pending:focus::placeholder {
 .uc-niveau-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: .65rem;
+  gap: 0.65rem;
 }
 .uc-niveau-row > div {
   display: flex;
   flex-direction: column;
-  gap: .25rem;
+  gap: 0.25rem;
   min-width: 0;
 }
 
@@ -2055,7 +2073,7 @@ textarea.theme-pending:focus::placeholder {
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: .85rem;
+  font-size: 0.85rem;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -2081,8 +2099,8 @@ textarea.theme-pending:focus::placeholder {
   display: block;
 }
 .niveau-combo-list-item {
-  padding: .35rem .65rem;
-  font-size: .82rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
   color: var(--text);
   cursor: pointer;
 }
@@ -2090,8 +2108,8 @@ textarea.theme-pending:focus::placeholder {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .niveau-combo-empty {
-  padding: .35rem .65rem;
-  font-size: .75rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
   color: var(--muted);
   font-style: italic;
 }
@@ -2106,7 +2124,7 @@ textarea.theme-pending:focus::placeholder {
 .pcm-counter {
   display: inline-flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
   cursor: pointer;
   text-transform: none;
   letter-spacing: 0;
@@ -2117,13 +2135,13 @@ textarea.theme-pending:focus::placeholder {
 }
 .pcm-counter input[type="number"] {
   width: 46px;
-  padding: .15rem .25rem;
+  padding: 0.15rem 0.25rem;
   text-align: center;
   font-weight: 600;
-  font-size: .78rem;
+  font-size: 0.78rem;
 }
 .pcm-counter-name {
-  font-size: .78rem;
+  font-size: 0.78rem;
   color: var(--text);
   font-weight: 500;
   min-width: 3.5em;
@@ -2134,7 +2152,7 @@ textarea.theme-pending:focus::placeholder {
 .indic_p,
 .indic_a {
   display: block;
-  font-size: .52rem;
+  font-size: 0.52rem;
   font-weight: 800;
   color: #fff;
   border-radius: 3px;
@@ -2176,14 +2194,14 @@ textarea.theme-pending:focus::placeholder {
   margin: 0;
 }
 #agenda-period-tabs .period-btn {
-  padding: .2rem .5rem;
-  font-size: .7rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
 }
 /* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda et dans la
    modale multi-badges (cell-stack-modal) — même taille texte + même scale de case. */
 #tab-content-agenda .planning-option,
 #cell-stack-modal .planning-option {
-  font-size: .65rem;
+  font-size: 0.65rem;
 }
 #tab-content-agenda .planning-option input[type="checkbox"],
 #cell-stack-modal .planning-option input[type="checkbox"] {
@@ -2209,11 +2227,13 @@ textarea.theme-pending:focus::placeholder {
 .agenda-mode-btn {
   background: transparent;
   border: 0;
-  padding: .12rem .5rem;
-  font-size: .62rem;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.62rem;
   color: var(--muted);
   cursor: pointer;
-  transition: background .15s, color .15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 .agenda-mode-btn + .agenda-mode-btn {
   border-left: 1px solid var(--border);
@@ -2237,8 +2257,8 @@ textarea.theme-pending:focus::placeholder {
 .agenda-header-cell {
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
-  padding: .3rem .4rem;
-  font-size: .75rem;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-align: center;
   color: var(--text);
@@ -2248,7 +2268,7 @@ textarea.theme-pending:focus::placeholder {
 }
 /* Semaine réelle : en-têtes plus compacts (jour + date sur 2 lignes). */
 .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
-  padding: 0 .4rem;
+  padding: 0 0.4rem;
 }
 .agenda-header-cell + .agenda-header-cell {
   border-left: 1px solid var(--border);
@@ -2261,7 +2281,7 @@ textarea.theme-pending:focus::placeholder {
   justify-content: center;
 }
 .agenda-day-sub {
-  font-size: .65rem;
+  font-size: 0.65rem;
   font-weight: 500;
   color: var(--muted);
 }
@@ -2276,7 +2296,7 @@ textarea.theme-pending:focus::placeholder {
   left: 0;
   right: 4px;
   transform: translateY(-50%);
-  font-size: .65rem;
+  font-size: 0.65rem;
   color: var(--muted);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -2355,7 +2375,7 @@ textarea.theme-pending:focus::placeholder {
   border-left: 2px dashed var(--block-color, var(--accent));
   border-top: 2px dashed var(--block-color);
   padding: 3px 7px;
-  font-size: .68rem;
+  font-size: 0.68rem;
   color: var(--text);
   /* clip (et non hidden) + marge de débord : laisse la pastille compteur (top/right -4)
      dépasser légèrement, tout en clippant le contenu des badges au-delà. */
@@ -2367,7 +2387,10 @@ textarea.theme-pending:focus::placeholder {
   /* Curseur "+" sur tout le créneau : signale clic = nouvelle réservation. Les badges
      enfants (.planning-name-tag) ont leur propre curseur (grab) qui prend le pas. */
   cursor: cell;
-  transition: transform .12s, box-shadow .12s, outline-color .12s;
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s,
+    outline-color 0.12s;
   outline: 2px solid transparent;
   outline-offset: -2px;
 }
@@ -2385,14 +2408,14 @@ textarea.theme-pending:focus::placeholder {
 .agenda-legend {
   display: flex;
   align-items: center;
-  gap: .9rem;
-  font-size: .72rem;
+  gap: 0.9rem;
+  font-size: 0.72rem;
   color: var(--muted);
 }
 .agenda-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: .35rem;
+  gap: 0.35rem;
 }
 .agenda-legend-swatch {
   /* Même jaune que la bordure des créneaux récurrents (--agenda-block-color). */
@@ -2416,7 +2439,7 @@ textarea.theme-pending:focus::placeholder {
   position: absolute;
   bottom: 1px;
   left: 5px;
-  font-size: .6rem;
+  font-size: 0.6rem;
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -2456,7 +2479,7 @@ textarea.theme-pending:focus::placeholder {
    doit s'adapter à l'espace dispo dans un bloc de hauteur variable. */
 .agenda-block-chips .planning-name-tag {
   padding: 2px 6px;
-  font-size: .66rem;
+  font-size: 0.66rem;
   width: 100%;
   border-radius: 6px;
   overflow: hidden;
@@ -2514,7 +2537,7 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: .85rem;
+  font-size: 0.85rem;
   color: var(--muted);
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   pointer-events: none;
@@ -2617,9 +2640,9 @@ textarea.theme-pending:focus::placeholder {
   border-bottom: 1px solid var(--border);
   /* Bordure à droite (comme .agenda-time-col en dessous dans la même colonne). */
   border-right: 1px solid var(--border);
-  font-size: .62rem;
+  font-size: 0.62rem;
   font-weight: 400;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
   color: var(--muted);
   display: flex;
   align-items: center;
@@ -2680,16 +2703,16 @@ textarea.theme-pending:focus::placeholder {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
-  padding: .3rem .65rem;
-  font-size: .82rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
   color: var(--text);
   min-height: 1.25rem;
   word-break: break-word;
 }
 .cap-input {
   width: 42px;
-  font-size: .78rem;
-  padding: .1rem .3rem;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.3rem;
   text-align: center;
   border: 1.5px solid var(--border);
   border-radius: var(--rad-sm);
@@ -2698,7 +2721,7 @@ textarea.theme-pending:focus::placeholder {
 }
 .muted {
   color: var(--muted);
-  font-size: .85rem;
+  font-size: 0.85rem;
 }
 
 /* ── Éditeur de texte enrichi (Tiptap) — onglet Échanges ─────────────────── */
@@ -2706,22 +2729,22 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: .25rem;
-  margin-bottom: .4rem;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
 }
 .rte-sep {
   width: 1px;
   align-self: stretch;
   background: var(--border);
-  margin: 0 .2rem;
+  margin: 0 0.2rem;
 }
 .rte-content {
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: .55rem .7rem;
+  padding: 0.55rem 0.7rem;
   min-height: 220px;
   background: var(--surface);
-  font-size: .85rem;
+  font-size: 0.85rem;
   line-height: 1.45;
   color: var(--text);
   overflow: auto;
@@ -2737,24 +2760,24 @@ textarea.theme-pending:focus::placeholder {
   overflow-y: auto;
 }
 .rte-content p {
-  margin: 0 0 .55rem;
+  margin: 0 0 0.55rem;
 }
 .rte-content h2 {
   font-size: 1.05rem;
   font-weight: 700;
-  margin: .2rem 0 .5rem;
+  margin: 0.2rem 0 0.5rem;
 }
 .rte-content ul,
 .rte-content ol {
-  margin: 0 0 .55rem 1.3rem;
+  margin: 0 0 0.55rem 1.3rem;
   padding: 0;
 }
 .rte-content li {
-  margin: .1rem 0;
+  margin: 0.1rem 0;
 }
 .rte-content blockquote {
-  margin: 0 0 .55rem;
-  padding-left: .7rem;
+  margin: 0 0 0.55rem;
+  padding-left: 0.7rem;
   border-left: 3px solid var(--border);
   color: var(--muted);
 }
@@ -2767,8 +2790,8 @@ textarea.theme-pending:focus::placeholder {
 .rte-color {
   display: inline-flex;
   align-items: center;
-  gap: .15rem;
-  padding: .1rem .3rem;
+  gap: 0.15rem;
+  padding: 0.1rem 0.3rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface2);
@@ -2785,14 +2808,14 @@ textarea.theme-pending:focus::placeholder {
 .rte-content table,
 .rte-preview table {
   border-collapse: collapse;
-  margin: 0 0 .55rem;
+  margin: 0 0 0.55rem;
 }
 .rte-content th,
 .rte-content td,
 .rte-preview th,
 .rte-preview td {
   border: 1px solid var(--border);
-  padding: .25rem .45rem;
+  padding: 0.25rem 0.45rem;
   min-width: 2rem;
 }
 .rte-content th,
@@ -2828,7 +2851,7 @@ textarea.theme-pending:focus::placeholder {
      calée sur le coin de l'entête desktop (.agenda-corner : padding .3rem / police
      1rem) qui pilote la hauteur de la rangée d'entête. */
   height: auto;
-  padding: .3rem 0;
+  padding: 0.3rem 0;
   border: none;
   border-radius: 0;
   background: var(--surface2);
@@ -2855,9 +2878,9 @@ textarea.theme-pending:focus::placeholder {
   background: var(--surface2);
   /* Même boîte que .agenda-header-cell (padding .3rem .4rem / police .75rem) →
      la fausse entête a la même hauteur que l'entête desktop. */
-  padding: .3rem .4rem;
+  padding: 0.3rem 0.4rem;
   font-weight: 700;
-  font-size: .75rem;
+  font-size: 0.75rem;
   line-height: 1.2;
   text-transform: capitalize;
 }
@@ -2865,21 +2888,21 @@ textarea.theme-pending:focus::placeholder {
 @media (max-width: 640px) {
   /* User bar plus compacte sur mobile : remontée, pill et bouton thème à 24px, avatar réduit. */
   .user-bar {
-    top: .2rem;
+    top: 0.2rem;
   }
   .user-bar .user-pill {
     height: 28px;
-    padding: 0 .55rem 0 .3rem;
+    padding: 0 0.55rem 0 0.3rem;
   }
   .user-bar .avatar {
     width: 20px;
     height: 20px;
-    font-size: .58rem;
+    font-size: 0.58rem;
   }
   .btn-theme {
     width: 28px;
     height: 28px;
-    font-size: .85rem;
+    font-size: 0.85rem;
   }
   /* Cadre : sidebar empilée en haut (barre horizontale de services), contenu pleine largeur. */
   .app-layout {
@@ -2895,7 +2918,7 @@ textarea.theme-pending:focus::placeholder {
     border-right: none;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
-    padding: .05rem .5rem;
+    padding: 0.05rem 0.5rem;
     /* Pas de fond sur mobile (couvre aussi la surcharge html.light, plus spécifique). */
     background: none !important;
   }
@@ -2910,14 +2933,14 @@ textarea.theme-pending:focus::placeholder {
   #mobile-services-toggle {
     display: flex;
     align-items: center;
-    gap: .5rem;
+    gap: 0.5rem;
     width: 100%;
     background: var(--surface2);
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: .3rem .7rem;
-    font-size: .82rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
   }
@@ -2939,9 +2962,9 @@ textarea.theme-pending:focus::placeholder {
     text-overflow: ellipsis;
   }
   #mobile-services-toggle .mst-caret {
-    font-size: .7rem;
+    font-size: 0.7rem;
     color: var(--muted);
-    transition: transform .15s ease;
+    transition: transform 0.15s ease;
   }
   #service-sidebar-wrap.mobile-open #mobile-services-toggle .mst-caret {
     transform: rotate(180deg);
@@ -2953,9 +2976,9 @@ textarea.theme-pending:focus::placeholder {
   #service-sidebar-wrap.mobile-open #service-sidebar {
     display: flex;
     flex-wrap: wrap;
-    gap: .4rem;
+    gap: 0.4rem;
     padding: 0;
-    margin-top: .5rem;
+    margin-top: 0.5rem;
   }
   #service-sidebar button,
   #service-sidebar .sidebar-compte-btn {
@@ -2963,8 +2986,8 @@ textarea.theme-pending:focus::placeholder {
     border: 1px solid var(--border);
     border-radius: 8px;
     /* Même hauteur que #mobile-services-toggle (padding vertical + police identiques). */
-    padding: .3rem .7rem;
-    font-size: .82rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.82rem;
     margin-top: 0 !important;
   }
   /* Icône réduite (1.05rem comme le burger du toggle) → même hauteur de contenu. */
@@ -2979,7 +3002,7 @@ textarea.theme-pending:focus::placeholder {
     height: auto;
     overflow: visible;
     /* Padding latéral réduit pour élargir la zone de contenu au doigt. */
-    padding: .6rem .25rem 2rem;
+    padding: 0.6rem 0.25rem 2rem;
     /* .app-layout est en colonne avec align-items:flex-start → .app-main se
        calerait à gauche : on le recentre dans la largeur du viewport. */
     align-self: center;
@@ -2988,7 +3011,7 @@ textarea.theme-pending:focus::placeholder {
   /* Agenda : un peu plus compact en texte pour gagner de la place au doigt.
      Coins hauts droits : la barre mobile-day-nav (rangée d'en-tête) se pose dessus. */
   .agenda-grid {
-    font-size: .8rem;
+    font-size: 0.8rem;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
@@ -3009,7 +3032,7 @@ textarea.theme-pending:focus::placeholder {
   }
   /* Onglets de période sur smartphone (compact) : marge haute seule, pas de marge basse. */
   #agenda-period-tabs {
-    margin-top: .5rem;
+    margin-top: 0.5rem;
     margin-bottom: 0;
   }
   /* La nav semaine garde son centrage ABSOLU (style inline left:50%/top:50%/translate)

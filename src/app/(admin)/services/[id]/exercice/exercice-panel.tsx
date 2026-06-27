@@ -1,9 +1,9 @@
 "use client";
 
-import { ModalOverlay } from "@/components/agenda-shared";
-import type { ExercicePaneData } from "@/server/services/exercice";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
+import type { ExercicePaneData } from "@/server/services/exercice";
 import { cycleAction, setShowPreviousExercicesAction, undoCycleAction } from "./actions";
 
 type Props = {
@@ -75,7 +75,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
     setConfirm(null);
     startTransition(async () => {
       const res = await undoCycleAction(serviceId);
-      if (!res || !res.ok) {
+      if (!res?.ok) {
         setError(res?.error ?? "Échec de l'annulation.");
         return;
       }
@@ -134,7 +134,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
               setShowPrevious(next); // optimiste
               startTransition(async () => {
                 const res = await setShowPreviousExercicesAction(serviceId, next);
-                if (!res || !res.ok) {
+                if (!res?.ok) {
                   setShowPrevious(!next); // rollback
                   setError(res?.error ?? "Échec de l'enregistrement.");
                   return;

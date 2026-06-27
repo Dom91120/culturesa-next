@@ -1,7 +1,7 @@
 import { csvResponse } from "@/lib/csv";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
-import { type StatsType, getServiceStats } from "@/server/services/stats";
+import { getServiceStats, type StatsType } from "@/server/services/stats";
 
 function parseType(v: string | null): StatsType {
   return v === "rec" || v === "uniq" ? v : "all";

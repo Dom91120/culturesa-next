@@ -1,6 +1,6 @@
 "use client";
 
-import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // Drag « pointer events » unifié souris + tactile + stylet, en remplacement du HTML5
 // Drag and Drop (qui ne se déclenche PAS au doigt sur mobile). Schéma :

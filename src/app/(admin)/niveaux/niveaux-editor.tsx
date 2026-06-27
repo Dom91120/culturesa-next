@@ -1,7 +1,7 @@
 "use client";
 
-import { useBufferedRows } from "@/components/use-buffered-rows";
 import { useState } from "react";
+import { useBufferedRows } from "@/components/use-buffered-rows";
 import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
 
 type DemandeurOption = { id: number; label: string };

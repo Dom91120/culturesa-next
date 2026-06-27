@@ -1,10 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { requireServiceManager } from "@/server/guards";
 import { cycleService, setShowPreviousExercices, undoCycle } from "@/server/services/exercice";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 /** Variante d'ActionState renvoyant les compteurs du cycle. */
 export type CycleActionState =

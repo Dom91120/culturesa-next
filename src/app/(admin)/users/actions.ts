@@ -1,12 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
-import { RgpdError, anonymizeUser } from "@/server/services/rgpd";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
+import { anonymizeUser, RgpdError } from "@/server/services/rgpd";
 
 const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
 

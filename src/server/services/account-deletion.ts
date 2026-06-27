@@ -3,7 +3,7 @@ import { getAppUrl } from "@/server/config";
 import { hmacSign, timingSafeEqualStr } from "@/server/crypto";
 import { prisma } from "@/server/db";
 import { sendTemplatedMail } from "@/server/services/mail-send";
-import { RgpdError, anonymizeUser, assertNotLastActiveAdmin } from "@/server/services/rgpd";
+import { anonymizeUser, assertNotLastActiveAdmin, RgpdError } from "@/server/services/rgpd";
 
 // ════════════════════════════════════════════════════════════
 //  Suppression de compte en self-service (RGPD art. 17).
