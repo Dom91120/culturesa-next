@@ -941,7 +941,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                         checked={exoForm.type === t}
                         onChange={() => changeExoType(t)}
                       />
-                      <span style={{ fontSize: ".82rem" }}>
+                      <span style={{ fontSize: ".75rem" }}>
                         {t === "scolaire" ? "Année scolaire" : "Année civile"}
                       </span>
                     </label>
