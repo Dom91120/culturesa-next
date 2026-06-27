@@ -574,20 +574,24 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                 </button>
               </>
             )}
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={openCreateExercice}
-              style={{
-                borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
-                color: "var(--warn)",
-                padding: ".18rem .5rem",
-                fontSize: ".62rem",
-                whiteSpace: "nowrap",
-              }}
-            >
-              ＋ Nouvel exercice
-            </button>
+            {/* « Nouvel exercice » : visible uniquement quand le service n'a AUCUN exercice
+                (sinon on crée les exercices suivants via la bascule). */}
+            {!hasExercices && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={openCreateExercice}
+                style={{
+                  borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
+                  color: "var(--warn)",
+                  padding: ".18rem .5rem",
+                  fontSize: ".62rem",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ＋ Nouvel exercice
+              </button>
+            )}
           </div>
         </div>
       </div>
