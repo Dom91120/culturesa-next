@@ -1326,6 +1326,7 @@ textarea.theme-pending:focus::placeholder {
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 1rem 5rem;
+  margin-bottom: 1rem;
 }
 /* Titre + navigation exercice (« Exercice ◀ … ▶ ») : bandeau pleine largeur AU-DESSUS du
    multi-colonnage (hors de la grille #periods-row). */
