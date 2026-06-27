@@ -156,7 +156,7 @@ export async function getServiceStats(
     if (!dateFrom && !dateTo) return true;
     if (b.slot.slotDate) return inRange(ymd(b.slot.slotDate), dateFrom, dateTo);
     // Récurrent (pas de date) : recoupement par les dates de sa période.
-    const per = periodsById.get(b.periodId);
+    const per = periodsById.get(b.periodId ?? 0);
     const ps = per?.dateStart ? ymd(per.dateStart) : null;
     const pe = per?.dateEnd ? ymd(per.dateEnd) : null;
     if (!ps || !pe) return true;
@@ -188,7 +188,7 @@ export async function getServiceStats(
       (occBySlot.get(b.slotId) ?? 0) + gaugeUnits(b.enfants, b.accompagnants, gaugeAccompagnants),
     );
     // Mois : date du créneau (ponctuel) sinon début de période (récurrent), comme le legacy.
-    const ref = b.slot.slotDate ?? periodsById.get(b.periodId)?.dateStart ?? null;
+    const ref = b.slot.slotDate ?? periodsById.get(b.periodId ?? 0)?.dateStart ?? null;
     if (ref) {
       const bucket = ymd(ref).slice(0, 7);
       monthMap.set(bucket, (monthMap.get(bucket) ?? 0) + 1);
@@ -249,7 +249,7 @@ export async function getServiceStats(
     if (type === "uniq" && b.bookingType !== "unique") continue;
     const label = b.slot.slotDate
       ? schoolYearLabel(b.slot.slotDate)
-      : (exoByPeriod.get(b.periodId) ?? null);
+      : (exoByPeriod.get(b.periodId ?? 0) ?? null);
     if (!label) continue;
     exoMap.set(label, (exoMap.get(label) ?? 0) + b.enfants);
   }

@@ -172,7 +172,9 @@ export async function listEditionRows(serviceId: string, userId?: string): Promi
     },
   });
 
-  const periodIds = [...new Set(bookings.map((b) => b.periodId).filter((p) => p > 0))];
+  const periodIds = [
+    ...new Set(bookings.map((b) => b.periodId).filter((p): p is number => p != null && p > 0)),
+  ];
   const periods = await prisma.period.findMany({
     where: { id: { in: periodIds } },
     select: { id: true, label: true },
@@ -196,7 +198,7 @@ export async function listEditionRows(serviceId: string, userId?: string): Promi
       prenom: b.user.prenom,
       enfants: b.enfants,
       accompagnants: b.accompagnants,
-      periode: periodLabel.get(b.periodId) ?? "—",
+      periode: periodLabel.get(b.periodId ?? 0) ?? "—",
       creneau: s && e ? `${s} – ${e}` : "Journée entière",
       debut: b.slot.startTime,
       fin: b.slot.endTime,

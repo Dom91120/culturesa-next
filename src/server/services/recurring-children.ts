@@ -21,7 +21,7 @@ export type ParentForSync = {
   userId: string;
   serviceId: string;
   slotId: string; // slot parent récurrent
-  periodId: number; // > 0
+  periodId: number | null; // période de la récurrente (null/≤0 = aucune → pas d'enfants)
   week: string; // "" | "A" | "B"
   themeLabel: string;
   enfants: number;
@@ -51,7 +51,7 @@ export async function syncRecurringChildren(
   // (comportement USAGER).
   opts?: { schoolZone?: string; cutoffISO?: string },
 ): Promise<{ created: number; updated: number; deleted: number }> {
-  if (parent.periodId <= 0) {
+  if (parent.periodId == null || parent.periodId <= 0) {
     const del = await tx.booking.deleteMany({ where: { parentBookingId: parent.id } });
     return { created: 0, updated: 0, deleted: del.count };
   }
@@ -140,7 +140,9 @@ export async function syncRecurringChildren(
     const uqWhere = {
       userId: parent.userId,
       serviceId: parent.serviceId,
-      periodId: 0,
+      // Enfants d'occurrence et ponctuelles autonomes ont periodId NULL (cf. uq_recurring
+      // NULLS NOT DISTINCT) : on matche IS NULL pour l'adoption, pas l'ancien sentinelle 0.
+      periodId: null,
       week: "",
     };
     const existingRows = await tx.booking.findMany({
@@ -172,7 +174,7 @@ export async function syncRecurringChildren(
           userId: parent.userId,
           serviceId: parent.serviceId,
           slotId,
-          periodId: 0,
+          periodId: null,
           week: "",
           parentBookingId: parent.id,
           themeLabel: parent.themeLabel,

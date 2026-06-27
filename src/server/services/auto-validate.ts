@@ -205,8 +205,9 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
   const periodIds = [
     ...new Set(
       allCands
-        .filter((c) => c.bookingType === "recurring" && c.periodId > 0)
-        .map((c) => c.periodId),
+        .filter((c) => c.bookingType === "recurring")
+        .map((c) => c.periodId)
+        .filter((id): id is number => id != null && id > 0),
     ),
   ];
   const periodEnd = new Map<number, Date | null>(
@@ -246,7 +247,7 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
         c.bookingType === "unique"
           ? c.slot.slotDate != null && toIso(c.slot.slotDate) < todayIso
           : (() => {
-              const end = periodEnd.get(c.periodId);
+              const end = c.periodId != null ? periodEnd.get(c.periodId) : null;
               return end != null && toIso(end) < todayIso;
             })();
       if (past) {

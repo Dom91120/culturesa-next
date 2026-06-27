@@ -73,6 +73,11 @@ async function reserveRecurringInTx(
   },
 ): Promise<BookingConfirmationParams> {
   const { slotId, periodId, theme, enfants, accompagnants, wk } = args;
+  // Une réservation récurrente est TOUJOURS rattachée à une période (FK bookings.periodId).
+  // Garde défensif : refuse un periodId absent/invalide plutôt que de violer la FK.
+  if (!(periodId > 0)) {
+    throw new BookingError("Période requise pour une réservation récurrente.");
+  }
   const slot = await tx.slot.findUnique({
     where: { id: slotId },
     include: { service: true, demandeurs: { select: { demandeurId: true } } },
@@ -385,6 +390,10 @@ async function moveInTx(
   ) {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
+  // Déplacement vers un créneau récurrent → période cible obligatoire (FK bookings.periodId).
+  if (!target.ponctuel && !(target.periodId != null && target.periodId > 0)) {
+    throw new BookingError("Période requise pour une réservation récurrente.");
+  }
   const user = await tx.user.findUnique({
     where: { id: userId },
     select: { demandeurId: true },
@@ -427,7 +436,8 @@ async function moveInTx(
     where: { id: bookingId },
     data: {
       slotId: target.slotId,
-      periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
+      // Ponctuel → aucune période (NULL) ; récurrent → période cible (validée plus haut).
+      periodId: target.ponctuel ? null : (target.periodId ?? null),
       week: target.ponctuel ? "" : wk,
       validated,
       autoValidateFrom: new Date(),

@@ -307,6 +307,7 @@ model Period {
   service  Service?        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   exercice Exercice?       @relation(fields: [exerciceId], references: [id], onDelete: SetNull)
   slots    Slot[]
+  bookings Booking[]
   holidays PeriodHoliday[]
 
   @@index([serviceId])
@@ -434,7 +435,11 @@ model Booking {
   userId          String
   serviceId       String
   slotId          String
-  periodId        Int         @default(0)
+  // null = aucune période (réservation ponctuelle autonome ou enfant d'occurrence) ;
+  // sinon FK vers la période (réservation récurrente). L'unicité uq_recurring est créée
+  // en NULLS NOT DISTINCT (migration brute) pour que les lignes à periodId NULL restent
+  // dédupliquées — Prisma ne sait pas exprimer NULLS NOT DISTINCT dans le schéma.
+  periodId        Int?
   week            String      @default("")
   parentBookingId Int?
   themeLabel      String      @default("")
@@ -453,6 +458,7 @@ model Booking {
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   slot      Slot              @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  period    Period?           @relation(fields: [periodId], references: [id], onDelete: Cascade)
   reminders BookingReminder[]
   // Réservation récurrente « parente » → réservations-enfants datées (une par
   // occurrence, bookingType=unique). Supprimer le parent supprime ses enfants.
@@ -461,7 +467,6 @@ model Booking {
 
   @@unique([userId, serviceId, slotId, periodId, week], name: "uq_recurring")
   @@index([userId])
-  @@index([serviceId])
   @@index([periodId])
   @@index([slotId])
   @@index([parentBookingId])
@@ -469,6 +474,10 @@ model Booking {
   @@index([serviceId, validated])
   // Digest gestionnaire : range scan des auto-validations d'un service (manager-notice.ts).
   @@index([serviceId, autoValidatedAt])
+  // Éditions/exports : filtre serviceId + tri (periodId, createdAt) sans tri en mémoire
+  // (editions.ts). Couvre aussi les lookups serviceId seul (préfixe gauche) → l'index
+  // [serviceId] simple devient redondant et a été retiré.
+  @@index([serviceId, periodId, createdAt])
   @@map("bookings")
 }
 

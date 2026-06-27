@@ -130,7 +130,9 @@ export async function assertSlotCapacity(
     serviceId: string;
     slotId: string;
     bookingType: "recurring" | "unique";
-    periodId: number;
+    // null/0 = aucune période (ponctuel) ; le décompte par période ne concerne que le
+    // récurrent — la branche unique ignore periodId.
+    periodId: number | null;
     enfants: number;
     accompagnants: number;
     excludeBookingId?: number;
@@ -358,7 +360,7 @@ export async function createUniqueBookingInTx(
       userId,
       serviceId: slot.serviceId,
       slotId: slot.id,
-      periodId: 0,
+      periodId: null,
       week: "",
       enfants: input.enfants,
       accompagnants: input.accompagnants,
@@ -673,7 +675,8 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       (b): UserAgendaBooking => ({
         id: b.id,
         slotId: b.slotId,
-        periodId: b.periodId,
+        // DTO client : convention 0 = aucune période (la grille usager raisonne en number).
+        periodId: b.periodId ?? 0,
         week: b.week,
         bookingType: b.bookingType,
         parentBookingId: b.parentBookingId,

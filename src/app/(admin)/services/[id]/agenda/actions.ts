@@ -846,7 +846,7 @@ export async function createUniqueBookingAction(input: {
             userId: d.userId,
             serviceId: d.serviceId,
             slotId: d.slotId,
-            periodId: 0,
+            periodId: null,
             week: "",
             enfants: d.enfants,
             accompagnants: d.accompagnants,

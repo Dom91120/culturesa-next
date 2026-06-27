@@ -158,7 +158,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   const bookingsData = bookings.map((b) => ({
     id: b.id,
     slotId: b.slotId,
-    periodId: b.periodId,
+    // DTO client : convention 0 = aucune période (la grille admin raisonne en number).
+    periodId: b.periodId ?? 0,
     week: b.week,
     bookingType: b.bookingType,
     parentBookingId: b.parentBookingId,
