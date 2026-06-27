@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { deleteServicesAction, saveServiceFromModalAction } from "./actions";
 import { ICON_CATEGORIES } from "./legacy-icons";
 
@@ -45,23 +45,33 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
   // « Modification/création en cours » : ligne nouvelle, suppression en attente ou ligne
   // (libellé/icône) modifiée. Pilote le pied : « Fermer » au repos, « Annuler /
   // Enregistrer » dès qu'il y a une modification.
-  const initialById = new Map(initial.map((s) => [s.id, s]));
-  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is string => id != null));
-  const dirty =
-    rows.some((r) => r.id == null) ||
-    initial.some((s) => !currentIds.has(s.id)) ||
-    rows.some((r) => {
-      if (r.id == null) return false;
-      const init = initialById.get(r.id);
-      return !!init && (init.label !== r.label.trim() || (init.icon ?? null) !== (r.icon ?? null));
-    });
+  // Mémoïsés : ne dépendent que de `initial` (stable entre deux frappes) / `rows` — sinon
+  // Map/Set + 3 balayages recalculés à CHAQUE frappe dans un champ.
+  const initialById = useMemo(() => new Map(initial.map((s) => [s.id, s])), [initial]);
+  const currentIds = useMemo(
+    () => new Set(rows.map((r) => r.id).filter((id): id is string => id != null)),
+    [rows],
+  );
+  const dirty = useMemo(
+    () =>
+      rows.some((r) => r.id == null) ||
+      initial.some((s) => !currentIds.has(s.id)) ||
+      rows.some((r) => {
+        if (r.id == null) return false;
+        const init = initialById.get(r.id);
+        return (
+          !!init && (init.label !== r.label.trim() || (init.icon ?? null) !== (r.icon ?? null))
+        );
+      }),
+    [rows, initial, initialById, currentIds],
+  );
 
   // Resynchronise le tampon après un enregistrement (réconcilie les nouveaux id) ou lors
   // d'un rafraîchissement externe sans modification locale en cours.
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const justSaved = useRef(false);
-  const initSig = JSON.stringify(initial);
+  const initSig = useMemo(() => JSON.stringify(initial), [initial]);
   const lastSig = useRef(initSig);
   // biome-ignore lint/correctness/useExhaustiveDependencies: resync piloté par la signature des données serveur
   useEffect(() => {
