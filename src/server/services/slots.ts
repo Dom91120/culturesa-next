@@ -1,5 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
-import { slotWeekTag } from "@/lib/iso-week";
+import { mirrorDates } from "@/lib/mirror-dates";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 
@@ -13,17 +13,6 @@ import { prisma } from "@/server/db";
 // Jours de la semaine : source unique = DAYS (schemas/config), aussi adossée à
 // l'enum Zod. type DayKey en dérive (audit duplication D2).
 type DayKey = (typeof DAYS)[number];
-
-// ISO weekday (1=Mon..7=Sun) → day key.
-const ISO_DOW_KEY: Record<number, DayKey> = {
-  1: "lun",
-  2: "mar",
-  3: "mer",
-  4: "jeu",
-  5: "ven",
-  6: "sam",
-  7: "dim",
-};
 
 function toISO(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -91,10 +80,9 @@ function normalizeDemandeurIds(demandeurIds: number[] | undefined): number[] {
 
 type WantedMirror = { date: string; cap: number };
 
-// Compute the mirrors a recurring slot should have, given period range,
-// active days, holidays (excluded unless openOnHolidays) and A/B filter.
-// Modèle « un slot = un jour » : on ne génère des miroirs que pour les dates
-// tombant sur `slotDay`, chacun avec la capacité unique du créneau.
+// Miroirs attendus d'un créneau récurrent (modèle « un slot = un jour ») : dates de
+// `slotDay` sur la période, capacité unique du créneau. Noyau dates partagé avec la
+// bascule d'exercice (lib/mirror-dates) — voir `mirrorDates`.
 function computeWantedMirrors(args: {
   startDate: string;
   endDate: string;
@@ -108,18 +96,16 @@ function computeWantedMirrors(args: {
   const { startDate, endDate, activeDays, holidaySet, openOnHolidays, weeks, slotDay, capacity } =
     args;
   const wanted = new Map<string, WantedMirror>();
-  if (!activeDays.includes(slotDay)) return wanted;
-  let cur = fromISO(startDate);
-  const end = fromISO(endDate);
-  while (cur.getTime() <= end.getTime()) {
-    const dateStr = toISO(cur);
-    const dow = cur.getUTCDay() || 7; // 1=Mon..7=Sun
-    const dayKey = ISO_DOW_KEY[dow];
-    cur = new Date(cur.getTime() + 86400000);
-    if (dayKey !== slotDay) continue;
-    if (!openOnHolidays && holidaySet.has(dateStr)) continue;
-    if (!weeks.includes(slotWeekTag(dateStr))) continue;
-    wanted.set(dateStr, { date: dateStr, cap: capacity });
+  for (const date of mirrorDates({
+    startDate,
+    endDate,
+    slotDay,
+    activeDays,
+    allowedWeeks: weeks,
+    holidaySet,
+    openOnHolidays,
+  })) {
+    wanted.set(date, { date, cap: capacity });
   }
   return wanted;
 }

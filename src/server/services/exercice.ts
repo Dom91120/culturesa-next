@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
 import { holidaysInRange } from "@/lib/french-holidays";
-import { slotWeekTag } from "@/lib/iso-week";
+import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
 import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";
 
@@ -84,12 +84,6 @@ export function shiftDateOneYear(date: string | null): string | null {
   return `${pad4(ny)}-${pad2(m)}-${pad2(d)}`;
 }
 
-/** Jour ISO 1..7 (1 = lundi, 7 = dimanche) d'une date UTC. */
-function isoDay(d: Date): number {
-  const day = d.getUTCDay(); // 0 = dimanche
-  return day === 0 ? 7 : day;
-}
-
 // Jours fériés : implémentation partagée dans lib/french-holidays (source unique
 // serveur + grilles agenda).
 
@@ -146,19 +140,12 @@ const ISO_KEY: Record<number, string> = {
   7: "dim",
 };
 
-/** Capacité du jour ISO (1..7) pour un slot mono-jour : non nulle uniquement le jour
- *  du créneau (slotDay). */
-function capForDay(slot: SlotSnapshot, iso: number): number | null {
-  return slot.slotDay === ISO_KEY[iso] ? slot.capacity : null;
-}
-
 /**
- * Génère les miroirs uniques (« u_<slotId>_<date> ») d'un créneau récurrent
- * cloné sur [rangeStart, rangeEnd], pour chaque jour actif du service, en
- * excluant les fériés si !openOnHolidays et en respectant le filtre semaines
- * A/B (convention UNIQUE de l'app, cf. lib/iso-week : A = semaine ISO IMPAIRE,
- * B = paire). Capacité miroir = cap du jour.
- * Renvoie les ids créés.
+ * Génère les miroirs uniques (« u_<slotId>_<date> ») d'un créneau récurrent cloné sur
+ * [rangeStart, rangeEnd] : dates de `src.slotDay` (jour actif), hors fériés si
+ * !openOnHolidays, filtre semaines A/B — via le noyau partagé `mirrorDates`
+ * (lib/mirror-dates), commun à la sauvegarde de créneau (slots.ts). Capacité miroir =
+ * capacité unique du créneau. Renvoie les ids créés.
  */
 async function generateMirrorSlots(
   tx: Prisma.TransactionClient,
@@ -175,48 +162,45 @@ async function generateMirrorSlots(
 ): Promise<string[]> {
   const { serviceId, slotId, periodId, src, rangeStart, rangeEnd, activeDays, openOnHolidays } =
     params;
+  // Slot mono-jour sans jour OU sans capacité → aucun miroir (ancien capForDay → null).
+  if (src.slotDay == null || src.capacity == null) return [];
+  const cap = src.capacity;
 
   const holidaySet = new Set<string>();
   if (!openOnHolidays) {
     for (const h of holidaysInRange(rangeStart, rangeEnd)) holidaySet.add(h.date);
   }
 
+  const dates = mirrorDates({
+    startDate: rangeStart,
+    endDate: rangeEnd,
+    slotDay: src.slotDay as DayKey,
+    activeDays: activeDays.map((n) => ISO_KEY[n] as DayKey),
+    allowedWeeks: src.weeks === "A" || src.weeks === "B" ? [src.weeks] : ["A", "B"],
+    holidaySet,
+    openOnHolidays,
+  });
+
   // Accumulation puis UN SEUL createMany : un INSERT par occurrence faisait dépasser
   // le timeout de transaction Prisma (5 s par défaut) dès quelques créneaux × périodes.
-  const rows: Prisma.SlotCreateManyInput[] = [];
   const created: string[] = [];
-  const end = dateFromYmd(rangeEnd);
-  const cursor = dateFromYmd(rangeStart);
-
-  while (cursor.getTime() <= end.getTime()) {
-    const iso = isoDay(cursor);
-    const dateStr = `${pad4(cursor.getUTCFullYear())}-${pad2(cursor.getUTCMonth() + 1)}-${pad2(cursor.getUTCDate())}`;
-    if (activeDays.includes(iso) && !holidaySet.has(dateStr)) {
-      let weekOk = true;
-      if (src.weeks === "A" || src.weeks === "B") {
-        // Convention unique de l'app (lib/iso-week) : semaine ISO IMPAIRE = A.
-        weekOk = src.weeks === slotWeekTag(dateStr);
-      }
-      const cap = capForDay(src, iso);
-      if (weekOk && cap !== null) {
-        const mid = `u_${slotId}_${dateStr}`;
-        rows.push({
-          id: mid,
-          serviceId,
-          slotType: "unique",
-          startTime: src.startTime,
-          endTime: src.endTime,
-          slotDate: dateFromYmd(dateStr),
-          capacity: cap,
-          periodId,
-          parentSlotId: slotId,
-          weeks: null,
-          state: "actif",
-        });
-        created.push(mid);
-      }
-    }
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  const rows: Prisma.SlotCreateManyInput[] = [];
+  for (const dateStr of dates) {
+    const mid = `u_${slotId}_${dateStr}`;
+    created.push(mid);
+    rows.push({
+      id: mid,
+      serviceId,
+      slotType: "unique",
+      startTime: src.startTime,
+      endTime: src.endTime,
+      slotDate: dateFromYmd(dateStr),
+      capacity: cap,
+      periodId,
+      parentSlotId: slotId,
+      weeks: null,
+      state: "actif",
+    });
   }
 
   if (rows.length > 0) await tx.slot.createMany({ data: rows });
