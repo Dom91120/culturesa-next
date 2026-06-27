@@ -52,7 +52,7 @@ const updateUserSchema = baseUserSchema
   .extend({ id: z.string().min(1) })
   .superRefine(requireKidsForUser);
 const createUserSchema = baseUserSchema
-  .extend({ email: z.string().trim().email() })
+  .extend({ email: z.string().trim().pipe(z.email()) })
   .superRefine(requireKidsForUser);
 
 export type UpdateUserInput = z.input<typeof updateUserSchema>;
@@ -200,7 +200,7 @@ export async function anonymizeUserAction(id: string): Promise<ActionState> {
 
 export async function resendVerificationAction(email: string): Promise<ActionState> {
   await requireRole("administrateur");
-  const parsed = z.string().email().safeParse(email);
+  const parsed = z.email().safeParse(email);
   if (!parsed.success) return { ok: false, error: "E-mail invalide" };
   try {
     await auth.api.sendVerificationEmail({ body: { email: parsed.data, callbackURL: "/" } });
@@ -212,7 +212,7 @@ export async function resendVerificationAction(email: string): Promise<ActionSta
 
 export async function sendPasswordResetAction(email: string): Promise<ActionState> {
   await requireRole("administrateur");
-  const parsed = z.string().email().safeParse(email);
+  const parsed = z.email().safeParse(email);
   if (!parsed.success) return { ok: false, error: "E-mail invalide" };
   try {
     await auth.api.requestPasswordReset({

@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 export type CaptchaHandle = { refresh: () => void };
 
@@ -10,12 +10,14 @@ export type CaptchaHandle = { refresh: () => void };
  * via `onChange`. Le parent peut demander un nouveau défi via la ref (`refresh()`),
  * typiquement après un échec d'inscription (token à usage unique / expiré).
  */
-export const CaptchaImage = forwardRef<
-  CaptchaHandle,
-  {
-    onChange: (state: { token: string; answer: string }) => void;
-  }
->(function CaptchaImage({ onChange }, ref) {
+// React 19 : `ref` est une prop normale (plus de forwardRef).
+export function CaptchaImage({
+  onChange,
+  ref,
+}: {
+  onChange: (state: { token: string; answer: string }) => void;
+  ref?: Ref<CaptchaHandle>;
+}) {
   const [svg, setSvg] = useState<string | null>(null);
   const [token, setToken] = useState("");
   const [answer, setAnswer] = useState("");
@@ -101,4 +103,4 @@ export const CaptchaImage = forwardRef<
       </p>
     </div>
   );
-});
+}
