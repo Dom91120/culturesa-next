@@ -1324,7 +1324,7 @@ textarea.theme-pending:focus::placeholder {
      quand la place manque (cf. .pr-hours / .defaults-row). */
   grid-template-columns: max-content minmax(0, 1fr);
   grid-template-rows: auto auto;
-  column-gap: 5rem;
+  column-gap: 2%;
 }
 /* Titre + navigation exercice (« Exercice ◀ … ▶ ») : bandeau pleine largeur AU-DESSUS du
    multi-colonnage (hors de la grille #periods-row). */
