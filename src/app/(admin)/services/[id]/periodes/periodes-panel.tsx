@@ -923,7 +923,6 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
 
             <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: ".3rem" }}>
-                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Type</span>
                 <div style={{ display: "flex", gap: "1rem" }}>
                   {(["scolaire", "civile"] as ExerciceType[]).map((t) => (
                     <label
