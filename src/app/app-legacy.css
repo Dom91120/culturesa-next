@@ -579,9 +579,6 @@ main {
   background: var(--accent);
   flex-shrink: 0;
 }
-.panel-second-title {
-  margin-top: 2rem;
-}
 /* Variante secondaire de panel-title (légère, plus discrète) */
 .panel-subtitle {
   font-size: 0.75rem;
@@ -1168,77 +1165,6 @@ textarea.theme-pending:focus::placeholder {
 }
 .slot-btn[draggable="true"]:active {
   cursor: grabbing;
-}
-
-/* ── Recap ───────────────────────────────────────────────── */
-.recap-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-}
-@media (max-width: 480px) {
-  .recap-grid {
-    grid-template-columns: 1fr;
-  }
-}
-.recap-item {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--rad-sm);
-  padding: 0.5rem 0.75rem;
-}
-.recap-key {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 0.15rem;
-}
-.recap-val {
-  font-size: 0.82rem;
-  color: var(--text);
-  font-weight: 500;
-}
-.recap-period-entry {
-  background: var(--surface2);
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-  border-radius: var(--rad-sm);
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.recap-period-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-}
-.recap-period-info .key {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.recap-period-info .val {
-  font-size: 0.8rem;
-  color: var(--text);
-  font-weight: 500;
-  margin-top: 0.1rem;
-}
-.recap-period-entries {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-}
-.no-booking-msg {
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-style: italic;
 }
 
 /* ── Misc ────────────────────────────────────────────────── */
@@ -2529,18 +2455,6 @@ textarea.theme-pending:focus::placeholder {
 }
 .agenda-block-chips .planning-stack-wrap .stack-back2 {
   transform: translate(8px, 8px);
-}
-
-.agenda-empty-overlay {
-  position: absolute;
-  inset: 40px 0 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.85rem;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
-  pointer-events: none;
 }
 
 /* ── Agenda utilisateur (onglet Réservations) ────────────── */

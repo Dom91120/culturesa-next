@@ -66,9 +66,15 @@ function parseBlocks(text) {
 }
 
 const tokenRe = /[.#]([A-Za-z0-9_-]+)/g;
+
+// Classes composées DYNAMIQUEMENT (ex. `toast toast--${variant}`) : le nom complet
+// n'apparaît jamais littéralement dans les sources → on les conserve explicitement
+// pour éviter un faux « mort ». Ajouter ici toute nouvelle famille de ce type.
+const KEEP = new Set(["toast--success", "toast--danger", "toast--warn"]);
+
 const liveCache = new Map();
 function tokenLive(name) {
-  if (!liveCache.has(name)) liveCache.set(name, corpus.includes(name));
+  if (!liveCache.has(name)) liveCache.set(name, KEEP.has(name) || corpus.includes(name));
   return liveCache.get(name);
 }
 
