@@ -466,15 +466,17 @@ export function ReservationsPanel(props: Props) {
         </label>
       </div>
 
-      <div style={{ minHeight: "1.4rem", marginTop: ".75rem" }}>
-        {error ? (
-          <span className="field-error" style={{ display: "block" }}>
-            {error}
-          </span>
-        ) : saved ? (
-          <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
-        ) : null}
-      </div>
+      {(error || saved) && (
+        <div style={{ marginTop: ".75rem" }}>
+          {error ? (
+            <span className="field-error" style={{ display: "block" }}>
+              {error}
+            </span>
+          ) : (
+            <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
