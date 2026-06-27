@@ -1,0 +1,73 @@
+name: CI
+
+# CI Linux : reproduit la validation faite en local.
+#  - checks : lint (Biome) + typecheck (TS) après génération du client Prisma 7
+#  - docker : build de l'image (output standalone) + test `migrate deploy` sur un Postgres
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    name: Lint + Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Client Prisma 7 généré dans src/generated (gitignoré) → requis par le typecheck.
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Lint (Biome)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  docker:
+    name: Build image + migrate deploy
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build de l'image de production (valide l'étape `output: standalone` + prisma generate
+      # v7 en Alpine — l'étape qui échoue sous Windows à cause des symlinks).
+      - name: Build Docker image
+        run: docker build -t culturesa-next:ci .
+
+      # Lance l'entrypoint de l'image : `prisma migrate deploy` applique les migrations sur
+      # la base de service, puis l'app démarrerait. `--network host` pour joindre Postgres
+      # (exposé sur localhost:5432 du runner).
+      - name: Run migrate deploy (image entrypoint)
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL="postgresql://app:app@localhost:5432/app?schema=public" \
+            culturesa-next:ci echo "CI: entrypoint OK, app would start"
