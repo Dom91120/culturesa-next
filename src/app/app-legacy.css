@@ -1373,9 +1373,8 @@ textarea.theme-pending:focus::placeholder {
 }
 .periode-nav .ex-nav-label {
   font-weight: 600;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   color: var(--text);
-  min-width: 5rem;
   text-align: center;
   /* Reste toujours sur une seule ligne (pas de retour à la ligne du « 12 juin → 18 juin »). */
   white-space: nowrap;
