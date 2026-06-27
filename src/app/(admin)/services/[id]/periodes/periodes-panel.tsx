@@ -535,7 +535,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
 
           {currentExercice && (currentExercice.dateStart || currentExercice.dateEnd) && (
             <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-              {currentExercice.type === "civile" ? "Civile" : "Scolaire"} ·{" "}
+              {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
               {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
             </span>
           )}
@@ -942,7 +942,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                         onChange={() => changeExoType(t)}
                       />
                       <span style={{ fontSize: ".82rem" }}>
-                        {t === "scolaire" ? "Scolaire" : "Civile"}
+                        {t === "scolaire" ? "Année scolaire" : "Année civile"}
                       </span>
                     </label>
                   ))}
