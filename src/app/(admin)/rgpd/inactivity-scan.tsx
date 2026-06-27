@@ -56,6 +56,21 @@ function noticeAge(sentAt: string | null): number {
   return Math.floor((Date.now() - t) / MS_PER_DAY);
 }
 
+// Statut RGPD d'un compte — RÈGLE UNIQUE d'éligibilité, partagée par le décompte global et
+// l'affichage par ligne (évite que les deux divergent). « ineligible » : inactivité < seuil ;
+// « needNotice » : éligible, préavis jamais envoyé ; « needWait » : préavis envoyé mais délai
+// de grâce non atteint ; « canAnonymize » : préavis + grâce écoulés.
+type RgpdStatus = "ineligible" | "needNotice" | "needWait" | "canAnonymize";
+function classifyUser(
+  u: { daysInactive: number; deletionNoticeSentAt: string | null },
+  thresholdDays: number,
+  grace: number,
+): RgpdStatus {
+  if (u.daysInactive < thresholdDays) return "ineligible";
+  if (!u.deletionNoticeSentAt) return "needNotice";
+  return noticeAge(u.deletionNoticeSentAt) >= grace ? "canAnonymize" : "needWait";
+}
+
 /** Cellule « Préavis » selon l'état d'éligibilité et l'âge du préavis. */
 function NoticeCell({
   row,
@@ -109,12 +124,9 @@ export function InactivityScan({
     const needNotice: string[] = [];
     const canAnon: string[] = [];
     for (const u of rows) {
-      if (u.daysInactive < thresholdDays) continue; // non éligible
-      if (!u.deletionNoticeSentAt) {
-        needNotice.push(u.id);
-      } else if (noticeAge(u.deletionNoticeSentAt) >= grace) {
-        canAnon.push(u.id);
-      }
+      const s = classifyUser(u, thresholdDays, grace);
+      if (s === "needNotice") needNotice.push(u.id);
+      else if (s === "canAnonymize") canAnon.push(u.id);
     }
     return { needNoticeIds: needNotice, canAnonymizeIds: canAnon };
   }, [rows, thresholdDays, grace]);
@@ -349,8 +361,9 @@ export function InactivityScan({
           </thead>
           <tbody>
             {pageRows.map((u) => {
-              const eligible = u.daysInactive >= thresholdDays;
-              const canDelete = eligible && noticeAge(u.deletionNoticeSentAt) >= grace;
+              const status = classifyUser(u, thresholdDays, grace);
+              const eligible = status !== "ineligible";
+              const canDelete = status === "canAnonymize";
               const fullName = `${u.nom} ${u.prenom}`.trim() || u.email;
 
               let actionCell: ReactNode;
