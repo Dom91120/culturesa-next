@@ -4,14 +4,13 @@
 // ============================================================
 
 generator client {
-  provider = "prisma-client-js"
-  // native     = poste de dev ; linux-musl-openssl-3.0.x = image Docker Alpine
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  // Prisma 7 : client Rust-free (généré dans le projet, importé via @/generated/prisma).
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ============================================================

@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma/client";
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
@@ -6,7 +7,6 @@ import { type BookingCreateInput, bookingCreateSchema } from "@/schemas/booking"
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
-import { Prisma } from "@prisma/client";
 import { getServiceDemandeurSettings } from "./demandeur-settings";
 import { deriveServiceModes } from "./service-modes";
 

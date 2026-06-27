@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@/generated/prisma/client";
 import { bookingCreateSchema } from "@/schemas/booking";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
@@ -20,7 +21,6 @@ import {
   userCanAccessService,
 } from "@/server/services/bookings";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
-import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 

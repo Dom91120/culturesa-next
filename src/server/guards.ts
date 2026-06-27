@@ -1,6 +1,6 @@
+import type { Role } from "@/generated/prisma/client";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
-import type { Role } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 

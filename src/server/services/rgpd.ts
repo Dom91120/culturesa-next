@@ -1,7 +1,7 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendTemplatedMail } from "@/server/services/mail-send";
-import type { Prisma } from "@prisma/client";
 
 export type AnonymizeReason = "self_service" | "admin" | "retention";
 

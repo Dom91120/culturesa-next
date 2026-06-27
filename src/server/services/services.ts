@@ -1,6 +1,6 @@
+import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
-import type { Role } from "@prisma/client";
 
 export function listServices() {
   return prisma.service.findMany({

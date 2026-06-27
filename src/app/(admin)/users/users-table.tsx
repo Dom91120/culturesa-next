@@ -1,7 +1,7 @@
 "use client";
 
+import type { Role } from "@/generated/prisma/client";
 import { formatTel } from "@/lib/format";
-import type { Role } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { anonymizeUserAction, resendVerificationAction } from "./actions";
