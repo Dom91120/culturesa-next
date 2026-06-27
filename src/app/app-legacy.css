@@ -1319,12 +1319,14 @@ textarea.theme-pending:focus::placeholder {
   vertical-align: middle;
 }
 #periods-row {
-  display: grid;
-  /* Colonne 2 (Plages horaires) flexible et rétrécissable → son contenu passe à la ligne
-     quand la place manque (cf. .pr-hours / .defaults-row). */
-  grid-template-columns: max-content minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  /* Flex-wrap : « Plages horaires » s'affiche à droite du tableau des périodes et bascule
+     AUTOMATIQUEMENT dessous quand la largeur disponible ne suffit plus (pas de breakpoint
+     fixe). align-items:flex-start aligne les deux colonnes en haut. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   column-gap: 2%;
+  row-gap: 1rem;
 }
 /* Titre + navigation exercice (« Exercice ◀ … ▶ ») : bandeau pleine largeur AU-DESSUS du
    multi-colonnage (hors de la grille #periods-row). */
@@ -1341,24 +1343,21 @@ textarea.theme-pending:focus::placeholder {
 .pr-head > .periode-nav {
   margin: 0;
 }
-#periods-row > .pr-editor {
-  grid-column: 1;
-  grid-row: 1;
+/* Colonne gauche : tableau des périodes + bouton « Ajouter » empilés. Rétrécit (flex) puis,
+   sous le seuil de base (flex-basis), la colonne « Plages horaires » passe dessous. */
+#periods-row > .pr-left {
+  flex: 1 1 30rem;
+  min-width: 0;
 }
-#periods-row > .pr-add {
-  grid-column: 1;
-  grid-row: 2;
+#periods-row > .pr-left > .pr-add {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
-/* « Plages horaires » : colonne DROITE de la grille, à côté du tableau Périodes (occupe
-   les 2 rangées de la colonne 1, aligné en haut). */
+/* « Plages horaires » : à droite du tableau, bascule dessous quand la place manque. */
 #periods-row > .pr-hours {
-  grid-column: 2;
-  grid-row: 1 / 3;
-  align-self: start;
+  flex: 1 1 18rem;
   min-width: 0; /* autorise le rétrécissement (sinon min-width:auto = contenu → pas de wrap) */
 }
 #periods-row > .pr-hours .defaults-row {
@@ -1450,7 +1449,7 @@ textarea.theme-pending:focus::placeholder {
 
 /* ── Panel Périodes : responsive ─────────────────────────── */
 /* Tableau scrollable horizontalement si son contenu déborde */
-#periods-row > .pr-editor {
+#periods-row .pr-editor {
   overflow-x: auto;
   max-width: 100%;
 }
@@ -1462,20 +1461,8 @@ textarea.theme-pending:focus::placeholder {
   }
 }
 
-/* Sous 900px : sidebar empilée sous la colonne principale.
-   Les éléments internes (titre, dates, bouton) restent empilés verticalement. */
-@media (max-width: 900px) {
-  #periods-row {
-    grid-template-columns: 1fr;
-    column-gap: 0;
-    row-gap: 1rem;
-  }
-  #periods-row > .pr-head,
-  #periods-row > .pr-editor,
-  #periods-row > .pr-add {
-    grid-column: 1;
-  }
-}
+/* L'empilement « Plages horaires » sous le tableau est désormais géré automatiquement par
+   le flex-wrap de #periods-row (plus de breakpoint grid dédié). */
 
 /* Sous 600px (mobile) : table plus compacte, libellé flexible */
 @media (max-width: 600px) {

@@ -594,143 +594,146 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
 
       {/* ── Multi-colonnage : tableau des périodes · actions · plages horaires ── */}
       <div id="periods-row">
-        <div className="pr-editor">
-          {/* Sous-titre discret entre « Exercice » et le tableau des périodes. */}
-          <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-            Périodes
-          </div>
-          {visiblePeriods.length > 0 ? (
-            <table className="periods-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 32 }}>
-                    <input
-                      type="checkbox"
-                      className="admin-cb"
-                      checked={allChecked}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someChecked;
-                      }}
-                      onChange={(e) => toggleSelectAll(e.target.checked)}
-                      title="Tout sélectionner"
-                    />
-                  </th>
-                  <th>Coul</th>
-                  <th>Étiq</th>
-                  <th className="td-left" style={{ width: 250 }}>
-                    Libellé
-                  </th>
-                  <th>Début</th>
-                  <th>Fin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visiblePeriods.map((p) => (
-                  <tr key={p.id} style={p.state === "actif" ? undefined : { opacity: 0.55 }}>
-                    <td>
+        {/* Colonne gauche (tableau + bouton Ajouter) : la colonne « Plages horaires »
+            bascule dessous quand la largeur manque (flex-wrap de #periods-row). */}
+        <div className="pr-left">
+          <div className="pr-editor">
+            {/* Sous-titre discret entre « Exercice » et le tableau des périodes. */}
+            <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+              Périodes
+            </div>
+            {visiblePeriods.length > 0 ? (
+              <table className="periods-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 32 }}>
                       <input
                         type="checkbox"
                         className="admin-cb"
-                        checked={selected.has(p.id)}
-                        onChange={() => toggleSelect(p.id)}
+                        checked={allChecked}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someChecked;
+                        }}
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        title="Tout sélectionner"
                       />
-                    </td>
-                    <td>
-                      <span
-                        className="period-swatch"
-                        style={{ background: p.color || "#6dceaa" }}
-                      />
-                    </td>
-                    <td>{p.etiquette || "—"}</td>
-                    <td className="td-left">{p.label || "—"}</td>
-                    <td>{fmtDate(p.dateStart)}</td>
-                    <td>{fmtDate(p.dateEnd)}</td>
+                    </th>
+                    <th>Coul</th>
+                    <th>Étiq</th>
+                    <th className="td-left" style={{ width: 250 }}>
+                      Libellé
+                    </th>
+                    <th>Début</th>
+                    <th>Fin</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ color: "var(--muted)", fontSize: ".85rem", margin: ".4rem 0" }}>
-              Aucune période définie.
-            </p>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {visiblePeriods.map((p) => (
+                    <tr key={p.id} style={p.state === "actif" ? undefined : { opacity: 0.55 }}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="admin-cb"
+                          checked={selected.has(p.id)}
+                          onChange={() => toggleSelect(p.id)}
+                        />
+                      </td>
+                      <td>
+                        <span
+                          className="period-swatch"
+                          style={{ background: p.color || "#6dceaa" }}
+                        />
+                      </td>
+                      <td>{p.etiquette || "—"}</td>
+                      <td className="td-left">{p.label || "—"}</td>
+                      <td>{fmtDate(p.dateStart)}</td>
+                      <td>{fmtDate(p.dateEnd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ color: "var(--muted)", fontSize: ".85rem", margin: ".4rem 0" }}>
+                Aucune période définie.
+              </p>
+            )}
+          </div>
 
-        <div className="pr-add">
-          {selectedCount > 0 && (
-            <>
-              <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>
-                {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
-              </span>
-              {selectedCount === 1 && (
+          <div className="pr-add">
+            {selectedCount > 0 && (
+              <>
+                <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>
+                  {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
+                </span>
+                {selectedCount === 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={openEdit}
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                      color: "var(--accent)",
+                      padding: ".25rem .65rem",
+                      fontSize: ".68rem",
+                    }}
+                  >
+                    ✏️ Modifier
+                  </button>
+                )}
+                {anyInactiveSelected && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={reactivateSelected}
+                    disabled={pending}
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                      color: "var(--accent)",
+                      padding: ".25rem .65rem",
+                      fontSize: ".68rem",
+                    }}
+                  >
+                    ✓ Réactiver
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={openEdit}
-                  style={{
-                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                    color: "var(--accent)",
-                    padding: ".25rem .65rem",
-                    fontSize: ".68rem",
-                  }}
-                >
-                  ✏️ Modifier
-                </button>
-              )}
-              {anyInactiveSelected && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={reactivateSelected}
+                  onClick={deleteSelected}
                   disabled={pending}
                   style={{
-                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                    color: "var(--accent)",
+                    borderColor: "rgba(220,80,80,.4)",
+                    color: "#e05555",
                     padding: ".25rem .65rem",
                     fontSize: ".68rem",
                   }}
                 >
-                  ✓ Réactiver
+                  🗑️ Supprimer
                 </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={deleteSelected}
-                disabled={pending}
-                style={{
-                  borderColor: "rgba(220,80,80,.4)",
-                  color: "#e05555",
-                  padding: ".25rem .65rem",
-                  fontSize: ".68rem",
-                }}
-              >
-                🗑️ Supprimer
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={openCreate}
-            disabled={!hasExercices}
-            title={hasExercices ? undefined : "Créez d'abord un exercice."}
-            style={{
-              marginLeft: "auto",
-              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-              color: "var(--accent)",
-              padding: ".18rem .5rem",
-              fontSize: ".62rem",
-              whiteSpace: "nowrap",
-              opacity: hasExercices ? 1 : 0.5,
-              cursor: hasExercices ? "pointer" : "not-allowed",
-            }}
-          >
-            ＋ Ajouter une période
-          </button>
+              </>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={openCreate}
+              disabled={!hasExercices}
+              title={hasExercices ? undefined : "Créez d'abord un exercice."}
+              style={{
+                marginLeft: "auto",
+                borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+                color: "var(--accent)",
+                padding: ".18rem .5rem",
+                fontSize: ".62rem",
+                whiteSpace: "nowrap",
+                opacity: hasExercices ? 1 : 0.5,
+                cursor: hasExercices ? "pointer" : "not-allowed",
+              }}
+            >
+              ＋ Ajouter une période
+            </button>
+          </div>
         </div>
-        {/* Plages horaires : placées dans la colonne DROITE de la grille #periods-row,
-            à côté du tableau Périodes (au lieu d'être empilées en dessous). */}
+        {/* Plages horaires : à droite du tableau, bascule dessous quand la place manque. */}
         <div className="pr-hours">
           <div
             className="panel-subtitle"
