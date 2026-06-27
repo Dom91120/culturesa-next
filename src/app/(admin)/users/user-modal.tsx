@@ -75,17 +75,9 @@ export function UserModal({
     [niveaux, demandeurId],
   );
 
-  // Si la catégorie change, on réinitialise la structure si elle n'appartient plus.
-  useEffect(() => {
-    if (structureId && !visibleStructures.some((s) => String(s.id) === structureId)) {
-      setStructureId("");
-    }
-  }, [visibleStructures, structureId]);
-
-  // Quand on quitte le rôle gestionnaire, on vide la sélection de services.
-  useEffect(() => {
-    if (!isManager && serviceIds.length) setServiceIds([]);
-  }, [isManager, serviceIds.length]);
+  // (Les réinitialisations dérivées — structure liée à la catégorie, services liés au rôle
+  // gestionnaire — sont faites directement dans les onChange concernés, pas via des
+  // useEffect en cascade : évite des rendus en plus et tout risque de désynchronisation.)
 
   // Ferme la liste du combobox niveau au clic extérieur.
   useEffect(() => {
@@ -233,7 +225,11 @@ export function UserModal({
               id="uc-demandeur"
               value={demandeurId}
               autoComplete="off"
-              onChange={(e) => setDemandeurId(e.target.value)}
+              onChange={(e) => {
+                setDemandeurId(e.target.value);
+                // La structure dépend de la catégorie → la re-sélection est requise.
+                setStructureId("");
+              }}
             >
               <option value="">— Catégorie —</option>
               {demandeurs.map((d) => (
@@ -355,7 +351,16 @@ export function UserModal({
 
           <div className="field full">
             <label htmlFor="uc-role">Rôle</label>
-            <select id="uc-role" value={role} onChange={(e) => setRole(e.target.value)}>
+            <select
+              id="uc-role"
+              value={role}
+              onChange={(e) => {
+                const r = e.target.value;
+                setRole(r);
+                // Hors rôle gestionnaire : pas de services rattachés.
+                if (r !== "gestionnaire") setServiceIds([]);
+              }}
+            >
               {ROLE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
