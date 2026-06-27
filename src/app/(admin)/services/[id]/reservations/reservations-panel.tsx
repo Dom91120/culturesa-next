@@ -127,9 +127,15 @@ export function ReservationsPanel(props: Props) {
     mgrNoticeWeekday: props.mgrNoticeWeekday,
   });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Garde de démontage : le save est asynchrone (await) + un timer de 1,8 s remet l'état
+  // « enregistré ». On évite tout setState après démontage du panneau (warning React).
+  const mountedRef = useRef(true);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
+      mountedRef.current = false;
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (successTimer.current) clearTimeout(successTimer.current);
     },
     [],
   );
@@ -163,9 +169,12 @@ export function ReservationsPanel(props: Props) {
             | "sam"
             | "dim",
         });
+        if (!mountedRef.current) return;
         if (res?.ok) {
           setSaved(true);
-          window.setTimeout(() => setSaved(false), 1800);
+          successTimer.current = setTimeout(() => {
+            if (mountedRef.current) setSaved(false);
+          }, 1800);
         } else {
           setError(res?.error ?? "Échec de l'enregistrement.");
         }
