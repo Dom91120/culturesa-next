@@ -658,80 +658,82 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
               </p>
             )}
           </div>
+        </div>
 
-          <div className="pr-add">
-            {selectedCount > 0 && (
-              <>
-                <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>
-                  {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
-                </span>
-                {selectedCount === 1 && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={openEdit}
-                    style={{
-                      borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                      color: "var(--accent)",
-                      padding: ".25rem .65rem",
-                      fontSize: ".68rem",
-                    }}
-                  >
-                    ✏️ Modifier
-                  </button>
-                )}
-                {anyInactiveSelected && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={reactivateSelected}
-                    disabled={pending}
-                    style={{
-                      borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                      color: "var(--accent)",
-                      padding: ".25rem .65rem",
-                      fontSize: ".68rem",
-                    }}
-                  >
-                    ✓ Réactiver
-                  </button>
-                )}
+        {/* Barre « Ajouter une période » + actions : hors de .pr-left, sur sa propre ligne
+            sous le tableau (cf. CSS #periods-row > .pr-add). */}
+        <div className="pr-add">
+          {selectedCount > 0 && (
+            <>
+              <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>
+                {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
+              </span>
+              {selectedCount === 1 && (
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={deleteSelected}
-                  disabled={pending}
+                  onClick={openEdit}
                   style={{
-                    borderColor: "rgba(220,80,80,.4)",
-                    color: "#e05555",
+                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                    color: "var(--accent)",
                     padding: ".25rem .65rem",
                     fontSize: ".68rem",
                   }}
                 >
-                  🗑️ Supprimer
+                  ✏️ Modifier
                 </button>
-              </>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={openCreate}
-              disabled={!hasExercices}
-              title={hasExercices ? undefined : "Créez d'abord un exercice."}
-              style={{
-                marginLeft: "auto",
-                borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-                color: "var(--accent)",
-                padding: ".18rem .5rem",
-                fontSize: ".62rem",
-                whiteSpace: "nowrap",
-                opacity: hasExercices ? 1 : 0.5,
-                cursor: hasExercices ? "pointer" : "not-allowed",
-              }}
-            >
-              ＋ Ajouter une période
-            </button>
-          </div>
+              )}
+              {anyInactiveSelected && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={reactivateSelected}
+                  disabled={pending}
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                    color: "var(--accent)",
+                    padding: ".25rem .65rem",
+                    fontSize: ".68rem",
+                  }}
+                >
+                  ✓ Réactiver
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={deleteSelected}
+                disabled={pending}
+                style={{
+                  borderColor: "rgba(220,80,80,.4)",
+                  color: "#e05555",
+                  padding: ".25rem .65rem",
+                  fontSize: ".68rem",
+                }}
+              >
+                🗑️ Supprimer
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={openCreate}
+            disabled={!hasExercices}
+            title={hasExercices ? undefined : "Créez d'abord un exercice."}
+            style={{
+              marginLeft: "auto",
+              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+              color: "var(--accent)",
+              padding: ".18rem .5rem",
+              fontSize: ".62rem",
+              whiteSpace: "nowrap",
+              opacity: hasExercices ? 1 : 0.5,
+              cursor: hasExercices ? "pointer" : "not-allowed",
+            }}
+          >
+            ＋ Ajouter une période
+          </button>
         </div>
         {/* Plages horaires : à droite du tableau, bascule dessous quand la place manque. */}
         <div className="pr-hours">
