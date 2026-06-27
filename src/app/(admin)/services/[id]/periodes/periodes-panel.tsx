@@ -732,7 +732,10 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
         {/* Plages horaires : placées dans la colonne DROITE de la grille #periods-row,
             à côté du tableau Périodes (au lieu d'être empilées en dessous). */}
         <div className="pr-hours">
-          <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+          <div
+            className="panel-subtitle"
+            style={{ fontSize: ".85rem", fontWeight: 500, whiteSpace: "nowrap" }}
+          >
             Plages horaires
           </div>
           <div
