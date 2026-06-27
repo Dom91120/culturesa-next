@@ -1334,7 +1334,7 @@ textarea.theme-pending:focus::placeholder {
   align-items: center;
   gap: 1.25rem;
   flex-wrap: wrap;
-  margin-bottom: 0.85rem;
+  margin-bottom: 1rem;
 }
 .pr-head > .pr-title {
   margin-bottom: 0;
