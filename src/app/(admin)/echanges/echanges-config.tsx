@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import {
   createMailTypeAction,
@@ -160,6 +160,21 @@ export function EchangesConfig({
   } | null>(null);
   const isCreating = metaEdit?.kind === null;
 
+  // Callbacks STABLES passés à <Row> (mémoïsé) : sans eux, toutes les lignes du tableau se
+  // re-rendraient à chaque frappe dans la modale d'édition (closures recréées par rendu).
+  const onEditKind = useCallback((kind: string) => setEditing(kind), []);
+  const onAskDeleteKind = useCallback((kind: string) => setConfirmDelete(kind), []);
+  const onEditMetaRow = useCallback(
+    (row: KindData) =>
+      setMetaEdit({
+        kind: row.kind,
+        label: row.label,
+        description: row.description,
+        recipient: row.recipient,
+      }),
+    [],
+  );
+
   // Ouvre la modale en mode création (champs vierges + destinataire par défaut).
   function openCreate() {
     setMsg(null);
@@ -283,16 +298,9 @@ export function EchangesConfig({
               canEditMeta={allowCreate && (!!r.deletable || !serviceId)}
               // 🗑️ : types personnalisés uniquement.
               canDelete={allowCreate && !!r.deletable}
-              onEdit={() => setEditing(r.kind)}
-              onEditMeta={() =>
-                setMetaEdit({
-                  kind: r.kind,
-                  label: r.label,
-                  description: r.description,
-                  recipient: r.recipient,
-                })
-              }
-              onAskDelete={() => setConfirmDelete(r.kind)}
+              onEdit={onEditKind}
+              onEditMeta={onEditMetaRow}
+              onAskDelete={onAskDeleteKind}
             />
           ))}
         </tbody>
@@ -495,7 +503,9 @@ function th(align: "left" | "center"): React.CSSProperties {
   };
 }
 
-function Row({
+// Mémoïsée : avec des callbacks parent STABLES, une ligne ne se re-rend que si SES données
+// changent (et non à chaque frappe ailleurs dans le panneau).
+const Row = memo(function Row({
   r,
   showSystem = false,
   showRecipient,
@@ -517,10 +527,10 @@ function Row({
   canEditMeta?: boolean;
   // Supprimable : types personnalisés uniquement.
   canDelete?: boolean;
-  onEdit: () => void;
-  onEditMeta?: () => void;
+  onEdit: (kind: string) => void;
+  onEditMeta?: (r: KindData) => void;
   // Demande la suppression : ouvre la modale de confirmation (--danger) au niveau du parent.
-  onAskDelete?: () => void;
+  onAskDelete?: (kind: string) => void;
 }) {
   const cell: React.CSSProperties = {
     padding: ".55rem .6rem",
@@ -583,7 +593,7 @@ function Row({
         <button
           type="button"
           className="btn btn-ghost"
-          onClick={onEdit}
+          onClick={() => onEdit(r.kind)}
           style={{ padding: ".25rem .6rem", fontSize: ".76rem" }}
         >
           ✏️ Modifier
@@ -599,7 +609,7 @@ function Row({
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={onEditMeta}
+                  onClick={() => onEditMeta?.(r)}
                   title="Modifier le nom et la description"
                   aria-label={`Modifier le type : ${r.label}`}
                   style={{ padding: ".25rem .5rem", fontSize: ".76rem" }}
@@ -611,7 +621,7 @@ function Row({
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={onAskDelete}
+                  onClick={() => onAskDelete?.(r.kind)}
                   disabled={r.used}
                   title={
                     r.used
@@ -636,7 +646,7 @@ function Row({
       )}
     </tr>
   );
-}
+});
 
 function Editor({
   draft,
@@ -659,7 +669,7 @@ function Editor({
   onReset: () => void;
   onSave: () => void;
 }) {
-  const previewHtml = renderPreview(draft.html, SAMPLE, SAMPLE_RAW);
+  const previewHtml = useMemo(() => renderPreview(draft.html, SAMPLE, SAMPLE_RAW), [draft.html]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
       <div className="field" style={{ margin: 0 }}>
