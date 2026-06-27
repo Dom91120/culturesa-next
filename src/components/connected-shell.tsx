@@ -71,6 +71,40 @@ export function ConnectedShell({
     return () => document.removeEventListener("click", onDocClick);
   }, []);
 
+  // Mémorise le dernier sous-onglet ouvert PAR service (agenda / editions / stats / periodes…)
+  // pour y revenir quand on rouvre ce service. La racine `/services/{id}` (qui redirige) n'est
+  // pas mémorisée afin de conserver le dernier onglet réel.
+  useEffect(() => {
+    if (!activeServiceId) return;
+    const prefix = `/services/${activeServiceId}/`;
+    if (!pathname.startsWith(prefix)) return;
+    const sub = pathname.slice(prefix.length);
+    if (!sub) return;
+    try {
+      sessionStorage.setItem(`svc-tab:${activeServiceId}`, sub);
+    } catch {}
+  }, [pathname, activeServiceId]);
+
+  // Changement de service depuis la barre latérale : on revient sur le dernier onglet ouvert
+  // pour CE service ; s'il n'a jamais été visité, on conserve l'onglet courant (même onglet
+  // que le service actif).
+  function goToService(id: string) {
+    let target = "agenda";
+    try {
+      const remembered = sessionStorage.getItem(`svc-tab:${id}`);
+      if (remembered) {
+        target = remembered;
+      } else if (activeServiceId) {
+        const prefix = `/services/${activeServiceId}/`;
+        if (pathname.startsWith(prefix)) {
+          const cur = pathname.slice(prefix.length);
+          if (cur) target = cur;
+        }
+      }
+    } catch {}
+    router.push(`/services/${id}/${target}`);
+  }
+
   async function onLogout() {
     await signOut();
     router.push("/auth/login");
@@ -154,7 +188,7 @@ export function ConnectedShell({
                   key={s.id}
                   type="button"
                   className={activeServiceId === s.id ? "active" : ""}
-                  onClick={() => router.push(`/services/${s.id}/agenda`)}
+                  onClick={() => goToService(s.id)}
                 >
                   <span className="sb-icon">{s.icon || "📄"}</span>
                   <span className="sb-label">{s.label}</span>
