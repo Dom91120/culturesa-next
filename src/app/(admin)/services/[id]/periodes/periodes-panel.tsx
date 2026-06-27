@@ -273,6 +273,8 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   const [exoModalOpen, setExoModalOpen] = useState(false);
   // Confirmation de suppression d'exercice via une modale --danger (cf. plus bas).
   const [confirmDeleteExo, setConfirmDeleteExo] = useState(false);
+  // Idem pour la suppression de période(s) sélectionnée(s).
+  const [confirmDeletePeriods, setConfirmDeletePeriods] = useState(false);
   const [exoForm, setExoForm] = useState<ExerciceForm>(emptyExerciceForm);
   const [exoError, setExoError] = useState<string | null>(null);
   // Après création d'un exercice : sélectionner le plus récent une fois la liste rafraîchie.
@@ -371,16 +373,17 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
     });
   }
 
+  // Ouvre la modale de confirmation --danger ; la suppression effective est dans
+  // runDeleteSelected (déclenchée par le bouton de la modale).
   function deleteSelected() {
+    if (selected.size === 0) return;
+    setListError(null);
+    setConfirmDeletePeriods(true);
+  }
+
+  function runDeleteSelected() {
     const ids = [...selected];
     if (ids.length === 0) return;
-    if (
-      !window.confirm(
-        `Supprimer ${ids.length} période(s) ? Les réservations liées seront aussi supprimées.`,
-      )
-    ) {
-      return;
-    }
     setListError(null);
     startTransition(async () => {
       for (const id of ids) {
@@ -390,6 +393,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
           return;
         }
       }
+      setConfirmDeletePeriods(false);
       setSelected(new Set());
       router.refresh();
     });
@@ -1058,6 +1062,69 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
               type="button"
               className="modal-close"
               onClick={() => setConfirmDeleteExo(false)}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modale de confirmation de suppression de période(s) (--danger) ───── */}
+      {confirmDeletePeriods && selectedCount > 0 && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
+        <div
+          className="modal-overlay open"
+          style={{ display: "flex" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmDeletePeriods(false);
+          }}
+        >
+          <div className="modal-box" style={{ maxWidth: 460, width: "95vw" }}>
+            <div className="modal-title" style={{ color: "var(--danger)" }}>
+              🗑️ Supprimer {selectedCount > 1 ? `${selectedCount} périodes` : "la période"}
+            </div>
+            <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+              Vous êtes sur le point de supprimer{" "}
+              <strong>{selectedCount > 1 ? `${selectedCount} périodes` : "1 période"}</strong>.
+            </p>
+            <p
+              style={{
+                fontSize: ".78rem",
+                color: "var(--danger)",
+                fontWeight: 600,
+                margin: "0 0 1rem",
+              }}
+            >
+              ⚠️ Les réservations liées seront aussi supprimées. Action irréversible.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setConfirmDeletePeriods(false)}
+                style={{ fontSize: ".78rem" }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={runDeleteSelected}
+                disabled={pending}
+                style={{
+                  fontSize: ".78rem",
+                  background: "var(--danger)",
+                  border: "none",
+                  color: "var(--text)",
+                }}
+              >
+                🗑️ Supprimer
+              </button>
+            </div>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setConfirmDeletePeriods(false)}
             >
               ×
             </button>
