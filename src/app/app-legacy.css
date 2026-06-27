@@ -1100,8 +1100,6 @@ textarea {
 textarea.slot-spots {
   padding-top: 1px;
   padding-bottom: 1px;
-}
-textarea.slot-spots {
   border: none;
   background: transparent;
   color: inherit;
