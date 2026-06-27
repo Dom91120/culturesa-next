@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signUp } from "@/lib/auth-client";
 import { PWD_RULES } from "@/lib/password";
+import { useFormSubmit } from "@/lib/use-form-submit";
 import { type CaptchaHandle, CaptchaImage } from "../captcha-image";
 
 type Structure = { id: number; label: string };
@@ -19,8 +20,7 @@ export function RegisterForm({
   niveaux: Niveau[];
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { pending, error, onSubmit } = useFormSubmit();
 
   const [demandeurId, setDemandeurId] = useState("");
   const [structureId, setStructureId] = useState("");
@@ -63,11 +63,9 @@ export function RegisterForm({
     return () => document.removeEventListener("click", onDocClick);
   }, []);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-
-    const form = new FormData(e.currentTarget);
+  // useFormSubmit gère pending / error / preventDefault / try-catch ; le handler reçoit le
+  // FormData et renvoie un message d'erreur (string) ou rien (succès → navigation).
+  const submit = onSubmit(async (form) => {
     const prenom = String(form.get("prenom")).trim();
     const nom = String(form.get("nom")).trim();
     const email = String(form.get("email")).trim();
@@ -75,32 +73,15 @@ export function RegisterForm({
     const enfants = Number(form.get("enfants"));
     const accompagnants = Number(form.get("accompagnants"));
 
-    if (!Number.isInteger(enfants) || enfants < 1) {
-      setError("Indiquez au moins 1 enfant.");
-      return;
-    }
-    if (!Number.isInteger(accompagnants) || accompagnants < 1) {
-      setError("Indiquez au moins 1 accompagnant.");
-      return;
-    }
-    if (!pwdValid) {
-      setError("Le mot de passe ne respecte pas toutes les règles.");
-      return;
-    }
-    if (pwd !== password2) {
-      setError("Les mots de passe ne correspondent pas.");
-      return;
-    }
-    if (form.get("rgpd") !== "on") {
-      setError("Vous devez accepter l'utilisation de vos données (RGPD).");
-      return;
-    }
-    if (!captcha.token || !captcha.answer.trim()) {
-      setError("Merci de recopier le code de l'image.");
-      return;
-    }
+    if (!Number.isInteger(enfants) || enfants < 1) return "Indiquez au moins 1 enfant.";
+    if (!Number.isInteger(accompagnants) || accompagnants < 1)
+      return "Indiquez au moins 1 accompagnant.";
+    if (!pwdValid) return "Le mot de passe ne respecte pas toutes les règles.";
+    if (pwd !== password2) return "Les mots de passe ne correspondent pas.";
+    if (form.get("rgpd") !== "on")
+      return "Vous devez accepter l'utilisation de vos données (RGPD).";
+    if (!captcha.token || !captcha.answer.trim()) return "Merci de recopier le code de l'image.";
 
-    setPending(true);
     const res = await signUp.email({
       email,
       password: pwd,
@@ -122,24 +103,20 @@ export function RegisterForm({
         },
       },
     });
-    setPending(false);
 
     if (res.error) {
       // Le défi captcha est consommé/expiré après une tentative : on en charge un
       // nouveau pour permettre une nouvelle saisie.
       captchaRef.current?.refresh();
-      setError(
-        res.error.status === 422
-          ? "Un compte existe déjà avec cette adresse e-mail."
-          : "Inscription impossible. Réessayez plus tard.",
-      );
-      return;
+      return res.error.status === 422
+        ? "Un compte existe déjà avec cette adresse e-mail."
+        : "Inscription impossible. Réessayez plus tard.";
     }
     router.push(`/auth/verify?email=${encodeURIComponent(email)}`);
-  }
+  });
 
   return (
-    <form onSubmit={onSubmit} style={{ width: "80%", maxWidth: "100%", margin: "0 auto" }}>
+    <form onSubmit={submit} style={{ width: "80%", maxWidth: "100%", margin: "0 auto" }}>
       <div className="mode-toggle">
         Déjà inscrit ?{" "}
         <Link

@@ -3,49 +3,38 @@
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { PWD_RULES } from "@/lib/password";
+import { useFormSubmit } from "@/lib/use-form-submit";
 
 export function PasswordForm() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
-  const [pending, setPending] = useState(false);
+  const { pending, error, onSubmit } = useFormSubmit();
 
   const valid = PWD_RULES.every((r) => r.test(next));
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
+  // Le handler renvoie un message d'erreur (string) ou rien (succès) ; useFormSubmit gère
+  // pending / error / preventDefault / try-catch.
+  const submit = onSubmit(async () => {
     setOk(false);
-    if (!valid) {
-      setError("Le nouveau mot de passe ne respecte pas toutes les règles.");
-      return;
-    }
-    if (next !== confirm) {
-      setError("Les deux mots de passe ne correspondent pas.");
-      return;
-    }
-    setPending(true);
+    if (!valid) return "Le nouveau mot de passe ne respecte pas toutes les règles.";
+    if (next !== confirm) return "Les deux mots de passe ne correspondent pas.";
     const res = await authClient.changePassword({
       currentPassword: current,
       newPassword: next,
       revokeOtherSessions: true,
     });
-    setPending(false);
     if (res.error) {
-      setError(
-        res.error.status === 400
-          ? "Mot de passe actuel incorrect."
-          : "Échec du changement de mot de passe.",
-      );
-      return;
+      return res.error.status === 400
+        ? "Mot de passe actuel incorrect."
+        : "Échec du changement de mot de passe.";
     }
     setOk(true);
     setCurrent("");
     setNext("");
     setConfirm("");
-  }
+  });
 
   return (
     <div className="panel">
@@ -53,7 +42,7 @@ export function PasswordForm() {
         <span className="dot" />
         Changer mon mot de passe
       </div>
-      <form onSubmit={onSubmit}>
+      <form onSubmit={submit}>
         <div className="form-grid">
           <div className="field full">
             <label htmlFor="pc-current">
