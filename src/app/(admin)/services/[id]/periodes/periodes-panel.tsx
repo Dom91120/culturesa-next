@@ -271,6 +271,8 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   const hasExercices = sortedExercices.length > 0;
   const currentExercice = exerciceIndex >= 0 ? sortedExercices[exerciceIndex] : null;
   const [exoModalOpen, setExoModalOpen] = useState(false);
+  // Confirmation de suppression d'exercice via une modale --danger (cf. plus bas).
+  const [confirmDeleteExo, setConfirmDeleteExo] = useState(false);
   const [exoForm, setExoForm] = useState<ExerciceForm>(emptyExerciceForm);
   const [exoError, setExoError] = useState<string | null>(null);
   // Après création d'un exercice : sélectionner le plus récent une fois la liste rafraîchie.
@@ -345,22 +347,25 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
     });
   }
 
+  // Ouvre la modale de confirmation --danger ; la suppression effective est dans
+  // runDeleteExercice (déclenchée par le bouton de la modale).
   function deleteExercice() {
     if (!currentExercice) return;
-    if (
-      !window.confirm(
-        `Supprimer l'exercice « ${currentExercice.label} » ? (uniquement s'il n'a aucune période)`,
-      )
-    ) {
-      return;
-    }
+    setListError(null);
+    setConfirmDeleteExo(true);
+  }
+
+  function runDeleteExercice() {
+    if (!currentExercice) return;
+    const id = currentExercice.id;
     setListError(null);
     startTransition(async () => {
-      const res = await deleteExerciceAction({ serviceId, id: currentExercice.id });
+      const res = await deleteExerciceAction({ serviceId, id });
       if (res && !res.ok) {
         setListError(res.error ?? "Échec de la suppression.");
         return;
       }
+      setConfirmDeleteExo(false);
       setCurrentExerciceId(null);
       router.refresh();
     });
@@ -993,6 +998,69 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modale de confirmation de suppression d'un exercice (--danger) ───── */}
+      {confirmDeleteExo && currentExercice && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
+        <div
+          className="modal-overlay open"
+          style={{ display: "flex" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmDeleteExo(false);
+          }}
+        >
+          <div className="modal-box" style={{ maxWidth: 460, width: "95vw" }}>
+            <div className="modal-title" style={{ color: "var(--danger)" }}>
+              🗑️ Supprimer l&apos;exercice
+            </div>
+            <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+              Vous êtes sur le point de supprimer l&apos;exercice{" "}
+              <strong>« {currentExercice.label} »</strong>.
+            </p>
+            <p
+              style={{
+                fontSize: ".78rem",
+                color: "var(--danger)",
+                fontWeight: 600,
+                margin: "0 0 1rem",
+              }}
+            >
+              ⚠️ Possible uniquement s&apos;il n&apos;a aucune période. Action irréversible.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setConfirmDeleteExo(false)}
+                style={{ fontSize: ".78rem" }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={runDeleteExercice}
+                disabled={pending}
+                style={{
+                  fontSize: ".78rem",
+                  background: "var(--danger)",
+                  border: "none",
+                  color: "var(--text)",
+                }}
+              >
+                🗑️ Supprimer
+              </button>
+            </div>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setConfirmDeleteExo(false)}
+            >
+              ×
+            </button>
           </div>
         </div>
       )}
