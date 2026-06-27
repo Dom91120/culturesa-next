@@ -2,70 +2,53 @@
 
 import { useRouter } from "next/navigation";
 
-// Sélecteur de vue, façon segmented control de l'agenda (« Modèle de période / Semaine
-// réelle ») : Hebdomadaire / Mensuel + un niveau par PÉRIODE longue (> 1 mois). Partagé
-// par les écrans Plannings et Pointages (`screen` = segment de page). Navigue au clic.
+// Sélecteur de granularité des éditions (segmented control façon agenda) :
+// Hebdomadaire / Mensuel / Trimestriel / Annuel. La navigation fine (semaine, mois,
+// trimestre) se fait ensuite via les flèches ◀ ▶ de la barre. Partagé par Plannings,
+// Pointages et la Liste « par date ».
 export function RangeSelect({
   serviceId,
   screen,
   mode,
   date,
-  periodId,
-  periods,
-  showMensuel = true,
   ruptures = false,
 }: {
   serviceId: string;
   screen: string;
-  mode: "week" | "month" | "period";
+  mode: "week" | "month" | "trimester" | "year";
   date: string;
-  periodId: number | null;
-  periods: { id: number; label: string }[];
-  // Masqué quand les périodes du service SONT des mois (doublon avec les boutons période).
-  showMensuel?: boolean;
   ruptures?: boolean;
 }) {
   const router = useRouter();
   const base = `/services/${serviceId}/editions/${screen}`;
   const rq = ruptures ? "&ruptures=1" : "";
   const go = (qs: string) => router.push(`${base}?${qs}${rq}`);
-  // Police du segmented control (override de .agenda-mode-btn, un peu plus grand).
-  // whiteSpace nowrap : un libellé long (« Année scolaire 2025 - 2026 ») reste sur une ligne.
   const btnStyle: React.CSSProperties = {
     fontSize: ".68rem",
     letterSpacing: "-.02em",
     whiteSpace: "nowrap",
   };
 
+  // Hebdo/Mensuel conservent la date courante (navigation libre) ; Trimestriel/Annuel
+  // se calculent sur l'exercice → pas de date à transmettre.
+  const items: { key: typeof mode; label: string; qs: string }[] = [
+    { key: "week", label: "Hebdomadaire", qs: `mode=week&date=${date}` },
+    { key: "month", label: "Mensuel", qs: `mode=month&date=${date}` },
+    { key: "trimester", label: "Trimestriel", qs: "mode=trimester" },
+    { key: "year", label: "Annuel", qs: "mode=year" },
+  ];
+
   return (
     <div className="agenda-mode-toggle no-print" role="tablist" aria-label="Vue">
-      <button
-        type="button"
-        className={`agenda-mode-btn${mode === "week" ? " active" : ""}`}
-        style={btnStyle}
-        onClick={() => go(`mode=week&date=${date}`)}
-      >
-        Hebdomadaire
-      </button>
-      {showMensuel && (
+      {items.map((it) => (
         <button
+          key={it.key}
           type="button"
-          className={`agenda-mode-btn${mode === "month" ? " active" : ""}`}
+          className={`agenda-mode-btn${mode === it.key ? " active" : ""}`}
           style={btnStyle}
-          onClick={() => go(`mode=month&date=${date}`)}
+          onClick={() => go(it.qs)}
         >
-          Mensuel
-        </button>
-      )}
-      {periods.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          className={`agenda-mode-btn${mode === "period" && periodId === p.id ? " active" : ""}`}
-          style={btnStyle}
-          onClick={() => go(`mode=period&periodId=${p.id}`)}
-        >
-          {p.label}
+          {it.label}
         </button>
       ))}
     </div>

@@ -25,7 +25,7 @@ export function RangeBar({
   // Lien d'export CSV (Liste) → bouton export à gauche de l'impression. Absent ailleurs.
   exportHref?: string;
 }) {
-  const { mode, dateParam, periodId, periods, showMensuel, subtitle, prevHref, nextHref } = range;
+  const { mode, dateParam, subtitle, prevHref, nextHref } = range;
   const rq = ruptures ? "&ruptures=1" : "";
   const linkBtn: React.CSSProperties = {
     fontSize: ".78rem",
@@ -38,8 +38,9 @@ export function RangeBar({
   };
   // Flèches de navigation : plus petites que les autres boutons.
   const arrowBtn: React.CSSProperties = { ...linkBtn, fontSize: ".62rem", padding: "2px 6px" };
-  const prevLabel = mode === "month" ? "Mois précédent" : "Semaine précédente";
-  const nextLabel = mode === "month" ? "Mois suivant" : "Semaine suivante";
+  const unit = mode === "month" ? "Mois" : mode === "trimester" ? "Trimestre" : "Semaine";
+  const prevLabel = `${unit} précédent${unit === "Semaine" ? "e" : ""}`;
+  const nextLabel = `${unit} suivant${unit === "Semaine" ? "e" : ""}`;
 
   return (
     <div style={{ marginBottom: "1rem" }}>
@@ -137,9 +138,6 @@ export function RangeBar({
           screen={screen}
           mode={mode}
           date={dateParam}
-          periodId={periodId}
-          periods={periods}
-          showMensuel={showMensuel}
           ruptures={ruptures}
         />
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>

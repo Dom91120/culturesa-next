@@ -24,10 +24,6 @@ const monthStart = (d: Date): Date => new Date(Date.UTC(d.getUTCFullYear(), d.ge
 const monthEnd = (d: Date): Date => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
 const addMonthsToFirst = (d: Date, n: number): Date =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
-// Date + n mois « exacts » (même quantième) — pour le seuil « période > 1 mois ».
-const addMonthsExact = (d: Date, n: number): Date =>
-  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()));
-
 const fmtShort = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",
   month: "2-digit",
@@ -52,65 +48,81 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export const formatDateHeading = (ymdStr: string): string =>
   cap(fmtHeading.format(parseYmd(ymdStr)));
 
-export type EditionPeriod = {
-  id: number;
+export type EditionExercice = {
   label: string;
+  type: "civile" | "scolaire";
   dateStart: Date | null;
   dateEnd: Date | null;
 };
 
-/** Périodes actives datées d'un service (pour le sélecteur de plage). */
-export function fetchEditionPeriods(serviceId: string): Promise<EditionPeriod[]> {
-  return prisma.period.findMany({
-    where: { serviceId, state: "actif", dateStart: { not: null }, dateEnd: { not: null } },
-    select: { id: true, label: true, dateStart: true, dateEnd: true },
-    orderBy: { dateStart: "asc" },
+/** Exercice courant (le plus récent) d'un service — base des vues Trimestriel/Annuel. */
+export async function fetchCurrentExercice(serviceId: string): Promise<EditionExercice | null> {
+  const rows = await prisma.exercice.findMany({
+    where: { serviceId },
+    select: { label: true, type: true, dateStart: true, dateEnd: true },
   });
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => {
+    const as = a.dateStart?.getTime();
+    const bs = b.dateStart?.getTime();
+    if (as != null && bs != null) return bs - as;
+    if (as != null) return -1;
+    if (bs != null) return 1;
+    return b.label.localeCompare(a.label);
+  });
+  return rows[0];
 }
 
-export type RangeMode = "week" | "month" | "period";
+type Trimestre = { label: string; from: Date; to: Date };
+const TRIM_LABELS = ["1er trimestre", "2e trimestre", "3e trimestre", "4e trimestre"];
+
+/**
+ * Trimestres d'un exercice selon son type, à partir de l'année de début :
+ *   • Scolaire (3) : Sep-Déc · Jan-Mar · Avr-Juin
+ *   • Civil    (4) : Jan-Mar · Avr-Juin · Juil-Sep · Oct-Déc
+ */
+function trimestresFor(type: "civile" | "scolaire", startYear: number): Trimestre[] {
+  const tri = (y: number, m0: number, m1: number, i: number): Trimestre => ({
+    label: TRIM_LABELS[i],
+    from: new Date(Date.UTC(y, m0, 1)),
+    to: new Date(Date.UTC(y, m1 + 1, 0)),
+  });
+  if (type === "scolaire") {
+    return [tri(startYear, 8, 11, 0), tri(startYear + 1, 0, 2, 1), tri(startYear + 1, 3, 5, 2)];
+  }
+  return [
+    tri(startYear, 0, 2, 0),
+    tri(startYear, 3, 5, 1),
+    tri(startYear, 6, 8, 2),
+    tri(startYear, 9, 11, 3),
+  ];
+}
+
+export type RangeMode = "week" | "month" | "trimester" | "year";
 export type RangeResult = {
   mode: RangeMode;
   fromYmd: string;
   toYmd: string;
   dateParam: string;
-  periodId: number | null;
-  periodLabel: string | null;
-  // Périodes proposées en boutons du sélecteur (périodes > 1 mois, ou périodes-mois si
-  // le service est découpé en mois — cf. `showMensuel`).
-  periods: { id: number; label: string }[];
-  // Afficher le bouton générique « Mensuel » ? Masqué quand les périodes SONT des mois
-  // (le bouton ferait doublon : on liste alors les périodes-mois à la place).
-  showMensuel: boolean;
+  // Index du trimestre courant (mode "trimester") — conservé pour la pagination.
+  trimIndex: number | null;
   subtitle: string;
   prevHref: string | null;
   nextHref: string | null;
 };
 
 /**
- * Résout la plage [from, to] + libellés + navigation à partir des paramètres d'URL
- * (`mode` = week|month|period, `date`, `periodId` ; compat `week`). `screen` = segment
- * de page (« planning » | « pointages ») pour construire les liens prev/next.
+ * Résout la plage [from, to] + libellé + navigation à partir des paramètres d'URL
+ * (`mode` = week|month|trimester|year, `date`, `trim` ; compat `week`). Les vues
+ * Trimestriel/Annuel se calculent sur l'exercice courant (type + dates).
  */
 export function resolveRange(
   serviceId: string,
   screen: string,
-  sp: { mode?: string; date?: string; week?: string; periodId?: string },
-  periods: EditionPeriod[],
+  sp: { mode?: string; date?: string; week?: string; trim?: string },
+  exercice: EditionExercice | null,
 ): RangeResult {
   const base = `/services/${serviceId}/editions/${screen}`;
-  const dated = periods.filter((p) => p.dateStart && p.dateEnd);
-  // Période « longue » = plus d'un mois (trimestre, année scolaire…).
-  const longPeriods = dated.filter(
-    (p) => p.dateStart && p.dateEnd && p.dateEnd > addMonthsExact(p.dateStart, 1),
-  );
-  // Périodes-mois : le service est découpé en mois ⇔ il a des périodes datées et AUCUNE
-  // n'excède un mois. On masque alors « Mensuel » et on liste ces périodes comme boutons.
-  const periodsAreMonths = dated.length > 0 && longPeriods.length === 0;
-  const buttonPeriods = periodsAreMonths ? dated : longPeriods;
-  const showMensuel = !periodsAreMonths;
-  const periodList = buttonPeriods.map((p) => ({ id: p.id, label: p.label }));
-
   const dateParam =
     sp.date && reIso.test(sp.date)
       ? sp.date
@@ -119,25 +131,49 @@ export function resolveRange(
         : ymd(new Date());
   const ref = parseYmd(dateParam);
 
-  const periodId = sp.periodId ? Number(sp.periodId) : null;
-  const selected = sp.mode === "period" ? buttonPeriods.find((p) => p.id === periodId) : undefined;
+  const type = exercice?.type ?? "civile";
+  const startYear = exercice?.dateStart
+    ? exercice.dateStart.getUTCFullYear()
+    : new Date().getUTCFullYear();
+  const trimestres = trimestresFor(type, startYear);
 
-  if (sp.mode === "period" && selected?.dateStart && selected.dateEnd) {
+  // ── Annuel : plage complète de l'exercice (pas de navigation entre exercices) ──
+  if (sp.mode === "year") {
+    const from = exercice?.dateStart ?? trimestres[0].from;
+    const to = exercice?.dateEnd ?? trimestres[trimestres.length - 1].to;
     return {
-      mode: "period",
-      fromYmd: ymd(selected.dateStart),
-      toYmd: ymd(selected.dateEnd),
+      mode: "year",
+      fromYmd: ymd(from),
+      toYmd: ymd(to),
       dateParam,
-      periodId,
-      periodLabel: selected.label,
-      periods: periodList,
-      showMensuel,
-      subtitle: `du ${fmtShort.format(selected.dateStart)} au ${fmtShort.format(selected.dateEnd)}`,
+      trimIndex: null,
+      subtitle: exercice?.label ?? `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
       prevHref: null,
       nextHref: null,
     };
   }
 
+  // ── Trimestriel : navigation T1→T2→T3(→T4) via les flèches ──
+  if (sp.mode === "trimester") {
+    const todayYmd = ymd(new Date());
+    let def = trimestres.findIndex((t) => ymd(t.from) <= todayYmd && todayYmd <= ymd(t.to));
+    if (def < 0) def = 0;
+    const raw = sp.trim != null && sp.trim !== "" ? Number(sp.trim) : def;
+    const idx = Math.min(Math.max(Number.isFinite(raw) ? raw : def, 0), trimestres.length - 1);
+    const t = trimestres[idx];
+    return {
+      mode: "trimester",
+      fromYmd: ymd(t.from),
+      toYmd: ymd(t.to),
+      dateParam,
+      trimIndex: idx,
+      subtitle: t.label,
+      prevHref: idx > 0 ? `${base}?mode=trimester&trim=${idx - 1}` : null,
+      nextHref: idx < trimestres.length - 1 ? `${base}?mode=trimester&trim=${idx + 1}` : null,
+    };
+  }
+
+  // ── Mensuel ──
   if (sp.mode === "month") {
     const from = monthStart(ref);
     const to = monthEnd(ref);
@@ -146,16 +182,14 @@ export function resolveRange(
       fromYmd: ymd(from),
       toYmd: ymd(to),
       dateParam,
-      periodId: null,
-      periodLabel: null,
-      periods: periodList,
-      showMensuel,
+      trimIndex: null,
       subtitle: cap(fmtMonth.format(from)),
       prevHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, -1))}`,
       nextHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, 1))}`,
     };
   }
 
+  // ── Hebdomadaire (défaut) ──
   const from = mondayOf(ref);
   const to = addDays(from, 6);
   return {
@@ -163,10 +197,7 @@ export function resolveRange(
     fromYmd: ymd(from),
     toYmd: ymd(to),
     dateParam,
-    periodId: null,
-    periodLabel: null,
-    periods: periodList,
-    showMensuel,
+    trimIndex: null,
     subtitle: `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
     prevHref: `${base}?mode=week&date=${ymd(addDays(from, -7))}`,
     nextHref: `${base}?mode=week&date=${ymd(addDays(from, 7))}`,
@@ -211,8 +242,8 @@ export type SessionBucket = { key: string; label: string; sessions: DatedSession
 
 /**
  * Découpe les séances en « ruptures » selon la vue : par SEMAINE en vue mensuelle,
- * par MOIS en vue période, et un seul bloc (sans rupture) en vue hebdomadaire. Les
- * séances étant déjà triées chronologiquement, l'ordre des ruptures l'est aussi.
+ * par MOIS en vue trimestrielle/annuelle, et un seul bloc (sans rupture) en vue
+ * hebdomadaire. Les séances étant déjà triées chronologiquement, les ruptures aussi.
  */
 export function bucketSessions(mode: RangeMode, sessions: DatedSession[]): SessionBucket[] {
   if (mode === "week") return sessions.length ? [{ key: "week", label: "", sessions }] : [];

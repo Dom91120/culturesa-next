@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import {
   bucketSessions,
   computeTotals,
-  fetchEditionPeriods,
+  fetchCurrentExercice,
   formatDateHeading,
   resolveRange,
 } from "../range";
@@ -24,26 +24,28 @@ export default async function PointagesPage({
     mode?: string;
     date?: string;
     week?: string;
-    periodId?: string;
+    trim?: string;
     ruptures?: string;
   }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
 
-  const [service, periods] = await Promise.all([
+  const [service, exercice] = await Promise.all([
     prisma.service.findUnique({ where: { id }, select: { label: true } }),
-    fetchEditionPeriods(id),
+    fetchCurrentExercice(id),
   ]);
   if (!service) notFound();
 
-  const range = resolveRange(id, "pointages", sp, periods);
+  const range = resolveRange(id, "pointages", sp, exercice);
   const titleLabel =
-    range.mode === "period"
-      ? `Pointages — ${range.periodLabel}`
-      : range.mode === "month"
-        ? "Pointages mensuels"
-        : "Pointages hebdomadaires";
+    range.mode === "month"
+      ? "Pointages mensuels"
+      : range.mode === "trimester"
+        ? "Pointages trimestriels"
+        : range.mode === "year"
+          ? "Pointages annuels"
+          : "Pointages hebdomadaires";
 
   const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd);
   // Ruptures (case « avec ruptures ») OFF par défaut → un seul bloc sans sous-total.

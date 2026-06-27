@@ -15,7 +15,7 @@ import {
   bucketSessions,
   computeRowTotals,
   computeTotals,
-  fetchEditionPeriods,
+  fetchCurrentExercice,
   resolveRange,
   sortRowsAlpha,
 } from "../range";
@@ -40,7 +40,7 @@ export default async function EditionsListePage({
     mode?: string;
     date?: string;
     week?: string;
-    periodId?: string;
+    trim?: string;
     page?: string;
     ruptures?: string;
   }>;
@@ -203,8 +203,8 @@ export default async function EditionsListePage({
   }
 
   // ── Vue PAR DATE : occurrences datées (Hebdo / Mensuel / Période) + ruptures ──
-  const periods = await fetchEditionPeriods(id);
-  const range = resolveRange(id, "liste", sp, periods);
+  const exercice = await fetchCurrentExercice(id);
+  const range = resolveRange(id, "liste", sp, exercice);
   const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd);
   // Ruptures (case « avec ruptures ») OFF par défaut → un seul bloc sans sous-total.
   const withRuptures = sp.ruptures === "1";
@@ -248,8 +248,9 @@ export default async function EditionsListePage({
 
   // Lien de page (conserve vue / plage / ruptures).
   const pageParams = new URLSearchParams({ tri: "date", mode: range.mode });
-  if (range.mode === "period" && range.periodId) pageParams.set("periodId", String(range.periodId));
-  else pageParams.set("date", range.dateParam);
+  if (range.mode === "week" || range.mode === "month") pageParams.set("date", range.dateParam);
+  if (range.mode === "trimester" && range.trimIndex != null)
+    pageParams.set("trim", String(range.trimIndex));
   if (withRuptures) pageParams.set("ruptures", "1");
   const dateHref = (n: number) =>
     `/services/${id}/editions/liste?${pageParams.toString()}&page=${n}`;
