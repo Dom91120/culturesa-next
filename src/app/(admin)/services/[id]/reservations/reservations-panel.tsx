@@ -203,10 +203,12 @@ export function ReservationsPanel(props: Props) {
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "max-content minmax(0, 1fr)",
+          // Flex-wrap : « Délais et verrou » passe sous « Maximums » quand la largeur manque.
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-start",
           columnGap: "5rem",
-          alignItems: "start",
+          rowGap: "1rem",
           marginBottom: ".5rem",
         }}
       >
