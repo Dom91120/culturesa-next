@@ -35,7 +35,7 @@ export async function saveMailConfigAction(input: MailConfigInput): Promise<Acti
   if (d.driver === "smtp" && (!d.host || !d.from)) {
     return { ok: false, error: "Serveur SMTP et adresse expéditeur sont requis." };
   }
-  if (d.from && !z.string().email().safeParse(d.from).success) {
+  if (d.from && !z.email().safeParse(d.from).success) {
     return { ok: false, error: "Adresse expéditeur invalide." };
   }
 
@@ -60,7 +60,7 @@ export async function saveMailConfigAction(input: MailConfigInput): Promise<Acti
 export async function sendTestMailAction(to: string): Promise<ActionState> {
   await requireRole("administrateur");
 
-  const parsed = z.string().trim().email().safeParse(to);
+  const parsed = z.string().trim().pipe(z.email()).safeParse(to);
   if (!parsed.success) return { ok: false, error: "Adresse destinataire invalide." };
 
   try {
