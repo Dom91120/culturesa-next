@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { todayParisISO } from "@/lib/booking-delay";
 import { DAYS } from "@/schemas/config";
@@ -12,8 +14,8 @@ import {
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
 import {
-  BookingError,
   assertSlotCapacity,
+  BookingError,
   effectiveOpenOnSchoolHolidays,
 } from "@/server/services/bookings";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
@@ -28,8 +30,6 @@ import {
   moveRecurringSlot,
   moveUniqueSlot,
 } from "@/server/services/slots";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 // Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
 type DayKeyT = (typeof DAYS)[number];
@@ -692,7 +692,7 @@ export async function createRecurringBookingAction(input: {
           where: { id: d.slotId, serviceId: d.serviceId },
           select: { slotType: true, state: true },
         });
-        if (!target || target.slotType !== "recurring" || target.state !== "actif") {
+        if (target?.slotType !== "recurring" || target.state !== "actif") {
           throw new BookingError("Ce créneau n'est pas disponible.");
         }
         // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.
@@ -821,7 +821,7 @@ export async function createUniqueBookingAction(input: {
       service: { select: { label: true } },
     },
   });
-  if (!slot || slot.slotType !== "unique" || slot.serviceId !== d.serviceId) {
+  if (slot?.slotType !== "unique" || slot.serviceId !== d.serviceId) {
     return { ok: false, error: "Créneau introuvable." };
   }
   // Gestionnaire : pas de délai, mais on n'autorise pas une date déjà passée.

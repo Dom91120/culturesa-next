@@ -4,13 +4,7 @@ import { useRouter } from "next/navigation";
 
 // Sélecteur de tri de la Liste des réservations (segmented control façon agenda) :
 // Alphabétique (Nom, Prénom) ou Par date (rupture par période). Navigue au clic.
-export function ListeSortSelect({
-  serviceId,
-  tri,
-}: {
-  serviceId: string;
-  tri: "alpha" | "date";
-}) {
+export function ListeSortSelect({ serviceId, tri }: { serviceId: string; tri: "alpha" | "date" }) {
   const router = useRouter();
   const base = `/services/${serviceId}/editions/liste`;
   const btnStyle: React.CSSProperties = { fontSize: ".68rem", letterSpacing: "-.02em" };

@@ -6,9 +6,9 @@
 // service × demandeur en respectant les règles de synchro (semaineAb uniforme entre
 // récurrents, jauge uniforme par mode).
 
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Switch } from "@/components/switch";
 import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
-import { useEffect, useRef, useState, useTransition } from "react";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
 import { setGaugeAccompagnantsAction } from "./actions";

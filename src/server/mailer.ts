@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import nodemailer from "nodemailer";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { decryptSecret } from "@/server/secret-crypto";
-import nodemailer from "nodemailer";
 
 // Logo embarqué en pièce jointe inline (CID) dans chaque e-mail — déposé sous
 // public/email-logo.png. Lu une seule fois et mis en cache (null si absent).
@@ -80,12 +80,7 @@ function formatFrom(s: MailSettings): string {
   return s.fromName ? `${s.fromName} <${s.from}>` : s.from;
 }
 
-export async function sendMail(opts: {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-}) {
+export async function sendMail(opts: { to: string; subject: string; html: string; text?: string }) {
   const s = await getMailSettings();
 
   // En Node, seul SMTP est réellement pris en charge par nodemailer ici.

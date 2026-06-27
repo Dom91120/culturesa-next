@@ -1,10 +1,10 @@
 "use client";
 
-import { signIn } from "@/lib/auth-client";
-import { useFormSubmit } from "@/lib/use-form-submit";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { signIn } from "@/lib/auth-client";
+import { useFormSubmit } from "@/lib/use-form-submit";
 
 export default function LoginPage() {
   const router = useRouter();

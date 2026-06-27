@@ -1,11 +1,11 @@
 import { requireRole } from "@/server/guards";
 import { EchangesAdminTabs } from "./echanges-tabs";
 import {
-  SYSTEM_MAIL_KINDS,
   getGlobalModeleRows,
   getKindOptions,
   getMailRows,
   getRoutingRows,
+  SYSTEM_MAIL_KINDS,
 } from "./mail-rows";
 
 // Onglet « Échanges » (administration), GLOBAL, en deux sous-onglets :

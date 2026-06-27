@@ -1,8 +1,8 @@
 "use client";
 
-import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import {
   createMailTypeAction,
   deleteMailTypeAction,

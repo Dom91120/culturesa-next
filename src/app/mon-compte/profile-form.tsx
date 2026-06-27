@@ -1,7 +1,7 @@
 "use client";
 
-import { initialActionState } from "@/lib/action-state";
 import { useActionState } from "react";
+import { initialActionState } from "@/lib/action-state";
 import { updateProfileAction } from "./actions";
 
 type Profile = { prenom: string; nom: string; tel: string; email: string };

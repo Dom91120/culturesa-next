@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { createCaptcha } from "@/server/captcha";
 import { rateLimit } from "@/server/rate-limit";
-import { NextResponse } from "next/server";
 
 // Génération côté Node (svg-captcha + node:crypto) et jamais mise en cache : chaque
 // requête doit produire un nouveau défi.

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { hmacSign, timingSafeEqualStr } from "@/server/crypto";
 import { create } from "svg-captcha";
+import { hmacSign, timingSafeEqualStr } from "@/server/crypto";
 
 /**
  * CAPTCHA image auto-hébergé (port de l'ancien captcha_img.php du legacy), sans

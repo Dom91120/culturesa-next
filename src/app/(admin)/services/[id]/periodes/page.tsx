@@ -1,6 +1,6 @@
+import { notFound } from "next/navigation";
 import { getServiceOpeningConfig, listServicePeriods } from "@/server/services/periods";
 import { getService } from "@/server/services/services";
-import { notFound } from "next/navigation";
 import { ParamsSubnav } from "../params-subnav";
 import { ReservationsPanel } from "../reservations/reservations-panel";
 import { PeriodesPanel } from "./periodes-panel";
@@ -10,11 +10,7 @@ function toISODate(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : "";
 }
 
-export default async function PeriodesPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function PeriodesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const service = await getService(id);
   if (!service) notFound();

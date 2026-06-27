@@ -1,8 +1,8 @@
+import { headers } from "next/headers";
 import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { isUserInServicesRgpdScope } from "@/server/services/rgpd";
-import { headers } from "next/headers";
 
 export async function GET(req: Request) {
   const session = await requireRole("gestionnaire");

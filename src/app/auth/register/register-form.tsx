@@ -1,10 +1,10 @@
 "use client";
 
-import { signUp } from "@/lib/auth-client";
-import { PWD_RULES } from "@/lib/password";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { signUp } from "@/lib/auth-client";
+import { PWD_RULES } from "@/lib/password";
 import { type CaptchaHandle, CaptchaImage } from "../captcha-image";
 
 type Structure = { id: number; label: string };

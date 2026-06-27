@@ -1,7 +1,7 @@
+import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/server/cron";
 import { runAutoValidation } from "@/server/services/auto-validate";
 import { sendManagerDigest } from "@/server/services/manager-notice";
-import { NextResponse } from "next/server";
 
 /**
  * Auto-validation des réservations selon `service.autoValidationDelay` (délai signé

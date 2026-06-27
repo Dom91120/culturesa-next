@@ -1,13 +1,13 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { rateLimit } from "@/server/rate-limit";
 import { requestAccountDeletion } from "@/server/services/account-deletion";
 import { RgpdError } from "@/server/services/rgpd";
-import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 const schema = z.object({
   prenom: z.string().trim().max(80),

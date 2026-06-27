@@ -1,7 +1,7 @@
+import { notFound } from "next/navigation";
 import { getConfigMany } from "@/server/config";
 import { requireUser } from "@/server/guards";
 import { getUserServiceAgenda } from "@/server/services/bookings";
-import { notFound } from "next/navigation";
 import { UserAgendaGrid } from "./user-agenda-grid";
 
 export default async function ReservationsServicePage({

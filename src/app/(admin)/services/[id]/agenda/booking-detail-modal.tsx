@@ -1,7 +1,7 @@
 "use client";
 
-import { ModalOverlay } from "@/components/agenda-shared";
 import { useState, useTransition } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 import {
   setBookingPointageAction,
   setBookingValidatedAction,

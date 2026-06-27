@@ -1,11 +1,11 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { PASSWORD_POLICY_MESSAGE, PWD_RULES, isPasswordValid } from "@/lib/password";
-import { useFormSubmit } from "@/lib/use-form-submit";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { authClient } from "@/lib/auth-client";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE, PWD_RULES } from "@/lib/password";
+import { useFormSubmit } from "@/lib/use-form-submit";
 
 function ResetForm() {
   const router = useRouter();

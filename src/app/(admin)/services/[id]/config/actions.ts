@@ -1,8 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
-import { revalidatePath } from "next/cache";
 
 /**
  * Bascule « Jauge — prise en compte des accompagnants » (Service.gaugeAccompagnants).

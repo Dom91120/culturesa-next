@@ -1,45 +1,42 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   AgendaDayBackground,
   AgendaTimeColumn,
   AgendaWeekHeader,
-  ModalOverlay,
-  PointagePill,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
+  addDays,
   DAY_NAMES,
   DAY_OFFSET,
-  type LayoutItem,
-  type Pointage,
-  ROW_H,
-  type Slot,
-  type UniqueSlot,
-  addDays,
-  badgeStyle,
   dayCap,
   dayKeyFromYmd,
   gridGeometry,
+  type LayoutItem,
   layoutOverlaps,
   mondayOf,
+  type Pointage,
   parseWeeks,
+  ROW_H,
+  type Slot,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
+  type UniqueSlot,
   ymd,
 } from "@/lib/agenda-core";
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { isFrenchHoliday } from "@/lib/french-holidays";
-import { gaugeColor, gaugeUnits } from "@/lib/gauge";
+import { gaugeUnits } from "@/lib/gauge";
 import { printHtmlDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { usePointerDrag } from "@/lib/use-pointer-drag";
 import type { ServiceModes } from "@/server/services/service-modes";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import { commitDraft } from "./actions";
 
 type Service = {
@@ -576,7 +573,6 @@ function MineBadge({
           dragFullSurface). Affichée au survol, en haut au centre. Le CLIC est neutralisé
           pour éviter l'action rapide du corps si l'usager relâche sans déplacer. */}
       {draggable && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: poignée pointer-only (drag natif)
         <span
           className="slot-drag-handle"
           data-tip="Glisser pour déplacer"
@@ -1020,7 +1016,7 @@ export function UserAgendaGrid({
   >({});
   const [pendingMoves, setPendingMoves] = useState<Record<number, PendingMove>>({});
   const [committing, setCommitting] = useState(false);
-  const [commitError, setCommitError] = useState<string | null>(null);
+  const [_commitError, setCommitError] = useState<string | null>(null);
   // Toast (variantes --success vert / --danger rouge), repris de la grille admin : centré
   // sur .app-main, bas de page, auto-dismiss ~4 s. Sert au verrou « une seule action »
   // (rouge) et au résultat de l'enregistrement du brouillon (vert création/modif/déplacement,
@@ -1364,7 +1360,7 @@ export function UserAgendaGrid({
 
   const gridStartMin = firstHour * 60;
   const gridEndMin = lastHour * 60;
-  const QUARTER_H = ROW_H / 4; // px par tranche de 15 min
+  const _QUARTER_H = ROW_H / 4; // px par tranche de 15 min
 
   // Ids des créneaux ponctuels AUTONOMES (non miroirs) : affichés en vert et en
   // lecture seule (on neutralise la création/déplacement de résa récurrente dessus ;

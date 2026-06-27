@@ -1,5 +1,5 @@
-import { listBookableServices } from "@/server/services/bookings";
 import { redirect } from "next/navigation";
+import { listBookableServices } from "@/server/services/bookings";
 
 // L'onglet « Réservations » est par service : on ouvre le premier service
 // réservable par défaut (la sidebar permet d'en changer).

@@ -1,5 +1,5 @@
-import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/generated/prisma/client";
 
 // Prisma 7 (client Rust-free) : la connexion passe par un driver adapter (pg).
 // Singleton : évite d'épuiser le pool de connexions en dev (HMR).

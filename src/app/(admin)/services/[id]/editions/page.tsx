@@ -1,5 +1,5 @@
-import { prisma } from "@/server/db";
 import { notFound } from "next/navigation";
+import { prisma } from "@/server/db";
 
 // En-tête de colonne du panel « Éditions disponibles » (même style que « Modèles d'e-mails »).
 const thStyle: React.CSSProperties = {

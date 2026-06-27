@@ -1,9 +1,9 @@
 "use client";
 
-import type { Role } from "@/generated/prisma/client";
-import { formatTel } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import type { Role } from "@/generated/prisma/client";
+import { formatTel } from "@/lib/format";
 import { anonymizeUserAction, resendVerificationAction } from "./actions";
 import { UserModal } from "./user-modal";
 
@@ -163,15 +163,7 @@ export function UsersTable({
   }
 
   // En-tête de colonne triable. Un clic (ou Entrée/Espace) fixe la clé de tri.
-  const SortTh = ({
-    label,
-    sk,
-    minWidth,
-  }: {
-    label: string;
-    sk: SortKey;
-    minWidth?: number;
-  }) => (
+  const SortTh = ({ label, sk, minWidth }: { label: string; sk: SortKey; minWidth?: number }) => (
     <th
       className={sortKey === sk ? "sorted" : undefined}
       style={{ minWidth, textAlign: "center", cursor: "pointer" }}

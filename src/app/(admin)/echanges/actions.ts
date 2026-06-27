@@ -1,26 +1,26 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/lib/action-state";
 import { requireRole, requireServiceManager } from "@/server/guards";
 import {
-  MAIL_KINDS,
-  type MailRecipientKind,
   isBookingTrigger,
   isMailRecipientKind,
+  MAIL_KINDS,
+  type MailRecipientKind,
   setTriggerEnabled,
   setTriggerKind,
   setTriggerRecipient,
 } from "@/server/services/mail-prefs";
 import {
-  TEMPLATE_KINDS,
   createCustomMailType,
   deleteCustomMailType,
   isCustomMailType,
   isCustomMailTypeUsed,
   setMailTemplate,
+  TEMPLATE_KINDS,
   updateCustomMailType,
 } from "@/server/services/mail-templates";
-import { revalidatePath } from "next/cache";
 
 const isBookingKind = (kind: string) => (MAIL_KINDS as readonly string[]).includes(kind);
 

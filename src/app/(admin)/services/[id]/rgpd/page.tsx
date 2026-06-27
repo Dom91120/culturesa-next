@@ -1,14 +1,10 @@
+import { notFound } from "next/navigation";
 import { listServiceRgpdUsers } from "@/server/services/rgpd";
 import { getService } from "@/server/services/services";
-import { notFound } from "next/navigation";
 import { ParamsSubnav } from "../params-subnav";
 import { ServiceRgpdPanel } from "./service-rgpd-panel";
 
-export default async function ServiceRgpdPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ServiceRgpdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const service = await getService(id);
   if (!service) notFound();

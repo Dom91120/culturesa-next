@@ -1,9 +1,9 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/lib/action-state";
 import { requireServiceManager } from "@/server/guards";
-import { RgpdError, anonymizeUser, isUserInServicesRgpdScope } from "@/server/services/rgpd";
-import { revalidatePath } from "next/cache";
+import { anonymizeUser, isUserInServicesRgpdScope, RgpdError } from "@/server/services/rgpd";
 
 /**
  * Anonymise un usager DU SERVICE depuis le sous-onglet Paramètres › RGPD.

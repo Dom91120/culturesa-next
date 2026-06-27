@@ -1,14 +1,13 @@
+import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import {
   type DatedSession,
-  type EditionRow,
-  type SessionAttendee,
   listDatedSessions,
   listEditionRows,
+  type SessionAttendee,
 } from "@/server/services/editions";
-import { notFound } from "next/navigation";
 import { ExportButton } from "../export-button";
 import { PrintButton } from "../print-button";
 import {

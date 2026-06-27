@@ -1,9 +1,9 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { useFormSubmit } from "@/lib/use-form-submit";
 import Link from "next/link";
 import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
+import { useFormSubmit } from "@/lib/use-form-submit";
 
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);

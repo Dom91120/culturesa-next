@@ -1,9 +1,9 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { niveauSchema } from "@/schemas/referentiels";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/niveaux";
-import { revalidatePath } from "next/cache";
 
 // Actions typées (référentiel Niveaux en modale, mode tampon). Un niveau a une position
 // d'ordre et peut être rattaché à un demandeur (demandeurId optionnel).
