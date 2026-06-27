@@ -122,7 +122,7 @@ export function UserShell({
             id="service-sidebar-wrap"
             className={`${collapsed && !isMobile ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
             style={{
-              width: "18%",
+              width: "16%",
               minWidth: "fit-content",
               maxWidth: 300,
               flexShrink: 0,

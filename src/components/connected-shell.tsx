@@ -121,7 +121,7 @@ export function ConnectedShell({
             id="service-sidebar-wrap"
             className={collapsed ? "collapsed" : ""}
             style={{
-              width: "18%",
+              width: "16%",
               minWidth: "fit-content",
               maxWidth: 300,
               flexShrink: 0,

@@ -265,10 +265,11 @@ header {
   gap: 1.3rem;
 }
 .planning-option {
-  display: flex;
+  display: block;
   align-items: center;
   gap: .4rem;
-  font-size: .75rem;
+  font-size: .65rem;
+  white-space: nowrap;
   color: var(--muted);
   cursor: pointer;
   user-select: none;
@@ -2175,7 +2176,7 @@ textarea.theme-pending:focus::placeholder {
   margin: 0;
 }
 #agenda-period-tabs .period-btn {
-  padding: .2rem .6rem;
+  padding: .2rem .5rem;
   font-size: .7rem;
 }
 /* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda et dans la

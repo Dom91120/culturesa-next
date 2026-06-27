@@ -2645,10 +2645,9 @@ export function AgendaGrid({
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           gap: ".75rem",
-          flexWrap: "wrap",
           marginBottom: ".5rem",
         }}
       >
@@ -2685,7 +2684,7 @@ export function AgendaGrid({
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B) ; sinon les cases. */}
           {creationMode ? (
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
