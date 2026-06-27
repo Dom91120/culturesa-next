@@ -1349,11 +1349,9 @@ textarea.theme-pending:focus::placeholder {
   flex: 1 1 30rem;
   min-width: 0;
 }
-/* Barre « Ajouter une période » + actions de sélection : sortie de .pr-left, sur sa propre
-   ligne pleine largeur SOUS le tableau (order:1 = après la rangée tableau + Plages horaires). */
-#periods-row > .pr-add {
-  order: 1;
-  flex: 1 1 100%;
+/* Barre « Ajouter une période » + actions de sélection : sous le tableau, DANS la colonne
+   gauche (largeur du tableau) — ne s'étend pas sous « Plages horaires ». */
+#periods-row > .pr-left > .pr-add {
   display: flex;
   align-items: center;
   gap: 0.5rem;
