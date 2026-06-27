@@ -1343,10 +1343,8 @@ textarea.theme-pending:focus::placeholder {
 .pr-head > .periode-nav {
   margin: 0;
 }
-/* Colonne gauche : tableau des périodes + bouton « Ajouter » empilés. Rétrécit (flex) puis,
-   sous le seuil de base (flex-basis), la colonne « Plages horaires » passe dessous. */
+/* Colonne gauche : tableau des périodes + bouton « Ajouter » empilés. */
 #periods-row > .pr-left {
-  flex: 1 1 30rem;
   min-width: 0;
 }
 /* Barre « Ajouter une période » + actions de sélection : sous le tableau, DANS la colonne
@@ -1359,7 +1357,6 @@ textarea.theme-pending:focus::placeholder {
 }
 /* « Plages horaires » : à droite du tableau, bascule dessous quand la place manque. */
 #periods-row > .pr-hours {
-  flex: 1 1 18rem;
   min-width: 0; /* autorise le rétrécissement (sinon min-width:auto = contenu → pas de wrap) */
 }
 #periods-row > .pr-hours .defaults-row {
