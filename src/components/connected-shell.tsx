@@ -85,6 +85,25 @@ export function ConnectedShell({
     } catch {}
   }, [pathname, activeServiceId]);
 
+  // Mémorise le dernier onglet d'ADMINISTRATION ouvert (Configuration / Utilisateurs /
+  // Échanges / Messagerie / RGPD) pour y revenir via le bouton « Administration ».
+  useEffect(() => {
+    if (!adminActive || !activeHref) return;
+    try {
+      sessionStorage.setItem("admin-tab", activeHref);
+    } catch {}
+  }, [adminActive, activeHref]);
+
+  // Bouton « Administration » : revient sur le dernier onglet admin utilisé (défaut Configuration).
+  function goToAdmin() {
+    let target = "/configuration";
+    try {
+      const remembered = sessionStorage.getItem("admin-tab");
+      if (remembered) target = remembered;
+    } catch {}
+    router.push(target);
+  }
+
   // Changement de service depuis la barre latérale : on revient sur le dernier onglet ouvert
   // pour CE service ; s'il n'a jamais été visité, on conserve l'onglet courant (même onglet
   // que le service actif).
@@ -201,7 +220,7 @@ export function ConnectedShell({
                   id="sidebar-admin-btn"
                   className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
                   style={{ marginTop: ".6rem" }}
-                  onClick={() => router.push("/configuration")}
+                  onClick={goToAdmin}
                 >
                   <span className="sb-icon">⚙️</span>
                   <span className="sb-label">Administration</span>
