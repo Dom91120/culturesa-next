@@ -56,10 +56,10 @@ export function addDays(iso: string, n: number): Date {
 export const shortDateFmt = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
 
 // Clé jour (lun..dim) d'une date "YYYY-MM-DD" — pour projeter un créneau ponctuel
-// daté sur la bonne colonne jour de l'agenda (legacy _agendaDayKeyFromYmd).
-const YMD_DAY_KEYS = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+// daté sur la bonne colonne jour de l'agenda (legacy _agendaDayKeyFromYmd). Réutilise
+// ISO_DAY_KEYS (même indexation getDay 0=dim) plutôt qu'une 2e copie du tableau.
 export function dayKeyFromYmd(ymdStr: string): string {
-  return YMD_DAY_KEYS[new Date(`${ymdStr}T00:00:00`).getDay()] ?? "";
+  return ISO_DAY_KEYS[new Date(`${ymdStr}T00:00:00`).getDay()] ?? "";
 }
 
 // ─── Créneaux ────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import {
   type DatedSession,
   listDatedSessions,
   listEditionRows,
+  POINTAGE_LABEL,
   type SessionAttendee,
 } from "@/server/services/editions";
 import { ExportButton } from "../export-button";
@@ -22,7 +23,6 @@ import { RangeBar } from "../range-bar";
 import { ListeTotalsLine, RuptureHeading, TotalsLine } from "../totals";
 import { ListeSortSelect } from "./liste-controls";
 
-const POINTAGE_LABEL: Record<string, string> = { present: "Présent", absent: "Absent" };
 const PER_PAGE = 20;
 
 // Édition « Liste des réservations » :

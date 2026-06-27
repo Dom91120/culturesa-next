@@ -8,8 +8,9 @@
 // « Aujourd'hui » = date calendaire à Paris. Tout est en chaînes ISO (YYYY-MM-DD)
 // pour rester aligné sur les `slot.slotDate` (@db.Date).
 
+import { ISO_DAY_KEYS } from "@/lib/agenda-core";
+
 const PARIS = "Europe/Paris";
-const DOW = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"] as const;
 
 /** Date calendaire d'aujourd'hui à Paris (YYYY-MM-DD). */
 export function todayParisISO(now: Date = new Date()): string {
@@ -28,7 +29,7 @@ function addDays(iso: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const dowKey = (iso: string) => DOW[new Date(`${iso}T00:00:00Z`).getUTCDay()];
+const dowKey = (iso: string) => ISO_DAY_KEYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];
 
 /** Date ISO (YYYY-MM-DD) la plus proche réservable selon le délai du service. */
 export function earliestBookableISO(

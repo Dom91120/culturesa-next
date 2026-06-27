@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
-import { type DatedSession, listDatedSessions } from "@/server/services/editions";
+import { type DatedSession, listDatedSessions, POINTAGE_LABEL } from "@/server/services/editions";
 import {
   bucketSessions,
   computeTotals,
@@ -10,8 +10,6 @@ import {
 } from "../range";
 import { RangeBar } from "../range-bar";
 import { RuptureHeading, TotalsLine } from "../totals";
-
-const POINTAGE_LABEL: Record<string, string> = { present: "Présent", absent: "Absent" };
 
 export const metadata = { title: "CultuRésa — Pointages" };
 
