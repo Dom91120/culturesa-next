@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { prisma } from "@/server/db";
 
 // Nettoyage unique (modèle « 1 créneau = 1 semaine ») : supprime les créneaux RÉCURRENTS
 // « A & B » (qui tournent les deux semaines) des services en mode A/B — désormais
@@ -8,8 +9,6 @@ import { PrismaClient } from "@prisma/client";
 //
 //   Rapport (dry-run) : tsx scripts/delete-ab-slots.ts
 //   Suppression réelle : tsx scripts/delete-ab-slots.ts --apply
-
-const prisma = new PrismaClient();
 
 /** Un créneau « A&B » = ni « A » ni « B » seul (donc "A,B", "", null, ...). */
 function isBothWeeks(weeks: string | null): boolean {

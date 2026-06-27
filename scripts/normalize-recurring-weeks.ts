@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { prisma } from "@/server/db";
 
 // Migration unique (convention « weeks ∈ {"", "A", "B"} ») : ramène à "" tout créneau
 // RÉCURRENT dont la colonne weeks n'est ni "A" ni "B" (typiquement le legacy "A,B", ou
@@ -7,8 +8,6 @@ import { PrismaClient } from "@prisma/client";
 //
 //   Rapport (dry-run) : tsx scripts/normalize-recurring-weeks.ts
 //   Migration réelle  : tsx scripts/normalize-recurring-weeks.ts --apply
-
-const prisma = new PrismaClient();
 
 async function main() {
   const apply = process.argv.includes("--apply");

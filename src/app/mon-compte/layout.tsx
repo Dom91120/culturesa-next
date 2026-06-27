@@ -1,9 +1,9 @@
 import { ConnectedShell } from "@/components/connected-shell";
 import { UserShell } from "@/components/user-shell";
+import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { listBookableServices } from "@/server/services/bookings";
-import type { Role } from "@prisma/client";
 
 // « Mon compte » est accessible à TOUS les utilisateurs connectés (pas seulement aux
 // gestionnaires) : la route vit donc hors du groupe (admin). On choisit ici le shell

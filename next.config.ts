@@ -9,7 +9,8 @@ const nextConfig: NextConfig = {
   // avec un chemin relatif à son __dirname. S'il est empaqueté par webpack, le
   // fichier .ttf n'est pas copié → ENOENT. On le garde donc en require runtime
   // depuis node_modules, où la police est à côté du code.
-  serverExternalPackages: ["svg-captcha"],
+  // + driver Postgres de Prisma 7 (pg : require dynamique) gardé hors bundle serveur.
+  serverExternalPackages: ["svg-captcha", "@prisma/adapter-pg", "pg"],
   // Pour le build standalone (Docker) : forcer l'inclusion de la police dans le
   // tracing, car le chemin construit dynamiquement échappe à l'analyse statique.
   outputFileTracingIncludes: {

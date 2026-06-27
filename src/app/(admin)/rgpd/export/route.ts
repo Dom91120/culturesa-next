@@ -1,7 +1,7 @@
+import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { isUserInServicesRgpdScope } from "@/server/services/rgpd";
-import type { Role } from "@prisma/client";
 import { headers } from "next/headers";
 
 export async function GET(req: Request) {

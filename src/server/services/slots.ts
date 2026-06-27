@@ -1,7 +1,7 @@
+import { Prisma } from "@/generated/prisma/client";
 import { slotWeekTag } from "@/lib/iso-week";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
-import { Prisma } from "@prisma/client";
 
 // Helpers de l'agenda admin (mode « Création de créneau ») : ajout/copie/déplacement/
 // suppression de créneaux + génération de leurs miroirs. L'API « upsert en masse »

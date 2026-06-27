@@ -23,6 +23,7 @@ coverage
 
 # Prisma (le client généré ne se commit pas)
 prisma/generated
+src/generated
 
 # Sauvegardes de la base (dumps produits par le conteneur cron)
 backups/

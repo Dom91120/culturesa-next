@@ -1,5 +1,5 @@
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import "dotenv/config";
+import { prisma } from "@/server/db";
 
 // --- Jours fériés français (auto-contenu, même logique que exercice.ts) ---
 function easterSunday(year: number): Date {

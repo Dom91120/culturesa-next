@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@/generated/prisma/client";
 import { todayParisISO } from "@/lib/booking-delay";
 import { DAYS } from "@/schemas/config";
 import { recurringSlotCreateSchema, uniqueSlotCreateSchema } from "@/schemas/slot";
@@ -27,7 +28,6 @@ import {
   moveRecurringSlot,
   moveUniqueSlot,
 } from "@/server/services/slots";
-import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 

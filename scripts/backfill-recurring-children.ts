@@ -1,13 +1,12 @@
 import { todayParisISO } from "@/lib/booking-delay";
 import { getSchoolZone, syncRecurringChildren } from "@/server/services/recurring-children";
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { prisma } from "@/server/db";
 
 // Back-fill unique : matérialise les réservations-enfants datées pour TOUTES les
 // réservations récurrentes existantes (qui n'en avaient pas dans l'ancien modèle).
 // Idempotent — peut être relancé sans dommage. À lancer une fois après
 // `prisma migrate deploy` : `tsx scripts/backfill-recurring-children.ts`.
-
-const prisma = new PrismaClient();
 
 async function main() {
   const zone = await getSchoolZone();

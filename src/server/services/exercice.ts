@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
 import { holidaysInRange } from "@/lib/french-holidays";
 import { slotWeekTag } from "@/lib/iso-week";
 import { prisma } from "@/server/db";
-import type { DayOfWeek, Prisma } from "@prisma/client";
 
 // =====================================================================================
 // Types

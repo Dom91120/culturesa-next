@@ -1,9 +1,9 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { slotWeekTag } from "@/lib/iso-week";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { getConfigMany } from "@/server/config";
 import { effectiveOpenOnSchoolHolidays } from "@/server/services/bookings";
-import type { Prisma } from "@prisma/client";
 
 // ════════════════════════════════════════════════════════════
 //  Matérialisation des réservations-enfants d'une récurrente (port legacy
