@@ -101,12 +101,7 @@ export default async function PlanningPage({
                     <td style={{ ...td, fontWeight: 600, paddingLeft: 0 }}>
                       {`${a.nom} ${a.prenom}`.trim() || "—"}
                     </td>
-                    <td style={td}>
-                      <div>{a.demandeur || "—"}</div>
-                      <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                        {a.structure || "—"}
-                      </div>
-                    </td>
+                    <td style={td}>{a.structure || a.demandeur || "—"}</td>
                     <td style={td}>{a.theme || "—"}</td>
                   </tr>
                 ))}
