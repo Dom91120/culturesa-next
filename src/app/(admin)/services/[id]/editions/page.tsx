@@ -37,14 +37,6 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
       action: "Ouvrir",
     },
     {
-      icon: "📥",
-      label: "Export CSV",
-      description:
-        "Toutes les réservations du service au format CSV (compatible Excel, UTF-8, séparateur point-virgule).",
-      href: `/services/${id}/editions/export`,
-      action: "Télécharger",
-    },
-    {
       icon: "🗓",
       label: "Plannings",
       description:
