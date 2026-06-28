@@ -99,6 +99,22 @@ export default async function PlanningPage({
                     {a.structure || a.demandeur || "—"}
                   </div>
                   <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.theme || "—"}</div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: ".75rem",
+                      fontSize: ".76rem",
+                      marginTop: ".15rem",
+                    }}
+                  >
+                    <span>
+                      {a.enfants} Enfant{a.enfants > 1 ? "s" : ""}
+                    </span>
+                    <span>
+                      {a.accompagnants} adulte{a.accompagnants > 1 ? "s" : ""}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
