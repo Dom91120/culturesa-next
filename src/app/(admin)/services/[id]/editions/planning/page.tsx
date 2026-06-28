@@ -101,7 +101,7 @@ export default async function PlanningPage({
                   <tr key={`${a.nom}-${a.prenom}-${i}`}>
                     <td style={{ ...td, fontWeight: 600 }}>{a.nom || "—"}</td>
                     <td style={td}>{a.prenom || "—"}</td>
-                    <td style={td}>{a.structure || "—"}</td>
+                    <td style={td}>{a.structure || a.demandeur || "—"}</td>
                     <td style={td}>{a.theme || "—"}</td>
                   </tr>
                 ))}
