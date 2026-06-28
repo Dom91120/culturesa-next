@@ -81,7 +81,9 @@ export default async function PlanningPage({
         {daySessions.map((s) => (
           <div key={`${s.startTime}-${s.endTime}`} style={{ marginBottom: ".6rem" }}>
             <div style={{ fontWeight: 600, fontSize: ".85rem", marginBottom: ".15rem" }}>
-              {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}{" "}
+              {s.startTime && s.endTime
+                ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
+                : "Journée entière"}{" "}
               <span style={{ color: "var(--muted)", fontWeight: 400 }}>
                 ({s.attendees.length} inscrit{s.attendees.length > 1 ? "s" : ""})
               </span>
