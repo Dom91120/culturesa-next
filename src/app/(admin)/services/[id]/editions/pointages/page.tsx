@@ -99,7 +99,7 @@ export default async function PointagesPage({
             <tr key={`${a.nom}-${a.prenom}-${i}`}>
               <td style={{ ...td, fontWeight: 600 }}>{a.nom}</td>
               <td style={td}>{a.prenom}</td>
-              <td style={td}>{a.structure || "—"}</td>
+              <td style={td}>{a.structure || a.demandeur || "—"}</td>
               <td style={{ ...td, textAlign: "center" }}>
                 {a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}
               </td>
