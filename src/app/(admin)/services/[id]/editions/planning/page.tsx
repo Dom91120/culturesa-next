@@ -98,7 +98,7 @@ export default async function PlanningPage({
               <tbody>
                 {s.attendees.map((a, i) => (
                   <tr key={`${a.nom}-${a.prenom}-${i}`}>
-                    <td style={{ ...td, fontWeight: 600 }}>
+                    <td style={{ ...td, fontWeight: 600, paddingLeft: 0 }}>
                       {`${a.nom} ${a.prenom}`.trim() || "—"}
                     </td>
                     <td style={td}>{a.structure || a.demandeur || "—"}</td>
