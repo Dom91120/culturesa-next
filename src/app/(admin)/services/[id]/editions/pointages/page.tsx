@@ -87,7 +87,7 @@ export default async function PointagesPage({
       <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={{ ...th, width: "34%" }}>Nom Prénom</th>
+            <th style={{ ...th, width: "34%" }}>Identité</th>
             <th style={th}>Structure</th>
             <th style={{ ...th, textAlign: "center", width: 110 }}>Pointage</th>
             <th style={{ ...th, width: 180 }}>Émargement</th>
