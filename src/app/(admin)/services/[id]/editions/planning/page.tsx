@@ -56,13 +56,6 @@ export default async function PlanningPage({
       : [];
   const withSubtotals = withRuptures && buckets.length > 1;
 
-  const td: React.CSSProperties = {
-    borderBottom: "1px solid var(--border)",
-    padding: "3px 6px",
-    fontSize: ".82rem",
-    verticalAlign: "top",
-  };
-
   const renderSection = (daySessions: DatedSession[]) => {
     const first = daySessions[0];
     return (
@@ -88,35 +81,27 @@ export default async function PlanningPage({
                 ({s.attendees.length} inscrit{s.attendees.length > 1 ? "s" : ""})
               </span>
             </div>
-            {/* Colonnes fixes (table-layout) → alignées d'une séance à l'autre. */}
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-              <tbody>
-                {s.attendees.map((a, i) => (
-                  <tr key={`${a.nom}-${a.prenom}-${i}`}>
-                    <td style={{ ...td, padding: "4px 0", border: "none" }}>
-                      <div
-                        style={{
-                          display: "inline-block",
-                          border: "1px solid var(--border)",
-                          borderRadius: "var(--rad-sm)",
-                          padding: ".35rem .6rem",
-                        }}
-                      >
-                        <div style={{ fontWeight: 600 }}>
-                          {`${a.nom} ${a.prenom}`.trim() || "—"}
-                        </div>
-                        <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                          {a.structure || a.demandeur || "—"}
-                        </div>
-                        <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                          {a.theme || "—"}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* Cartes participants : côte à côte (flex-wrap) — elles passent à la ligne
+                seulement quand la largeur ne suffit plus. */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem" }}>
+              {s.attendees.map((a, i) => (
+                <div
+                  key={`${a.nom}-${a.prenom}-${i}`}
+                  style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--rad-sm)",
+                    padding: ".35rem .6rem",
+                    fontSize: ".82rem",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</div>
+                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                    {a.structure || a.demandeur || "—"}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.theme || "—"}</div>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </section>
