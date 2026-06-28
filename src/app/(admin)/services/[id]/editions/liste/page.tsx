@@ -278,7 +278,9 @@ export default async function EditionsListePage({
                 {s.dayLabel} {s.dateLabel}
               </td>
               <td style={tdNoWrap}>
-                {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
+                {s.startTime && s.endTime
+                  ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
+                  : "Journée entière"}
               </td>
               <td>{a.demandeur || "—"}</td>
               <td style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>

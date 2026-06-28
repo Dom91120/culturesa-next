@@ -76,7 +76,10 @@ export default async function PointagesPage({
       style={{ marginBottom: "1.25rem", breakInside: "avoid" }}
     >
       <h3 style={{ fontSize: ".9rem", fontWeight: 700, marginBottom: ".35rem" }}>
-        {formatDateHeading(s.date)} · {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}{" "}
+        {formatDateHeading(s.date)} ·{" "}
+        {s.startTime && s.endTime
+          ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
+          : "Journée entière"}{" "}
         <span style={{ color: "var(--muted)", fontWeight: 400 }}>
           ({s.attendees.length} inscrit{s.attendees.length > 1 ? "s" : ""})
         </span>
