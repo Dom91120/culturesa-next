@@ -93,13 +93,24 @@ export default async function PlanningPage({
               <tbody>
                 {s.attendees.map((a, i) => (
                   <tr key={`${a.nom}-${a.prenom}-${i}`}>
-                    <td style={{ ...td, paddingLeft: 0 }}>
-                      <div style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</div>
-                      <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                        {a.structure || a.demandeur || "—"}
-                      </div>
-                      <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                        {a.theme || "—"}
+                    <td style={{ ...td, padding: "4px 0", border: "none" }}>
+                      <div
+                        style={{
+                          display: "inline-block",
+                          border: "1px solid var(--border)",
+                          borderRadius: "var(--rad-sm)",
+                          padding: ".35rem .6rem",
+                        }}
+                      >
+                        <div style={{ fontWeight: 600 }}>
+                          {`${a.nom} ${a.prenom}`.trim() || "—"}
+                        </div>
+                        <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                          {a.structure || a.demandeur || "—"}
+                        </div>
+                        <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                          {a.theme || "—"}
+                        </div>
                       </div>
                     </td>
                   </tr>
