@@ -89,6 +89,7 @@ export default async function PointagesPage({
           <tr>
             <th style={{ ...th, width: "34%" }}>Identité</th>
             <th style={th}>Structure</th>
+            <th style={{ ...th, width: 150 }}>Participants</th>
             <th style={{ ...th, textAlign: "center", width: 110 }}>Pointage</th>
             <th style={{ ...th, width: 180 }}>Émargement</th>
           </tr>
@@ -98,6 +99,10 @@ export default async function PointagesPage({
             <tr key={`${a.nom}-${a.prenom}-${i}`}>
               <td style={{ ...td, fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>
               <td style={td}>{a.structure || a.demandeur || "—"}</td>
+              <td style={td}>
+                {a.enfants} Enfant{a.enfants > 1 ? "s" : ""} {a.accompagnants} adulte
+                {a.accompagnants > 1 ? "s" : ""}
+              </td>
               <td style={{ ...td, textAlign: "center" }}>
                 {a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}
               </td>
