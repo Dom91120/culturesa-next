@@ -91,17 +91,18 @@ export default async function PlanningPage({
             {/* Colonnes fixes (table-layout) → alignées d'une séance à l'autre. */}
             <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
               <colgroup>
-                <col style={{ width: "34%" }} />
-                <col style={{ width: "33%" }} />
+                <col style={{ width: "50%" }} />
                 <col />
               </colgroup>
               <tbody>
                 {s.attendees.map((a, i) => (
                   <tr key={`${a.nom}-${a.prenom}-${i}`}>
-                    <td style={{ ...td, fontWeight: 600, paddingLeft: 0 }}>
-                      {`${a.nom} ${a.prenom}`.trim() || "—"}
+                    <td style={{ ...td, paddingLeft: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</div>
+                      <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                        {a.structure || a.demandeur || "—"}
+                      </div>
                     </td>
-                    <td style={td}>{a.structure || a.demandeur || "—"}</td>
                     <td style={td}>{a.theme || "—"}</td>
                   </tr>
                 ))}
