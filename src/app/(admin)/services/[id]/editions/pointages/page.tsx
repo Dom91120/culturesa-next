@@ -87,8 +87,7 @@ export default async function PointagesPage({
       <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={{ ...th, width: "18%" }}>Nom</th>
-            <th style={{ ...th, width: "16%" }}>Prénom</th>
+            <th style={{ ...th, width: "34%" }}>Nom Prénom</th>
             <th style={th}>Structure</th>
             <th style={{ ...th, textAlign: "center", width: 110 }}>Pointage</th>
             <th style={{ ...th, width: 180 }}>Émargement</th>
@@ -97,8 +96,7 @@ export default async function PointagesPage({
         <tbody>
           {s.attendees.map((a, i) => (
             <tr key={`${a.nom}-${a.prenom}-${i}`}>
-              <td style={{ ...td, fontWeight: 600 }}>{a.nom}</td>
-              <td style={td}>{a.prenom}</td>
+              <td style={{ ...td, fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>
               <td style={td}>{a.structure || a.demandeur || "—"}</td>
               <td style={{ ...td, textAlign: "center" }}>
                 {a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}
