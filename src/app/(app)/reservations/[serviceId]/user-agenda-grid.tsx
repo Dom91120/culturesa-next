@@ -625,7 +625,10 @@ function MineBadge({
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            // Ligne unique « − chiffre + ⏳ − chiffre + » : space-evenly répartit le même
+            // espace partout → tous les espacements se resserrent au même rythme avec la
+            // largeur. (Thème central : on garde center, le thème prend la place restante.)
+            justifyContent: themeInMiddle ? "center" : "space-evenly",
             gap: 0,
             width: "100%",
             cursor: "default",
@@ -633,104 +636,86 @@ function MineBadge({
             color: gColor,
           }}
         >
-          {/* Colonne Enfants */}
+          {/* Jauge APLATIE : 7 éléments directs (− chiffre + ⏳ − chiffre +). space-evenly
+              répartit le MÊME espace partout → resserrement uniforme. Les libellés sont en
+              position ABSOLUE sous chaque chiffre pour ne pas élargir l'élément (sinon ils
+              dicteraient les espacements). */}
+          <StepBtn
+            sign="−"
+            color={gColor}
+            onClick={() => onBump("enfants", -1)}
+            isMobile={dragFullSurface}
+          />
           <div
             style={{
+              position: "relative",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              // Thème au centre (créneau court) : colonnes à largeur naturelle pour laisser
-              // la place au thème ; sinon chaque colonne occupe la moitié du badge.
-              width: themeInMiddle ? "auto" : "50%",
-              flexShrink: 0,
+              minWidth: 0,
             }}
           >
-            {/* Ligne − chiffre + : occupe 100% de la colonne (= 50% du badge, largeur RÉELLE).
-                Le chiffre (input flex:1, plafonné bu(64)) prend l'espace entre les boutons → son
-                espacement se resserre quand le badge rétrécit en largeur. Le libellé est SOUS la
-                ligne (sibling) pour ne plus dicter cette largeur. */}
-            <div
+            <input
+              type="number"
+              // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+              readOnly
+              tabIndex={-1}
+              inputMode="none"
+              min={1}
+              max={remaining}
+              value={enfants}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 0,
-                width: "100%",
+                width: bu(40),
+                maxWidth: "100%",
+                height: bu(36),
+                boxSizing: "border-box",
+                textAlign: "center",
+                fontSize: bu(38),
+                background: "transparent",
+                border: "none",
+                color: gColor,
+                fontWeight: 600,
+                padding: 0,
+                cursor: "default",
+                transform: veryShortSlot ? "translateY(3px)" : undefined,
               }}
-            >
-              <StepBtn
-                sign="−"
-                color={gColor}
-                onClick={() => onBump("enfants", -1)}
-                isMobile={dragFullSurface}
-              />
-              <input
-                type="number"
-                // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
-                readOnly
-                tabIndex={-1}
-                inputMode="none"
-                min={1}
-                max={remaining}
-                value={enfants}
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
-                style={{
-                  // Largeur = 50% de la colonne : avec des boutons de largeur fixe, c'est la
-                  // valeur où la marge de centrage (gap vers l'icône centrale) et l'espacement
-                  // interne (− chiffre +) varient à la MÊME vitesse avec la largeur → resserrement
-                  // uniforme (même rythme), sans phase « la marge se vide d'abord ».
-                  width: "50%",
-                  minWidth: bu(22),
-                  height: bu(36),
-                  boxSizing: "border-box",
-                  textAlign: "center",
-                  fontSize: bu(38),
-                  background: "transparent",
-                  border: "none",
-                  color: gColor,
-                  fontWeight: 600,
-                  padding: 0,
-                  cursor: "default",
-                  // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
-                  transform: veryShortSlot ? "translateY(3px)" : undefined,
-                }}
-              />
-              <StepBtn
-                sign="+"
-                color={gColor}
-                onClick={() => onBump("enfants", 1)}
-                isMobile={dragFullSurface}
-              />
-            </div>
+            />
             <span
               className="gauge-txt"
               style={{
+                position: "absolute",
+                top: "100%",
+                left: "50%",
+                transform: `translateX(-50%)${veryShortSlot ? " translateY(3px)" : ""}`,
                 color: gColor,
                 fontSize: bu(20),
                 lineHeight: 1,
                 fontWeight: 700,
-                // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
-                transform: veryShortSlot ? "translateY(3px)" : undefined,
+                whiteSpace: "nowrap",
               }}
             >
               {enfants > 1 ? "Enfants" : "Enfant"}
             </span>
           </div>
-          {/* Colonne centrale : icône d'état ✔/⏳ — OU, sur créneau court, le thème
-              (multi-lignes) qui prend sa place pour rester visible (cf. themeInMiddle). */}
+          <StepBtn
+            sign="+"
+            color={gColor}
+            onClick={() => onBump("enfants", 1)}
+            isMobile={dragFullSurface}
+          />
+          {/* Centre : icône d'état ✔/⏳ — OU, sur créneau court, le thème (themeInMiddle). */}
           {themeInMiddle ? (
             <div
               style={{
                 flex: 1,
                 minWidth: 0,
-                // Thème central aligné en BAS de la colonne (cf. demande créneau court).
                 alignSelf: "flex-end",
                 display: "flex",
                 alignItems: "flex-end",
                 justifyContent: "center",
-                // Créneau très court (≤ 15 min) : thème remonté de 3px.
                 transform: veryShortSlot ? "translateY(-3px)" : undefined,
               }}
             >
@@ -740,7 +725,6 @@ function MineBadge({
             <span
               className="slot-icon"
               style={{
-                width: 0,
                 flexShrink: 0,
                 display: "flex",
                 justifyContent: "center",
@@ -751,91 +735,72 @@ function MineBadge({
               {icon}
             </span>
           )}
-          {/* Colonne Adultes */}
+          <StepBtn
+            sign="−"
+            color={gColor}
+            onClick={() => onBump("accompagnants", -1)}
+            isMobile={dragFullSurface}
+          />
           <div
             style={{
+              position: "relative",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              // Thème au centre (créneau court) : colonnes à largeur naturelle pour laisser
-              // la place au thème ; sinon chaque colonne occupe la moitié du badge.
-              width: themeInMiddle ? "auto" : "50%",
-              flexShrink: 0,
+              minWidth: 0,
             }}
           >
-            {/* Ligne − chiffre + : occupe 100% de la colonne (= 50% du badge, largeur RÉELLE).
-                Le chiffre (input flex:1, plafonné bu(64)) prend l'espace entre les boutons → son
-                espacement se resserre quand le badge rétrécit en largeur. Le libellé est SOUS la
-                ligne (sibling) pour ne plus dicter cette largeur. */}
-            <div
+            <input
+              type="number"
+              // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+              readOnly
+              tabIndex={-1}
+              inputMode="none"
+              min={1}
+              max={remaining}
+              value={accompagnants}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 0,
-                width: "100%",
+                width: bu(40),
+                maxWidth: "100%",
+                height: bu(36),
+                boxSizing: "border-box",
+                textAlign: "center",
+                fontSize: bu(38),
+                background: "transparent",
+                border: "none",
+                color: gColor,
+                fontWeight: 600,
+                padding: 0,
+                cursor: "default",
+                transform: veryShortSlot ? "translateY(3px)" : undefined,
               }}
-            >
-              <StepBtn
-                sign="−"
-                color={gColor}
-                onClick={() => onBump("accompagnants", -1)}
-                isMobile={dragFullSurface}
-              />
-              <input
-                type="number"
-                // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
-                readOnly
-                tabIndex={-1}
-                inputMode="none"
-                min={1}
-                max={remaining}
-                value={accompagnants}
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
-                style={{
-                  // Largeur = 50% de la colonne : avec des boutons de largeur fixe, c'est la
-                  // valeur où la marge de centrage (gap vers l'icône centrale) et l'espacement
-                  // interne (− chiffre +) varient à la MÊME vitesse avec la largeur → resserrement
-                  // uniforme (même rythme), sans phase « la marge se vide d'abord ».
-                  width: "50%",
-                  minWidth: bu(22),
-                  height: bu(36),
-                  boxSizing: "border-box",
-                  textAlign: "center",
-                  fontSize: bu(38),
-                  background: "transparent",
-                  border: "none",
-                  color: gColor,
-                  fontWeight: 600,
-                  padding: 0,
-                  cursor: "default",
-                  // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
-                  transform: veryShortSlot ? "translateY(3px)" : undefined,
-                }}
-              />
-              <StepBtn
-                sign="+"
-                color={gColor}
-                onClick={() => onBump("accompagnants", 1)}
-                isMobile={dragFullSurface}
-              />
-            </div>
+            />
             <span
               className="gauge-txt"
               style={{
+                position: "absolute",
+                top: "100%",
+                left: "50%",
+                transform: `translateX(-50%)${veryShortSlot ? " translateY(3px)" : ""}`,
                 color: gColor,
                 fontSize: bu(20),
                 lineHeight: 1,
                 fontWeight: 700,
-                // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
-                transform: veryShortSlot ? "translateY(3px)" : undefined,
+                whiteSpace: "nowrap",
               }}
             >
               {accompagnants > 1 ? "Adultes" : "Adulte"}
             </span>
           </div>
+          <StepBtn
+            sign="+"
+            color={gColor}
+            onClick={() => onBump("accompagnants", 1)}
+            isMobile={dragFullSurface}
+          />
         </div>
       ) : (
         <span
