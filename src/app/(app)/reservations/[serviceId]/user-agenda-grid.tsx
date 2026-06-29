@@ -648,11 +648,16 @@ function MineBadge({
           />
           <div
             style={{
-              position: "relative",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              minWidth: 0,
+              // Largeur = celle du chiffre : le libellé (en flux, dessous) déborde
+              // symétriquement (text-align center) sans élargir l'élément → espacements
+              // uniformes préservés, et le libellé compte dans la hauteur → centrage vertical.
+              // minWidth = plancher pour que le chiffre reste lisible (ne s'effondre pas) sur
+              // les badges étroits.
+              width: bu(40),
+              minWidth: bu(30),
             }}
           >
             <input
@@ -686,15 +691,14 @@ function MineBadge({
             <span
               className="gauge-txt"
               style={{
-                position: "absolute",
-                top: "100%",
-                left: "50%",
-                transform: `translateX(-50%)${veryShortSlot ? " translateY(3px)" : ""}`,
+                width: "100%",
+                textAlign: "center",
                 color: gColor,
                 fontSize: bu(20),
                 lineHeight: 1,
                 fontWeight: 700,
                 whiteSpace: "nowrap",
+                transform: veryShortSlot ? "translateY(3px)" : undefined,
               }}
             >
               {enfants > 1 ? "Enfants" : "Enfant"}
@@ -743,11 +747,16 @@ function MineBadge({
           />
           <div
             style={{
-              position: "relative",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              minWidth: 0,
+              // Largeur = celle du chiffre : le libellé (en flux, dessous) déborde
+              // symétriquement (text-align center) sans élargir l'élément → espacements
+              // uniformes préservés, et le libellé compte dans la hauteur → centrage vertical.
+              // minWidth = plancher pour que le chiffre reste lisible (ne s'effondre pas) sur
+              // les badges étroits.
+              width: bu(40),
+              minWidth: bu(30),
             }}
           >
             <input
@@ -781,15 +790,14 @@ function MineBadge({
             <span
               className="gauge-txt"
               style={{
-                position: "absolute",
-                top: "100%",
-                left: "50%",
-                transform: `translateX(-50%)${veryShortSlot ? " translateY(3px)" : ""}`,
+                width: "100%",
+                textAlign: "center",
                 color: gColor,
                 fontSize: bu(20),
                 lineHeight: 1,
                 fontWeight: 700,
                 whiteSpace: "nowrap",
+                transform: veryShortSlot ? "translateY(3px)" : undefined,
               }}
             >
               {accompagnants > 1 ? "Adultes" : "Adulte"}
