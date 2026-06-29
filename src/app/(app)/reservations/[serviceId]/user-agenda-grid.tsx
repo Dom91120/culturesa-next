@@ -674,10 +674,11 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    // Largeur (= espacement − chiffre +) bornée par la LARGEUR du badge
-                    // (cqw) : se resserre quand le badge rétrécit en largeur, plafonnée à
-                    // bu(64) sur badge large, plancher bu(36) pour ne pas tronquer le nombre.
-                    width: `clamp(${bu(36)}, 26cqw, ${bu(64)})`,
+                    // Largeur (= espacement − chiffre +) PROPORTIONNELLE à la largeur du badge
+                    // (16cqw) : se resserre quand le badge rétrécit en largeur. Plancher bu(26)
+                    // (ne pas tronquer le nombre), plafond bu(56) (badge très large). Coefficient
+                    // choisi pour que le terme cqw reste actif dans la plage de largeurs usuelle.
+                    width: `clamp(${bu(26)}, 16cqw, ${bu(56)})`,
                     height: bu(36),
                     boxSizing: "border-box",
                     textAlign: "center",
@@ -789,10 +790,11 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    // Largeur (= espacement − chiffre +) bornée par la LARGEUR du badge
-                    // (cqw) : se resserre quand le badge rétrécit en largeur, plafonnée à
-                    // bu(64) sur badge large, plancher bu(36) pour ne pas tronquer le nombre.
-                    width: `clamp(${bu(36)}, 26cqw, ${bu(64)})`,
+                    // Largeur (= espacement − chiffre +) PROPORTIONNELLE à la largeur du badge
+                    // (16cqw) : se resserre quand le badge rétrécit en largeur. Plancher bu(26)
+                    // (ne pas tronquer le nombre), plafond bu(56) (badge très large). Coefficient
+                    // choisi pour que le terme cqw reste actif dans la plage de largeurs usuelle.
+                    width: `clamp(${bu(26)}, 16cqw, ${bu(56)})`,
                     height: bu(36),
                     boxSizing: "border-box",
                     textAlign: "center",
