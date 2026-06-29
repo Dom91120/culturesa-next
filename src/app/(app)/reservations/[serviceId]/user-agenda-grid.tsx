@@ -674,7 +674,10 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    width: bu(64),
+                    // Largeur (= espacement − chiffre +) bornée par la LARGEUR du badge
+                    // (cqw) : se resserre quand le badge rétrécit en largeur, plafonnée à
+                    // bu(64) sur badge large, plancher bu(36) pour ne pas tronquer le nombre.
+                    width: `clamp(${bu(36)}, 26cqw, ${bu(64)})`,
                     height: bu(36),
                     boxSizing: "border-box",
                     textAlign: "center",
@@ -786,7 +789,10 @@ function MineBadge({
                   onMouseDown={(e) => e.stopPropagation()}
                   onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                   style={{
-                    width: bu(64),
+                    // Largeur (= espacement − chiffre +) bornée par la LARGEUR du badge
+                    // (cqw) : se resserre quand le badge rétrécit en largeur, plafonnée à
+                    // bu(64) sur badge large, plancher bu(36) pour ne pas tronquer le nombre.
+                    width: `clamp(${bu(36)}, 26cqw, ${bu(64)})`,
                     height: bu(36),
                     boxSizing: "border-box",
                     textAlign: "center",
