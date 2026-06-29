@@ -677,11 +677,11 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  // Largeur = 40% de la colonne (= 20% du badge) : le chiffre ET la marge de
-                  // centrage (gap vers l'icône centrale) sont alors proportionnels à la largeur
-                  // → les deux espacements se resserrent EN MÊME TEMPS quand le badge rétrécit
-                  // (un flex:1 plafonné absorbait d'abord la marge, d'où l'effet en deux temps).
-                  width: "40%",
+                  // Largeur = 50% de la colonne : avec des boutons de largeur fixe, c'est la
+                  // valeur où la marge de centrage (gap vers l'icône centrale) et l'espacement
+                  // interne (− chiffre +) varient à la MÊME vitesse avec la largeur → resserrement
+                  // uniforme (même rythme), sans phase « la marge se vide d'abord ».
+                  width: "50%",
                   minWidth: bu(22),
                   height: bu(36),
                   boxSizing: "border-box",
@@ -795,11 +795,11 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  // Largeur = 40% de la colonne (= 20% du badge) : le chiffre ET la marge de
-                  // centrage (gap vers l'icône centrale) sont alors proportionnels à la largeur
-                  // → les deux espacements se resserrent EN MÊME TEMPS quand le badge rétrécit
-                  // (un flex:1 plafonné absorbait d'abord la marge, d'où l'effet en deux temps).
-                  width: "40%",
+                  // Largeur = 50% de la colonne : avec des boutons de largeur fixe, c'est la
+                  // valeur où la marge de centrage (gap vers l'icône centrale) et l'espacement
+                  // interne (− chiffre +) varient à la MÊME vitesse avec la largeur → resserrement
+                  // uniforme (même rythme), sans phase « la marge se vide d'abord ».
+                  width: "50%",
                   minWidth: bu(22),
                   height: bu(36),
                   boxSizing: "border-box",
