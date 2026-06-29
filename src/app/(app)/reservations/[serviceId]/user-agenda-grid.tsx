@@ -86,10 +86,13 @@ function StepBtn({
   sign,
   color,
   onClick,
+  isMobile,
 }: {
   sign: "+" | "−";
   color: string;
   onClick: () => void;
+  // Smartphone : bordure pointillée ; desktop : pas de bordure.
+  isMobile: boolean;
 }) {
   const onClickRef = useRef(onClick);
   onClickRef.current = onClick;
@@ -133,7 +136,9 @@ function StepBtn({
         // Toujours un cercle, glyphe centré. Taille proportionnelle au créneau (cqmin).
         width: bu(44),
         height: bu(44),
-        border: `${bu(2)} solid ${color}`,
+        boxSizing: "border-box",
+        // Smartphone : bordure pointillée ; desktop : aucune bordure.
+        border: isMobile ? `${bu(2)} dotted ${color}` : "none",
         borderRadius: "50%",
         background: "transparent",
         color,
@@ -648,7 +653,12 @@ function MineBadge({
                 gap: 0,
               }}
             >
-              <StepBtn sign="−" color={gColor} onClick={() => onBump("enfants", -1)} />
+              <StepBtn
+                sign="−"
+                color={gColor}
+                onClick={() => onBump("enfants", -1)}
+                isMobile={dragFullSurface}
+              />
               {/* Wrapper : input au-dessus, libellé Enfant(s) en dessous. */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <input
@@ -694,7 +704,12 @@ function MineBadge({
                   {enfants > 1 ? "Enfants" : "Enfant"}
                 </span>
               </div>
-              <StepBtn sign="+" color={gColor} onClick={() => onBump("enfants", 1)} />
+              <StepBtn
+                sign="+"
+                color={gColor}
+                onClick={() => onBump("enfants", 1)}
+                isMobile={dragFullSurface}
+              />
             </div>
           </div>
           {/* Colonne centrale : icône d'état ✔/⏳ — OU, sur créneau court, le thème
@@ -750,7 +765,12 @@ function MineBadge({
                 gap: 0,
               }}
             >
-              <StepBtn sign="−" color={gColor} onClick={() => onBump("accompagnants", -1)} />
+              <StepBtn
+                sign="−"
+                color={gColor}
+                onClick={() => onBump("accompagnants", -1)}
+                isMobile={dragFullSurface}
+              />
               {/* Wrapper : input au-dessus, libellé Adulte(s) en dessous. */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <input
@@ -796,7 +816,12 @@ function MineBadge({
                   {accompagnants > 1 ? "Adultes" : "Adulte"}
                 </span>
               </div>
-              <StepBtn sign="+" color={gColor} onClick={() => onBump("accompagnants", 1)} />
+              <StepBtn
+                sign="+"
+                color={gColor}
+                onClick={() => onBump("accompagnants", 1)}
+                isMobile={dragFullSurface}
+              />
             </div>
           </div>
         </div>
