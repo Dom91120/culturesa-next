@@ -134,8 +134,10 @@ function StepBtn({
       onMouseLeave={stop}
       style={{
         // Toujours un cercle, glyphe centré. Taille proportionnelle au créneau (cqmin).
-        width: bu(44),
-        height: bu(44),
+        // Desktop : boutons plus compacts (bu32) pour réduire la largeur de la jauge sur les
+        // créneaux étroits (multi-colonnes) ; mobile (cible tactile) : on garde bu44.
+        width: bu(isMobile ? 44 : 32),
+        height: bu(isMobile ? 44 : 32),
         boxSizing: "border-box",
         // Smartphone : bordure pointillée ; desktop : aucune bordure.
         border: isMobile ? `${bu(2)} dotted ${color}` : "none",
@@ -146,7 +148,7 @@ function StepBtn({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: bu(32),
+        fontSize: bu(isMobile ? 32 : 24),
         fontWeight: 700,
         lineHeight: 1,
         padding: 0,
@@ -741,7 +743,8 @@ function MineBadge({
                 display: "flex",
                 justifyContent: "center",
                 alignSelf: "flex-start",
-                fontSize: bu(35),
+                // Desktop : icône réduite (bu24) pour gagner de la largeur ; mobile : bu35.
+                fontSize: bu(dragFullSurface ? 35 : 24),
               }}
             >
               {icon}
