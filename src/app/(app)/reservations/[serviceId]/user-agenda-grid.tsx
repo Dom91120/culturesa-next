@@ -677,9 +677,13 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  flex: "1 1 0",
-                  minWidth: 0,
-                  maxWidth: bu(64),
+                  // Largeur = 40% de la colonne (= 20% du badge) : le chiffre ET la marge de
+                  // centrage (gap vers l'icône centrale) sont alors proportionnels à la largeur
+                  // → les deux espacements se resserrent EN MÊME TEMPS quand le badge rétrécit
+                  // (un flex:1 plafonné absorbait d'abord la marge, d'où l'effet en deux temps).
+                  width: "40%",
+                  minWidth: bu(22),
+                  maxWidth: bu(72),
                   height: bu(36),
                   boxSizing: "border-box",
                   textAlign: "center",
@@ -792,9 +796,13 @@ function MineBadge({
                 onMouseDown={(e) => e.stopPropagation()}
                 onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
                 style={{
-                  flex: "1 1 0",
-                  minWidth: 0,
-                  maxWidth: bu(64),
+                  // Largeur = 40% de la colonne (= 20% du badge) : le chiffre ET la marge de
+                  // centrage (gap vers l'icône centrale) sont alors proportionnels à la largeur
+                  // → les deux espacements se resserrent EN MÊME TEMPS quand le badge rétrécit
+                  // (un flex:1 plafonné absorbait d'abord la marge, d'où l'effet en deux temps).
+                  width: "40%",
+                  minWidth: bu(22),
+                  maxWidth: bu(72),
                   height: bu(36),
                   boxSizing: "border-box",
                   textAlign: "center",
