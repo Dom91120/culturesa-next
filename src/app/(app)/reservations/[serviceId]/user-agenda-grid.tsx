@@ -133,8 +133,12 @@ function StepBtn({
       onMouseUp={stop}
       onMouseLeave={stop}
       style={{
-        // Toujours un cercle, glyphe centré. Taille proportionnelle au créneau (cqmin).
-        width: bu(44),
+        // Glyphe centré, taille proportionnelle au créneau (cqmin). Le glyphe « − » / « + »
+        // ne fait que ~7,7px de large pour une boîte de bu(44) : en DESKTOP (pas de bordure ni
+        // fond → boîte invisible) on resserre la largeur à bu(22) pour gagner ~40px sur la
+        // jauge (anti-troncature) SANS toucher au glyphe (font-size inchangée). Mobile : on
+        // garde le cercle bu(44) (cible tactile, vue 1 jour pleine largeur, pas de troncature).
+        width: bu(isMobile ? 44 : 22),
         height: bu(44),
         boxSizing: "border-box",
         // Smartphone : bordure pointillée ; desktop : aucune bordure.
