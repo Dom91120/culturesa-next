@@ -683,7 +683,6 @@ function MineBadge({
                   // (un flex:1 plafonné absorbait d'abord la marge, d'où l'effet en deux temps).
                   width: "40%",
                   minWidth: bu(22),
-                  maxWidth: bu(72),
                   height: bu(36),
                   boxSizing: "border-box",
                   textAlign: "center",
@@ -802,7 +801,6 @@ function MineBadge({
                   // (un flex:1 plafonné absorbait d'abord la marge, d'où l'effet en deux temps).
                   width: "40%",
                   minWidth: bu(22),
-                  maxWidth: bu(72),
                   height: bu(36),
                   boxSizing: "border-box",
                   textAlign: "center",
