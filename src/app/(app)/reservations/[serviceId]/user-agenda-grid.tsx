@@ -645,83 +645,80 @@ function MineBadge({
             color: gColor,
           }}
         >
-          {/* Jauge APLATIE : 7 éléments directs (− chiffre + ⏳ − chiffre +). space-evenly
-              répartit le MÊME espace partout → resserrement uniforme. Les libellés sont en
-              position ABSOLUE sous chaque chiffre pour ne pas élargir l'élément (sinon ils
-              dicteraient les espacements). */}
-          <StepBtn
-            sign="−"
-            color={gColor}
-            onClick={() => onBump("enfants", -1)}
-            isMobile={dragFullSurface}
-          />
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              // Largeur = celle du chiffre : le libellé (en flux, dessous) déborde
-              // symétriquement (text-align center) sans élargir l'élément → espacements
-              // uniformes préservés, et le libellé compte dans la hauteur → centrage vertical.
-              // minWidth = plancher pour que le chiffre reste lisible (ne s'effondre pas) sur
-              // les badges étroits.
-              width: bu(40),
-              minWidth: bu(30),
-            }}
-          >
-            <input
-              type="number"
-              // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
-              readOnly
-              tabIndex={-1}
-              inputMode="none"
-              min={1}
-              max={remaining}
-              value={enfants}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
-              style={{
-                width: bu(40),
-                maxWidth: "100%",
-                height: bu(36),
-                boxSizing: "border-box",
-                textAlign: "center",
-                fontSize: bu(38),
-                background: "transparent",
-                border: "none",
-                color: gColor,
-                fontWeight: 600,
-                padding: 0,
-                cursor: "default",
-                transform: veryShortSlot ? "translateY(3px)" : undefined,
-              }}
+          {/* Jauge GROUPÉE : 3 unités (groupe Enfants | icône | groupe Adultes). Chaque groupe
+              = [− chiffre +] à espacement interne NUL → les boutons collent à leur chiffre, même
+              quand le badge est large ; space-evenly ne distribue l'espace qu'ENTRE les groupes. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 0, minWidth: 0 }}>
+            <StepBtn
+              sign="−"
+              color={gColor}
+              onClick={() => onBump("enfants", -1)}
+              isMobile={dragFullSurface}
             />
-            <span
-              className="gauge-txt"
+            <div
               style={{
-                // Boîte = largeur du TEXTE (max-content), pas celle du wrapper : ainsi
-                // align-items:center du wrapper la centre sur le chiffre, et elle déborde
-                // symétriquement sans élargir le wrapper (espacements uniformes préservés).
-                // (.gauge-txt est display:block → sans ceci le texte débordait à droite.)
-                width: "max-content",
-                color: gColor,
-                fontSize: bu(20),
-                lineHeight: 1,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                transform: veryShortSlot ? "translateY(3px)" : undefined,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                // Largeur = celle du chiffre : le libellé (en flux, dessous) déborde
+                // symétriquement (text-align center) sans élargir l'élément, et compte dans la
+                // hauteur → centrage vertical. minWidth = plancher de lisibilité du chiffre.
+                width: bu(40),
+                minWidth: bu(30),
               }}
             >
-              {enfants > 1 ? "Enfants" : "Enfant"}
-            </span>
+              <input
+                type="number"
+                // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+                readOnly
+                tabIndex={-1}
+                inputMode="none"
+                min={1}
+                max={remaining}
+                value={enfants}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
+                style={{
+                  width: bu(40),
+                  maxWidth: "100%",
+                  height: bu(36),
+                  boxSizing: "border-box",
+                  textAlign: "center",
+                  fontSize: bu(38),
+                  background: "transparent",
+                  border: "none",
+                  color: gColor,
+                  fontWeight: 600,
+                  padding: 0,
+                  cursor: "default",
+                  transform: veryShortSlot ? "translateY(3px)" : undefined,
+                }}
+              />
+              <span
+                className="gauge-txt"
+                style={{
+                  // Boîte = largeur du TEXTE (max-content) → align-items:center du wrapper la
+                  // centre sur le chiffre, débordement symétrique sans élargir le wrapper.
+                  width: "max-content",
+                  color: gColor,
+                  fontSize: bu(20),
+                  lineHeight: 1,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                  transform: veryShortSlot ? "translateY(3px)" : undefined,
+                }}
+              >
+                {enfants > 1 ? "Enfants" : "Enfant"}
+              </span>
+            </div>
+            <StepBtn
+              sign="+"
+              color={gColor}
+              onClick={() => onBump("enfants", 1)}
+              isMobile={dragFullSurface}
+            />
           </div>
-          <StepBtn
-            sign="+"
-            color={gColor}
-            onClick={() => onBump("enfants", 1)}
-            isMobile={dragFullSurface}
-          />
           {/* Centre : icône d'état ✔/⏳ — OU, sur créneau court, le thème (themeInMiddle). */}
           {themeInMiddle ? (
             <div
@@ -751,79 +748,79 @@ function MineBadge({
               {icon}
             </span>
           )}
-          <StepBtn
-            sign="−"
-            color={gColor}
-            onClick={() => onBump("accompagnants", -1)}
-            isMobile={dragFullSurface}
-          />
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              // Largeur = celle du chiffre : le libellé (en flux, dessous) déborde
-              // symétriquement (text-align center) sans élargir l'élément → espacements
-              // uniformes préservés, et le libellé compte dans la hauteur → centrage vertical.
-              // minWidth = plancher pour que le chiffre reste lisible (ne s'effondre pas) sur
-              // les badges étroits.
-              width: bu(40),
-              minWidth: bu(30),
-            }}
-          >
-            <input
-              type="number"
-              // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
-              readOnly
-              tabIndex={-1}
-              inputMode="none"
-              min={1}
-              max={remaining}
-              value={accompagnants}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
-              style={{
-                width: bu(40),
-                maxWidth: "100%",
-                height: bu(36),
-                boxSizing: "border-box",
-                textAlign: "center",
-                fontSize: bu(38),
-                background: "transparent",
-                border: "none",
-                color: gColor,
-                fontWeight: 600,
-                padding: 0,
-                cursor: "default",
-                transform: veryShortSlot ? "translateY(3px)" : undefined,
-              }}
+          <div style={{ display: "flex", alignItems: "center", gap: 0, minWidth: 0 }}>
+            <StepBtn
+              sign="−"
+              color={gColor}
+              onClick={() => onBump("accompagnants", -1)}
+              isMobile={dragFullSurface}
             />
-            <span
-              className="gauge-txt"
+            <div
               style={{
-                // Boîte = largeur du TEXTE (max-content), pas celle du wrapper : ainsi
-                // align-items:center du wrapper la centre sur le chiffre, et elle déborde
-                // symétriquement sans élargir le wrapper (espacements uniformes préservés).
-                // (.gauge-txt est display:block → sans ceci le texte débordait à droite.)
-                width: "max-content",
-                color: gColor,
-                fontSize: bu(20),
-                lineHeight: 1,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                transform: veryShortSlot ? "translateY(3px)" : undefined,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                // Largeur = celle du chiffre : le libellé (en flux, dessous) déborde
+                // symétriquement (text-align center) sans élargir l'élément, et compte dans la
+                // hauteur → centrage vertical. minWidth = plancher de lisibilité du chiffre.
+                width: bu(40),
+                minWidth: bu(30),
               }}
             >
-              {accompagnants > 1 ? "Adultes" : "Adulte"}
-            </span>
+              <input
+                type="number"
+                // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+                readOnly
+                tabIndex={-1}
+                inputMode="none"
+                min={1}
+                max={remaining}
+                value={accompagnants}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
+                style={{
+                  width: bu(40),
+                  maxWidth: "100%",
+                  height: bu(36),
+                  boxSizing: "border-box",
+                  textAlign: "center",
+                  fontSize: bu(38),
+                  background: "transparent",
+                  border: "none",
+                  color: gColor,
+                  fontWeight: 600,
+                  padding: 0,
+                  cursor: "default",
+                  transform: veryShortSlot ? "translateY(3px)" : undefined,
+                }}
+              />
+              <span
+                className="gauge-txt"
+                style={{
+                  // Boîte = largeur du TEXTE (max-content), pas celle du wrapper : ainsi
+                  // align-items:center du wrapper la centre sur le chiffre, et elle déborde
+                  // symétriquement sans élargir le wrapper (espacements uniformes préservés).
+                  // (.gauge-txt est display:block → sans ceci le texte débordait à droite.)
+                  width: "max-content",
+                  color: gColor,
+                  fontSize: bu(20),
+                  lineHeight: 1,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                  transform: veryShortSlot ? "translateY(3px)" : undefined,
+                }}
+              >
+                {accompagnants > 1 ? "Adultes" : "Adulte"}
+              </span>
+            </div>
+            <StepBtn
+              sign="+"
+              color={gColor}
+              onClick={() => onBump("accompagnants", 1)}
+              isMobile={dragFullSurface}
+            />
           </div>
-          <StepBtn
-            sign="+"
-            color={gColor}
-            onClick={() => onBump("accompagnants", 1)}
-            isMobile={dragFullSurface}
-          />
         </div>
       ) : (
         <span
