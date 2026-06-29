@@ -927,6 +927,16 @@ textarea {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Steppers − / + de l'écran Réservations : pas de bordure sur desktop, pointillés en
+   « smartphone » (≤ 640px, seuil isMobile de l'app). */
+.btn-ghost.res-stepper-btn {
+  border-style: none;
+}
+@media (max-width: 640px) {
+  .btn-ghost.res-stepper-btn {
+    border-style: dotted;
+  }
+}
 .btn-ghost:disabled {
   opacity: 0.35;
   cursor: not-allowed;

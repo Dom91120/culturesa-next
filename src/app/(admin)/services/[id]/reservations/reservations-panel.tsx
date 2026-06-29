@@ -520,7 +520,7 @@ function Stepper({
       >
         <button
           type="button"
-          className="btn btn-ghost"
+          className="btn btn-ghost res-stepper-btn"
           style={round}
           onClick={onMinus}
           disabled={value <= 1}
@@ -541,7 +541,7 @@ function Stepper({
         </span>
         <button
           type="button"
-          className="btn btn-ghost"
+          className="btn btn-ghost res-stepper-btn"
           style={round}
           onClick={onPlus}
           aria-label={`${label} : augmenter`}
