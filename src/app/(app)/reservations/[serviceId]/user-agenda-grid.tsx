@@ -691,8 +691,11 @@ function MineBadge({
             <span
               className="gauge-txt"
               style={{
-                width: "100%",
-                textAlign: "center",
+                // Boîte = largeur du TEXTE (max-content), pas celle du wrapper : ainsi
+                // align-items:center du wrapper la centre sur le chiffre, et elle déborde
+                // symétriquement sans élargir le wrapper (espacements uniformes préservés).
+                // (.gauge-txt est display:block → sans ceci le texte débordait à droite.)
+                width: "max-content",
                 color: gColor,
                 fontSize: bu(20),
                 lineHeight: 1,
@@ -790,8 +793,11 @@ function MineBadge({
             <span
               className="gauge-txt"
               style={{
-                width: "100%",
-                textAlign: "center",
+                // Boîte = largeur du TEXTE (max-content), pas celle du wrapper : ainsi
+                // align-items:center du wrapper la centre sur le chiffre, et elle déborde
+                // symétriquement sans élargir le wrapper (espacements uniformes préservés).
+                // (.gauge-txt est display:block → sans ceci le texte débordait à droite.)
+                width: "max-content",
                 color: gColor,
                 fontSize: bu(20),
                 lineHeight: 1,
