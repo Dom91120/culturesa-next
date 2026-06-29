@@ -648,7 +648,17 @@ function MineBadge({
           {/* Jauge GROUPÉE : 3 unités (groupe Enfants | icône | groupe Adultes). Chaque groupe
               = [− chiffre +] à espacement interne NUL → les boutons collent à leur chiffre, même
               quand le badge est large ; space-evenly ne distribue l'espace qu'ENTRE les groupes. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 0, minWidth: 0 }}>
+          <div
+            style={{
+              // Desktop : groupe flex (gap 0 → boutons collés au chiffre). Mobile :
+              // display:contents → le wrapper s'efface, les 7 éléments redeviennent directs et
+              // space-evenly les espace uniformément (comportement d'avant le regroupement).
+              display: dragFullSurface ? "contents" : "flex",
+              alignItems: "center",
+              gap: 0,
+              minWidth: 0,
+            }}
+          >
             <StepBtn
               sign="−"
               color={gColor}
@@ -748,7 +758,17 @@ function MineBadge({
               {icon}
             </span>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 0, minWidth: 0 }}>
+          <div
+            style={{
+              // Desktop : groupe flex (gap 0 → boutons collés au chiffre). Mobile :
+              // display:contents → le wrapper s'efface, les 7 éléments redeviennent directs et
+              // space-evenly les espace uniformément (comportement d'avant le regroupement).
+              display: dragFullSurface ? "contents" : "flex",
+              alignItems: "center",
+              gap: 0,
+              minWidth: 0,
+            }}
+          >
             <StepBtn
               sign="−"
               color={gColor}
