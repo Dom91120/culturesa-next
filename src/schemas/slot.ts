@@ -9,8 +9,11 @@ import { DAYS } from "./config";
  */
 
 // Heure « HH:MM » 24 h, zéro-paddée → la comparaison lexicographique start < end est sûre.
+// Le VIDE ("") est accepté : un créneau « journée entière » est stocké sans horaires
+// (startTime/endTime vides), représentation lue par la grille (allday = !start || !end).
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-const time = (label: string) => z.string().regex(TIME, `${label} invalide (format HH:MM).`);
+const time = (label: string) =>
+  z.string().refine((v) => v === "" || TIME.test(v), `${label} invalide (format HH:MM).`);
 
 // Capacité d'un créneau : entier ≥ 1 (un créneau à 0 place n'a pas de sens à la création).
 const capacity = z.coerce
@@ -23,7 +26,10 @@ const capacity = z.coerce
 // dédoublonne ensuite côté service.
 const demandeurIds = z.array(z.coerce.number().int().positive()).optional();
 
-const hoursOrdered = (v: { startTime: string; endTime: string }) => v.startTime < v.endTime;
+// Journée entière (deux heures vides) → pas de contrôle d'ordre ; sinon les deux heures
+// doivent être renseignées ET ordonnées (start < end).
+const hoursOrdered = (v: { startTime: string; endTime: string }) =>
+  (!v.startTime && !v.endTime) || (!!v.startTime && !!v.endTime && v.startTime < v.endTime);
 const hoursOrderedMsg = {
   message: "L'heure de fin doit être postérieure à l'heure de début.",
   path: ["endTime"] as (string | number)[],
