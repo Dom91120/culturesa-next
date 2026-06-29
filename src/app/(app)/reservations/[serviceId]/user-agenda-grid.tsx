@@ -645,12 +645,17 @@ function MineBadge({
               flexShrink: 0,
             }}
           >
+            {/* Ligne − chiffre + : occupe 100% de la colonne (= 50% du badge, largeur RÉELLE).
+                Le chiffre (input flex:1, plafonné bu(64)) prend l'espace entre les boutons → son
+                espacement se resserre quand le badge rétrécit en largeur. Le libellé est SOUS la
+                ligne (sibling) pour ne plus dicter cette largeur. */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 0,
+                width: "100%",
               }}
             >
               <StepBtn
@@ -659,51 +664,36 @@ function MineBadge({
                 onClick={() => onBump("enfants", -1)}
                 isMobile={dragFullSurface}
               />
-              {/* Wrapper : input au-dessus, libellé Enfant(s) en dessous. */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <input
-                  type="number"
-                  // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
-                  readOnly
-                  tabIndex={-1}
-                  inputMode="none"
-                  min={1}
-                  max={remaining}
-                  value={enfants}
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
-                  style={{
-                    width: bu(64),
-                    height: bu(36),
-                    boxSizing: "border-box",
-                    textAlign: "center",
-                    fontSize: bu(38),
-                    background: "transparent",
-                    border: "none",
-                    color: gColor,
-                    fontWeight: 600,
-                    padding: 0,
-                    flexShrink: 0,
-                    cursor: "default",
-                    // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
-                    transform: veryShortSlot ? "translateY(3px)" : undefined,
-                  }}
-                />
-                <span
-                  className="gauge-txt"
-                  style={{
-                    color: gColor,
-                    fontSize: bu(20),
-                    lineHeight: 1,
-                    fontWeight: 700,
-                    // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
-                    transform: veryShortSlot ? "translateY(3px)" : undefined,
-                  }}
-                >
-                  {enfants > 1 ? "Enfants" : "Enfant"}
-                </span>
-              </div>
+              <input
+                type="number"
+                // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+                readOnly
+                tabIndex={-1}
+                inputMode="none"
+                min={1}
+                max={remaining}
+                value={enfants}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => onSetCount("enfants", Number.parseInt(e.target.value, 10))}
+                style={{
+                  flex: "1 1 0",
+                  minWidth: 0,
+                  maxWidth: bu(64),
+                  height: bu(36),
+                  boxSizing: "border-box",
+                  textAlign: "center",
+                  fontSize: bu(38),
+                  background: "transparent",
+                  border: "none",
+                  color: gColor,
+                  fontWeight: 600,
+                  padding: 0,
+                  cursor: "default",
+                  // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
+                  transform: veryShortSlot ? "translateY(3px)" : undefined,
+                }}
+              />
               <StepBtn
                 sign="+"
                 color={gColor}
@@ -711,6 +701,19 @@ function MineBadge({
                 isMobile={dragFullSurface}
               />
             </div>
+            <span
+              className="gauge-txt"
+              style={{
+                color: gColor,
+                fontSize: bu(20),
+                lineHeight: 1,
+                fontWeight: 700,
+                // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
+                transform: veryShortSlot ? "translateY(3px)" : undefined,
+              }}
+            >
+              {enfants > 1 ? "Enfants" : "Enfant"}
+            </span>
           </div>
           {/* Colonne centrale : icône d'état ✔/⏳ — OU, sur créneau court, le thème
               (multi-lignes) qui prend sa place pour rester visible (cf. themeInMiddle). */}
@@ -757,12 +760,17 @@ function MineBadge({
               flexShrink: 0,
             }}
           >
+            {/* Ligne − chiffre + : occupe 100% de la colonne (= 50% du badge, largeur RÉELLE).
+                Le chiffre (input flex:1, plafonné bu(64)) prend l'espace entre les boutons → son
+                espacement se resserre quand le badge rétrécit en largeur. Le libellé est SOUS la
+                ligne (sibling) pour ne plus dicter cette largeur. */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 0,
+                width: "100%",
               }}
             >
               <StepBtn
@@ -771,51 +779,36 @@ function MineBadge({
                 onClick={() => onBump("accompagnants", -1)}
                 isMobile={dragFullSurface}
               />
-              {/* Wrapper : input au-dessus, libellé Adulte(s) en dessous. */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <input
-                  type="number"
-                  // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
-                  readOnly
-                  tabIndex={-1}
-                  inputMode="none"
-                  min={1}
-                  max={remaining}
-                  value={accompagnants}
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
-                  style={{
-                    width: bu(64),
-                    height: bu(36),
-                    boxSizing: "border-box",
-                    textAlign: "center",
-                    fontSize: bu(38),
-                    background: "transparent",
-                    border: "none",
-                    color: gColor,
-                    fontWeight: 600,
-                    padding: 0,
-                    flexShrink: 0,
-                    cursor: "default",
-                    // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
-                    transform: veryShortSlot ? "translateY(3px)" : undefined,
-                  }}
-                />
-                <span
-                  className="gauge-txt"
-                  style={{
-                    color: gColor,
-                    fontSize: bu(20),
-                    lineHeight: 1,
-                    fontWeight: 700,
-                    // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
-                    transform: veryShortSlot ? "translateY(3px)" : undefined,
-                  }}
-                >
-                  {accompagnants > 1 ? "Adultes" : "Adulte"}
-                </span>
-              </div>
+              <input
+                type="number"
+                // Valeur modifiable UNIQUEMENT via les boutons − / + : pas de saisie directe.
+                readOnly
+                tabIndex={-1}
+                inputMode="none"
+                min={1}
+                max={remaining}
+                value={accompagnants}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => onSetCount("accompagnants", Number.parseInt(e.target.value, 10))}
+                style={{
+                  flex: "1 1 0",
+                  minWidth: 0,
+                  maxWidth: bu(64),
+                  height: bu(36),
+                  boxSizing: "border-box",
+                  textAlign: "center",
+                  fontSize: bu(38),
+                  background: "transparent",
+                  border: "none",
+                  color: gColor,
+                  fontWeight: 600,
+                  padding: 0,
+                  cursor: "default",
+                  // Créneau très court (≤ 15 min) : compteur décalé de 3px vers le bas.
+                  transform: veryShortSlot ? "translateY(3px)" : undefined,
+                }}
+              />
               <StepBtn
                 sign="+"
                 color={gColor}
@@ -823,6 +816,19 @@ function MineBadge({
                 isMobile={dragFullSurface}
               />
             </div>
+            <span
+              className="gauge-txt"
+              style={{
+                color: gColor,
+                fontSize: bu(20),
+                lineHeight: 1,
+                fontWeight: 700,
+                // Créneau très court (≤ 15 min) : libellé décalé de 3px vers le bas.
+                transform: veryShortSlot ? "translateY(3px)" : undefined,
+              }}
+            >
+              {accompagnants > 1 ? "Adultes" : "Adulte"}
+            </span>
           </div>
         </div>
       ) : (
