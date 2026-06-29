@@ -255,16 +255,18 @@ function ThemeField({
             background: "transparent",
             cursor: "pointer",
             maxWidth: "100%",
-            // multiline : interligne aéré pour le retour à la ligne ; sinon comportement usuel
-            // (mobile : pas de line-height imposée ; desktop : 1).
-            lineHeight: multiline ? 1.1 : big ? undefined : 1,
+            // multiline : interligne aéré pour le retour à la ligne ; sinon on s'aligne sur
+            // le textarea du mode libre (line-height 1.3 de .slot-spots) pour une hauteur
+            // IDENTIQUE aux deux modes (mobile : pas de line-height imposée).
+            lineHeight: multiline ? 1.1 : big ? undefined : 1.3,
             boxSizing: "border-box",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: bu(4),
-            // Pas de hauteur imposée : le champ s'ajuste à son contenu (police themeFont).
-            padding: `0 ${bu(4)} 0 ${bu(8)}`,
+            // Padding vertical 1px = celui de textarea.slot-spots → même hauteur que le mode
+            // libre (1.3 × themeFont + 2px). Le champ s'ajuste sinon à son contenu.
+            padding: `1px ${bu(4)} 1px ${bu(8)}`,
             userSelect: "none",
             overflow: "hidden",
           }}
@@ -293,7 +295,9 @@ function ThemeField({
           <span
             style={{
               flexShrink: 0,
-              fontSize: bu(36),
+              // Chevron calé sur la police du texte (≤ themeFont) : il ne dicte plus la
+              // hauteur de la ligne → c'est le texte (1.3) qui pilote, comme le textarea.
+              fontSize: bu(22),
               color: themeColor,
               lineHeight: 1,
             }}
