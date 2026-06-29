@@ -255,10 +255,11 @@ function ThemeField({
             background: "transparent",
             cursor: "pointer",
             maxWidth: "100%",
-            // multiline : interligne aéré pour le retour à la ligne ; sinon on s'aligne sur
-            // le textarea du mode libre (line-height 1.3 de .slot-spots) pour une hauteur
-            // IDENTIQUE aux deux modes (mobile : pas de line-height imposée).
-            lineHeight: multiline ? 1.1 : big ? undefined : 1.3,
+            // multiline : interligne aéré pour le retour à la ligne ; sinon line-height 1 =
+            // celui RÉELLEMENT rendu par le textarea du mode libre (mesuré ~1,0, pas le 1.3
+            // de .slot-spots), y compris en mode « big » (mobile) → hauteur IDENTIQUE aux deux
+            // modes : bu(22) + 2px de padding.
+            lineHeight: multiline ? 1.1 : 1,
             boxSizing: "border-box",
             display: "flex",
             alignItems: "center",
