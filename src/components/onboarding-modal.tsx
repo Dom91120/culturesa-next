@@ -196,7 +196,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
       ),
     },
     {
-      title: "Réserver un créneau 📆",
+      title: "Créer une réservation 📆",
       body: hasGauge ? (
         <>
           <p style={P}>
