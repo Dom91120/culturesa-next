@@ -26,7 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       services={services.map((s) => ({ id: s.id, label: s.label, icon: s.icon }))}
     >
       {children}
-      <OnboardingModal variant="usager" open={needsOnboarding} />
+      <OnboardingModal
+        variant="usager"
+        open={needsOnboarding}
+        services={services.map((s) => ({ label: s.label, icon: s.icon }))}
+      />
     </UserShell>
   );
 }

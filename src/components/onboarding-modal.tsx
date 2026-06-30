@@ -8,23 +8,232 @@ import { markOnboardedAction } from "./onboarding-actions";
 export const ONBOARDING_REPLAY_EVENT = "culturesa:onboarding-replay";
 
 type Step = { title: string; body: ReactNode };
+type ServiceLite = { label: string; icon: string | null };
 
-// Contenu adapté au rôle. Volontairement court (3 étapes) — modale de bienvenue.
-const STEPS: Record<"usager" | "gestionnaire" | "administrateur", Step[]> = {
-  usager: [
+/** Énumération française : « A », « A et B », « A, B et C ». */
+function listFr(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} et ${items[items.length - 1]}`;
+}
+
+/* ── Illustrations (reproductions HTML/CSS de bouts d'écran, fidèles au thème) ───────── */
+
+/** Mini-reproduction de la barre de gauche (« le menu de gauche »), avec les VRAIS services. */
+function SidebarMock({ services }: { services: ServiceLite[] }) {
+  const list = (services.length ? services : [{ label: "Activités", icon: "📄" }]).slice(0, 5);
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        background: "var(--surface)",
+        padding: ".5rem",
+        maxWidth: 210,
+        margin: ".5rem auto 0",
+      }}
+    >
+      <div style={{ fontSize: ".82rem", fontWeight: 800, margin: "0 0 .1rem .15rem" }}>
+        Cultu
+        <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
+      </div>
+      <div
+        style={{
+          fontSize: ".6rem",
+          textTransform: "uppercase",
+          letterSpacing: ".05em",
+          color: "var(--muted)",
+          margin: "0 0 .35rem .15rem",
+        }}
+      >
+        Réservations
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: ".22rem" }}>
+        {list.map((s, i) => (
+          <div
+            key={s.label}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: ".45rem",
+              padding: ".3rem .45rem",
+              borderRadius: 7,
+              fontSize: ".76rem",
+              // Premier service mis en avant (comme un service sélectionné).
+              background:
+                i === 0 ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "transparent",
+              border:
+                i === 0
+                  ? "1px solid color-mix(in srgb, var(--accent) 55%, transparent)"
+                  : "1px solid transparent",
+              fontWeight: i === 0 ? 600 : 400,
+              color: "var(--text)",
+            }}
+          >
+            <span aria-hidden>{s.icon || "📄"}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {s.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Petit compteur « − N + » + libellé, comme sur le badge de réservation. */
+function CounterMock({ n, label }: { n: number; label: string }) {
+  const round: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 18,
+    height: 18,
+    borderRadius: "50%",
+    fontSize: ".8rem",
+    fontWeight: 700,
+    color: "#9a7b3a",
+  };
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: ".15rem" }}>
+        <span style={round}>−</span>
+        <span style={{ fontSize: ".95rem", fontWeight: 700, color: "#7a6326", minWidth: 12 }}>
+          {n}
+        </span>
+        <span style={round}>+</span>
+      </span>
+      <span style={{ fontSize: ".58rem", color: "#9a7b3a", fontWeight: 700 }}>{label}</span>
+    </span>
+  );
+}
+
+/** Badge « ma réservation » miniature (jauge participants), pour l'étape « Réserver ». */
+function GaugeMock() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: ".7rem",
+          background: "rgba(232,164,90,.16)",
+          border: "1px solid rgba(232,164,90,.5)",
+          borderRadius: 12,
+          padding: ".35rem .7rem",
+        }}
+      >
+        <CounterMock n={2} label="Enfants" />
+        <span aria-hidden style={{ fontSize: "1rem" }}>
+          ⏳
+        </span>
+        <CounterMock n={1} label="Adulte" />
+      </div>
+    </div>
+  );
+}
+
+/** Légende des statuts (en attente / validée), comme sous l'agenda. */
+function LegendMock() {
+  const chip = (bg: string, fg: string): React.CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    background: bg,
+    color: fg,
+    fontSize: ".8rem",
+    flexShrink: 0,
+  });
+  const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: ".5rem" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: ".4rem", margin: ".5rem 0 0" }}>
+      <div style={row}>
+        <span style={chip("rgba(232,164,90,.2)", "#9a7b3a")} aria-hidden>
+          ⏳
+        </span>
+        <span style={{ fontSize: ".82rem" }}>Demande en attente de validation</span>
+      </div>
+      <div style={row}>
+        <span
+          style={chip("color-mix(in srgb, var(--accent) 22%, transparent)", "var(--accent)")}
+          aria-hidden
+        >
+          ✓
+        </span>
+        <span style={{ fontSize: ".82rem" }}>Réservation validée</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Contenu des étapes ──────────────────────────────────────────────────────────────── */
+
+const P: React.CSSProperties = { margin: "0 0 .55rem" };
+
+/** Étapes « usager » : enrichies (multi-services + illustrations). Dépend des services. */
+function usagerSteps(services: ServiceLite[]): Step[] {
+  const names = services.map((s) => s.label);
+  return [
     {
       title: "Bienvenue sur CultuRésa 👋",
       body: "Réservez vos activités culturelles en quelques clics. Voici l'essentiel pour démarrer.",
     },
     {
+      title: "Plusieurs services à votre disposition 🏛️",
+      body: (
+        <>
+          <p style={P}>
+            Vous pouvez réserver des activités auprès de{" "}
+            <strong>{names.length > 1 ? "plusieurs services" : "votre service"}</strong>
+            {names.length ? (
+              <>
+                {" "}
+                : <strong>{listFr(names)}</strong>
+              </>
+            ) : null}
+            .
+          </p>
+          <p style={{ ...P, marginBottom: 0 }}>
+            Pour commencer, choisissez celui qui vous intéresse dans le{" "}
+            <strong>menu de gauche</strong> :
+          </p>
+          <SidebarMock services={services} />
+        </>
+      ),
+    },
+    {
       title: "Réserver un créneau 📆",
-      body: "Choisissez un service dans le menu, cliquez sur un créneau libre, ajustez le nombre de participants, puis enregistrez votre sélection.",
+      body: (
+        <>
+          <p style={P}>
+            Sur l'agenda du service, cliquez sur un <strong>créneau libre</strong>, ajustez le
+            nombre de participants avec les boutons <strong>−</strong> et <strong>+</strong>, puis
+            enregistrez votre sélection.
+          </p>
+          <GaugeMock />
+        </>
+      ),
     },
     {
       title: "Suivre vos réservations ✅",
-      body: "Retrouvez vos réservations validées et vos demandes en attente de validation, annulez-les si besoin, et imprimez votre liste depuis l'écran Réservations.",
+      body: (
+        <>
+          <p style={P}>Vos réservations apparaissent directement sur l'agenda :</p>
+          <LegendMock />
+          <p style={{ ...P, margin: ".55rem 0 0" }}>
+            Vous pouvez les annuler si besoin, et imprimer votre liste 🖨 depuis l'écran
+            Réservations.
+          </p>
+        </>
+      ),
     },
-  ],
+  ];
+}
+
+// Étapes des rôles à périmètre étendu (texte simple, pas d'illustration).
+const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
   // Gestionnaire : périmètre LIMITÉ aux services qui lui sont confiés. Pas d'accès au
   // menu Administration (réservé aux administrateurs).
   gestionnaire: [
@@ -66,9 +275,12 @@ const STEPS: Record<"usager" | "gestionnaire" | "administrateur", Step[]> = {
 export function OnboardingModal({
   variant,
   open,
+  services = [],
 }: {
   variant: "usager" | "gestionnaire" | "administrateur";
   open: boolean;
+  // Services réservables (variant « usager ») : cités et illustrés dans la présentation.
+  services?: ServiceLite[];
 }) {
   const [visible, setVisible] = useState(open);
   const [step, setStep] = useState(0);
@@ -86,7 +298,7 @@ export function OnboardingModal({
 
   if (!visible) return null;
 
-  const steps = STEPS[variant];
+  const steps = variant === "usager" ? usagerSteps(services) : STAFF_STEPS[variant];
   const cur = steps[step];
   const isLast = step >= steps.length - 1;
   const finish = () => {
@@ -100,17 +312,16 @@ export function OnboardingModal({
         <div className="modal-title" style={{ marginBottom: ".6rem" }}>
           {cur.title}
         </div>
-        <p
+        <div
           style={{
             fontSize: ".88rem",
             lineHeight: 1.6,
             color: "var(--text)",
-            margin: 0,
-            minHeight: 78,
+            minHeight: 150,
           }}
         >
           {cur.body}
-        </p>
+        </div>
 
         {/* Indicateur de progression */}
         <div style={{ display: "flex", justifyContent: "center", gap: 6, margin: ".7rem 0 1rem" }}>
