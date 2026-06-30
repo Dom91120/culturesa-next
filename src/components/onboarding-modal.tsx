@@ -95,8 +95,8 @@ export function OnboardingModal({
   };
 
   return (
-    <ModalOverlay onClose={finish}>
-      <div style={{ maxWidth: 440 }}>
+    <ModalOverlay onClose={finish} boxStyle={{ maxWidth: 440 }}>
+      <div>
         <div className="modal-title" style={{ marginBottom: ".6rem" }}>
           {cur.title}
         </div>

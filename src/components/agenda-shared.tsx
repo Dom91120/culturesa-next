@@ -193,9 +193,13 @@ export function PointagePill({ pointage }: { pointage: Pointage }) {
 export function ModalOverlay({
   onClose,
   children,
+  // Surcharge de style de la boîte (ex. caler max-width sur un contenu plus étroit que les
+  // 620px par défaut de .modal-box, pour que la boîte épouse le contenu).
+  boxStyle,
 }: {
   onClose: () => void;
   children: React.ReactNode;
+  boxStyle?: React.CSSProperties;
 }) {
   return (
     <div
@@ -210,6 +214,7 @@ export function ModalOverlay({
         open
         className="modal-box"
         aria-modal="true"
+        style={boxStyle}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
