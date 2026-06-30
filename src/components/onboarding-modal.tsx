@@ -28,16 +28,16 @@ function SidebarShot() {
     <img
       src="/onboarding/services-sidebar.png"
       alt="Le menu de gauche listant les services disponibles"
-      width={353}
+      width={319}
       height={300}
+      // La capture est déjà une carte aux coins arrondis (fond transparent autour) :
+      // pas de bordure/borderRadius ajoutés, qui déborderaient des coins.
       style={{
         display: "block",
         width: "100%",
-        maxWidth: 215,
+        maxWidth: 205,
         height: "auto",
         margin: ".55rem auto 0",
-        borderRadius: 10,
-        border: "1px solid var(--border)",
       }}
     />
   );
