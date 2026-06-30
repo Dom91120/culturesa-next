@@ -16,67 +16,30 @@ function listFr(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} et ${items[items.length - 1]}`;
 }
 
-/* ── Illustrations (reproductions HTML/CSS de bouts d'écran, fidèles au thème) ───────── */
+/* ── Illustrations ────────────────────────────────────────────────────────────────────
+   Le menu de gauche est une vraie capture (public/onboarding/services-sidebar.png) : la barre
+   est toujours sombre (thèmes clair et sombre), donc cohérente partout. Les autres visuels
+   sont reproduits en HTML/CSS (suivent le thème). */
 
-/** Mini-reproduction de la barre de gauche (« le menu de gauche »), avec les VRAIS services. */
-function SidebarMock({ services }: { services: ServiceLite[] }) {
-  const list = (services.length ? services : [{ label: "Activités", icon: "📄" }]).slice(0, 5);
+/** Capture (recadrée) de la barre de gauche listant les services. */
+function SidebarShot() {
   return (
-    <div
+    // Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile).
+    <img
+      src="/onboarding/services-sidebar.png"
+      alt="Le menu de gauche listant les services disponibles"
+      width={353}
+      height={300}
       style={{
-        border: "1px solid var(--border)",
+        display: "block",
+        width: "100%",
+        maxWidth: 215,
+        height: "auto",
+        margin: ".55rem auto 0",
         borderRadius: 10,
-        background: "var(--surface)",
-        padding: ".5rem",
-        maxWidth: 210,
-        margin: ".5rem auto 0",
+        border: "1px solid var(--border)",
       }}
-    >
-      <div style={{ fontSize: ".82rem", fontWeight: 800, margin: "0 0 .1rem .15rem" }}>
-        Cultu
-        <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
-      </div>
-      <div
-        style={{
-          fontSize: ".6rem",
-          textTransform: "uppercase",
-          letterSpacing: ".05em",
-          color: "var(--muted)",
-          margin: "0 0 .35rem .15rem",
-        }}
-      >
-        Réservations
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: ".22rem" }}>
-        {list.map((s, i) => (
-          <div
-            key={s.label}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: ".45rem",
-              padding: ".3rem .45rem",
-              borderRadius: 7,
-              fontSize: ".76rem",
-              // Premier service mis en avant (comme un service sélectionné).
-              background:
-                i === 0 ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "transparent",
-              border:
-                i === 0
-                  ? "1px solid color-mix(in srgb, var(--accent) 55%, transparent)"
-                  : "1px solid transparent",
-              fontWeight: i === 0 ? 600 : 400,
-              color: "var(--text)",
-            }}
-          >
-            <span aria-hidden>{s.icon || "📄"}</span>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {s.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
+    />
   );
 }
 
@@ -199,7 +162,7 @@ function usagerSteps(services: ServiceLite[]): Step[] {
             Pour commencer, choisissez celui qui vous intéresse dans le{" "}
             <strong>menu de gauche</strong> :
           </p>
-          <SidebarMock services={services} />
+          <SidebarShot />
         </>
       ),
     },
