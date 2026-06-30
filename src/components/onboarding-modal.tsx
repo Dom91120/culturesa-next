@@ -95,6 +95,34 @@ function GaugeMock() {
   );
 }
 
+/** Créneau libre cliquable (réservation SANS jauge : pas de compteurs de participants). */
+function FreeSlotMock() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: ".5rem",
+          background: "rgba(232,164,90,.12)",
+          border: "1.5px dashed rgba(232,164,90,.65)",
+          borderRadius: 10,
+          padding: ".45rem .85rem",
+          fontSize: ".85rem",
+          color: "var(--text)",
+        }}
+      >
+        <span aria-hidden style={{ fontSize: "1.1rem" }}>
+          📅
+        </span>
+        <span>
+          Créneau libre · <strong>10 places</strong>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** Légende des statuts (en attente / validée), comme sous l'agenda. */
 function LegendMock() {
   const chip = (bg: string, fg: string): React.CSSProperties => ({
@@ -135,8 +163,9 @@ function LegendMock() {
 
 const P: React.CSSProperties = { margin: "0 0 .55rem" };
 
-/** Étapes « usager » : enrichies (multi-services + illustrations). Dépend des services. */
-function usagerSteps(services: ServiceLite[]): Step[] {
+/** Étapes « usager » : enrichies (multi-services + illustrations). Dépend des services et de
+ *  la présence d'une jauge (créneau AVEC ou SANS compteurs de participants). */
+function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
   const names = services.map((s) => s.label);
   return [
     {
@@ -168,7 +197,7 @@ function usagerSteps(services: ServiceLite[]): Step[] {
     },
     {
       title: "Réserver un créneau 📆",
-      body: (
+      body: hasGauge ? (
         <>
           <p style={P}>
             Sur l'agenda du service, cliquez sur un <strong>créneau libre</strong>, ajustez le
@@ -176,6 +205,14 @@ function usagerSteps(services: ServiceLite[]): Step[] {
             enregistrez votre sélection.
           </p>
           <GaugeMock />
+        </>
+      ) : (
+        <>
+          <p style={P}>
+            Sur l'agenda du service, cliquez sur un <strong>créneau libre</strong>, puis enregistrez
+            votre réservation.
+          </p>
+          <FreeSlotMock />
         </>
       ),
     },
@@ -239,11 +276,14 @@ export function OnboardingModal({
   variant,
   open,
   services = [],
+  hasGauge = true,
 }: {
   variant: "usager" | "gestionnaire" | "administrateur";
   open: boolean;
   // Services réservables (variant « usager ») : cités et illustrés dans la présentation.
   services?: ServiceLite[];
+  // Le demandeur a-t-il une jauge ? Adapte l'étape « Réserver » (avec/sans compteurs).
+  hasGauge?: boolean;
 }) {
   const [visible, setVisible] = useState(open);
   const [step, setStep] = useState(0);
@@ -261,7 +301,7 @@ export function OnboardingModal({
 
   if (!visible) return null;
 
-  const steps = variant === "usager" ? usagerSteps(services) : STAFF_STEPS[variant];
+  const steps = variant === "usager" ? usagerSteps(services, hasGauge) : STAFF_STEPS[variant];
   const cur = steps[step];
   const isLast = step >= steps.length - 1;
   const finish = () => {

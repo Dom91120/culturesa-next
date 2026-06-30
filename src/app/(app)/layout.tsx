@@ -2,11 +2,11 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { UserShell } from "@/components/user-shell";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
-import { listBookableServices } from "@/server/services/bookings";
+import { listBookableServices, userHasAnyGauge } from "@/server/services/bookings";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await requireUser();
-  const services = await listBookableServices();
+  const [services, hasGauge] = await Promise.all([listBookableServices(), userHasAnyGauge()]);
   // Onboarding : modale de bienvenue à la 1re connexion (onboardedAt null). Lecture
   // tolérante : si la colonne n'existe pas encore (migration non appliquée), on désactive
   // l'onboarding au lieu de casser la page.
@@ -30,6 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         variant="usager"
         open={needsOnboarding}
         services={services.map((s) => ({ label: s.label, icon: s.icon }))}
+        hasGauge={hasGauge}
       />
     </UserShell>
   );

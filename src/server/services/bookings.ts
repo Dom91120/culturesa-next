@@ -111,6 +111,25 @@ export async function listBookableServices() {
 }
 
 /**
+ * Le demandeur EFFECTIF de l'usager courant a-t-il la jauge (participants) activée sur au
+ * moins un service ? Sert à adapter la présentation (onboarding) : créneau AVEC jauge si
+ * vrai, SANS jauge sinon. Compte sans demandeur effectif (ex. admin) → true par défaut
+ * (illustration la plus complète).
+ */
+export async function userHasAnyGauge(): Promise<boolean> {
+  const session = await getSession();
+  const userId = session?.user?.id;
+  if (!userId) return false;
+  const demandeurId = await effectiveDemandeurId(prisma, userId);
+  if (demandeurId == null) return true;
+  const withGauge = await prisma.serviceDemandeurSettings.findFirst({
+    where: { demandeurId, jauge: true },
+    select: { serviceId: true },
+  });
+  return !!withGauge;
+}
+
+/**
  * Garantit qu'un créneau a la place pour une réservation (anti-surbooking), avec la
  * MÊME règle que la création usager : mode jauge → enfants + adultes (selon
  * `gaugeAccompagnants`) ; hors jauge → 1 par réservation. Lève
