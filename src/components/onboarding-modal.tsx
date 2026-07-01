@@ -95,8 +95,9 @@ function GaugeMock() {
   );
 }
 
-/** Créneau libre cliquable (réservation SANS jauge : pas de compteurs de participants). */
-function FreeSlotMock() {
+/** Badge « ma réservation » SANS jauge : icône d'état + libellé, pas de compteurs (parallèle
+ *  à GaugeMock, reproduit le badge réel quand gaugeOn est faux). */
+function ReservationMock() {
   return (
     <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
       <div
@@ -104,20 +105,19 @@ function FreeSlotMock() {
           display: "inline-flex",
           alignItems: "center",
           gap: ".5rem",
-          background: "rgba(232,164,90,.12)",
-          border: "1.5px dashed rgba(232,164,90,.65)",
-          borderRadius: 10,
-          padding: ".45rem .85rem",
+          background: "rgba(232,164,90,.16)",
+          border: "1px solid rgba(232,164,90,.5)",
+          borderRadius: 12,
+          padding: ".4rem .85rem",
+          color: "#9a7b3a",
+          fontWeight: 700,
           fontSize: ".85rem",
-          color: "var(--text)",
         }}
       >
-        <span aria-hidden style={{ fontSize: "1.1rem" }}>
-          📅
+        <span aria-hidden style={{ fontSize: "1.2rem" }}>
+          ⏳
         </span>
-        <span>
-          Créneau libre · <strong>10 places</strong>
-        </span>
+        <span>Ma réservation</span>
       </div>
     </div>
   );
@@ -212,7 +212,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
             Sur l'agenda du service, cliquez sur un <strong>créneau libre</strong>, puis enregistrez
             votre réservation.
           </p>
-          <FreeSlotMock />
+          <ReservationMock />
         </>
       ),
     },
