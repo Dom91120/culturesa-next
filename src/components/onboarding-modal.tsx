@@ -104,8 +104,8 @@ function ReservationShot() {
       <img
         src="/onboarding/reservation-badge.png"
         alt="Badge de réservation : demande en attente de validation"
-        width={278}
-        height={73}
+        width={266}
+        height={63}
         style={{ display: "block", width: "100%", maxWidth: 215, height: "auto" }}
       />
     </div>
