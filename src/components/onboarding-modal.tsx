@@ -237,9 +237,9 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
           <p style={{ ...P, margin: ".55rem 0 0" }}>
             Vous pouvez les annuler si besoin, et imprimer votre{" "}
             <span style={{ whiteSpace: "nowrap" }}>
-              liste <PrinterIcon />
+              liste <PrinterIcon /> depuis
             </span>{" "}
-            depuis l'écran Réservations.
+            l'écran Réservations.
           </p>
         </>
       ),
