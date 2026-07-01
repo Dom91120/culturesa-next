@@ -163,7 +163,7 @@ function PrinterIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
       // display:inline-block écrase le preflight Tailwind (svg { display:block }), sinon
-      // l'icône passe seule sur sa ligne, avant et après (le nowrap n'y peut rien).
+      // l'icône passe seule sur sa ligne au lieu de suivre le flux du texte.
       style={{ display: "inline-block", verticalAlign: "-2px", margin: "0 1px" }}
     >
       <polyline points="6 9 6 2 18 2 18 9" />
