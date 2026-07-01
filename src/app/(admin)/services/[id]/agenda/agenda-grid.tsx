@@ -441,6 +441,13 @@ export function AgendaGrid({
     currentExerciceId == null ? periods : periods.filter((p) => p.exerciceId === currentExerciceId);
   const selectedPeriodId = visiblePeriods[periodIdx]?.id ?? null;
 
+  // « Aujourd'hui » n'a de sens que si la date du jour tombe dans une période de l'exercice
+  // affiché (sinon le bouton renverrait hors de la plage visible) → on masque le bouton sinon.
+  const todayYmd = ymd(new Date());
+  const todayInVisiblePeriods = visiblePeriods.some(
+    (p) => p.dateStart && p.dateEnd && p.dateStart <= todayYmd && p.dateEnd >= todayYmd,
+  );
+
   // Navigation entre exercices (◀ label ▶).
   const exIdx = exercices.findIndex((e) => e.id === currentExerciceId);
   const exLabel = exIdx >= 0 ? exercices[exIdx].label : "—";
@@ -2567,19 +2574,21 @@ export function AgendaGrid({
             >
               ▶
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ padding: ".05rem .45rem", fontSize: ".64rem", marginLeft: ".4rem" }}
-              onClick={() => {
-                // Retour à la semaine courante : on relâche le verrou pour
-                // re-dériver la période qui couvre aujourd'hui.
-                setRwPeriodId(null);
-                setAnchorMonday(ymd(mondayOf(new Date())));
-              }}
-            >
-              Aujourd&apos;hui
-            </button>
+            {todayInVisiblePeriods && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: ".05rem .45rem", fontSize: ".64rem", marginLeft: ".4rem" }}
+                onClick={() => {
+                  // Retour à la semaine courante : on relâche le verrou pour
+                  // re-dériver la période qui couvre aujourd'hui.
+                  setRwPeriodId(null);
+                  setAnchorMonday(ymd(mondayOf(new Date())));
+                }}
+              >
+                Aujourd&apos;hui
+              </button>
+            )}
           </div>
         )}
         {/* Sélecteurs alignés à droite : Modèle/Semaine réelle, puis le toggle Semaine A/B. */}

@@ -1163,6 +1163,13 @@ export function UserAgendaGrid({
     currentExerciceId == null ? periods : periods.filter((p) => p.exerciceId === currentExerciceId);
   const selectedPeriodId = visiblePeriods[periodIdx]?.id ?? null;
 
+  // « Aujourd'hui » n'a de sens que si la date du jour tombe dans une période de l'exercice
+  // affiché (sinon le bouton renverrait hors de la plage visible) → on masque le bouton sinon.
+  const todayYmd = ymd(new Date());
+  const todayInVisiblePeriods = visiblePeriods.some(
+    (p) => p.dateStart && p.dateEnd && p.dateStart <= todayYmd && p.dateEnd >= todayYmd,
+  );
+
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
   const mondayStr = anchorMonday;
   const sundayStr = mondayStr ? ymd(addDays(mondayStr, 6)) : null;
@@ -3071,30 +3078,32 @@ export function UserAgendaGrid({
               >
                 ▶
               </button>
-              <button
-                type="button"
-                className="btn btn-ghost pn-today"
-                // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
-                // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
-                style={{
-                  padding: ".05rem .45rem",
-                  fontSize: ".64rem",
-                  position: "absolute",
-                  left: "100%",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  marginLeft: ".4rem",
-                  whiteSpace: "nowrap",
-                }}
-                onClick={() => {
-                  // Retour à la semaine courante : on relâche le verrou pour
-                  // re-dériver la période qui couvre aujourd'hui.
-                  setRwPeriodId(null);
-                  setAnchorMonday(ymd(mondayOf(new Date())));
-                }}
-              >
-                Aujourd&apos;hui
-              </button>
+              {todayInVisiblePeriods && (
+                <button
+                  type="button"
+                  className="btn btn-ghost pn-today"
+                  // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
+                  // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
+                  style={{
+                    padding: ".05rem .45rem",
+                    fontSize: ".64rem",
+                    position: "absolute",
+                    left: "100%",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    marginLeft: ".4rem",
+                    whiteSpace: "nowrap",
+                  }}
+                  onClick={() => {
+                    // Retour à la semaine courante : on relâche le verrou pour
+                    // re-dériver la période qui couvre aujourd'hui.
+                    setRwPeriodId(null);
+                    setAnchorMonday(ymd(mondayOf(new Date())));
+                  }}
+                >
+                  Aujourd&apos;hui
+                </button>
+              )}
             </span>
           </div>
         )}
