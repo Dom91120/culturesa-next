@@ -202,7 +202,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
             .
           </p>
           <p style={{ ...P, marginBottom: 0 }}>
-            Pour commencer, choisissez celui qui vous intéresse dans le{" "}
+            Pour commencer, choisissez le service qui vous intéresse dans le{" "}
             <strong>menu de gauche</strong> :
           </p>
           <SidebarShot />
