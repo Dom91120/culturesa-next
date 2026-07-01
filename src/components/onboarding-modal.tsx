@@ -235,8 +235,11 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
           <p style={P}>Vos réservations apparaissent directement sur l'agenda :</p>
           <LegendMock />
           <p style={{ ...P, margin: ".55rem 0 0" }}>
-            Vous pouvez les annuler si besoin, et imprimer votre liste <PrinterIcon /> depuis
-            l'écran Réservations.
+            Vous pouvez les annuler si besoin, et imprimer votre{" "}
+            <span style={{ whiteSpace: "nowrap" }}>
+              liste <PrinterIcon />
+            </span>{" "}
+            depuis l'écran Réservations.
           </p>
         </>
       ),
