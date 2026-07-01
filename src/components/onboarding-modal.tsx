@@ -191,8 +191,8 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
       body: (
         <>
           <p style={P}>
-            Vous pouvez réserver des activités auprès de{" "}
-            <strong>{names.length > 1 ? "plusieurs services" : "votre service"}</strong>
+            Vous pouvez réserver des activités auprès {names.length > 1 ? "de " : "du "}
+            <strong>{names.length > 1 ? "plusieurs services" : "service"}</strong>
             {names.length ? (
               <>
                 {" "}
