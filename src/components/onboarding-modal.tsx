@@ -177,6 +177,16 @@ function PrinterIcon() {
 
 const P: React.CSSProperties = { margin: "0 0 .55rem" };
 
+/** Note : quota de réservations par période / an, variable selon le service. */
+function QuotaNote() {
+  return (
+    <p style={{ margin: ".55rem 0 0", fontSize: ".82rem", color: "var(--muted)" }}>
+      Selon le service, votre nombre de réservations est <strong>limité par période</strong> (et par
+      an) — la limite est rappelée sous l'agenda.
+    </p>
+  );
+}
+
 /** Étapes « usager » : enrichies (multi-services + illustrations). Dépend des services et de
  *  la présence d'une jauge (créneau AVEC ou SANS compteurs de participants). */
 function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
@@ -214,19 +224,22 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
       body: hasGauge ? (
         <>
           <p style={P}>
-            Sur l'agenda du service, cliquez sur un <strong>créneau libre</strong>, ajustez le
-            nombre de participants avec les boutons <strong>−</strong> et <strong>+</strong>, puis
-            enregistrez votre sélection.
+            Choisissez une <strong>période</strong> en haut de l'agenda, cliquez sur un{" "}
+            <strong>créneau libre</strong>, ajustez le nombre de participants avec les boutons{" "}
+            <strong>−</strong> et <strong>+</strong>, puis enregistrez votre sélection.
           </p>
           <GaugeMock />
+          <QuotaNote />
         </>
       ) : (
         <>
           <p style={P}>
-            Sur l'agenda du service, cliquez sur un <strong>créneau libre</strong>, puis enregistrez
-            votre <strong>demande de réservation</strong>.
+            Choisissez une <strong>période</strong> en haut de l'agenda, cliquez sur un{" "}
+            <strong>créneau libre</strong>, puis enregistrez votre{" "}
+            <strong>demande de réservation</strong>.
           </p>
           <ReservationShot />
+          <QuotaNote />
         </>
       ),
     },
