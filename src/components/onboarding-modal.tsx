@@ -95,30 +95,19 @@ function GaugeMock() {
   );
 }
 
-/** Badge « ma réservation » SANS jauge : icône d'état + libellé, pas de compteurs (parallèle
- *  à GaugeMock, reproduit le badge réel quand gaugeOn est faux). */
-function ReservationMock() {
+/** Badge « ma réservation » SANS jauge : capture détourée du badge réel (⏳ + « Demande en
+ *  attente de validation »), fond transparent → s'intègre en thème clair comme sombre. */
+function ReservationShot() {
   return (
     <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: ".5rem",
-          background: "rgba(232,164,90,.16)",
-          border: "1px solid rgba(232,164,90,.5)",
-          borderRadius: 12,
-          padding: ".4rem .85rem",
-          color: "#9a7b3a",
-          fontWeight: 700,
-          fontSize: ".85rem",
-        }}
-      >
-        <span aria-hidden style={{ fontSize: "1.2rem" }}>
-          ⏳
-        </span>
-        <span>Ma réservation</span>
-      </div>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src="/onboarding/reservation-badge.png"
+        alt="Badge de réservation : demande en attente de validation"
+        width={278}
+        height={73}
+        style={{ display: "block", width: "100%", maxWidth: 215, height: "auto" }}
+      />
     </div>
   );
 }
@@ -210,9 +199,9 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
         <>
           <p style={P}>
             Sur l'agenda du service, cliquez sur un <strong>créneau libre</strong>, puis enregistrez
-            votre réservation.
+            votre <strong>demande de réservation</strong>.
           </p>
-          <ReservationMock />
+          <ReservationShot />
         </>
       ),
     },
