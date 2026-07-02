@@ -55,6 +55,27 @@ Compte admin de démo : `admin@culturesa.fr` / `Admin1234!`
 | `pnpm db:studio` | Explorateur Prisma Studio |
 | `pnpm lint` / `pnpm format` | Biome |
 | `pnpm typecheck` | Vérification TypeScript |
+| `pnpm gen:docs` | Régénère la page d'aide (`public/aide/…html`) depuis `docs/Guide-utilisation.md` |
+
+## Documentation
+| Document | Public | Contenu | Livrable Word (à la main) |
+|---|---|---|---|
+| [docs/Guide-utilisation.md](docs/Guide-utilisation.md) | Usager, gestionnaire, administrateur | Prise en main fonctionnelle (réserver, créneaux, validation, pointages, éditions/stats, administration) | `docs/Guide-utilisateur-CultuResa.docx` |
+| [docs/Guide-administration.md](docs/Guide-administration.md) | Installateur / mainteneur | Installation Docker, base de données, sauvegardes | `docs/Guide-administration-CultuResa.docx` |
+| [DEPLOY.md](./DEPLOY.md) + [docs/EXPLOITATION.md](docs/EXPLOITATION.md) | Admin système | Déploiement et exploitation au quotidien | — |
+| [docs/BASE-DE-DONNEES.md](docs/BASE-DE-DONNEES.md) | Développeur / DBA | Modèle de données | — |
+
+Les deux `.docx` sont des **livrables Word imprimables**, jumeaux des guides markdown
+correspondants, **maintenus à la main** (mieux mis en page qu'une conversion automatique).
+
+**Guide d'utilisation.** Le contenu vit dans
+[docs/Guide-utilisation.md](docs/Guide-utilisation.md) (source unique). `pnpm gen:docs` en
+régénère `public/aide/guide-utilisation.html` — page d'**aide accessible dans l'application**
+(menu utilisateur → **📖 Guide d'utilisation**), servie statiquement. Ne pas éditer ce HTML à la
+main.
+
+Une **présentation interactive** (modale d'accueil) reprend ce guide à la première connexion,
+adaptée au rôle ; on peut la revoir via le menu utilisateur → **💡 Revoir la présentation**.
 
 ## État d'avancement
 Voir [PLAN.md](./PLAN.md) — la **fondation** est en place (config, schéma de

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guide d'utilisation — CultuRésa</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2430; --muted: #5b6472; --accent: #2f8f5b;
+    --border: #e3e7ee; --surface2: #f6f8fb; --code: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --fg: #e6e9ef; --muted: #9aa4b2; --accent: #4fbf82;
+      --border: #2a2f3a; --surface2: #1a1f27; --code: #1c222b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  main { max-width: 820px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .4rem; }
+  h2 { font-size: 1.35rem; margin: 2.4rem 0 .8rem; padding-bottom: .35rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.08rem; margin: 1.8rem 0 .5rem; }
+  p, li { color: var(--fg); }
+  a { color: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1rem 0; padding: .6rem 1rem; border-left: 3px solid var(--accent);
+    background: var(--surface2); color: var(--muted); border-radius: 0 6px 6px 0;
+  }
+  blockquote p { margin: .2rem 0; }
+  code { background: var(--code); padding: .1em .35em; border-radius: 4px; font-size: .92em; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+  th, td { border: 1px solid var(--border); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+  th { background: var(--surface2); }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: .25rem 0; }
+</style>
+</head>
+<body>
+<main>
+<h1 id="guide-d39utilisation-culturésa">Guide d&#39;utilisation — CultuRésa</h1>
+<p>Réservation d&#39;activités culturelles.</p>
+<p>CultuRésa est l&#39;application de réservation d&#39;activités culturelles. Elle permet aux <strong>usagers</strong>
+de réserver des créneaux d&#39;activités proposées par différents services (médiathèque,
+conservatoire, ludothèque, maison des enfants, maison des arts…), aux <strong>gestionnaires</strong>
+d&#39;organiser ces activités et de suivre la présence, et aux <strong>administrateurs</strong> de piloter
+l&#39;ensemble du système.</p>
+<p>Ce guide est organisé par profil d&#39;utilisateur. Chaque section décrit ce que vous pouvez faire
+dans l&#39;application. Pour l&#39;installation et l&#39;exploitation serveur, voir le
+<span>Guide d&#39;administration</span> et le <span>runbook d&#39;exploitation</span>.</p>
+<blockquote>
+<p>Une <strong>présentation interactive</strong> (fenêtre de bienvenue) reprend l&#39;essentiel de ce guide à la
+première connexion, adaptée au rôle. On peut la revoir à tout moment via le menu utilisateur →
+<strong>« Revoir la présentation »</strong>.</p>
+</blockquote>
+<h3 id="les-trois-profils">Les trois profils</h3>
+<table>
+<thead>
+<tr>
+<th>Profil</th>
+<th>Ce qu&#39;il peut faire</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Usager</strong></td>
+<td>Réserver des créneaux d&#39;activités, gérer ses réservations, modifier son compte.</td>
+</tr>
+<tr>
+<td><strong>Gestionnaire</strong></td>
+<td>Tout ce que fait l&#39;usager, plus la gestion des services qui lui sont confiés : créneaux, réservations, pointage, statistiques et paramètres.</td>
+</tr>
+<tr>
+<td><strong>Administrateur</strong></td>
+<td>Tout ce que fait le gestionnaire, sur tous les services, plus la gestion des utilisateurs, des référentiels, de la messagerie et du RGPD.</td>
+</tr>
+</tbody></table>
+<p>Sommaire : <a href="#1-pour-tous-les-utilisateurs">Pour tous les utilisateurs</a> ·
+<a href="#2-pour-les-usagers-réserver-une-activité">Usagers</a> ·
+<a href="#3-pour-les-gestionnaires-de-service">Gestionnaires</a> ·
+<a href="#4-pour-les-administrateurs">Administrateurs</a> · <a href="#5-notions-clés">Notions clés</a> ·
+<a href="#6-automatismes-en-arrière-plan">Automatismes</a></p>
+<hr>
+<h2 id="1-pour-tous-les-utilisateurs">1. Pour tous les utilisateurs</h2>
+<h3 id="se-connecter">Se connecter</h3>
+<p>Sur la page de connexion, saisissez votre adresse e-mail et votre mot de passe, puis cliquez
+sur <strong>« Connexion »</strong>. Les liens <strong>« Créer un compte »</strong> et <strong>« Mot de passe oublié ? »</strong> sont
+accessibles depuis cet écran.</p>
+<h3 id="créer-un-compte">Créer un compte</h3>
+<p>L&#39;inscription se fait en renseignant votre identité (nom, prénom, e-mail, téléphone), puis en
+choisissant votre <strong>catégorie</strong> (le demandeur : établissement ou organisme), votre <strong>structure</strong>
+et votre <strong>niveau</strong>. Le nombre d&#39;enfants et d&#39;accompagnants est obligatoire : au moins 1 de
+chaque (champs marqués d&#39;un astérisque). L&#39;acceptation de la politique de confidentialité (RGPD)
+et la recopie d&#39;un code de sécurité sont également demandées.</p>
+<p>Un e-mail de vérification vous est ensuite envoyé pour <strong>activer votre compte</strong>.</p>
+<h3 id="gérer-son-compte">Gérer son compte</h3>
+<p>Depuis <strong>« Mon compte »</strong>, vous pouvez modifier vos informations personnelles, changer votre mot
+de passe et demander la suppression de votre compte :</p>
+<ul>
+<li><strong>Mon profil</strong> — nom, prénom, e-mail, téléphone.</li>
+<li><strong>Changer mon mot de passe</strong> — avec rappel des règles de sécurité (12 caractères, majuscule,
+minuscule, chiffre, caractère spécial).</li>
+<li><strong>Supprimer mon compte</strong> — conformément au RGPD, vos données sont anonymisées de façon
+irréversible après un délai de grâce (e-mail de confirmation valable 24 h).</li>
+</ul>
+<hr>
+<h2 id="2-pour-les-usagers-réserver-une-activité">2. Pour les usagers — réserver une activité</h2>
+<h3 id="première-connexion">Première connexion</h3>
+<p>À la première connexion, une <strong>fenêtre de bienvenue</strong> présente l&#39;essentiel pour démarrer. Vous
+pouvez la parcourir avec <strong>« Suivant »</strong> ou la fermer avec <strong>« Passer »</strong>.</p>
+<h3 id="l39agenda-de-réservation">L&#39;agenda de réservation</h3>
+<p>Sélectionnez un service dans le <strong>menu de gauche</strong> pour ouvrir son agenda. La vue présente une
+semaine type avec les créneaux disponibles.</p>
+<ul>
+<li><strong>Semaines A / B</strong> — pour les activités en alternance, basculez entre la semaine A (semaines
+impaires) et la semaine B (semaines paires).</li>
+<li><strong>Période / exercice</strong> — un bandeau indique l&#39;année scolaire ou la période en cours.</li>
+<li><strong>Indicateurs</strong> — chaque créneau affiche le nombre de places, son statut (en attente de
+validation, validée) et, le cas échéant, « Clôturé ».</li>
+<li><strong>Légende</strong> — un rappel précise le nombre de séances réservables et les conditions du service
+(récurrent, semaines A/B, validation, thèmes, jauge, jours fériés, vacances scolaires).</li>
+</ul>
+<h3 id="réserver-modifier-annuler">Réserver, modifier, annuler</h3>
+<ol>
+<li>Cliquez sur un <strong>créneau disponible</strong> dans l&#39;agenda.</li>
+<li>Renseignez les informations demandées : éventuel <strong>thème</strong>, nombre d&#39;<strong>enfants</strong> et
+d&#39;<strong>accompagnants</strong>.</li>
+<li>Cliquez sur <strong>« Enregistrer »</strong> pour confirmer. Un e-mail de confirmation vous est envoyé.</li>
+</ol>
+<p>Vous pouvez <strong>annuler</strong> une réservation tant qu&#39;elle n&#39;est pas verrouillée. Si le service active
+le <strong>verrouillage des réservations validées</strong>, une réservation validée ne peut plus être annulée
+ni déplacée. Un bouton permet aussi d&#39;<strong>imprimer votre liste</strong> de réservations.</p>
+<h3 id="règles-appliquées-automatiquement">Règles appliquées automatiquement</h3>
+<p>Lors d&#39;une réservation, l&#39;application vérifie automatiquement :</p>
+<ul>
+<li>la <strong>capacité</strong> du créneau (selon que les accompagnants comptent ou non dans la jauge) ;</li>
+<li>votre <strong>droit d&#39;accès</strong> au service, selon votre demandeur ;</li>
+<li>le <strong>nombre maximum de réservations</strong> autorisé (par service et par période) ;</li>
+<li>les <strong>jours de fermeture</strong> : un créneau en période de vacances scolaires n&#39;est réservable que
+si le service <strong>et</strong> le demandeur sont ouverts ce jour-là ;</li>
+<li>le <strong>délai de réservation</strong> : les créneaux trop proches dans le temps ne sont pas réservables.</li>
+</ul>
+<h3 id="rappels-automatiques">Rappels automatiques</h3>
+<p>Vous recevez des rappels par e-mail avant vos créneaux : un rappel <strong>7 jours avant</strong> (J-7) et un
+rappel <strong>la veille</strong> (J-1).</p>
+<hr>
+<h2 id="3-pour-les-gestionnaires-de-service">3. Pour les gestionnaires de service</h2>
+<p>Les gestionnaires accèdent à un espace d&#39;administration <strong>limité aux services qui leur sont
+confiés</strong>. Chaque service dispose des onglets <strong>Agenda</strong>, <strong>Éditions</strong>, <strong>Statistiques</strong> et
+<strong>Paramètres</strong>.</p>
+<h3 id="agenda-créneaux-et-réservations">Agenda — créneaux et réservations</h3>
+<p>L&#39;agenda du gestionnaire permet de gérer les créneaux et les réservations de chaque usager.</p>
+<ul>
+<li><strong>Créer des créneaux</strong> récurrents (jour, horaire, capacité, demandeurs autorisés) ou ponctuels
+(date précise).</li>
+<li><strong>Déplacer, copier ou supprimer</strong> des créneaux.</li>
+<li><strong>Gérer les réservations</strong> : ajouter, modifier, annuler ou valider une réservation pour un
+usager.</li>
+<li><strong>Pointage</strong> : marquer chaque participant <strong>Présent</strong> ou <strong>Absent</strong> après la séance.</li>
+</ul>
+<blockquote>
+<p>Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un
+autre créneau pour le déplacer.</p>
+</blockquote>
+<p>L&#39;agenda s&#39;affiche en deux modes : <strong>Modèle de période</strong> (les créneaux récurrents, gabarit de la
+période) et <strong>Semaine réelle</strong> (les éléments datés : réservations, pointages, créneaux ponctuels).</p>
+<h3 id="éditions-listes-et-suivi">Éditions — listes et suivi</h3>
+<p>L&#39;onglet <strong>Éditions</strong> présente le tableau de <strong>toutes les réservations</strong> (période, date, créneau,
+demandeur, participant, thème, nombre d&#39;enfants, statut, pointage). Il propose un <strong>export CSV</strong>,
+une vue <strong>Planning</strong> hebdomadaire et la saisie des <strong>Pointages</strong>.</p>
+<h3 id="statistiques">Statistiques</h3>
+<p>Le tableau de bord du service présente des <strong>compteurs</strong> (réservations, usagers distincts, en
+attente, enfants, accompagnants), le <strong>suivi de présence</strong> sur les séances passées (prévu /
+réalisé, taux de présence et de réalisation) et des <strong>graphiques</strong> de répartition (par jour, par
+mois, par structure, par niveau, taux de remplissage). Les données sont <strong>filtrables et
+exportables en CSV</strong>.</p>
+<h3 id="paramètres-périodes-et-réservations">Paramètres — Périodes et réservations</h3>
+<p>Cet onglet regroupe les <strong>périodes</strong> (libellé, dates, couleur), les <strong>jours d&#39;ouverture</strong>, les
+<strong>plages horaires</strong> matin / après-midi, ainsi que les <strong>règles de réservation</strong> : maximums par
+période et par an, délai de réservation, verrouillage de validation, validation automatique et
+notifications aux gestionnaires.</p>
+<h3 id="paramètres-configuration-accès-et-thèmes">Paramètres — Configuration (accès et thèmes)</h3>
+<p>La configuration définit les <strong>paramètres globaux</strong> du service (alternance Semaine A/B, prise en
+compte des accompagnants dans la jauge) et, <strong>pour chaque demandeur</strong>, le mode de réservation
+autorisé (récurrent / ponctuel), la validation et les thèmes. Le mode des thèmes peut être
+<strong>« libre »</strong> (texte saisi par l&#39;usager) ou <strong>« liste »</strong> (choix imposé).</p>
+<h3 id="paramètres-échanges-e-mails-du-service">Paramètres — Échanges (e-mails du service)</h3>
+<p>Chaque service peut personnaliser le <strong>contenu</strong> de ses e-mails de réservation : réservation
+confirmée, demande enregistrée, réservation annulée, réservation non validée (refus) et rappel de
+réservation. Le bouton <strong>« Modifier »</strong> personnalise le contenu ; à défaut, le gabarit global est
+utilisé. Le <strong>routage, le destinataire et l&#39;activation de l&#39;envoi</strong> sont, eux, <strong>globaux</strong> (voir
+<a href="#échanges-e-mails-réglages-globaux">Administration → Échanges</a>).</p>
+<h3 id="paramètres-changement-d39exercice">Paramètres — Changement d&#39;exercice</h3>
+<p>Bascule le service vers un <strong>nouvel exercice</strong> (nouvelle saison / année scolaire) : les périodes
+du nouvel exercice sont créées avec des <strong>dates décalées</strong> à partir de l&#39;exercice précédent ; les
+exercices antérieurs restent consultables.</p>
+<h3 id="paramètres-rgpd-usagers-du-service">Paramètres — RGPD (usagers du service)</h3>
+<p>Vue RGPD <strong>limitée aux usagers rattachés au service</strong> : repérer les comptes inactifs concernés.
+Le pilotage RGPD global (avis de suppression, anonymisation, journal d&#39;audit) reste dans
+<a href="#rgpd-et-conservation-des-données">Administration → RGPD</a>.</p>
+<hr>
+<h2 id="4-pour-les-administrateurs">4. Pour les administrateurs</h2>
+<p>Les administrateurs disposent de <strong>toutes les fonctions des gestionnaires</strong>, sur l&#39;ensemble des
+services, ainsi que de la <strong>gestion globale</strong> de l&#39;application via l&#39;onglet <strong>« Administration »</strong>.</p>
+<h3 id="configuration-et-référentiels">Configuration et référentiels</h3>
+<p>La page <strong>Configuration</strong> regroupe les réglages de l&#39;application (zone des vacances scolaires,
+URL, intervalles de rafraîchissement automatique, mode debug) et l&#39;accès aux <strong>référentiels</strong> :
+<strong>Services</strong>, <strong>Demandeurs</strong>, <strong>Structures</strong> et <strong>Niveaux</strong>.</p>
+<h3 id="utilisateurs">Utilisateurs</h3>
+<p>La liste des utilisateurs permet de rechercher, filtrer et modifier les comptes : informations,
+<strong>rôle</strong> (utilisateur, gestionnaire, administrateur), structure / service rattaché, services
+gérés et statut RGPD.</p>
+<h3 id="échanges-e-mails-réglages-globaux">Échanges — e-mails (réglages globaux)</h3>
+<p>L&#39;onglet <strong>Échanges</strong> règle les e-mails <strong>au niveau global</strong> (communs à tous les services), en
+deux volets :</p>
+<ul>
+<li><strong>Échanges par mail</strong> — pour chaque action, le <strong>type d&#39;e-mail</strong> envoyé, son <strong>destinataire</strong> et
+l&#39;<strong>activation de l&#39;envoi</strong>.</li>
+<li><strong>Modèles d&#39;e-mails</strong> — l&#39;<strong>objet et le corps</strong> de tous les types. Les e-mails de réservation
+servent de <strong>base surchargeable par chaque service</strong> (onglet Échanges du service) ; les e-mails
+<strong>système</strong> (compte, sécurité, test) sont toujours envoyés. On peut aussi créer des <strong>types
+personnalisés globaux</strong>.</li>
+</ul>
+<h3 id="messagerie">Messagerie</h3>
+<p>L&#39;onglet <strong>Messagerie</strong> configure l&#39;envoi des e-mails (paramètres SMTP), gère les <strong>e-mails
+système</strong> (vérification de compte, réinitialisation de mot de passe, etc.) et permet de
+<strong>relancer les envois en échec</strong>.</p>
+<h3 id="rgpd-et-conservation-des-données">RGPD et conservation des données</h3>
+<p>L&#39;onglet <strong>RGPD</strong> permet de repérer les <strong>comptes inactifs</strong>, de déclencher un <strong>avis de
+suppression</strong> (délai de grâce de 30 jours), d&#39;<strong>anonymiser</strong> des comptes et de consulter le
+<strong>journal d&#39;audit</strong> (historique immuable des actions liées aux données personnelles).</p>
+<hr>
+<h2 id="5-notions-clés">5. Notions clés</h2>
+<ul>
+<li><strong>Demandeur</strong> — l&#39;établissement ou l&#39;organisme auquel un usager est rattaché. Il conditionne
+l&#39;accès aux services et les jours d&#39;ouverture.</li>
+<li><strong>Structure</strong> — unité organisationnelle sous un demandeur ; rattacher un usager à une structure
+lui fait hériter du demandeur.</li>
+<li><strong>Niveau</strong> — classification (par demandeur) utilisée dans le profil et les statistiques.</li>
+<li><strong>Service</strong> — une activité culturelle, avec ses propres créneaux, périodes, règles et e-mails.</li>
+<li><strong>Période / Exercice</strong> — une période est une plage de dates (saison, semestre) ; l&#39;exercice
+correspond à l&#39;année (ex. « 2025-2026 »).</li>
+<li><strong>Créneau</strong> — un créneau récurrent se répète chaque semaine ; un créneau ponctuel correspond à
+une date précise (un créneau = un jour).</li>
+<li><strong>Semaines A / B</strong> — alternance pour les activités bi-hebdomadaires : semaine impaire = A,
+semaine paire = B.</li>
+<li><strong>Validation / verrouillage</strong> — une réservation validée peut être verrouillée (selon le réglage
+du service), empêchant toute annulation ou déplacement côté usager.</li>
+<li><strong>Jauge</strong> — la capacité d&#39;un créneau ; selon le service, les accompagnants y sont comptés ou non.</li>
+<li><strong>Vacances scolaires</strong> — récupérées depuis le calendrier officiel selon la zone ; un jour de
+vacances n&#39;est réservable que si le service et le demandeur sont ouverts.</li>
+</ul>
+<hr>
+<h2 id="6-automatismes-en-arrière-plan">6. Automatismes en arrière-plan</h2>
+<p>Plusieurs traitements s&#39;exécutent automatiquement, sans intervention :</p>
+<ul>
+<li><strong>Validation automatique</strong> des réservations après un délai paramétré, avec récapitulatif envoyé
+aux gestionnaires.</li>
+<li><strong>Rappels de réservation</strong> envoyés aux usagers (J-7 et J-1).</li>
+<li><strong>Conservation des données</strong> : anonymisation des comptes inactifs après l&#39;avis de suppression.</li>
+</ul>
+<hr>
+<h2 id="voir-aussi">Voir aussi</h2>
+<ul>
+<li><span>Guide d&#39;administration</span> — installation serveur, base de données,
+sauvegardes.</li>
+<li><span>Exploitation</span> — runbook d&#39;exploitation au quotidien.</li>
+<li>Présentation interactive intégrée à l&#39;application (menu utilisateur → <strong>« Revoir la
+présentation »</strong>).</li>
+</ul>
+
+</main>
+</body>
+</html>

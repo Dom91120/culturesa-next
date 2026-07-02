@@ -4,13 +4,14 @@ Installation serveur, base de données, exploitation et **sauvegarde**.
 
 Ce guide s'adresse à la personne qui installe et maintient CultuRésa sur un serveur.
 Pour l'utilisation fonctionnelle (réservations, gestion des services), voir le
-*Guide d'utilisation*.
+[Guide d'utilisation](Guide-utilisation.md).
 
 ---
 
 ## 1. Architecture
 
-CultuRésa s'installe en **auto-hébergé** via Docker Compose. Quatre conteneurs :
+CultuRésa s'installe en **auto-hébergé** via Docker Compose. Quatre conteneurs de service,
+plus un conteneur d'initialisation ponctuel (`init`) :
 
 | Conteneur | Rôle |
 |-----------|------|
@@ -18,6 +19,7 @@ CultuRésa s'installe en **auto-hébergé** via Docker Compose. Quatre conteneur
 | **db** | Base de données PostgreSQL 17 (volume persistant `pgdata`) |
 | **caddy** | Reverse proxy + HTTPS automatique (Let's Encrypt) |
 | **cron** | Tâches planifiées (auto-validation, rappels, RGPD) **et sauvegarde quotidienne de la base** |
+| **init** | One-shot (profil `init`, lancé à la demande) : crée le compte administrateur et les référentiels d'e-mails |
 
 Les migrations de base de données sont appliquées **automatiquement** au démarrage de
 `app` (`prisma migrate deploy`).

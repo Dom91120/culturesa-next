@@ -70,6 +70,11 @@ export function AgendaTimeColumn({
   lunchEnd: number;
   mapMinToY: (min: number) => number;
 }) {
+  // Grille vide (aucun quart visible : semaine sans créneau en mode compacté, ex.
+  // semaine à cheval hors période active) : aucune heure à situer. On n'affiche
+  // AUCUNE marque — sinon la seule borne rescapée (fin de grille, ex. « 18:00 »)
+  // se retrouverait à top:0 remontée par is-break-end, débordant dans le coin.
+  if (quarters.length === 0) return <div className="agenda-time-col" style={{ height: totalH }} />;
   const minLabel = (m: number) =>
     `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   // Fin réelle de la grille = fin du dernier quart visible (≠ gridEndMin si compacté).

@@ -2580,9 +2580,11 @@ export function AgendaGrid({
                 className="btn btn-ghost"
                 style={{ padding: ".05rem .45rem", fontSize: ".64rem", marginLeft: ".4rem" }}
                 onClick={() => {
-                  // Retour à la semaine courante : on relâche le verrou pour
-                  // re-dériver la période qui couvre aujourd'hui.
-                  setRwPeriodId(null);
+                  // Retour à la semaine courante : on verrouille sur la période
+                  // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
+                  // qui diffère quand la semaine chevauche deux périodes — sinon
+                  // on afficherait la période du mois précédent).
+                  setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
                   setAnchorMonday(ymd(mondayOf(new Date())));
                 }}
               >

@@ -108,6 +108,15 @@ export function UserShell({
             >
               💡 Revoir la présentation
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                window.open("/aide/guide-utilisation.html", "_blank", "noopener");
+              }}
+            >
+              📖 Guide d&apos;utilisation
+            </button>
             <button type="button" className="danger" onClick={onLogout}>
               ⏏ Déconnexion
             </button>

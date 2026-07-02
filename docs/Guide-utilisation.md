@@ -1,0 +1,274 @@
+<!-- SOURCE UNIQUE de la doc fonctionnelle. Après toute modification, régénérer la page
+     d'aide de l'app : `pnpm gen:docs` (→ public/aide/guide-utilisation.html).
+     Le livrable Word (docs/Guide-utilisateur-CultuResa.docx) est, lui, maintenu à la main. -->
+
+# Guide d'utilisation — CultuRésa
+
+Réservation d'activités culturelles.
+
+CultuRésa est l'application de réservation d'activités culturelles. Elle permet aux **usagers**
+de réserver des créneaux d'activités proposées par différents services (médiathèque,
+conservatoire, ludothèque, maison des enfants, maison des arts…), aux **gestionnaires**
+d'organiser ces activités et de suivre la présence, et aux **administrateurs** de piloter
+l'ensemble du système.
+
+Ce guide est organisé par profil d'utilisateur. Chaque section décrit ce que vous pouvez faire
+dans l'application. Pour l'installation et l'exploitation serveur, voir le
+[Guide d'administration](Guide-administration.md) et le [runbook d'exploitation](EXPLOITATION.md).
+
+> Une **présentation interactive** (fenêtre de bienvenue) reprend l'essentiel de ce guide à la
+> première connexion, adaptée au rôle. On peut la revoir à tout moment via le menu utilisateur →
+> **« Revoir la présentation »**.
+
+### Les trois profils
+
+| Profil | Ce qu'il peut faire |
+|--------|---------------------|
+| **Usager** | Réserver des créneaux d'activités, gérer ses réservations, modifier son compte. |
+| **Gestionnaire** | Tout ce que fait l'usager, plus la gestion des services qui lui sont confiés : créneaux, réservations, pointage, statistiques et paramètres. |
+| **Administrateur** | Tout ce que fait le gestionnaire, sur tous les services, plus la gestion des utilisateurs, des référentiels, de la messagerie et du RGPD. |
+
+Sommaire : [Pour tous les utilisateurs](#1-pour-tous-les-utilisateurs) ·
+[Usagers](#2-pour-les-usagers-réserver-une-activité) ·
+[Gestionnaires](#3-pour-les-gestionnaires-de-service) ·
+[Administrateurs](#4-pour-les-administrateurs) · [Notions clés](#5-notions-clés) ·
+[Automatismes](#6-automatismes-en-arrière-plan)
+
+---
+
+## 1. Pour tous les utilisateurs
+
+### Se connecter
+
+Sur la page de connexion, saisissez votre adresse e-mail et votre mot de passe, puis cliquez
+sur **« Connexion »**. Les liens **« Créer un compte »** et **« Mot de passe oublié ? »** sont
+accessibles depuis cet écran.
+
+### Créer un compte
+
+L'inscription se fait en renseignant votre identité (nom, prénom, e-mail, téléphone), puis en
+choisissant votre **catégorie** (le demandeur : établissement ou organisme), votre **structure**
+et votre **niveau**. Le nombre d'enfants et d'accompagnants est obligatoire : au moins 1 de
+chaque (champs marqués d'un astérisque). L'acceptation de la politique de confidentialité (RGPD)
+et la recopie d'un code de sécurité sont également demandées.
+
+Un e-mail de vérification vous est ensuite envoyé pour **activer votre compte**.
+
+### Gérer son compte
+
+Depuis **« Mon compte »**, vous pouvez modifier vos informations personnelles, changer votre mot
+de passe et demander la suppression de votre compte :
+
+- **Mon profil** — nom, prénom, e-mail, téléphone.
+- **Changer mon mot de passe** — avec rappel des règles de sécurité (12 caractères, majuscule,
+  minuscule, chiffre, caractère spécial).
+- **Supprimer mon compte** — conformément au RGPD, vos données sont anonymisées de façon
+  irréversible après un délai de grâce (e-mail de confirmation valable 24 h).
+
+---
+
+## 2. Pour les usagers — réserver une activité
+
+### Première connexion
+
+À la première connexion, une **fenêtre de bienvenue** présente l'essentiel pour démarrer. Vous
+pouvez la parcourir avec **« Suivant »** ou la fermer avec **« Passer »**.
+
+### L'agenda de réservation
+
+Sélectionnez un service dans le **menu de gauche** pour ouvrir son agenda. La vue présente une
+semaine type avec les créneaux disponibles.
+
+- **Semaines A / B** — pour les activités en alternance, basculez entre la semaine A (semaines
+  impaires) et la semaine B (semaines paires).
+- **Période / exercice** — un bandeau indique l'année scolaire ou la période en cours.
+- **Indicateurs** — chaque créneau affiche le nombre de places, son statut (en attente de
+  validation, validée) et, le cas échéant, « Clôturé ».
+- **Légende** — un rappel précise le nombre de séances réservables et les conditions du service
+  (récurrent, semaines A/B, validation, thèmes, jauge, jours fériés, vacances scolaires).
+
+### Réserver, modifier, annuler
+
+1. Cliquez sur un **créneau disponible** dans l'agenda.
+2. Renseignez les informations demandées : éventuel **thème**, nombre d'**enfants** et
+   d'**accompagnants**.
+3. Cliquez sur **« Enregistrer »** pour confirmer. Un e-mail de confirmation vous est envoyé.
+
+Vous pouvez **annuler** une réservation tant qu'elle n'est pas verrouillée. Si le service active
+le **verrouillage des réservations validées**, une réservation validée ne peut plus être annulée
+ni déplacée. Un bouton permet aussi d'**imprimer votre liste** de réservations.
+
+### Règles appliquées automatiquement
+
+Lors d'une réservation, l'application vérifie automatiquement :
+
+- la **capacité** du créneau (selon que les accompagnants comptent ou non dans la jauge) ;
+- votre **droit d'accès** au service, selon votre demandeur ;
+- le **nombre maximum de réservations** autorisé (par service et par période) ;
+- les **jours de fermeture** : un créneau en période de vacances scolaires n'est réservable que
+  si le service **et** le demandeur sont ouverts ce jour-là ;
+- le **délai de réservation** : les créneaux trop proches dans le temps ne sont pas réservables.
+
+### Rappels automatiques
+
+Vous recevez des rappels par e-mail avant vos créneaux : un rappel **7 jours avant** (J-7) et un
+rappel **la veille** (J-1).
+
+---
+
+## 3. Pour les gestionnaires de service
+
+Les gestionnaires accèdent à un espace d'administration **limité aux services qui leur sont
+confiés**. Chaque service dispose des onglets **Agenda**, **Éditions**, **Statistiques** et
+**Paramètres**.
+
+### Agenda — créneaux et réservations
+
+L'agenda du gestionnaire permet de gérer les créneaux et les réservations de chaque usager.
+
+- **Créer des créneaux** récurrents (jour, horaire, capacité, demandeurs autorisés) ou ponctuels
+  (date précise).
+- **Déplacer, copier ou supprimer** des créneaux.
+- **Gérer les réservations** : ajouter, modifier, annuler ou valider une réservation pour un
+  usager.
+- **Pointage** : marquer chaque participant **Présent** ou **Absent** après la séance.
+
+> Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un
+> autre créneau pour le déplacer.
+
+L'agenda s'affiche en deux modes : **Modèle de période** (les créneaux récurrents, gabarit de la
+période) et **Semaine réelle** (les éléments datés : réservations, pointages, créneaux ponctuels).
+
+### Éditions — listes et suivi
+
+L'onglet **Éditions** présente le tableau de **toutes les réservations** (période, date, créneau,
+demandeur, participant, thème, nombre d'enfants, statut, pointage). Il propose un **export CSV**,
+une vue **Planning** hebdomadaire et la saisie des **Pointages**.
+
+### Statistiques
+
+Le tableau de bord du service présente des **compteurs** (réservations, usagers distincts, en
+attente, enfants, accompagnants), le **suivi de présence** sur les séances passées (prévu /
+réalisé, taux de présence et de réalisation) et des **graphiques** de répartition (par jour, par
+mois, par structure, par niveau, taux de remplissage). Les données sont **filtrables et
+exportables en CSV**.
+
+### Paramètres — Périodes et réservations
+
+Cet onglet regroupe les **périodes** (libellé, dates, couleur), les **jours d'ouverture**, les
+**plages horaires** matin / après-midi, ainsi que les **règles de réservation** : maximums par
+période et par an, délai de réservation, verrouillage de validation, validation automatique et
+notifications aux gestionnaires.
+
+### Paramètres — Configuration (accès et thèmes)
+
+La configuration définit les **paramètres globaux** du service (alternance Semaine A/B, prise en
+compte des accompagnants dans la jauge) et, **pour chaque demandeur**, le mode de réservation
+autorisé (récurrent / ponctuel), la validation et les thèmes. Le mode des thèmes peut être
+**« libre »** (texte saisi par l'usager) ou **« liste »** (choix imposé).
+
+### Paramètres — Échanges (e-mails du service)
+
+Chaque service peut personnaliser le **contenu** de ses e-mails de réservation : réservation
+confirmée, demande enregistrée, réservation annulée, réservation non validée (refus) et rappel de
+réservation. Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
+utilisé. Le **routage, le destinataire et l'activation de l'envoi** sont, eux, **globaux** (voir
+[Administration → Échanges](#échanges-e-mails-réglages-globaux)).
+
+### Paramètres — Changement d'exercice
+
+Bascule le service vers un **nouvel exercice** (nouvelle saison / année scolaire) : les périodes
+du nouvel exercice sont créées avec des **dates décalées** à partir de l'exercice précédent ; les
+exercices antérieurs restent consultables.
+
+### Paramètres — RGPD (usagers du service)
+
+Vue RGPD **limitée aux usagers rattachés au service** : repérer les comptes inactifs concernés.
+Le pilotage RGPD global (avis de suppression, anonymisation, journal d'audit) reste dans
+[Administration → RGPD](#rgpd-et-conservation-des-données).
+
+---
+
+## 4. Pour les administrateurs
+
+Les administrateurs disposent de **toutes les fonctions des gestionnaires**, sur l'ensemble des
+services, ainsi que de la **gestion globale** de l'application via l'onglet **« Administration »**.
+
+### Configuration et référentiels
+
+La page **Configuration** regroupe les réglages de l'application (zone des vacances scolaires,
+URL, intervalles de rafraîchissement automatique, mode debug) et l'accès aux **référentiels** :
+**Services**, **Demandeurs**, **Structures** et **Niveaux**.
+
+### Utilisateurs
+
+La liste des utilisateurs permet de rechercher, filtrer et modifier les comptes : informations,
+**rôle** (utilisateur, gestionnaire, administrateur), structure / service rattaché, services
+gérés et statut RGPD.
+
+### Échanges — e-mails (réglages globaux)
+
+L'onglet **Échanges** règle les e-mails **au niveau global** (communs à tous les services), en
+deux volets :
+
+- **Échanges par mail** — pour chaque action, le **type d'e-mail** envoyé, son **destinataire** et
+  l'**activation de l'envoi**.
+- **Modèles d'e-mails** — l'**objet et le corps** de tous les types. Les e-mails de réservation
+  servent de **base surchargeable par chaque service** (onglet Échanges du service) ; les e-mails
+  **système** (compte, sécurité, test) sont toujours envoyés. On peut aussi créer des **types
+  personnalisés globaux**.
+
+### Messagerie
+
+L'onglet **Messagerie** configure l'envoi des e-mails (paramètres SMTP), gère les **e-mails
+système** (vérification de compte, réinitialisation de mot de passe, etc.) et permet de
+**relancer les envois en échec**.
+
+### RGPD et conservation des données
+
+L'onglet **RGPD** permet de repérer les **comptes inactifs**, de déclencher un **avis de
+suppression** (délai de grâce de 30 jours), d'**anonymiser** des comptes et de consulter le
+**journal d'audit** (historique immuable des actions liées aux données personnelles).
+
+---
+
+## 5. Notions clés
+
+- **Demandeur** — l'établissement ou l'organisme auquel un usager est rattaché. Il conditionne
+  l'accès aux services et les jours d'ouverture.
+- **Structure** — unité organisationnelle sous un demandeur ; rattacher un usager à une structure
+  lui fait hériter du demandeur.
+- **Niveau** — classification (par demandeur) utilisée dans le profil et les statistiques.
+- **Service** — une activité culturelle, avec ses propres créneaux, périodes, règles et e-mails.
+- **Période / Exercice** — une période est une plage de dates (saison, semestre) ; l'exercice
+  correspond à l'année (ex. « 2025-2026 »).
+- **Créneau** — un créneau récurrent se répète chaque semaine ; un créneau ponctuel correspond à
+  une date précise (un créneau = un jour).
+- **Semaines A / B** — alternance pour les activités bi-hebdomadaires : semaine impaire = A,
+  semaine paire = B.
+- **Validation / verrouillage** — une réservation validée peut être verrouillée (selon le réglage
+  du service), empêchant toute annulation ou déplacement côté usager.
+- **Jauge** — la capacité d'un créneau ; selon le service, les accompagnants y sont comptés ou non.
+- **Vacances scolaires** — récupérées depuis le calendrier officiel selon la zone ; un jour de
+  vacances n'est réservable que si le service et le demandeur sont ouverts.
+
+---
+
+## 6. Automatismes en arrière-plan
+
+Plusieurs traitements s'exécutent automatiquement, sans intervention :
+
+- **Validation automatique** des réservations après un délai paramétré, avec récapitulatif envoyé
+  aux gestionnaires.
+- **Rappels de réservation** envoyés aux usagers (J-7 et J-1).
+- **Conservation des données** : anonymisation des comptes inactifs après l'avis de suppression.
+
+---
+
+## Voir aussi
+
+- [Guide d'administration](Guide-administration.md) — installation serveur, base de données,
+  sauvegardes.
+- [Exploitation](EXPLOITATION.md) — runbook d'exploitation au quotidien.
+- Présentation interactive intégrée à l'application (menu utilisateur → **« Revoir la
+  présentation »**).

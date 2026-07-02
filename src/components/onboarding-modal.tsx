@@ -7,7 +7,9 @@ import { markOnboardedAction } from "./onboarding-actions";
 /** Événement global pour ré-ouvrir l'onboarding (« Revoir la présentation » du user-menu). */
 export const ONBOARDING_REPLAY_EVENT = "culturesa:onboarding-replay";
 
-type Step = { title: string; body: ReactNode };
+// `image` (optionnel) : illustration de fin d'étape, rendue sous le texte dans un
+// conteneur extensible qui la CENTRE verticalement dans l'espace restant du corps.
+type Step = { title: string; body: ReactNode; image?: ReactNode };
 type ServiceLite = { label: string; icon: string | null };
 
 /** Énumération française : « A », « A et B », « A, B et C ». */
@@ -95,6 +97,107 @@ function GaugeMock() {
   );
 }
 
+/** Capture de l'agenda en mode création : un créneau tracé (bloc orangé pointillé « 10:00–11:00 »)
+ *  avec le curseur main illustrant le geste. public/onboarding/slot-create.png. */
+function SlotCreateShot() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src="/onboarding/slot-create.png"
+        alt="Un créneau 10:00–11:00 tracé sur l'agenda en mode création"
+        style={{
+          display: "block",
+          width: "100%",
+          maxWidth: 260,
+          height: "auto",
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Bascule d'affichage de l'agenda : « Modèle de période » / « Semaine réelle ». public/onboarding/period-model.png. */
+function ViewModeShot() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src="/onboarding/period-model.png"
+        alt="Bascule « Modèle de période » / « Semaine réelle » de l'agenda"
+        style={{
+          display: "block",
+          width: "100%",
+          maxWidth: 240,
+          height: "auto",
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Barre d'options de l'agenda avec « Mode validation » coché. public/onboarding/validation-mode.png. */
+function ValidationModeShot() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src="/onboarding/validation-mode.png"
+        alt="Barre d'options de l'agenda, « Mode validation » activé"
+        style={{
+          display: "block",
+          width: "100%",
+          maxWidth: 280,
+          height: "auto",
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Modale « Nouvelle réservation » (réserver pour un usager). public/onboarding/reservation-create.png. */
+function ReservationCreateShot() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src="/onboarding/reservation-create.png"
+        alt="Modale de création d'une réservation pour un usager"
+        // Capture détourée à coins arrondis (fond transparent autour) : pas de bordure/borderRadius
+        // ajoutés, qui déborderaient des coins (cf. SidebarShot).
+        style={{ display: "block", width: "100%", maxWidth: 320, height: "auto" }}
+      />
+    </div>
+  );
+}
+
+/** Barre d'options en « Semaine réelle » avec « Mode pointage » coché. public/onboarding/pointage-mode.png. */
+function PointageModeShot() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src="/onboarding/pointage-mode.png"
+        alt="Barre d'options de l'agenda en Semaine réelle, « Mode pointage » activé"
+        style={{
+          display: "block",
+          width: "100%",
+          maxWidth: 280,
+          height: "auto",
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+        }}
+      />
+    </div>
+  );
+}
+
 /** Badge « ma réservation » SANS jauge : capture détourée du badge réel (⏳ + « Demande en
  *  attente de validation »), fond transparent → s'intègre en thème clair comme sombre. */
 function ReservationShot() {
@@ -173,6 +276,43 @@ function PrinterIcon() {
   );
 }
 
+/** Bouton « Mode création » de l'agenda gestionnaire : crayon (couleur danger) dans son contour,
+ *  reproduit à l'identique (bordure, rayon, padding) pour être reconnaissable dans le texte. */
+function EditIcon() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: "inline-block",
+        verticalAlign: "bottom",
+        margin: "0 2px",
+        // Mêmes dimensions que le bouton « Mode création » d'origine (agenda gestionnaire).
+        padding: ".28rem .38rem",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--rad-sm)",
+        color: "var(--danger)",
+      }}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        style={{ display: "block" }}
+      >
+        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+        <path d="m15 5 4 4" />
+      </svg>
+    </span>
+  );
+}
+
 /* ── Contenu des étapes ──────────────────────────────────────────────────────────────── */
 
 const P: React.CSSProperties = { margin: "0 0 .55rem" };
@@ -211,13 +351,13 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
             ) : null}
             .
           </p>
-          <p style={{ ...P, marginBottom: 0 }}>
+          <p style={{ margin: 0 }}>
             Pour commencer, choisissez le service qui vous intéresse dans le{" "}
             <strong>menu de gauche</strong> :
           </p>
-          <SidebarShot />
         </>
       ),
+      image: <SidebarShot />,
     },
     {
       title: "Créer une réservation 📆",
@@ -266,15 +406,99 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
   gestionnaire: [
     {
       title: "Bienvenue 👋",
-      body: "Vous gérez les services qui vous sont confiés et les réservations de leurs usagers. Voici l'essentiel.",
+      body: (
+        <>
+          <p style={P}>
+            Vous gérez les services qui vous sont confiés et les réservations de leurs usagers.
+          </p>
+          <p style={{ margin: 0 }}>
+            La première étape <strong>indispensable</strong> consiste à paramétrer votre service.
+            Vous renseignez ses périodes et son mode de fonctionnement à partir des onglets{" "}
+            <strong>« 🔧 Paramètres »</strong>, <strong>« 🗓️ Périodes et réservations »</strong> et{" "}
+            <strong>« ✨ Configuration »</strong>.
+          </p>
+        </>
+      ),
     },
     {
-      title: "Vos créneaux et réservations 📆",
-      body: "Depuis l'agenda d'un service, créez les créneaux, validez ou ajustez les réservations des usagers et renseignez les pointages.",
+      title: "Travaillez en « Modèle de période » ou en « Semaine réelle »",
+      body: (
+        <>
+          <p style={P}>
+            L'agenda de chaque service s'affiche de deux façons. En{" "}
+            <strong>« Modèle de période »</strong>, vous mettez en place les créneaux récurrents qui
+            se répètent chaque semaine de la période. En <strong>« Semaine réelle »</strong>, vous
+            travaillez sur des éléments datés : réservations, pointages et créneaux ponctuels.
+          </p>
+        </>
+      ),
+      image: <ViewModeShot />,
     },
     {
-      title: "Paramétrer et suivre 📊",
-      body: "L'onglet « Paramètres » de chaque service gère ses périodes, e-mails et options ; « Éditions » et « Statistiques » en donnent le suivi détaillé.",
+      title: "Créer les créneaux 🗓️",
+      body: (
+        <>
+          <p style={P}>
+            Depuis l'agenda d'un service, activez le <strong>« Mode création »</strong> <EditIcon />{" "}
+            :
+            <br />
+            Dessinez un créneau sur le planning, ajustez-le en glissant ses bords, ou supprimez-le
+            avec la croix. Vous{" "}
+            <strong>définissez ainsi l'offre réservable de chaque période</strong>.
+          </p>
+        </>
+      ),
+      image: <SlotCreateShot />,
+    },
+    {
+      title: "Réserver pour un utilisateur ✅",
+      body: (
+        <p style={{ margin: 0 }}>
+          Vous pouvez réserver à la place d'un usager : cliquez sur un{" "}
+          <strong>créneau libre</strong>, choisissez l'usager, ajustez le nombre de participants,
+          puis enregistrez la réservation.
+        </p>
+      ),
+      image: <ReservationCreateShot />,
+    },
+    {
+      title: "Valider les demandes ✅",
+      body: (
+        <>
+          <p style={P}>
+            En <strong>« Mode validation »</strong>, validez ou dévalidez les demandes des usagers.
+          </p>
+        </>
+      ),
+      image: <ValidationModeShot />,
+    },
+    {
+      title: "Renseigner les pointages 🖊️",
+      body: (
+        <>
+          <p style={P}>
+            En <strong>« Semaine réelle »</strong>, activez le <strong>« Mode pointage »</strong>{" "}
+            pour marquer la présence ou l'absence à chaque réservation, semaine après semaine.
+          </p>
+        </>
+      ),
+      image: <PointageModeShot />,
+    },
+    {
+      title: "Éditions 📋 et Statistiques 📈",
+      body: (
+        <>
+          <p style={P}>
+            Une fois vos réservations en place, deux onglets vous aident à les suivre et à les
+            exploiter.
+          </p>
+          <p style={{ margin: 0 }}>
+            <strong>« Éditions 📋 »</strong> imprime et exporte la liste des réservations, le
+            planning et les feuilles de pointage. <strong>« Statistiques 📈 »</strong> synthétise la
+            fréquentation de votre service, exportable en CSV.
+          </p>
+        </>
+      ),
     },
   ],
   // Administrateur : périmètre GLOBAL (en plus de la gestion des services).
@@ -337,7 +561,7 @@ export function OnboardingModal({
   };
 
   return (
-    <ModalOverlay onClose={finish} boxStyle={{ maxWidth: 440 }}>
+    <ModalOverlay onClose={finish} boxStyle={{ maxWidth: 580 }}>
       <div>
         <div className="modal-title" style={{ marginBottom: ".6rem" }}>
           {cur.title}
@@ -348,9 +572,29 @@ export function OnboardingModal({
             lineHeight: 1.6,
             color: "var(--text)",
             minHeight: 150,
+            display: "flex",
+            flexDirection: "column",
+            // Corps justifié (titres exclus : ils sont dans .modal-title). Les images sont
+            // dans des conteneurs flex centrés → non affectées par text-align.
+            textAlign: "justify",
           }}
         >
-          {cur.body}
+          <div>{cur.body}</div>
+          {cur.image && (
+            // Conteneur extensible : occupe tout l'espace restant sous le texte et centre
+            // l'image verticalement entre le texte (au-dessus) et l'élément suivant (dessous).
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 0,
+              }}
+            >
+              {cur.image}
+            </div>
+          )}
         </div>
 
         {/* Indicateur de progression */}

@@ -265,7 +265,7 @@ header {
   gap: 1.3rem;
 }
 .planning-option {
-  display: block;
+  display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.65rem;
@@ -2383,6 +2383,16 @@ textarea.theme-pending:focus::placeholder {
   flex-direction: column;
   gap: 2px;
   min-height: 0;
+  /* Conteneur des badges : width:100% pour remplir le créneau (sinon flex:0 0 auto le
+     rétracte au contenu ~127px), cappé à 196px et centré horizontalement dans le créneau
+     (.agenda-block, flex colonne) via margin auto. align-items:center centre le badge à
+     l'intérieur. La pile multi-résa (.planning-stack-wrap) garde son positionnement via
+     align-self:stretch. */
+  width: 100%;
+  max-width: 196px;
+  margin-left: auto;
+  margin-right: auto;
+  align-items: center;
 }
 /* Override : dans l'agenda, le badge .planning-name-tag (50px fixe sur le planning)
    doit s'adapter à l'espace dispo dans un bloc de hauteur variable. */
