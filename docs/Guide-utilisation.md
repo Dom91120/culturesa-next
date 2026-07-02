@@ -1,6 +1,8 @@
-<!-- SOURCE UNIQUE de la doc fonctionnelle. Après toute modification, régénérer la page
-     d'aide de l'app : `pnpm gen:docs` (→ public/aide/guide-utilisation.html).
-     Le livrable Word (docs/Guide-utilisateur-CultuResa.docx) est, lui, maintenu à la main. -->
+<!-- SOURCE UNIQUE de la doc fonctionnelle (texte + captures dans docs/img/).
+     Après toute modification : `pnpm gen:docs` régénère la page d'aide de l'app
+     (public/aide/guide-utilisation.html, captures incluses).
+     Pas de livrable Word : pour un document imprimable, ouvrir la page d'aide et
+     « Imprimer → Enregistrer en PDF » depuis le navigateur. -->
 
 # Guide d'utilisation — CultuRésa
 
@@ -44,6 +46,10 @@ Sur la page de connexion, saisissez votre adresse e-mail et votre mot de passe, 
 sur **« Connexion »**. Les liens **« Créer un compte »** et **« Mot de passe oublié ? »** sont
 accessibles depuis cet écran.
 
+![Page de connexion](img/01-page-connexion.png)
+
+*Figure 1 — Page de connexion*
+
 ### Créer un compte
 
 L'inscription se fait en renseignant votre identité (nom, prénom, e-mail, téléphone), puis en
@@ -53,6 +59,10 @@ chaque (champs marqués d'un astérisque). L'acceptation de la politique de conf
 et la recopie d'un code de sécurité sont également demandées.
 
 Un e-mail de vérification vous est ensuite envoyé pour **activer votre compte**.
+
+![Formulaire de création de compte](img/02-creation-compte.png)
+
+*Figure 2 — Formulaire de création de compte*
 
 ### Gérer son compte
 
@@ -65,6 +75,10 @@ de passe et demander la suppression de votre compte :
 - **Supprimer mon compte** — conformément au RGPD, vos données sont anonymisées de façon
   irréversible après un délai de grâce (e-mail de confirmation valable 24 h).
 
+![Écran « Mon compte »](img/03-mon-compte.png)
+
+*Figure 3 — Écran « Mon compte »*
+
 ---
 
 ## 2. Pour les usagers — réserver une activité
@@ -73,6 +87,10 @@ de passe et demander la suppression de votre compte :
 
 À la première connexion, une **fenêtre de bienvenue** présente l'essentiel pour démarrer. Vous
 pouvez la parcourir avec **« Suivant »** ou la fermer avec **« Passer »**.
+
+![Fenêtre de bienvenue (première connexion)](img/04-fenetre-bienvenue.png)
+
+*Figure 4 — Fenêtre de bienvenue (première connexion)*
 
 ### L'agenda de réservation
 
@@ -86,6 +104,10 @@ semaine type avec les créneaux disponibles.
   validation, validée) et, le cas échéant, « Clôturé ».
 - **Légende** — un rappel précise le nombre de séances réservables et les conditions du service
   (récurrent, semaines A/B, validation, thèmes, jauge, jours fériés, vacances scolaires).
+
+![Agenda de réservation côté usager](img/05-agenda-usager.png)
+
+*Figure 5 — Agenda de réservation côté usager*
 
 ### Réserver, modifier, annuler
 
@@ -139,11 +161,19 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
 L'agenda s'affiche en deux modes : **Modèle de période** (les créneaux récurrents, gabarit de la
 période) et **Semaine réelle** (les éléments datés : réservations, pointages, créneaux ponctuels).
 
+![Agenda d'administration d'un service](img/06-agenda-admin.png)
+
+*Figure 6 — Agenda d'administration d'un service*
+
 ### Éditions — listes et suivi
 
 L'onglet **Éditions** présente le tableau de **toutes les réservations** (période, date, créneau,
 demandeur, participant, thème, nombre d'enfants, statut, pointage). Il propose un **export CSV**,
 une vue **Planning** hebdomadaire et la saisie des **Pointages**.
+
+![Liste des réservations (Éditions) et export CSV](img/07-editions-liste.png)
+
+*Figure 7 — Liste des réservations (Éditions) et export CSV*
 
 ### Statistiques
 
@@ -153,12 +183,20 @@ réalisé, taux de présence et de réalisation) et des **graphiques** de répar
 mois, par structure, par niveau, taux de remplissage). Les données sont **filtrables et
 exportables en CSV**.
 
+![Statistiques d'un service](img/08-statistiques.png)
+
+*Figure 8 — Statistiques d'un service*
+
 ### Paramètres — Périodes et réservations
 
 Cet onglet regroupe les **périodes** (libellé, dates, couleur), les **jours d'ouverture**, les
 **plages horaires** matin / après-midi, ainsi que les **règles de réservation** : maximums par
 période et par an, délai de réservation, verrouillage de validation, validation automatique et
 notifications aux gestionnaires.
+
+![Paramètres : périodes et réservations](img/09-parametres-periodes.png)
+
+*Figure 9 — Paramètres : périodes et réservations*
 
 ### Paramètres — Configuration (accès et thèmes)
 
@@ -167,6 +205,10 @@ compte des accompagnants dans la jauge) et, **pour chaque demandeur**, le mode d
 autorisé (récurrent / ponctuel), la validation et les thèmes. Le mode des thèmes peut être
 **« libre »** (texte saisi par l'usager) ou **« liste »** (choix imposé).
 
+![Paramètres : configuration des accès par demandeur](img/10-parametres-configuration.png)
+
+*Figure 10 — Paramètres : configuration des accès par demandeur*
+
 ### Paramètres — Échanges (e-mails du service)
 
 Chaque service peut personnaliser le **contenu** de ses e-mails de réservation : réservation
@@ -174,6 +216,10 @@ confirmée, demande enregistrée, réservation annulée, réservation non valid�
 réservation. Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
 utilisé. Le **routage, le destinataire et l'activation de l'envoi** sont, eux, **globaux** (voir
 [Administration → Échanges](#échanges-e-mails-réglages-globaux)).
+
+![Paramètres : e-mails personnalisés par service](img/11-parametres-echanges.png)
+
+*Figure 11 — Paramètres : e-mails personnalisés par service*
 
 ### Paramètres — Changement d'exercice
 
@@ -200,11 +246,19 @@ La page **Configuration** regroupe les réglages de l'application (zone des vaca
 URL, intervalles de rafraîchissement automatique, mode debug) et l'accès aux **référentiels** :
 **Services**, **Demandeurs**, **Structures** et **Niveaux**.
 
+![Configuration générale et référentiels](img/12-configuration-referentiels.png)
+
+*Figure 12 — Configuration générale et référentiels*
+
 ### Utilisateurs
 
 La liste des utilisateurs permet de rechercher, filtrer et modifier les comptes : informations,
 **rôle** (utilisateur, gestionnaire, administrateur), structure / service rattaché, services
 gérés et statut RGPD.
+
+![Gestion des comptes utilisateurs](img/13-utilisateurs.png)
+
+*Figure 13 — Gestion des comptes utilisateurs*
 
 ### Échanges — e-mails (réglages globaux)
 
@@ -224,11 +278,19 @@ L'onglet **Messagerie** configure l'envoi des e-mails (paramètres SMTP), gère 
 système** (vérification de compte, réinitialisation de mot de passe, etc.) et permet de
 **relancer les envois en échec**.
 
+![Configuration de la messagerie](img/14-messagerie.png)
+
+*Figure 14 — Configuration de la messagerie*
+
 ### RGPD et conservation des données
 
 L'onglet **RGPD** permet de repérer les **comptes inactifs**, de déclencher un **avis de
 suppression** (délai de grâce de 30 jours), d'**anonymiser** des comptes et de consulter le
 **journal d'audit** (historique immuable des actions liées aux données personnelles).
+
+![RGPD : conservation des données et journal d'audit](img/15-rgpd.png)
+
+*Figure 15 — RGPD : conservation des données et journal d'audit*
 
 ---
 

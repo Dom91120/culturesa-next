@@ -38,6 +38,18 @@
   th { background: var(--surface2); }
   ul, ol { padding-left: 1.4rem; }
   li { margin: .25rem 0; }
+  /* Captures d'écran : cadrées, bordure douce, légende (l'italique qui suit) centrée. */
+  img { display: block; max-width: 100%; height: auto; margin: 1rem auto .3rem; border: 1px solid var(--border); border-radius: 8px; }
+  img + em { display: block; text-align: center; font-size: .82rem; color: var(--muted); margin-bottom: 1.4rem; }
+  /* Impression / export PDF (option « Imprimer → Enregistrer en PDF » du navigateur). */
+  @media print {
+    :root { --bg: #fff; --fg: #000; --muted: #444; --border: #bbb; --surface2: #f2f2f2; }
+    main { max-width: none; padding: 0; }
+    h2 { break-after: avoid; }
+    h3 { break-after: avoid; }
+    img, table, blockquote { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
 </style>
 </head>
 <body>
@@ -89,6 +101,8 @@ première connexion, adaptée au rôle. On peut la revoir à tout moment via le 
 <p>Sur la page de connexion, saisissez votre adresse e-mail et votre mot de passe, puis cliquez
 sur <strong>« Connexion »</strong>. Les liens <strong>« Créer un compte »</strong> et <strong>« Mot de passe oublié ? »</strong> sont
 accessibles depuis cet écran.</p>
+<p><img src="img/01-page-connexion.png" alt="Page de connexion"></p>
+<p><em>Figure 1 — Page de connexion</em></p>
 <h3 id="créer-un-compte">Créer un compte</h3>
 <p>L&#39;inscription se fait en renseignant votre identité (nom, prénom, e-mail, téléphone), puis en
 choisissant votre <strong>catégorie</strong> (le demandeur : établissement ou organisme), votre <strong>structure</strong>
@@ -96,6 +110,8 @@ et votre <strong>niveau</strong>. Le nombre d&#39;enfants et d&#39;accompagnants
 chaque (champs marqués d&#39;un astérisque). L&#39;acceptation de la politique de confidentialité (RGPD)
 et la recopie d&#39;un code de sécurité sont également demandées.</p>
 <p>Un e-mail de vérification vous est ensuite envoyé pour <strong>activer votre compte</strong>.</p>
+<p><img src="img/02-creation-compte.png" alt="Formulaire de création de compte"></p>
+<p><em>Figure 2 — Formulaire de création de compte</em></p>
 <h3 id="gérer-son-compte">Gérer son compte</h3>
 <p>Depuis <strong>« Mon compte »</strong>, vous pouvez modifier vos informations personnelles, changer votre mot
 de passe et demander la suppression de votre compte :</p>
@@ -106,11 +122,15 @@ minuscule, chiffre, caractère spécial).</li>
 <li><strong>Supprimer mon compte</strong> — conformément au RGPD, vos données sont anonymisées de façon
 irréversible après un délai de grâce (e-mail de confirmation valable 24 h).</li>
 </ul>
+<p><img src="img/03-mon-compte.png" alt="Écran « Mon compte »"></p>
+<p><em>Figure 3 — Écran « Mon compte »</em></p>
 <hr>
 <h2 id="2-pour-les-usagers-réserver-une-activité">2. Pour les usagers — réserver une activité</h2>
 <h3 id="première-connexion">Première connexion</h3>
 <p>À la première connexion, une <strong>fenêtre de bienvenue</strong> présente l&#39;essentiel pour démarrer. Vous
 pouvez la parcourir avec <strong>« Suivant »</strong> ou la fermer avec <strong>« Passer »</strong>.</p>
+<p><img src="img/04-fenetre-bienvenue.png" alt="Fenêtre de bienvenue (première connexion)"></p>
+<p><em>Figure 4 — Fenêtre de bienvenue (première connexion)</em></p>
 <h3 id="l39agenda-de-réservation">L&#39;agenda de réservation</h3>
 <p>Sélectionnez un service dans le <strong>menu de gauche</strong> pour ouvrir son agenda. La vue présente une
 semaine type avec les créneaux disponibles.</p>
@@ -123,6 +143,8 @@ validation, validée) et, le cas échéant, « Clôturé ».</li>
 <li><strong>Légende</strong> — un rappel précise le nombre de séances réservables et les conditions du service
 (récurrent, semaines A/B, validation, thèmes, jauge, jours fériés, vacances scolaires).</li>
 </ul>
+<p><img src="img/05-agenda-usager.png" alt="Agenda de réservation côté usager"></p>
+<p><em>Figure 5 — Agenda de réservation côté usager</em></p>
 <h3 id="réserver-modifier-annuler">Réserver, modifier, annuler</h3>
 <ol>
 <li>Cliquez sur un <strong>créneau disponible</strong> dans l&#39;agenda.</li>
@@ -167,32 +189,44 @@ autre créneau pour le déplacer.</p>
 </blockquote>
 <p>L&#39;agenda s&#39;affiche en deux modes : <strong>Modèle de période</strong> (les créneaux récurrents, gabarit de la
 période) et <strong>Semaine réelle</strong> (les éléments datés : réservations, pointages, créneaux ponctuels).</p>
+<p><img src="img/06-agenda-admin.png" alt="Agenda d&#39;administration d&#39;un service"></p>
+<p><em>Figure 6 — Agenda d&#39;administration d&#39;un service</em></p>
 <h3 id="éditions-listes-et-suivi">Éditions — listes et suivi</h3>
 <p>L&#39;onglet <strong>Éditions</strong> présente le tableau de <strong>toutes les réservations</strong> (période, date, créneau,
 demandeur, participant, thème, nombre d&#39;enfants, statut, pointage). Il propose un <strong>export CSV</strong>,
 une vue <strong>Planning</strong> hebdomadaire et la saisie des <strong>Pointages</strong>.</p>
+<p><img src="img/07-editions-liste.png" alt="Liste des réservations (Éditions) et export CSV"></p>
+<p><em>Figure 7 — Liste des réservations (Éditions) et export CSV</em></p>
 <h3 id="statistiques">Statistiques</h3>
 <p>Le tableau de bord du service présente des <strong>compteurs</strong> (réservations, usagers distincts, en
 attente, enfants, accompagnants), le <strong>suivi de présence</strong> sur les séances passées (prévu /
 réalisé, taux de présence et de réalisation) et des <strong>graphiques</strong> de répartition (par jour, par
 mois, par structure, par niveau, taux de remplissage). Les données sont <strong>filtrables et
 exportables en CSV</strong>.</p>
+<p><img src="img/08-statistiques.png" alt="Statistiques d&#39;un service"></p>
+<p><em>Figure 8 — Statistiques d&#39;un service</em></p>
 <h3 id="paramètres-périodes-et-réservations">Paramètres — Périodes et réservations</h3>
 <p>Cet onglet regroupe les <strong>périodes</strong> (libellé, dates, couleur), les <strong>jours d&#39;ouverture</strong>, les
 <strong>plages horaires</strong> matin / après-midi, ainsi que les <strong>règles de réservation</strong> : maximums par
 période et par an, délai de réservation, verrouillage de validation, validation automatique et
 notifications aux gestionnaires.</p>
+<p><img src="img/09-parametres-periodes.png" alt="Paramètres : périodes et réservations"></p>
+<p><em>Figure 9 — Paramètres : périodes et réservations</em></p>
 <h3 id="paramètres-configuration-accès-et-thèmes">Paramètres — Configuration (accès et thèmes)</h3>
 <p>La configuration définit les <strong>paramètres globaux</strong> du service (alternance Semaine A/B, prise en
 compte des accompagnants dans la jauge) et, <strong>pour chaque demandeur</strong>, le mode de réservation
 autorisé (récurrent / ponctuel), la validation et les thèmes. Le mode des thèmes peut être
 <strong>« libre »</strong> (texte saisi par l&#39;usager) ou <strong>« liste »</strong> (choix imposé).</p>
+<p><img src="img/10-parametres-configuration.png" alt="Paramètres : configuration des accès par demandeur"></p>
+<p><em>Figure 10 — Paramètres : configuration des accès par demandeur</em></p>
 <h3 id="paramètres-échanges-e-mails-du-service">Paramètres — Échanges (e-mails du service)</h3>
 <p>Chaque service peut personnaliser le <strong>contenu</strong> de ses e-mails de réservation : réservation
 confirmée, demande enregistrée, réservation annulée, réservation non validée (refus) et rappel de
 réservation. Le bouton <strong>« Modifier »</strong> personnalise le contenu ; à défaut, le gabarit global est
 utilisé. Le <strong>routage, le destinataire et l&#39;activation de l&#39;envoi</strong> sont, eux, <strong>globaux</strong> (voir
 <a href="#échanges-e-mails-réglages-globaux">Administration → Échanges</a>).</p>
+<p><img src="img/11-parametres-echanges.png" alt="Paramètres : e-mails personnalisés par service"></p>
+<p><em>Figure 11 — Paramètres : e-mails personnalisés par service</em></p>
 <h3 id="paramètres-changement-d39exercice">Paramètres — Changement d&#39;exercice</h3>
 <p>Bascule le service vers un <strong>nouvel exercice</strong> (nouvelle saison / année scolaire) : les périodes
 du nouvel exercice sont créées avec des <strong>dates décalées</strong> à partir de l&#39;exercice précédent ; les
@@ -209,10 +243,14 @@ services, ainsi que de la <strong>gestion globale</strong> de l&#39;application 
 <p>La page <strong>Configuration</strong> regroupe les réglages de l&#39;application (zone des vacances scolaires,
 URL, intervalles de rafraîchissement automatique, mode debug) et l&#39;accès aux <strong>référentiels</strong> :
 <strong>Services</strong>, <strong>Demandeurs</strong>, <strong>Structures</strong> et <strong>Niveaux</strong>.</p>
+<p><img src="img/12-configuration-referentiels.png" alt="Configuration générale et référentiels"></p>
+<p><em>Figure 12 — Configuration générale et référentiels</em></p>
 <h3 id="utilisateurs">Utilisateurs</h3>
 <p>La liste des utilisateurs permet de rechercher, filtrer et modifier les comptes : informations,
 <strong>rôle</strong> (utilisateur, gestionnaire, administrateur), structure / service rattaché, services
 gérés et statut RGPD.</p>
+<p><img src="img/13-utilisateurs.png" alt="Gestion des comptes utilisateurs"></p>
+<p><em>Figure 13 — Gestion des comptes utilisateurs</em></p>
 <h3 id="échanges-e-mails-réglages-globaux">Échanges — e-mails (réglages globaux)</h3>
 <p>L&#39;onglet <strong>Échanges</strong> règle les e-mails <strong>au niveau global</strong> (communs à tous les services), en
 deux volets :</p>
@@ -228,10 +266,14 @@ personnalisés globaux</strong>.</li>
 <p>L&#39;onglet <strong>Messagerie</strong> configure l&#39;envoi des e-mails (paramètres SMTP), gère les <strong>e-mails
 système</strong> (vérification de compte, réinitialisation de mot de passe, etc.) et permet de
 <strong>relancer les envois en échec</strong>.</p>
+<p><img src="img/14-messagerie.png" alt="Configuration de la messagerie"></p>
+<p><em>Figure 14 — Configuration de la messagerie</em></p>
 <h3 id="rgpd-et-conservation-des-données">RGPD et conservation des données</h3>
 <p>L&#39;onglet <strong>RGPD</strong> permet de repérer les <strong>comptes inactifs</strong>, de déclencher un <strong>avis de
 suppression</strong> (délai de grâce de 30 jours), d&#39;<strong>anonymiser</strong> des comptes et de consulter le
 <strong>journal d&#39;audit</strong> (historique immuable des actions liées aux données personnelles).</p>
+<p><img src="img/15-rgpd.png" alt="RGPD : conservation des données et journal d&#39;audit"></p>
+<p><em>Figure 15 — RGPD : conservation des données et journal d&#39;audit</em></p>
 <hr>
 <h2 id="5-notions-clés">5. Notions clés</h2>
 <ul>

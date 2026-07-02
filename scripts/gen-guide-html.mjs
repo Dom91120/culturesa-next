@@ -1,16 +1,18 @@
 // Génère la page d'aide servie dans l'app à partir de la source markdown UNIQUE.
-//   docs/Guide-utilisation.md  →  public/aide/guide-utilisation.html
+//   docs/Guide-utilisation.md (+ docs/img/*)  →  public/aide/guide-utilisation.html (+ public/aide/img/*)
 // Relancer après toute modif du guide :  pnpm gen:docs
-// NB : le livrable Word (docs/Guide-utilisateur-CultuResa.docx) est maintenu à la MAIN
-// (mieux mis en page qu'une conversion automatique) ; il n'est pas généré ici.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// Pas de livrable Word : pour un document imprimable, ouvrir la page d'aide et
+// « Imprimer → Enregistrer en PDF » (une feuille de style print dédiée est incluse).
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marked } from "marked";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcMd = join(root, "docs", "Guide-utilisation.md");
+const srcImg = join(root, "docs", "img");
 const outHtml = join(root, "public", "aide", "guide-utilisation.html");
+const outImg = join(root, "public", "aide", "img");
 
 // Slug façon GitHub : minuscules, on retire emojis/ponctuation, espaces → tirets.
 // (marked v18 ne génère plus les id d'en-têtes ; on les réinjecte pour que les
@@ -80,6 +82,18 @@ const html = `<!doctype html>
   th { background: var(--surface2); }
   ul, ol { padding-left: 1.4rem; }
   li { margin: .25rem 0; }
+  /* Captures d'écran : cadrées, bordure douce, légende (l'italique qui suit) centrée. */
+  img { display: block; max-width: 100%; height: auto; margin: 1rem auto .3rem; border: 1px solid var(--border); border-radius: 8px; }
+  img + em { display: block; text-align: center; font-size: .82rem; color: var(--muted); margin-bottom: 1.4rem; }
+  /* Impression / export PDF (option « Imprimer → Enregistrer en PDF » du navigateur). */
+  @media print {
+    :root { --bg: #fff; --fg: #000; --muted: #444; --border: #bbb; --surface2: #f2f2f2; }
+    main { max-width: none; padding: 0; }
+    h2 { break-after: avoid; }
+    h3 { break-after: avoid; }
+    img, table, blockquote { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
 </style>
 </head>
 <body>
@@ -93,4 +107,10 @@ ${body}
 mkdirSync(dirname(outHtml), { recursive: true });
 writeFileSync(outHtml, html, "utf8");
 console.log(`✓ ${outHtml}`);
+
+// Copie les captures d'écran référencées par le guide (chemins relatifs `img/…`).
+if (existsSync(srcImg)) {
+  cpSync(srcImg, outImg, { recursive: true });
+  console.log(`✓ ${outImg} (captures copiées depuis docs/img)`);
+}
 console.log(`  (source : ${srcMd})`);

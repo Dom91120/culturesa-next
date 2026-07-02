@@ -30,3 +30,6 @@ backups/
 
 # config locale Claude Code
 .claude/settings.local.json
+
+# Fichiers temporaires Office (verrous ~$… créés quand un .docx est ouvert)
+~$*
