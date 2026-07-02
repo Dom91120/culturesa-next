@@ -78,7 +78,7 @@ Une **présentation interactive** (modale d'accueil) reprend ce guide à la prem
 adaptée au rôle ; on peut la revoir via le menu utilisateur → **💡 Revoir la présentation**.
 
 ## État d'avancement
-Voir [PLAN.md](./PLAN.md) — la **fondation** est en place (config, schéma de
-données complet, auth, shell d'app, cron, Docker). Reste à implémenter les
-modules métier (référentiels, services/périodes/créneaux, tunnel de réservation,
-back-office, stats, exports, RGPD) selon l'ordre de la section 6 du plan.
+Application **fonctionnelle** : référentiels, services / périodes / créneaux, tunnel de
+réservation, back-office (agenda, validation, pointages), statistiques, exports CSV, e-mails
+transactionnels et RGPD sont en place. Déploiement Docker : voir [DEPLOY.md](./DEPLOY.md) et
+[docs/EXPLOITATION.md](docs/EXPLOITATION.md).
