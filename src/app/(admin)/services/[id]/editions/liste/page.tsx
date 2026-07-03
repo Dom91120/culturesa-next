@@ -268,16 +268,17 @@ export default async function EditionsListePage({
   // (sinon chaque tableau se dimensionne sur son propre contenu). Identité = Thème.
   const renderOccRows = (rows: OccRow[]) => (
     <div className="admin-table-wrap">
-      <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 920 }}>
+      <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1040 }}>
         <thead>
           <tr>
-            <th style={{ ...thNoWrap, width: "14%" }}>Date</th>
-            <th style={{ ...thNoWrap, width: "11%" }}>Créneau</th>
-            <th style={{ ...thC, width: "15%" }}>Demandeur</th>
-            <th style={{ ...thC, width: "20%" }}>Identité</th>
-            <th style={{ ...thC, width: "20%" }}>Thème</th>
-            <th style={{ ...thC, width: "11%" }}>Participants</th>
-            <th style={{ ...thC, width: "9%" }}>Pointage</th>
+            <th style={{ ...thNoWrap, width: "13%" }}>Date</th>
+            <th style={{ ...thNoWrap, width: "10%" }}>Créneau</th>
+            <th style={{ ...thC, width: "13%" }}>Demandeur</th>
+            <th style={{ ...thC, width: "18%" }}>Identité</th>
+            <th style={{ ...thC, width: "18%" }}>Thème</th>
+            <th style={{ ...thC, width: "10%" }}>Participants</th>
+            <th style={{ ...thC, width: "10%" }}>Statut</th>
+            <th style={{ ...thC, width: "8%" }}>Pointage</th>
           </tr>
         </thead>
         <tbody>
@@ -296,6 +297,13 @@ export default async function EditionsListePage({
               <td>{a.theme || "—"}</td>
               <td style={tdCenter}>
                 {a.enfants} + {a.accompagnants}
+              </td>
+              <td style={tdCenter}>
+                <span
+                  className={`role-pill ${a.statut === "Réservation validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                >
+                  {a.statut}
+                </span>
               </td>
               <td style={tdCenter}>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
             </tr>

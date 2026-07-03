@@ -45,6 +45,7 @@ export type SessionAttendee = {
   accompagnants: number;
   theme: string;
   pointage: "present" | "absent" | null;
+  statut: string;
 };
 
 export type DatedSession = {
@@ -85,6 +86,7 @@ export async function listDatedSessions(
       accompagnants: true,
       themeLabel: true,
       pointage: true,
+      validated: true,
       slot: { select: { startTime: true, endTime: true, slotDate: true } },
       user: {
         select: {
@@ -125,6 +127,7 @@ export async function listDatedSessions(
       accompagnants: b.accompagnants,
       theme: b.themeLabel,
       pointage: b.pointage,
+      statut: b.validated ? "Réservation validée" : "Demande en attente de validation",
     });
   }
 
