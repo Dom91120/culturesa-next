@@ -8,9 +8,9 @@ import {
   POINTAGE_LABEL,
   type SessionAttendee,
 } from "@/server/services/editions";
-import { computeTotals, resolveEditionExercice, resolveRange } from "../range";
+import { bucketSessions, computeTotals, resolveEditionExercice, resolveRange } from "../range";
 import { RangeBar } from "../range-bar";
-import { TotalsLine } from "../totals";
+import { RuptureHeading, TotalsLine } from "../totals";
 
 const PER_PAGE = 20;
 
@@ -61,7 +61,9 @@ function sortValue({ s, a }: OccRow, key: SortKey): string | number {
 }
 
 // Édition « Liste des réservations » : occurrences datées de la plage choisie
-// (Hebdomadaire / Mensuel / Trimestriel / Annuel), TRIABLES par colonne, paginées + total.
+// (Hebdomadaire / Mensuel / Trimestriel / Annuel), TRIABLES par colonne. Case « avec
+// ruptures » → regroupement (semaine/mois) + sous-totaux ; le tri s'applique dans chaque
+// groupe. Paginée (20/page) + total général.
 export default async function EditionsListePage({
   params,
   searchParams,
@@ -73,6 +75,7 @@ export default async function EditionsListePage({
     week?: string;
     trim?: string;
     page?: string;
+    ruptures?: string;
     exercice?: string;
     sort?: string;
     dir?: string;
@@ -94,9 +97,7 @@ export default async function EditionsListePage({
 
   const sortKey: SortKey = SORT_KEYS.has(sp.sort ?? "") ? (sp.sort as SortKey) : "date";
   const dir = sp.dir === "desc" ? "desc" : "asc";
-
-  const flat: OccRow[] = sessions.flatMap((s) => s.attendees.map((a) => ({ s, a })));
-  flat.sort((x, y) => {
+  const cmp = (x: OccRow, y: OccRow) => {
     const vx = sortValue(x, sortKey);
     const vy = sortValue(y, sortKey);
     let c =
@@ -105,13 +106,49 @@ export default async function EditionsListePage({
         : String(vx).localeCompare(String(vy));
     if (c === 0) c = `${x.a.nom} ${x.a.prenom}`.localeCompare(`${y.a.nom} ${y.a.prenom}`);
     return dir === "desc" ? -c : c;
-  });
+  };
+
+  // Ruptures OFF → un seul groupe ; ON → semaine/mois (via bucketSessions). Le tri par
+  // colonne s'applique À L'INTÉRIEUR de chaque groupe.
+  const withRuptures = sp.ruptures === "1";
+  const buckets = withRuptures
+    ? bucketSessions(range.mode, sessions, range.trimestres)
+    : sessions.length > 0
+      ? [{ key: "all", label: "", sessions }]
+      : [];
+  const withSubtotals = withRuptures && buckets.length > 1;
+
+  // Lignes plates (1 par participant d'occurrence), triées dans chaque groupe, + index global.
+  type FlatRow = { gi: number; bucketKey: string; s: DatedSession; a: SessionAttendee };
+  const flat: FlatRow[] = [];
+  const bucketInfo = new Map<
+    string,
+    { label: string; first: number; last: number; sessions: DatedSession[] }
+  >();
+  for (const b of buckets) {
+    const rows = b.sessions.flatMap((s) => s.attendees.map((a) => ({ s, a }))).sort(cmp);
+    for (const r of rows) {
+      const gi = flat.length;
+      flat.push({ gi, bucketKey: b.key, s: r.s, a: r.a });
+      const info = bucketInfo.get(b.key);
+      if (info) info.last = gi;
+      else bucketInfo.set(b.key, { label: b.label, first: gi, last: gi, sessions: b.sessions });
+    }
+  }
 
   const pages = Math.max(1, Math.ceil(flat.length / PER_PAGE));
   const page = Math.min(Math.max(1, Number(sp.page) || 1), pages);
   const pageRows = flat.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // Base d'URL : conserve exercice + plage courante (mode/date/trim).
+  // Groupes consécutifs (même rupture) dans la page courante.
+  const groups: { key: string; rows: FlatRow[] }[] = [];
+  for (const f of pageRows) {
+    const last = groups[groups.length - 1];
+    if (last && last.key === f.bucketKey) last.rows.push(f);
+    else groups.push({ key: f.bucketKey, rows: [f] });
+  }
+
+  // Base d'URL : conserve exercice + plage (mode/date/trim) + ruptures + tri.
   const baseParams = () => {
     const p = new URLSearchParams();
     if (selected) p.set("exercice", String(selected.id));
@@ -119,6 +156,7 @@ export default async function EditionsListePage({
     if (range.mode === "week" || range.mode === "month") p.set("date", range.dateParam);
     if (range.mode === "trimester" && range.trimIndex != null)
       p.set("trim", String(range.trimIndex));
+    if (withRuptures) p.set("ruptures", "1");
     return p;
   };
   const sortHref = (key: SortKey) => {
@@ -152,16 +190,74 @@ export default async function EditionsListePage({
   };
   const tdCenter: React.CSSProperties = { textAlign: "center", whiteSpace: "nowrap" };
 
+  const renderRows = (rows: FlatRow[]) => (
+    <div className="admin-table-wrap">
+      <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1080 }}>
+        <thead>
+          <tr>
+            {COLS.map((col) => (
+              <th
+                key={col.key}
+                style={{ ...thBase, width: col.width, textAlign: col.center ? "center" : "left" }}
+              >
+                <a
+                  href={sortHref(col.key)}
+                  className="no-print"
+                  style={{ color: "inherit", textDecoration: "none", cursor: "pointer" }}
+                  title="Trier par cette colonne"
+                >
+                  {col.label}
+                  {sortKey === col.key ? (dir === "asc" ? " ▲" : " ▼") : ""}
+                </a>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ gi, s, a }) => (
+            <tr key={gi}>
+              <td style={tdNoWrap}>
+                {s.dayLabel} {s.dateLabel}
+              </td>
+              <td style={tdNoWrap}>
+                {s.startTime && s.endTime
+                  ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
+                  : "Journée entière"}
+              </td>
+              <td style={tdNoWrap}>{a.demandeur || "—"}</td>
+              <td style={{ ...tdNoWrap, fontWeight: 600 }}>
+                {`${a.nom} ${a.prenom}`.trim() || "—"}
+              </td>
+              <td style={tdNoWrap}>{a.theme || "—"}</td>
+              <td style={tdCenter}>
+                {a.enfants} + {a.accompagnants}
+              </td>
+              <td style={tdNoWrap}>
+                <span
+                  className={`role-pill ${a.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {a.statut}
+                </span>
+              </td>
+              <td style={tdCenter}>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div>
       <RangeBar
         serviceId={id}
         screen="liste"
         range={range}
+        ruptures={withRuptures}
         exportHref={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
         exercices={exercices}
         selectedExerciceId={selected?.id ?? null}
-        showRuptures={false}
       />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
@@ -174,65 +270,30 @@ export default async function EditionsListePage({
         </p>
       ) : (
         <>
-          <div className="admin-table-wrap">
-            <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1080 }}>
-              <thead>
-                <tr>
-                  {COLS.map((col) => (
-                    <th
-                      key={col.key}
-                      style={{
-                        ...thBase,
-                        width: col.width,
-                        textAlign: col.center ? "center" : "left",
-                      }}
-                    >
-                      <a
-                        href={sortHref(col.key)}
-                        className="no-print"
-                        style={{ color: "inherit", textDecoration: "none", cursor: "pointer" }}
-                        title="Trier par cette colonne"
-                      >
-                        {col.label}
-                        {sortKey === col.key ? (dir === "asc" ? " ▲" : " ▼") : ""}
-                      </a>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pageRows.map(({ s, a }, i) => (
-                  <tr key={`${s.date}-${s.startTime}-${a.nom}-${a.prenom}-${i}`}>
-                    <td style={tdNoWrap}>
-                      {s.dayLabel} {s.dateLabel}
-                    </td>
-                    <td style={tdNoWrap}>
-                      {s.startTime && s.endTime
-                        ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
-                        : "Journée entière"}
-                    </td>
-                    <td style={tdNoWrap}>{a.demandeur || "—"}</td>
-                    <td style={{ ...tdNoWrap, fontWeight: 600 }}>
-                      {`${a.nom} ${a.prenom}`.trim() || "—"}
-                    </td>
-                    <td style={tdNoWrap}>{a.theme || "—"}</td>
-                    <td style={tdCenter}>
-                      {a.enfants} + {a.accompagnants}
-                    </td>
-                    <td style={tdNoWrap}>
-                      <span
-                        className={`role-pill ${a.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
-                        style={{ whiteSpace: "nowrap" }}
-                      >
-                        {a.statut}
-                      </span>
-                    </td>
-                    <td style={tdCenter}>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {groups.map((g) => {
+            const info = bucketInfo.get(g.key);
+            const label = info?.label ?? "";
+            const isContinuation = !!info && g.rows[0].gi > info.first;
+            const endsHere = !!info && g.rows[g.rows.length - 1].gi === info.last;
+            return (
+              <div key={`${g.key}-${g.rows[0].gi}`}>
+                {label && (
+                  <RuptureHeading>
+                    {label}
+                    {isContinuation ? " (suite)" : ""}
+                  </RuptureHeading>
+                )}
+                {renderRows(g.rows)}
+                {withSubtotals && endsHere && info && (
+                  <TotalsLine
+                    label={`Sous-total — ${label}`}
+                    totals={computeTotals(info.sessions)}
+                    variant="planning"
+                  />
+                )}
+              </div>
+            );
+          })}
 
           {pages > 1 && (
             <div
