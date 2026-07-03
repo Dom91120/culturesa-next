@@ -362,8 +362,3 @@ export function computeRowTotals(rows: EditionRow[]): RowTotals {
   }
   return t;
 }
-
-/** Réservations triées alphabétiquement (Nom, Prénom). Ne mute pas l'entrée. */
-export function sortRowsAlpha(rows: EditionRow[]): EditionRow[] {
-  return [...rows].sort((a, z) => a.nom.localeCompare(z.nom) || a.prenom.localeCompare(z.prenom));
-}
