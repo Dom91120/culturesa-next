@@ -46,6 +46,7 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
         serviceId={id}
         initialPeriods={initialPeriods}
         exercices={uiExercices}
+        showPreviousExercices={service.showPreviousExercices}
         opening={
           opening ?? {
             activeDays: [],

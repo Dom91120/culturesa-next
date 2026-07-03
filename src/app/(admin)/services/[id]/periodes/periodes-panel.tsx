@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { TimeStepper } from "@/components/time-stepper";
+import { setShowPreviousExercicesAction } from "../exercice/actions";
 import {
   createExerciceAction,
   createPeriodAction,
@@ -52,6 +53,7 @@ type Props = {
   initialPeriods: UiPeriod[];
   exercices: Exercice[];
   opening: Opening;
+  showPreviousExercices: boolean;
 };
 
 // Ordre + libellés des jours (legacy : ALL_DKEYS / ALL_DAYS).
@@ -145,9 +147,17 @@ function emptyExerciceForm(): ExerciceForm {
   return { id: null, ...exerciceDefaults("scolaire"), type: "scolaire" };
 }
 
-export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }: Props) {
+export function PeriodesPanel({
+  serviceId,
+  initialPeriods,
+  exercices,
+  opening,
+  showPreviousExercices,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Réglage service « Afficher les exercices précédents » (optimiste, autosave).
+  const [showPrevious, setShowPrevious] = useState(showPreviousExercices);
 
   // ── Navigation entre exercices (par défaut : le plus récent). ───────────────
   const sortedExercices = useMemo(
@@ -270,6 +280,11 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   // ── Modale exercice (création / édition). ───────────────────────────────────
   const hasExercices = sortedExercices.length > 0;
   const currentExercice = exerciceIndex >= 0 ? sortedExercices[exerciceIndex] : null;
+  // Un exercice qui a déjà des périodes est « verrouillé » : suppression interdite (pas de
+  // corbeille) et, en édition, seul son libellé reste modifiable — le type et les dates
+  // structurent les périodes existantes.
+  const currentExerciceHasPeriods =
+    currentExercice != null && initialPeriods.some((p) => p.exerciceId === currentExercice.id);
   const [exoModalOpen, setExoModalOpen] = useState(false);
   // Confirmation de suppression d'exercice via une modale --danger (cf. plus bas).
   const [confirmDeleteExo, setConfirmDeleteExo] = useState(false);
@@ -277,6 +292,9 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
   const [confirmDeletePeriods, setConfirmDeletePeriods] = useState(false);
   const [exoForm, setExoForm] = useState<ExerciceForm>(emptyExerciceForm);
   const [exoError, setExoError] = useState<string | null>(null);
+  // Édition d'un exercice déjà pourvu de périodes : type et dates figés (seul le libellé
+  // reste modifiable). Ne s'applique jamais en création (exoForm.id null).
+  const exoFieldsLocked = exoForm.id !== null && currentExerciceHasPeriods;
   // Après création d'un exercice : sélectionner le plus récent une fois la liste rafraîchie.
   const [pendingSelectNewest, setPendingSelectNewest] = useState(false);
 
@@ -497,16 +515,16 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
 
   return (
     <div className="panel">
-      {/* Bandeau « Exercice ◀ … ▶ » : EXTRAIT du multi-colonnage, pleine largeur au-dessus. */}
-      <div className="pr-head">
-        <div className="panel-title pr-title" style={{ fontWeight: 500 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            <span className="dot" style={{ background: "var(--warn)" }} />
-            Exercice
-          </span>
-        </div>
+      {/* Bandeau « Exercice ◀ … ▶ » + réglage « exercices précédents », regroupés. */}
+      <div className="pr-head-wrap">
+        <div className="pr-head">
+          <div className="panel-title pr-title" style={{ fontWeight: 500 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+              <span className="dot" style={{ background: "var(--warn)" }} />
+              Exercice
+            </span>
+          </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
           {hasExercices ? (
             <div className="periode-nav">
               <button
@@ -533,46 +551,57 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucun exercice</span>
           )}
 
-          {currentExercice && (currentExercice.dateStart || currentExercice.dateEnd) && (
-            <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-              {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
-              {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
+          {/* Dates de l'exercice + bouton d'édition regroupés (une seule unité). */}
+          {currentExercice && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: ".5rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {(currentExercice.dateStart || currentExercice.dateEnd) && (
+                <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+                  {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
+                  {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
+                </span>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={openEditExercice}
+                title="Modifier l'exercice"
+                style={{
+                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                  color: "var(--accent)",
+                  padding: ".1rem .3rem",
+                  fontSize: ".62rem",
+                }}
+              >
+                ✏️
+              </button>
             </span>
           )}
 
           <div style={{ display: "flex", gap: ".4rem", alignItems: "center" }}>
-            {currentExercice && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={openEditExercice}
-                  title="Modifier l'exercice"
-                  style={{
-                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                    color: "var(--accent)",
-                    padding: ".18rem .5rem",
-                    fontSize: ".62rem",
-                  }}
-                >
-                  ✏️
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={deleteExercice}
-                  disabled={pending}
-                  title="Supprimer l'exercice"
-                  style={{
-                    borderColor: "rgba(220,80,80,.4)",
-                    color: "#e05555",
-                    padding: ".18rem .5rem",
-                    fontSize: ".62rem",
-                  }}
-                >
-                  🗑️
-                </button>
-              </>
+            {/* Corbeille masquée si l'exercice a des périodes : suppression interdite. */}
+            {currentExercice && !currentExerciceHasPeriods && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={deleteExercice}
+                disabled={pending}
+                title="Supprimer l'exercice"
+                style={{
+                  borderColor: "rgba(220,80,80,.4)",
+                  color: "#e05555",
+                  padding: ".18rem .5rem",
+                  fontSize: ".62rem",
+                }}
+              >
+                🗑️
+              </button>
             )}
             {/* « Nouvel exercice » : visible uniquement quand le service n'a AUCUN exercice
                 (sinon on crée les exercices suivants via la bascule). */}
@@ -594,6 +623,36 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             )}
           </div>
         </div>
+
+        {/* Réglage service : afficher aussi les exercices passés dans la nav ◀ ▶.
+            Sibling de .pr-head dans le wrapper .pr-head-wrap ; autosave optimiste. */}
+        {hasExercices && (
+          <label
+            className="check"
+            style={{ fontSize: ".62rem", whiteSpace: "nowrap", color: "var(--muted)" }}
+          >
+            <input
+              type="checkbox"
+              checked={showPrevious}
+              disabled={pending}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setShowPrevious(next); // optimiste
+                setListError(null);
+                startTransition(async () => {
+                  const res = await setShowPreviousExercicesAction(serviceId, next);
+                  if (res && !res.ok) {
+                    setShowPrevious(!next); // rollback
+                    setListError(res.error ?? "Échec de l'enregistrement.");
+                    return;
+                  }
+                  router.refresh();
+                });
+              }}
+            />{" "}
+            Afficher les exercices précédents
+          </label>
+        )}
       </div>
 
       {/* ── Multi-colonnage : tableau des périodes · actions · plages horaires ── */}
@@ -803,7 +862,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
             </div>
             {/* Auto-save : statut, sur sa propre ligne sous les plages. */}
             <div
-              style={{ display: "flex", alignItems: "center", gap: ".5rem", minHeight: ".9rem" }}
+              style={{ display: "flex", alignItems: "center", gap: ".5rem", minHeight: ".75rem" }}
             >
               {openingError && (
                 <span className="field-error" style={{ display: "inline" }}>
@@ -927,7 +986,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
 
             <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: ".3rem" }}>
-                <div style={{ display: "flex", gap: "1rem" }}>
+                <div style={{ display: "flex", gap: "1rem", opacity: exoFieldsLocked ? 0.5 : 1 }}>
                   {(["scolaire", "civile"] as ExerciceType[]).map((t) => (
                     <label
                       key={t}
@@ -935,7 +994,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                         display: "flex",
                         alignItems: "center",
                         gap: ".35rem",
-                        cursor: "pointer",
+                        cursor: exoFieldsLocked ? "not-allowed" : "pointer",
                       }}
                     >
                       <input
@@ -943,6 +1002,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                         name="exo-type"
                         checked={exoForm.type === t}
                         onChange={() => changeExoType(t)}
+                        disabled={exoFieldsLocked}
                       />
                       <span style={{ fontSize: ".75rem" }}>
                         {t === "scolaire" ? "Année scolaire" : "Année civile"}
@@ -960,13 +1020,19 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                   placeholder="Ex. 2025-2026"
                 />
               </label>
-              <div style={{ display: "flex", gap: ".75rem" }}>
+              {exoFieldsLocked && (
+                <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: 0 }}>
+                  Cet exercice a des périodes : seul le libellé est modifiable.
+                </p>
+              )}
+              <div style={{ display: "flex", gap: ".75rem", opacity: exoFieldsLocked ? 0.5 : 1 }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
                   <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Début</span>
                   <input
                     type="date"
                     value={exoForm.dateStart}
                     onChange={(e) => setExoForm((f) => ({ ...f, dateStart: e.target.value }))}
+                    disabled={exoFieldsLocked}
                   />
                 </label>
                 <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
@@ -975,6 +1041,7 @@ export function PeriodesPanel({ serviceId, initialPeriods, exercices, opening }:
                     type="date"
                     value={exoForm.dateEnd}
                     onChange={(e) => setExoForm((f) => ({ ...f, dateEnd: e.target.value }))}
+                    disabled={exoFieldsLocked}
                   />
                 </label>
               </div>

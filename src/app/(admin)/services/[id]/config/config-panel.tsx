@@ -383,7 +383,7 @@ export function ConfigPanel({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 180px 84px 84px 32px",
+                gridTemplateColumns: "minmax(0, 1fr) 180px 84px 84px 32px",
                 gap: ".75rem",
                 alignItems: "center",
                 padding: "0 .75rem .5rem",
@@ -407,7 +407,7 @@ export function ConfigPanel({
                 className="mockup-row"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 180px 84px 84px 32px",
+                  gridTemplateColumns: "minmax(0, 1fr) 180px 84px 84px 32px",
                   gap: ".75rem",
                   alignItems: "center",
                   padding: ".55rem .75rem",

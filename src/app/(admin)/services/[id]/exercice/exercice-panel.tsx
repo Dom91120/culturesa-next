@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
 import type { ExercicePaneData } from "@/server/services/exercice";
-import { cycleAction, setShowPreviousExercicesAction, undoCycleAction } from "./actions";
+import { cycleAction, undoCycleAction } from "./actions";
 
 type Props = {
   serviceId: string;
@@ -23,7 +23,6 @@ export function ExercicePanel({ serviceId, data }: Props) {
   const [recreatePeriods, setRecreatePeriods] = useState(true);
   const [recreateSlots, setRecreateSlots] = useState(true);
   const [undoAck, setUndoAck] = useState(false);
-  const [showPrevious, setShowPrevious] = useState(data.showPreviousExercices);
   // Modale de confirmation ouverte (port des modales legacy exercice-create/delete-confirm).
   const [confirm, setConfirm] = useState<"create" | "undo" | null>(null);
 
@@ -124,27 +123,6 @@ export function ExercicePanel({ serviceId, data }: Props) {
             ) : null}
           </p>
         </div>
-        <label className="check" style={{ fontSize: ".62rem" }}>
-          <input
-            type="checkbox"
-            checked={showPrevious}
-            disabled={isPending}
-            onChange={(e) => {
-              const next = e.target.checked;
-              setShowPrevious(next); // optimiste
-              startTransition(async () => {
-                const res = await setShowPreviousExercicesAction(serviceId, next);
-                if (!res?.ok) {
-                  setShowPrevious(!next); // rollback
-                  setError(res?.error ?? "Échec de l'enregistrement.");
-                  return;
-                }
-                router.refresh();
-              });
-            }}
-          />{" "}
-          Afficher les exercices précédents
-        </label>
       </div>
 
       {error ? (

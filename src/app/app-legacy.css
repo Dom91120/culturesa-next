@@ -475,8 +475,8 @@ main {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 0 0.6rem 0.85rem;
-  margin-bottom: 0.35rem;
+  padding: 0 0.6rem 0.42rem;
+  margin-bottom: 0.18rem;
   border-bottom: 1px solid var(--border);
 }
 #service-sidebar,
@@ -1325,17 +1325,23 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 1rem 5rem;
-  margin-bottom: 1rem;
+  gap: 1rem 6rem;
+  margin-bottom: 1.5rem;
 }
 /* Titre + navigation exercice (« Exercice ◀ … ▶ ») : bandeau pleine largeur AU-DESSUS du
    multi-colonnage (hors de la grille #periods-row). */
+.pr-head-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 3rem;
+  align-items: baseline;
+  margin-bottom: 1.5rem;
+}
 .pr-head {
   display: flex;
-  align-items: center;
-  gap: 1.25rem;
+  align-items: baseline;
+  gap: 0 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
 }
 .pr-head > .pr-title {
   margin-bottom: 0;
@@ -1368,8 +1374,7 @@ textarea.theme-pending:focus::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  margin: 0.35rem 0 0.55rem;
+  gap: 0 0.6rem;
 }
 .periode-nav .ex-nav-label {
   font-weight: 600;
@@ -1384,7 +1389,7 @@ textarea.theme-pending:focus::placeholder {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
-  padding: 0.05rem 0.4rem;
+  padding: 0.05rem 0.2rem;
   font-size: 0.7rem;
   cursor: pointer;
   line-height: 1;
@@ -2103,8 +2108,8 @@ textarea.theme-pending:focus::placeholder {
   margin: 0;
 }
 #agenda-period-tabs .period-btn {
-  padding: 0.2rem 0.5rem;
-  font-size: 0.7rem;
+  padding: 0.16rem 0.44rem;
+  font-size: 0.66rem;
 }
 /* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda et dans la
    modale multi-badges (cell-stack-modal) — même taille texte + même scale de case. */

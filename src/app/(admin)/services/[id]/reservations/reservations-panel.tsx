@@ -207,7 +207,7 @@ export function ReservationsPanel(props: Props) {
           display: "flex",
           flexWrap: "wrap",
           alignItems: "flex-start",
-          columnGap: "5rem",
+          columnGap: "6rem",
           rowGap: "1rem",
           marginBottom: ".5rem",
         }}

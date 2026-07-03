@@ -7,7 +7,10 @@ import { createDemandeurAction, deleteDemandeurAction, updateDemandeurAction } f
 type Initial = { id: number; label: string; openOnSchoolHolidays: boolean };
 type Row = { id: number | null; label: string; openOnSchoolHolidays: boolean };
 
-const GRID = "1fr 190px 80px";
+// minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : la 1re colonne ne se dimensionne PAS
+// sur le min-content de son contenu (l'input des lignes est plus large que le span de l'en-tête),
+// sinon les colonnes ne s'alignent plus entre en-tête et lignes quand la modale est étroite.
+const GRID = "minmax(0, 1fr) 190px 80px";
 
 /**
  * Éditeur des demandeurs (modale du référentiel, Administration > Configuration).

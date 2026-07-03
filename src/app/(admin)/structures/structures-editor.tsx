@@ -7,7 +7,10 @@ type DemandeurOption = { id: number; label: string };
 type Initial = { id: number; label: string; demandeurId: number; users: number };
 type Row = { id: number | null; label: string; demandeurId: number; users: number };
 
-const GRID = "1fr 170px 64px 80px";
+// minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : la 1re colonne ne se dimensionne pas
+// sur le min-content de son contenu, sinon les colonnes se désalignent entre en-tête et lignes
+// dans une modale étroite (cf. demandeurs-editor).
+const GRID = "minmax(0, 1fr) 170px 64px 80px";
 
 const SELECT_STYLE = {
   fontSize: ".78rem",

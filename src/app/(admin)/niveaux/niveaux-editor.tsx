@@ -9,7 +9,10 @@ type Initial = { id: number; label: string; demandeurId: number | null; position
 type Row = { id: number | null; label: string; demandeurId: number | null; position: number };
 
 // Poignée · Demandeur · Position · Niveau · Action.
-const GRID = "28px 180px 72px 1fr 96px";
+// Colonne « Niveau » en minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : elle ne se
+// dimensionne pas sur le min-content (span « Niveau » en en-tête vs input dans les lignes),
+// sinon les colonnes se désalignent en modale étroite (cf. demandeurs-editor).
+const GRID = "28px 180px 72px minmax(0, 1fr) 96px";
 
 const FIELD_STYLE = {
   fontSize: ".78rem",

@@ -228,7 +228,7 @@ export function ConnectedShell({
                   type="button"
                   id="sidebar-admin-btn"
                   className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
-                  style={{ marginTop: ".6rem" }}
+                  style={{ marginTop: "1rem" }}
                   onClick={goToAdmin}
                 >
                   <span className="sb-icon">⚙️</span>
@@ -239,7 +239,7 @@ export function ConnectedShell({
               <button
                 type="button"
                 className={`sidebar-compte-btn${pathname === "/mon-compte" ? " active" : ""}`}
-                style={{ marginTop: ".3rem" }}
+                style={{ marginTop: "1rem" }}
                 onClick={() => router.push("/mon-compte")}
               >
                 <span className="sb-icon">👤</span>
