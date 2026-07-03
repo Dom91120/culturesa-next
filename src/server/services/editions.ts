@@ -73,8 +73,10 @@ export async function listDatedSessions(
   const rows = await prisma.booking.findMany({
     where: {
       serviceId,
-      ...(periodIds ? { periodId: { in: periodIds } } : {}),
+      // Scope exercice via le CRÉNEAU : booking.periodId est null pour les ponctuels,
+      // alors que slot.periodId est renseigné pour récurrents ET ponctuels.
       slot: {
+        ...(periodIds ? { periodId: { in: periodIds } } : {}),
         slotDate: { gte: new Date(`${fromYmd}T00:00:00Z`), lte: new Date(`${toYmd}T23:59:59Z`) },
       },
     },
@@ -159,7 +161,9 @@ export async function listEditionRows(
     where: {
       serviceId,
       ...(userId ? { userId, parentBookingId: null } : {}),
-      ...(scopePeriodIds ? { periodId: { in: scopePeriodIds } } : {}),
+      // Scope exercice via le CRÉNEAU (slot.periodId) : booking.periodId est null pour
+      // les ponctuels — filtrer dessus les excluait (récurrents seuls visibles).
+      ...(scopePeriodIds ? { slot: { periodId: { in: scopePeriodIds } } } : {}),
     },
     orderBy: [{ periodId: "asc" }, { createdAt: "asc" }],
     select: {
