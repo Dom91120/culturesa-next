@@ -3,8 +3,9 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 /**
- * Navigation d'exercice façon Agenda (◀ libellé ▶). Écrit `?exercice=<id>` en conservant
- * les autres paramètres et réinitialise la navigation de dates (date/week/trim/page).
+ * Navigation d'exercice façon Agenda (libellé puis flèches ◀ ▶ groupées à droite,
+ * classe `.exercice-nav-inline`). Écrit `?exercice=<id>` en conservant les autres
+ * paramètres et réinitialise la navigation de dates (date/week/trim/page).
  * Exercices triés du plus ancien au plus récent (comme resolveEditionExercice).
  */
 export function ExerciceNav({
@@ -32,26 +33,28 @@ export function ExerciceNav({
   };
 
   return (
-    <span className="periode-nav no-print">
-      <button
-        type="button"
-        className="ex-arrow"
-        disabled={!prev}
-        onClick={() => prev && go(prev.id)}
-        aria-label="Exercice précédent"
-      >
-        ◀
-      </button>
+    <span className="exercice-nav-inline no-print">
       <span className="ex-nav-label">{label}</span>
-      <button
-        type="button"
-        className="ex-arrow"
-        disabled={!next}
-        onClick={() => next && go(next.id)}
-        aria-label="Exercice suivant"
-      >
-        ▶
-      </button>
+      <span className="ex-nav-arrows">
+        <button
+          type="button"
+          className="ex-arrow"
+          disabled={!prev}
+          onClick={() => prev && go(prev.id)}
+          aria-label="Exercice précédent"
+        >
+          ◀
+        </button>
+        <button
+          type="button"
+          className="ex-arrow"
+          disabled={!next}
+          onClick={() => next && go(next.id)}
+          aria-label="Exercice suivant"
+        >
+          ▶
+        </button>
+      </span>
     </span>
   );
 }

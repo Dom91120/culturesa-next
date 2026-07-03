@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
+import { ExerciceNav } from "../exercice-nav";
 import {
   bucketSessions,
   computeTotals,
@@ -133,13 +134,17 @@ export default async function PlanningPage({
         screen="planning"
         range={range}
         ruptures={withRuptures}
-        exercices={exercices}
         selectedExerciceId={selected?.id ?? null}
+        title={
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: ".5rem", fontWeight: 700 }}
+          >
+            {titleLabel}
+            <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
+            {service.label}
+          </span>
+        }
       />
-
-      <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
-        {titleLabel} — {service.label}
-      </h2>
 
       {sessions.length === 0 ? (
         <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>

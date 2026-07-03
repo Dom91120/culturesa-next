@@ -254,7 +254,6 @@ export default async function EditionsListePage({
         range={range}
         ruptures={withRuptures}
         exportHref={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
-        exercices={[]}
         selectedExerciceId={selected?.id ?? null}
         title={
           <span

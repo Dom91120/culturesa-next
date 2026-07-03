@@ -1,4 +1,3 @@
-import { ExerciceSelect } from "./exercice-select";
 import { ExportButton } from "./export-button";
 import { PrintButton } from "./print-button";
 import type { RangeResult } from "./range";
@@ -15,7 +14,6 @@ export function RangeBar({
   extra,
   ruptures = false,
   exportHref,
-  exercices = [],
   selectedExerciceId = null,
   showRuptures = true,
   title,
@@ -23,8 +21,9 @@ export function RangeBar({
   serviceId: string;
   screen: string;
   range: RangeResult;
-  // Titre centré de la ligne 1 (ex. « Liste des réservations ◀ exercice ▶ Service »).
-  // S'il est fourni, la navigation de plage ◀…▶ passe au centre de la ligne 2.
+  // Titre centré de la ligne 1 (ex. « Liste des réservations <nav exercice> Service »).
+  // La navigation d'exercice ◀ ▶ est intégrée au titre (ExerciceNav) ; la navigation de
+  // plage ◀…▶ passe alors au centre de la ligne 2.
   title?: React.ReactNode;
   // Contrôle additionnel placé à gauche du segmented control (ex. tri de la Liste).
   extra?: React.ReactNode;
@@ -32,8 +31,7 @@ export function RangeBar({
   ruptures?: boolean;
   // Lien d'export CSV (Liste) → bouton export à gauche de l'impression. Absent ailleurs.
   exportHref?: string;
-  // Exercices sélectionnables + exercice courant (scope des données).
-  exercices?: { id: number; label: string }[];
+  // Exercice courant : propagé aux liens de changement de vue pour le conserver.
   selectedExerciceId?: number | null;
   // Case « avec ruptures » : masquée quand la table est triable par colonne (Liste).
   showRuptures?: boolean;
@@ -144,7 +142,7 @@ export function RangeBar({
         {title ? <div style={centerAbs}>{title}</div> : plageNav}
       </div>
 
-      {/* Ligne 2 : exercice/plage au centre ; « avec ruptures » + export/impression à droite. */}
+      {/* Ligne 2 : plage ◀…▶ au centre ; « avec ruptures » + export/impression à droite. */}
       <div
         className="no-print"
         style={{
@@ -156,7 +154,6 @@ export function RangeBar({
           minHeight: title ? "2rem" : undefined,
         }}
       >
-        <ExerciceSelect exercices={exercices} selectedId={selectedExerciceId} />
         {title && plageNav}
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
           {showRuptures && <RupturesToggle />}
