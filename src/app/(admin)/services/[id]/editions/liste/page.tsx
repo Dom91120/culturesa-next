@@ -72,12 +72,18 @@ export default async function EditionsListePage({
   const thC: React.CSSProperties = { textAlign: "center" }; // en-têtes centrées
   // 2 premières colonnes : contenu sur une seule ligne (largeur = au contenu, sans wrap).
   const thNoWrap: React.CSSProperties = { ...thC, whiteSpace: "nowrap" };
-  const tdNoWrap: React.CSSProperties = { whiteSpace: "nowrap" };
+  // Cellules tronquées « … » (pas de retour à la ligne) : nécessite overflow:hidden +
+  // une largeur fixe (fournie par table-layout: fixed).
+  const tdNoWrap: React.CSSProperties = {
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
   const tdCenter: React.CSSProperties = { textAlign: "center", whiteSpace: "nowrap" };
-  // Colonnes « Identité » et « Thème » : même largeur, elles se partagent l'espace
-  // restant à parts égales (au détriment de date/créneau/demandeur, compactés).
-  const thIdentite: React.CSSProperties = { ...thC, width: "50%" };
-  const thTheme: React.CSSProperties = thIdentite;
+  // Largeurs de colonnes PARTAGÉES par les deux vues (alphabétique + par date) →
+  // Date/Jour · Créneau · Demandeur · Identité · Thème · Participants · Statut · Pointage.
+  // Les deux tableaux sont en table-layout: fixed pour un rendu identique.
+  const COL_W = ["12%", "9%", "15%", "17%", "17%", "10%", "11%", "9%"];
 
   // Barre de pagination (20 lignes/page).
   const pager = (page: number, pages: number, total: number, href: (n: number) => string) =>
@@ -156,37 +162,38 @@ export default async function EditionsListePage({
         ) : (
           <>
             <div className="admin-table-wrap">
-              <table className="admin-table">
+              <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1080 }}>
                 <thead>
                   <tr>
-                    <th style={thNoWrap}>Période</th>
-                    <th style={thNoWrap}>Jour / Date</th>
-                    <th style={thNoWrap}>Créneau</th>
-                    <th style={thNoWrap}>Demandeur</th>
-                    <th style={thIdentite}>Identité</th>
-                    <th style={thTheme}>Thème</th>
-                    <th style={thC}>Participants</th>
-                    <th style={thC}>Statut</th>
-                    <th style={thC}>Pointage</th>
+                    <th style={{ ...thNoWrap, width: COL_W[0] }}>Date</th>
+                    <th style={{ ...thNoWrap, width: COL_W[1] }}>Créneau</th>
+                    <th style={{ ...thC, width: COL_W[2] }}>Demandeur</th>
+                    <th style={{ ...thC, width: COL_W[3] }}>Identité</th>
+                    <th style={{ ...thC, width: COL_W[4] }}>Thème</th>
+                    <th style={{ ...thC, width: COL_W[5] }}>Participants</th>
+                    <th style={{ ...thNoWrap, width: COL_W[6] }}>Statut</th>
+                    <th style={{ ...thC, width: COL_W[7] }}>Pointage</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map((r) => (
                     <tr key={r.id}>
-                      <td style={tdNoWrap}>{r.periode}</td>
                       <td style={tdNoWrap}>{r.jour}</td>
                       <td style={tdNoWrap}>
-                        {r.debut}–{r.fin}
+                        {r.debut && r.fin ? `${r.debut}–${r.fin}` : "Journée entière"}
                       </td>
                       <td style={tdNoWrap}>{r.demandeur || "—"}</td>
-                      <td style={{ fontWeight: 600 }}>{`${r.nom} ${r.prenom}`.trim() || "—"}</td>
-                      <td>{r.theme || "—"}</td>
+                      <td style={{ ...tdNoWrap, fontWeight: 600 }}>
+                        {`${r.nom} ${r.prenom}`.trim() || "—"}
+                      </td>
+                      <td style={tdNoWrap}>{r.theme || "—"}</td>
                       <td style={tdCenter}>
                         {r.enfants} + {r.accompagnants}
                       </td>
-                      <td>
+                      <td style={tdNoWrap}>
                         <span
-                          className={`role-pill ${r.statut === "Réservation validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                          className={`role-pill ${r.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                          style={{ whiteSpace: "nowrap" }}
                         >
                           {r.statut}
                         </span>
@@ -268,17 +275,17 @@ export default async function EditionsListePage({
   // (sinon chaque tableau se dimensionne sur son propre contenu). Identité = Thème.
   const renderOccRows = (rows: OccRow[]) => (
     <div className="admin-table-wrap">
-      <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1040 }}>
+      <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1080 }}>
         <thead>
           <tr>
-            <th style={{ ...thNoWrap, width: "13%" }}>Date</th>
-            <th style={{ ...thNoWrap, width: "10%" }}>Créneau</th>
-            <th style={{ ...thC, width: "13%" }}>Demandeur</th>
-            <th style={{ ...thC, width: "18%" }}>Identité</th>
-            <th style={{ ...thC, width: "18%" }}>Thème</th>
-            <th style={{ ...thC, width: "10%" }}>Participants</th>
-            <th style={{ ...thC, width: "10%" }}>Statut</th>
-            <th style={{ ...thC, width: "8%" }}>Pointage</th>
+            <th style={{ ...thNoWrap, width: COL_W[0] }}>Date</th>
+            <th style={{ ...thNoWrap, width: COL_W[1] }}>Créneau</th>
+            <th style={{ ...thC, width: COL_W[2] }}>Demandeur</th>
+            <th style={{ ...thC, width: COL_W[3] }}>Identité</th>
+            <th style={{ ...thC, width: COL_W[4] }}>Thème</th>
+            <th style={{ ...thC, width: COL_W[5] }}>Participants</th>
+            <th style={{ ...thNoWrap, width: COL_W[6] }}>Statut</th>
+            <th style={{ ...thC, width: COL_W[7] }}>Pointage</th>
           </tr>
         </thead>
         <tbody>
@@ -292,15 +299,18 @@ export default async function EditionsListePage({
                   ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
                   : "Journée entière"}
               </td>
-              <td>{a.demandeur || "—"}</td>
-              <td style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>
-              <td>{a.theme || "—"}</td>
+              <td style={tdNoWrap}>{a.demandeur || "—"}</td>
+              <td style={{ ...tdNoWrap, fontWeight: 600 }}>
+                {`${a.nom} ${a.prenom}`.trim() || "—"}
+              </td>
+              <td style={tdNoWrap}>{a.theme || "—"}</td>
               <td style={tdCenter}>
                 {a.enfants} + {a.accompagnants}
               </td>
               <td style={tdCenter}>
                 <span
-                  className={`role-pill ${a.statut === "Réservation validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                  className={`role-pill ${a.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                  style={{ whiteSpace: "nowrap" }}
                 >
                   {a.statut}
                 </span>

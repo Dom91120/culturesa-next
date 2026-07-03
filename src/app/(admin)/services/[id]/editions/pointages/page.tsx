@@ -102,7 +102,7 @@ export default async function PointagesPage({
               <td style={{ ...td, fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>
               <td style={td}>{a.structure || a.demandeur || "—"}</td>
               <td style={td}>
-                {a.enfants} Enfant{a.enfants > 1 ? "s" : ""} + {a.accompagnants} adulte
+                {a.enfants} enfant{a.enfants > 1 ? "s" : ""} + {a.accompagnants} adulte
                 {a.accompagnants > 1 ? "s" : ""}
               </td>
               <td style={{ ...td, textAlign: "center" }}>

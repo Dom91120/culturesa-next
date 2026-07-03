@@ -127,7 +127,7 @@ export async function listDatedSessions(
       accompagnants: b.accompagnants,
       theme: b.themeLabel,
       pointage: b.pointage,
-      statut: b.validated ? "Réservation validée" : "Demande en attente de validation",
+      statut: b.validated ? "Validée" : "En attente",
     });
   }
 
@@ -227,7 +227,7 @@ export async function listEditionRows(
       jour: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),
       jourDate: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),
       theme: b.themeLabel,
-      statut: b.validated ? "Réservation validée" : "Demande en attente de validation",
+      statut: b.validated ? "Validée" : "En attente",
       pointage: b.pointage === "present" ? "Présent" : b.pointage === "absent" ? "Absent" : "",
       createdAt: b.createdAt.toISOString().slice(0, 16).replace("T", " "),
     };
