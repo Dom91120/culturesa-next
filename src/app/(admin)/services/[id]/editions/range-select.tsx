@@ -12,17 +12,20 @@ export function RangeSelect({
   mode,
   date,
   ruptures = false,
+  exerciceId,
 }: {
   serviceId: string;
   screen: string;
   mode: "week" | "month" | "trimester" | "year";
   date: string;
   ruptures?: boolean;
+  exerciceId?: number | null;
 }) {
   const router = useRouter();
   const base = `/services/${serviceId}/editions/${screen}`;
   const rq = ruptures ? "&ruptures=1" : "";
-  const go = (qs: string) => router.push(`${base}?${qs}${rq}`);
+  const exq = exerciceId != null ? `&exercice=${exerciceId}` : "";
+  const go = (qs: string) => router.push(`${base}?${qs}${rq}${exq}`);
   const btnStyle: React.CSSProperties = {
     fontSize: ".68rem",
     letterSpacing: "-.02em",

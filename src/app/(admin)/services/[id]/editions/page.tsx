@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { ExerciceSelect } from "./exercice-select";
+import { resolveEditionExercice } from "./range";
 
 // En-tête de colonne du panel « Éditions disponibles » (même style que « Modèles d'e-mails »).
 const thStyle: React.CSSProperties = {
@@ -14,10 +16,21 @@ const cellStyle: React.CSSProperties = {
   borderBottom: "1px solid var(--border)",
 };
 
-export default async function EditionsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditionsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ exercice?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
   if (!service) notFound();
+
+  // Exercice sélectionné : transmis aux liens « Ouvrir » pour scoper chaque édition.
+  const { exercices, selected } = await resolveEditionExercice(id, sp.exercice);
+  const exq = selected ? `?exercice=${selected.id}` : "";
 
   // Éditions proposées pour ce service. Une ligne par édition (façon « Modèles d'e-mails »).
   // L'export CSV télécharge un fichier (Content-Disposition) ; les autres ouvrent un écran dédié.
@@ -33,7 +46,7 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
       label: "Liste des réservations",
       description:
         "Tableau de toutes les réservations du service, à consulter et imprimer sur son écran dédié.",
-      href: `/services/${id}/editions/liste`,
+      href: `/services/${id}/editions/liste${exq}`,
       action: "Ouvrir",
     },
     {
@@ -41,14 +54,14 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
       label: "Plannings",
       description:
         "Vue par jour des séances d'une semaine (récurrentes + ponctuelles), avec les participants.",
-      href: `/services/${id}/editions/planning`,
+      href: `/services/${id}/editions/planning${exq}`,
       action: "Ouvrir",
     },
     {
       icon: "✔",
       label: "Pointages",
       description: "Feuille de présence par séance, à imprimer pour relever les présences.",
-      href: `/services/${id}/editions/pointages`,
+      href: `/services/${id}/editions/pointages${exq}`,
       action: "Ouvrir",
     },
   ];
@@ -62,11 +75,20 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
 
       {/* Panel « Éditions disponibles » (première position, façon « Modèles d'e-mails »). */}
       <div className="panel" id="editions-panel">
-        <div className="panel-title">
+        <div
+          className="panel-title"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: ".6rem",
+          }}
+        >
           <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
             <span className="dot" style={{ background: "var(--accent)" }} />
             Éditions disponibles
           </span>
+          <ExerciceSelect exercices={exercices} selectedId={selected?.id ?? null} />
         </div>
 
         <p

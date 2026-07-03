@@ -4,8 +4,8 @@ import { type DatedSession, listDatedSessions } from "@/server/services/editions
 import {
   bucketSessions,
   computeTotals,
-  fetchCurrentExercice,
   formatDateHeading,
+  resolveEditionExercice,
   resolveRange,
 } from "../range";
 import { RangeBar } from "../range-bar";
@@ -24,18 +24,20 @@ export default async function PlanningPage({
     week?: string;
     trim?: string;
     ruptures?: string;
+    exercice?: string;
   }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
 
-  const [service, exercice] = await Promise.all([
+  const [service, exo] = await Promise.all([
     prisma.service.findUnique({ where: { id }, select: { label: true } }),
-    fetchCurrentExercice(id),
+    resolveEditionExercice(id, sp.exercice),
   ]);
   if (!service) notFound();
+  const { exercices, selected } = exo;
 
-  const range = resolveRange(id, "planning", sp, exercice);
+  const range = resolveRange(id, "planning", sp, selected, selected?.id);
   const titleLabel =
     range.mode === "month"
       ? "Planning mensuel"
@@ -45,7 +47,7 @@ export default async function PlanningPage({
           ? "Planning annuel"
           : "Planning hebdomadaire";
 
-  const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd);
+  const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd, selected?.periodIds);
   // Ruptures (case « avec ruptures ») : par semaine (vue mensuelle) / par mois (vue
   // période). OFF par défaut → un seul bloc sans en-tête ni sous-total.
   const withRuptures = sp.ruptures === "1";
@@ -126,7 +128,14 @@ export default async function PlanningPage({
 
   return (
     <div>
-      <RangeBar serviceId={id} screen="planning" range={range} ruptures={withRuptures} />
+      <RangeBar
+        serviceId={id}
+        screen="planning"
+        range={range}
+        ruptures={withRuptures}
+        exercices={exercices}
+        selectedExerciceId={selected?.id ?? null}
+      />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
         {titleLabel} — {service.label}

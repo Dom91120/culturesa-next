@@ -67,10 +67,13 @@ export async function listDatedSessions(
   serviceId: string,
   fromYmd: string,
   toYmd: string,
+  // Restreint aux réservations des périodes de l'exercice sélectionné (scope exercice).
+  periodIds?: number[],
 ): Promise<DatedSession[]> {
   const rows = await prisma.booking.findMany({
     where: {
       serviceId,
+      ...(periodIds ? { periodId: { in: periodIds } } : {}),
       slot: {
         slotDate: { gte: new Date(`${fromYmd}T00:00:00Z`), lte: new Date(`${toYmd}T23:59:59Z`) },
       },
@@ -146,9 +149,18 @@ function jourDateOf(bookingType: string, slotDate: Date | null, slotDay: string 
  * `userId` fourni → restreint aux réservations de CET usager (export « mes réservations »),
  * en excluant les miroirs (une ligne par réservation, pas par occurrence).
  */
-export async function listEditionRows(serviceId: string, userId?: string): Promise<EditionRow[]> {
+export async function listEditionRows(
+  serviceId: string,
+  userId?: string,
+  // Restreint aux réservations des périodes de l'exercice sélectionné (scope exercice).
+  scopePeriodIds?: number[],
+): Promise<EditionRow[]> {
   const bookings = await prisma.booking.findMany({
-    where: { serviceId, ...(userId ? { userId, parentBookingId: null } : {}) },
+    where: {
+      serviceId,
+      ...(userId ? { userId, parentBookingId: null } : {}),
+      ...(scopePeriodIds ? { periodId: { in: scopePeriodIds } } : {}),
+    },
     orderBy: [{ periodId: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,

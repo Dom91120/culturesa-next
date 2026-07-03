@@ -73,6 +73,56 @@ export async function fetchCurrentExercice(serviceId: string): Promise<EditionEx
   return rows[0];
 }
 
+/** Exercice sélectionnable dans les Éditions + ids de ses périodes (pour scoper les données). */
+export type EditionExerciceOption = EditionExercice & { id: number; periodIds: number[] };
+
+/**
+ * Exercices proposés au sélecteur des Éditions et exercice sélectionné.
+ * Éligibles = exercices ayant des périodes ACTIVES, + celles DÉSACTIVÉES si le service
+ * « affiche les exercices précédents » (même règle que l'agenda). Défaut = le plus récent.
+ */
+export async function resolveEditionExercice(
+  serviceId: string,
+  spExercice: string | undefined,
+): Promise<{ exercices: { id: number; label: string }[]; selected: EditionExerciceOption | null }> {
+  const svc = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { showPreviousExercices: true },
+  });
+  const states: ("actif" | "desactive")[] = svc?.showPreviousExercices
+    ? ["actif", "desactive"]
+    : ["actif"];
+  const periods = await prisma.period.findMany({
+    where: { serviceId, state: { in: states } },
+    select: {
+      id: true,
+      exercice: { select: { id: true, label: true, type: true, dateStart: true, dateEnd: true } },
+    },
+  });
+  const map = new Map<number, EditionExerciceOption>();
+  for (const p of periods) {
+    const ex = p.exercice;
+    if (!ex) continue;
+    let e = map.get(ex.id);
+    if (!e) {
+      e = {
+        id: ex.id,
+        label: ex.label,
+        type: ex.type,
+        dateStart: ex.dateStart,
+        dateEnd: ex.dateEnd,
+        periodIds: [],
+      };
+      map.set(ex.id, e);
+    }
+    e.periodIds.push(p.id);
+  }
+  const list = [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
+  const spId = spExercice ? Number(spExercice) : Number.NaN;
+  const selected = list.find((e) => e.id === spId) ?? list[list.length - 1] ?? null;
+  return { exercices: list.map((e) => ({ id: e.id, label: e.label })), selected };
+}
+
 type Trimestre = { label: string; from: Date; to: Date };
 const TRIM_LABELS = ["1er trimestre", "2e trimestre", "3e trimestre", "4e trimestre"];
 
@@ -123,14 +173,19 @@ export function resolveRange(
   screen: string,
   sp: { mode?: string; date?: string; week?: string; trim?: string },
   exercice: EditionExercice | null,
+  exerciceId?: number | null,
 ): RangeResult {
   const base = `/services/${serviceId}/editions/${screen}`;
+  // Suffixe d'URL conservant l'exercice sélectionné dans les liens de navigation.
+  const exq = exerciceId != null ? `&exercice=${exerciceId}` : "";
+  // Date de référence : param explicite, sinon aujourd'hui BORNÉ dans l'exercice (la vue
+  // reste dans l'exercice même si « aujourd'hui » est hors de ses dates).
+  const es = exercice?.dateStart ? ymd(exercice.dateStart) : null;
+  const ee = exercice?.dateEnd ? ymd(exercice.dateEnd) : null;
+  const todayY = ymd(new Date());
+  const fallback = es && todayY < es ? es : ee && todayY > ee ? ee : todayY;
   const dateParam =
-    sp.date && reIso.test(sp.date)
-      ? sp.date
-      : sp.week && reIso.test(sp.week)
-        ? sp.week
-        : ymd(new Date());
+    sp.date && reIso.test(sp.date) ? sp.date : sp.week && reIso.test(sp.week) ? sp.week : fallback;
   const ref = parseYmd(dateParam);
 
   const type = exercice?.type ?? "civile";
@@ -177,8 +232,8 @@ export function resolveRange(
       trimIndex: idx,
       trimestres: trimList,
       subtitle: t.label,
-      prevHref: idx > 0 ? `${base}?mode=trimester&trim=${idx - 1}` : null,
-      nextHref: idx < trimestres.length - 1 ? `${base}?mode=trimester&trim=${idx + 1}` : null,
+      prevHref: idx > 0 ? `${base}?mode=trimester&trim=${idx - 1}${exq}` : null,
+      nextHref: idx < trimestres.length - 1 ? `${base}?mode=trimester&trim=${idx + 1}${exq}` : null,
     };
   }
 
@@ -194,8 +249,8 @@ export function resolveRange(
       trimIndex: null,
       trimestres: trimList,
       subtitle: cap(fmtMonth.format(from)),
-      prevHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, -1))}`,
-      nextHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, 1))}`,
+      prevHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, -1))}${exq}`,
+      nextHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, 1))}${exq}`,
     };
   }
 
@@ -210,8 +265,8 @@ export function resolveRange(
     trimIndex: null,
     trimestres: trimList,
     subtitle: `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
-    prevHref: `${base}?mode=week&date=${ymd(addDays(from, -7))}`,
-    nextHref: `${base}?mode=week&date=${ymd(addDays(from, 7))}`,
+    prevHref: `${base}?mode=week&date=${ymd(addDays(from, -7))}${exq}`,
+    nextHref: `${base}?mode=week&date=${ymd(addDays(from, 7))}${exq}`,
   };
 }
 

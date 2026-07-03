@@ -16,11 +16,15 @@ export function StatsFilters({
   dateFrom,
   dateTo,
   periods,
+  exercices,
+  selectedExerciceId,
 }: {
   type: string;
   dateFrom: string;
   dateTo: string;
   periods: PeriodOpt[];
+  exercices: { id: number; label: string }[];
+  selectedExerciceId: number | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -64,6 +68,23 @@ export function StatsFilters({
         marginBottom: "1rem",
       }}
     >
+      {/* Exercice : filtre principal — définit la plage de dates des stats. Le changer
+          réinitialise les affinages manuels (from/to). */}
+      {exercices.length > 0 && (
+        <select
+          value={selectedExerciceId ?? ""}
+          onChange={(e) => setParams({ exercice: e.target.value || null, from: null, to: null })}
+          style={{ ...inputStyle, fontWeight: 600 }}
+          aria-label="Exercice"
+        >
+          {exercices.map((ex) => (
+            <option key={ex.id} value={ex.id}>
+              {ex.label}
+            </option>
+          ))}
+        </select>
+      )}
+
       {/* Type */}
       <div
         style={{

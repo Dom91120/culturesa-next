@@ -9,13 +9,14 @@ import {
   POINTAGE_LABEL,
   type SessionAttendee,
 } from "@/server/services/editions";
+import { ExerciceSelect } from "../exercice-select";
 import { ExportButton } from "../export-button";
 import { PrintButton } from "../print-button";
 import {
   bucketSessions,
   computeRowTotals,
   computeTotals,
-  fetchCurrentExercice,
+  resolveEditionExercice,
   resolveRange,
   sortRowsAlpha,
 } from "../range";
@@ -42,17 +43,21 @@ export default async function EditionsListePage({
     trim?: string;
     page?: string;
     ruptures?: string;
+    exercice?: string;
   }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
   const tri = sp.tri === "alpha" ? "alpha" : "date";
 
-  const [service, demRows] = await Promise.all([
+  const [service, demRows, exo] = await Promise.all([
     prisma.service.findUnique({ where: { id }, select: { label: true } }),
     getServiceDemandeurSettingsLabeled(id),
+    resolveEditionExercice(id, sp.exercice),
   ]);
   if (!service) notFound();
+  const { exercices, selected } = exo;
+  const exq = selected ? `&exercice=${selected.id}` : "";
 
   const linkBtn: React.CSSProperties = {
     fontSize: ".7rem",
@@ -109,11 +114,11 @@ export default async function EditionsListePage({
 
   // ── Vue ALPHABÉTIQUE : réservations triées Nom/Prénom, paginées ──
   if (tri === "alpha") {
-    const rows = sortRowsAlpha(await listEditionRows(id));
+    const rows = sortRowsAlpha(await listEditionRows(id, undefined, selected?.periodIds));
     const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
     const page = Math.min(Math.max(1, Number(sp.page) || 1), pages);
     const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-    const pageHref = (n: number) => `/services/${id}/editions/liste?tri=alpha&page=${n}`;
+    const pageHref = (n: number) => `/services/${id}/editions/liste?tri=alpha&page=${n}${exq}`;
 
     return (
       <div>
@@ -129,9 +134,13 @@ export default async function EditionsListePage({
           <a href={`/services/${id}/editions`} className="no-print" style={linkBtn}>
             ← Éditions
           </a>
-          <div className="agenda-mode-toggles-wrap no-print" style={{ marginLeft: "auto" }}>
-            <ListeSortSelect serviceId={id} tri={tri} />
-            <ExportButton href={`/services/${id}/editions/export`} />
+          <div
+            className="agenda-mode-toggles-wrap no-print"
+            style={{ marginLeft: "auto", alignItems: "center", gap: ".6rem" }}
+          >
+            <ExerciceSelect exercices={exercices} selectedId={selected?.id ?? null} />
+            <ListeSortSelect serviceId={id} tri={tri} exerciceId={selected?.id} />
+            <ExportButton href={`/services/${id}/editions/export?tri=alpha${exq}`} />
             <PrintButton iconOnly />
           </div>
         </div>
@@ -202,9 +211,8 @@ export default async function EditionsListePage({
   }
 
   // ── Vue PAR DATE : occurrences datées (Hebdo / Mensuel / Période) + ruptures ──
-  const exercice = await fetchCurrentExercice(id);
-  const range = resolveRange(id, "liste", sp, exercice);
-  const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd);
+  const range = resolveRange(id, "liste", sp, selected, selected?.id);
+  const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd, selected?.periodIds);
   // Ruptures (case « avec ruptures ») OFF par défaut → un seul bloc sans sous-total.
   const withRuptures = sp.ruptures === "1";
   const buckets = withRuptures
@@ -251,6 +259,7 @@ export default async function EditionsListePage({
   if (range.mode === "trimester" && range.trimIndex != null)
     pageParams.set("trim", String(range.trimIndex));
   if (withRuptures) pageParams.set("ruptures", "1");
+  if (selected) pageParams.set("exercice", String(selected.id));
   const dateHref = (n: number) =>
     `/services/${id}/editions/liste?${pageParams.toString()}&page=${n}`;
 
@@ -302,9 +311,11 @@ export default async function EditionsListePage({
         serviceId={id}
         screen="liste"
         range={range}
-        extra={<ListeSortSelect serviceId={id} tri={tri} />}
+        extra={<ListeSortSelect serviceId={id} tri={tri} exerciceId={selected?.id} />}
         ruptures={withRuptures}
-        exportHref={`/services/${id}/editions/export`}
+        exportHref={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
+        exercices={exercices}
+        selectedExerciceId={selected?.id ?? null}
       />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>

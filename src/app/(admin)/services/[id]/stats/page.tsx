@@ -432,32 +432,75 @@ export default async function StatsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ type?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ type?: string; from?: string; to?: string; exercice?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
+  const service = await prisma.service.findUnique({
+    where: { id },
+    select: { label: true, showPreviousExercices: true },
+  });
   if (!service) notFound();
 
   const type = parseType(sp.type);
-  const dateFrom = parseDate(sp.from);
-  const dateTo = parseDate(sp.to);
+  const rawFrom = parseDate(sp.from);
+  const rawTo = parseDate(sp.to);
 
-  const [stats, periodRows] = await Promise.all([
-    getServiceStats(id, { type, dateFrom, dateTo }),
-    prisma.period.findMany({
-      where: { serviceId: id, state: "actif" },
-      orderBy: [{ dateStart: "asc" }, { id: "asc" }],
-      select: { id: true, label: true, dateStart: true, dateEnd: true },
-    }),
-  ]);
+  // Exercices éligibles (comme l'agenda) : périodes actives + désactivées si le service
+  // « affiche les exercices précédents ». Le sélecteur porte sur ces exercices.
+  const periodStates: ("actif" | "desactive")[] = service.showPreviousExercices
+    ? ["actif", "desactive"]
+    : ["actif"];
+  const periodRows = await prisma.period.findMany({
+    where: { serviceId: id, state: { in: periodStates } },
+    orderBy: [{ dateStart: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      label: true,
+      dateStart: true,
+      dateEnd: true,
+      exerciceId: true,
+      exercice: { select: { id: true, label: true, dateStart: true, dateEnd: true } },
+    },
+  });
 
-  const periods = periodRows.map((p) => ({
-    id: p.id,
-    label: p.label,
-    dateStart: p.dateStart ? p.dateStart.toISOString().slice(0, 10) : null,
-    dateEnd: p.dateEnd ? p.dateEnd.toISOString().slice(0, 10) : null,
-  }));
+  // Exercices distincts (triés par libellé ; le plus récent en dernier = défaut).
+  const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+  const exoMap = new Map<
+    number,
+    { id: number; label: string; dateStart: string | null; dateEnd: string | null }
+  >();
+  for (const p of periodRows) {
+    if (p.exercice && !exoMap.has(p.exercice.id)) {
+      exoMap.set(p.exercice.id, {
+        id: p.exercice.id,
+        label: p.exercice.label,
+        dateStart: iso(p.exercice.dateStart),
+        dateEnd: iso(p.exercice.dateEnd),
+      });
+    }
+  }
+  const exercices = [...exoMap.values()].sort((a, b) => a.label.localeCompare(b.label));
+  const spExoId = sp.exercice ? Number(sp.exercice) : Number.NaN;
+  const selectedExercice =
+    exercices.find((e) => e.id === spExoId) ?? exercices[exercices.length - 1] ?? null;
+
+  // « L'exercice définit la plage » : bornes = celles de l'exercice, sauf from/to manuels
+  // (affinage à l'intérieur de l'exercice).
+  const dateFrom = rawFrom ?? selectedExercice?.dateStart ?? null;
+  const dateTo = rawTo ?? selectedExercice?.dateEnd ?? null;
+
+  const stats = await getServiceStats(id, { type, dateFrom, dateTo });
+
+  // Raccourci « Période » : périodes de l'exercice sélectionné uniquement.
+  const periods = periodRows
+    .filter((p) => p.exerciceId === selectedExercice?.id)
+    .map((p) => ({
+      id: p.id,
+      label: p.label,
+      dateStart: iso(p.dateStart),
+      dateEnd: iso(p.dateEnd),
+    }));
 
   const niveauMax = Math.max(1, ...stats.topNiveaux.map((r) => r.value));
   const effMax = Math.max(1, ...stats.effectifsByExercice.map((r) => r.value));
@@ -494,9 +537,11 @@ export default async function StatsPage({
 
       <StatsFilters
         type={type === "all" ? "" : type}
-        dateFrom={dateFrom ?? ""}
-        dateTo={dateTo ?? ""}
+        dateFrom={rawFrom ?? ""}
+        dateTo={rawTo ?? ""}
         periods={periods}
+        exercices={exercices.map((e) => ({ id: e.id, label: e.label }))}
+        selectedExerciceId={selectedExercice?.id ?? null}
       />
 
       {/* Bandeau KPIs */}

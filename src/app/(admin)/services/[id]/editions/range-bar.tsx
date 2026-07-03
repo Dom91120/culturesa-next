@@ -1,3 +1,4 @@
+import { ExerciceSelect } from "./exercice-select";
 import { ExportButton } from "./export-button";
 import { PrintButton } from "./print-button";
 import type { RangeResult } from "./range";
@@ -14,6 +15,8 @@ export function RangeBar({
   extra,
   ruptures = false,
   exportHref,
+  exercices = [],
+  selectedExerciceId = null,
 }: {
   serviceId: string;
   screen: string;
@@ -24,6 +27,9 @@ export function RangeBar({
   ruptures?: boolean;
   // Lien d'export CSV (Liste) → bouton export à gauche de l'impression. Absent ailleurs.
   exportHref?: string;
+  // Exercices sélectionnables + exercice courant (scope des données).
+  exercices?: { id: number; label: string }[];
+  selectedExerciceId?: number | null;
 }) {
   const { mode, dateParam, subtitle, prevHref, nextHref } = range;
   const rq = ruptures ? "&ruptures=1" : "";
@@ -133,12 +139,14 @@ export function RangeBar({
           gap: ".6rem",
         }}
       >
+        <ExerciceSelect exercices={exercices} selectedId={selectedExerciceId} />
         <RangeSelect
           serviceId={serviceId}
           screen={screen}
           mode={mode}
           date={dateParam}
           ruptures={ruptures}
+          exerciceId={selectedExerciceId}
         />
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
           <RupturesToggle />
