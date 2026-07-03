@@ -18,10 +18,14 @@ export function RangeBar({
   exercices = [],
   selectedExerciceId = null,
   showRuptures = true,
+  title,
 }: {
   serviceId: string;
   screen: string;
   range: RangeResult;
+  // Titre centré de la ligne 1 (ex. « Liste des réservations ◀ exercice ▶ Service »).
+  // S'il est fourni, la navigation de plage ◀…▶ passe au centre de la ligne 2.
+  title?: React.ReactNode;
   // Contrôle additionnel placé à gauche du segmented control (ex. tri de la Liste).
   extra?: React.ReactNode;
   // État de la case « avec ruptures » — propagé aux navigations pour le conserver.
@@ -51,16 +55,62 @@ export function RangeBar({
   const prevLabel = `${unit} précédent${unit === "Semaine" ? "e" : ""}`;
   const nextLabel = `${unit} suivant${unit === "Semaine" ? "e" : ""}`;
 
+  // Centrage absolu (au milieu de .app-main), utilisé pour le titre et/ou la plage ◀…▶.
+  const centerAbs: React.CSSProperties = {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
+    display: "flex",
+    alignItems: "center",
+    gap: ".6rem",
+    whiteSpace: "nowrap",
+  };
+
+  // Plage ◀ <plage> ▶ (reste imprimée). Centrée : ligne 1 par défaut, ligne 2 si un titre
+  // occupe déjà le centre de la ligne 1.
+  const plageNav = (
+    <div style={centerAbs}>
+      {prevHref && (
+        <a
+          href={`${prevHref}${rq}`}
+          className="no-print"
+          style={arrowBtn}
+          title={prevLabel}
+          aria-label={prevLabel}
+        >
+          ◀
+        </a>
+      )}
+      <span
+        style={{
+          fontSize: ".8rem",
+          fontWeight: 600,
+          letterSpacing: "-.02em",
+          color: "var(--muted)",
+        }}
+      >
+        {subtitle}
+      </span>
+      {nextHref && (
+        <a
+          href={`${nextHref}${rq}`}
+          className="no-print"
+          style={arrowBtn}
+          title={nextLabel}
+          aria-label={nextLabel}
+        >
+          ▶
+        </a>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ marginBottom: "1rem" }}>
-      {/* Ligne 1 : ← Éditions (gauche) · plage ◀…▶ centrée (absolu, .app-main) · tri à droite. */}
+      {/* Ligne 1 : ← Éditions (gauche) · titre OU plage centré(e) · sélecteur de vue (droite). */}
       <div
-        style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          minHeight: "2rem",
-        }}
+        style={{ position: "relative", display: "flex", alignItems: "center", minHeight: "2rem" }}
       >
         <a
           href={`/services/${serviceId}/editions`}
@@ -76,81 +126,38 @@ export function RangeBar({
           ← Éditions
         </a>
 
-        {/* Sélecteur de tri (Alphabétique|Par date) : toujours ligne 1, à droite. */}
-        {extra && (
-          <div className="no-print" style={{ marginLeft: "auto", display: "flex" }}>
-            {extra}
-          </div>
-        )}
-
-        {/* Plage ◀ <plage> ▶ : centrée en absolu sur .app-main ; reste imprimée. */}
         <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            display: "flex",
-            alignItems: "center",
-            gap: ".6rem",
-            whiteSpace: "nowrap",
-          }}
+          className="no-print"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
         >
-          {prevHref && (
-            <a
-              href={`${prevHref}${rq}`}
-              className="no-print"
-              style={arrowBtn}
-              title={prevLabel}
-              aria-label={prevLabel}
-            >
-              ◀
-            </a>
-          )}
-          <span
-            style={{
-              fontSize: ".8rem",
-              fontWeight: 600,
-              letterSpacing: "-.02em",
-              color: "var(--muted)",
-            }}
-          >
-            {subtitle}
-          </span>
-          {nextHref && (
-            <a
-              href={`${nextHref}${rq}`}
-              className="no-print"
-              style={arrowBtn}
-              title={nextLabel}
-              aria-label={nextLabel}
-            >
-              ▶
-            </a>
-          )}
+          {extra}
+          <RangeSelect
+            serviceId={serviceId}
+            screen={screen}
+            mode={mode}
+            date={dateParam}
+            ruptures={ruptures}
+            exerciceId={selectedExerciceId}
+          />
         </div>
+
+        {title ? <div style={centerAbs}>{title}</div> : plageNav}
       </div>
 
-      {/* Ligne 2 : sélecteur de vue (Hebdo|Mensuel|Année) à GAUCHE ; checkbox « avec ruptures »
-          + impression à DROITE. */}
+      {/* Ligne 2 : exercice/plage au centre ; « avec ruptures » + export/impression à droite. */}
       <div
         className="no-print"
         style={{
+          position: "relative",
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
           gap: ".6rem",
+          minHeight: title ? "2rem" : undefined,
         }}
       >
         <ExerciceSelect exercices={exercices} selectedId={selectedExerciceId} />
-        <RangeSelect
-          serviceId={serviceId}
-          screen={screen}
-          mode={mode}
-          date={dateParam}
-          ruptures={ruptures}
-          exerciceId={selectedExerciceId}
-        />
+        {title && plageNav}
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
           {showRuptures && <RupturesToggle />}
           {exportHref && <ExportButton href={exportHref} />}

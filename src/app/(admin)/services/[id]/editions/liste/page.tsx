@@ -8,6 +8,7 @@ import {
   POINTAGE_LABEL,
   type SessionAttendee,
 } from "@/server/services/editions";
+import { ExerciceNav } from "../exercice-nav";
 import { bucketSessions, computeTotals, resolveEditionExercice, resolveRange } from "../range";
 import { RangeBar } from "../range-bar";
 import { RuptureHeading, TotalsLine } from "../totals";
@@ -196,10 +197,7 @@ export default async function EditionsListePage({
         <thead>
           <tr>
             {COLS.map((col) => (
-              <th
-                key={col.key}
-                style={{ ...thBase, width: col.width, textAlign: col.center ? "center" : "left" }}
-              >
+              <th key={col.key} style={{ ...thBase, width: col.width, textAlign: "center" }}>
                 <a
                   href={sortHref(col.key)}
                   className="no-print"
@@ -256,13 +254,18 @@ export default async function EditionsListePage({
         range={range}
         ruptures={withRuptures}
         exportHref={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
-        exercices={exercices}
+        exercices={[]}
         selectedExerciceId={selected?.id ?? null}
+        title={
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: ".5rem", fontWeight: 700 }}
+          >
+            Liste des réservations
+            <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
+            {service.label}
+          </span>
+        }
       />
-
-      <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
-        Liste des réservations — {service.label}
-      </h2>
 
       {flat.length === 0 ? (
         <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
