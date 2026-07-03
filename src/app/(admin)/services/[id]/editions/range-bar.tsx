@@ -17,6 +17,7 @@ export function RangeBar({
   exportHref,
   exercices = [],
   selectedExerciceId = null,
+  showRuptures = true,
 }: {
   serviceId: string;
   screen: string;
@@ -30,6 +31,8 @@ export function RangeBar({
   // Exercices sélectionnables + exercice courant (scope des données).
   exercices?: { id: number; label: string }[];
   selectedExerciceId?: number | null;
+  // Case « avec ruptures » : masquée quand la table est triable par colonne (Liste).
+  showRuptures?: boolean;
 }) {
   const { mode, dateParam, subtitle, prevHref, nextHref } = range;
   const rq = ruptures ? "&ruptures=1" : "";
@@ -149,7 +152,7 @@ export function RangeBar({
           exerciceId={selectedExerciceId}
         />
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
-          <RupturesToggle />
+          {showRuptures && <RupturesToggle />}
           {exportHref && <ExportButton href={exportHref} />}
           <PrintButton iconOnly />
         </div>

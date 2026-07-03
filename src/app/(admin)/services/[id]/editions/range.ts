@@ -1,5 +1,5 @@
 import { prisma } from "@/server/db";
-import type { DatedSession, EditionRow } from "@/server/services/editions";
+import type { DatedSession } from "@/server/services/editions";
 
 // Plage de dates partagée par les écrans « Plannings » et « Pointages » : vue
 // Hebdomadaire / Mensuelle / par Période (> 1 mois). Tout en UTC (cf. slots /
@@ -345,20 +345,4 @@ export function bucketSessions(
     else map.set(key, { key, label, sessions: [s] });
   }
   return [...map.values()];
-}
-
-// ── Liste des réservations : vue alphabétique (réservations triées + total) ──
-// (La vue « par date » liste les OCCURRENCES via listDatedSessions + bucketSessions.)
-
-export type RowTotals = { reservations: number; enfants: number; accompagnants: number };
-
-/** Cumul d'une liste de réservations (nb réservations + enfants + accompagnants). */
-export function computeRowTotals(rows: EditionRow[]): RowTotals {
-  const t: RowTotals = { reservations: 0, enfants: 0, accompagnants: 0 };
-  for (const r of rows) {
-    t.reservations += 1;
-    t.enfants += r.enfants;
-    t.accompagnants += r.accompagnants;
-  }
-  return t;
 }

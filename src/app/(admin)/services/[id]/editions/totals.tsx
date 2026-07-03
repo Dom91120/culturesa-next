@@ -1,4 +1,4 @@
-import type { RowTotals, Totals } from "./range";
+import type { Totals } from "./range";
 
 const plural = (n: number) => (n > 1 ? "s" : "");
 
@@ -77,23 +77,5 @@ export function TotalsLine({
           `${totals.enfants} enfant${plural(totals.enfants)}`,
           `${totals.accompagnants} accompagnant${plural(totals.accompagnants)}`,
         ];
-  return <TotalsBar label={label} parts={parts} strong={strong} />;
-}
-
-// Total de réservations (Liste des réservations).
-export function ListeTotalsLine({
-  label,
-  totals,
-  strong = false,
-}: {
-  label: string;
-  totals: RowTotals;
-  strong?: boolean;
-}) {
-  const parts = [
-    `${totals.reservations} réservation${plural(totals.reservations)}`,
-    `${totals.enfants} enfant${plural(totals.enfants)}`,
-    `${totals.accompagnants} accompagnant${plural(totals.accompagnants)}`,
-  ];
   return <TotalsBar label={label} parts={parts} strong={strong} />;
 }

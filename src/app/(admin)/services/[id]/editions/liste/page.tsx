@@ -2,16 +2,19 @@ import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
-import { type EditionRow, listEditionRows } from "@/server/services/editions";
-import { ExerciceSelect } from "../exercice-select";
-import { ExportButton } from "../export-button";
-import { PrintButton } from "../print-button";
-import { computeRowTotals, resolveEditionExercice } from "../range";
-import { ListeTotalsLine } from "../totals";
+import {
+  type DatedSession,
+  listDatedSessions,
+  POINTAGE_LABEL,
+  type SessionAttendee,
+} from "@/server/services/editions";
+import { computeTotals, resolveEditionExercice, resolveRange } from "../range";
+import { RangeBar } from "../range-bar";
+import { TotalsLine } from "../totals";
 
 const PER_PAGE = 20;
 
-// Colonnes triables de la liste des réservations. `key` = paramètre d'URL `?sort=`.
+// Colonnes triables (clic sur l'en-tête → ?sort=<key>&dir=asc|desc).
 type SortKey =
   | "date"
   | "creneau"
@@ -33,36 +36,47 @@ const COLS: { key: SortKey; label: string; width: string; center?: boolean }[] =
 ];
 const SORT_KEYS = new Set<string>(COLS.map((c) => c.key));
 
-/** Valeur de tri d'une ligne pour une colonne (nombre pour Participants, sinon chaîne). */
-function sortValue(r: EditionRow, key: SortKey): string | number {
+type OccRow = { s: DatedSession; a: SessionAttendee };
+
+/** Valeur de tri d'une occurrence pour une colonne (nombre pour Participants, sinon chaîne). */
+function sortValue({ s, a }: OccRow, key: SortKey): string | number {
   switch (key) {
     case "date":
-      return r.jour;
+      return `${s.date} ${s.startTime}`;
     case "creneau":
-      return r.debut;
+      return s.startTime;
     case "demandeur":
-      return r.demandeur;
+      return a.demandeur;
     case "identite":
-      return `${r.nom} ${r.prenom}`;
+      return `${a.nom} ${a.prenom}`;
     case "theme":
-      return r.theme;
+      return a.theme;
     case "participants":
-      return r.enfants + r.accompagnants;
+      return a.enfants + a.accompagnants;
     case "statut":
-      return r.statut;
+      return a.statut;
     case "pointage":
-      return r.pointage;
+      return a.pointage ?? "";
   }
 }
 
-// Édition « Liste des réservations » : une ligne par RÉSERVATION, triable par colonne
-// (clic sur l'en-tête → ?sort=<col>&dir=asc|desc), paginée (20/page) + total.
+// Édition « Liste des réservations » : occurrences datées de la plage choisie
+// (Hebdomadaire / Mensuel / Trimestriel / Annuel), TRIABLES par colonne, paginées + total.
 export default async function EditionsListePage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ sort?: string; dir?: string; page?: string; exercice?: string }>;
+  searchParams: Promise<{
+    mode?: string;
+    date?: string;
+    week?: string;
+    trim?: string;
+    page?: string;
+    exercice?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -75,56 +89,61 @@ export default async function EditionsListePage({
   if (!service) notFound();
   const { exercices, selected } = exo;
 
-  const sortKey: SortKey = SORT_KEYS.has(sp.sort ?? "") ? (sp.sort as SortKey) : "identite";
+  const range = resolveRange(id, "liste", sp, selected, selected?.id);
+  const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd, selected?.periodIds);
+
+  const sortKey: SortKey = SORT_KEYS.has(sp.sort ?? "") ? (sp.sort as SortKey) : "date";
   const dir = sp.dir === "desc" ? "desc" : "asc";
 
-  const rows = await listEditionRows(id, undefined, selected?.periodIds);
-  const sorted = [...rows].sort((a, b) => {
-    const va = sortValue(a, sortKey);
-    const vb = sortValue(b, sortKey);
+  const flat: OccRow[] = sessions.flatMap((s) => s.attendees.map((a) => ({ s, a })));
+  flat.sort((x, y) => {
+    const vx = sortValue(x, sortKey);
+    const vy = sortValue(y, sortKey);
     let c =
-      typeof va === "number" && typeof vb === "number"
-        ? va - vb
-        : String(va).localeCompare(String(vb));
-    // Départage stable par identité (Nom, Prénom).
-    if (c === 0) c = `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`);
+      typeof vx === "number" && typeof vy === "number"
+        ? vx - vy
+        : String(vx).localeCompare(String(vy));
+    if (c === 0) c = `${x.a.nom} ${x.a.prenom}`.localeCompare(`${y.a.nom} ${y.a.prenom}`);
     return dir === "desc" ? -c : c;
   });
 
-  const pages = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+  const pages = Math.max(1, Math.ceil(flat.length / PER_PAGE));
   const page = Math.min(Math.max(1, Number(sp.page) || 1), pages);
-  const pageRows = sorted.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const pageRows = flat.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // Href conservant exercice + tri courant.
-  const buildHref = (extra: Record<string, string>) => {
+  // Base d'URL : conserve exercice + plage courante (mode/date/trim).
+  const baseParams = () => {
     const p = new URLSearchParams();
     if (selected) p.set("exercice", String(selected.id));
+    p.set("mode", range.mode);
+    if (range.mode === "week" || range.mode === "month") p.set("date", range.dateParam);
+    if (range.mode === "trimester" && range.trimIndex != null)
+      p.set("trim", String(range.trimIndex));
+    return p;
+  };
+  const sortHref = (key: SortKey) => {
+    const p = baseParams();
+    p.set("sort", key);
+    p.set("dir", key === sortKey && dir === "asc" ? "desc" : "asc");
+    return `/services/${id}/editions/liste?${p.toString()}`;
+  };
+  const pageHref = (n: number) => {
+    const p = baseParams();
     p.set("sort", sortKey);
     p.set("dir", dir);
-    for (const [k, v] of Object.entries(extra)) p.set(k, v);
-    return `/services/${id}/editions/liste?${p.toString()}`;
-  };
-  const pageHref = (n: number) => buildHref({ page: String(n) });
-  // Lien d'en-tête : bascule asc↔desc sur la colonne cliquée, repart page 1.
-  const sortHref = (key: SortKey) => {
-    const nextDir = key === sortKey && dir === "asc" ? "desc" : "asc";
-    const p = new URLSearchParams();
-    if (selected) p.set("exercice", String(selected.id));
-    p.set("sort", key);
-    p.set("dir", nextDir);
+    p.set("page", String(n));
     return `/services/${id}/editions/liste?${p.toString()}`;
   };
 
-  const linkBtn: React.CSSProperties = {
-    fontSize: ".7rem",
-    padding: "3px 8px",
+  const navBtn: React.CSSProperties = {
+    fontSize: ".8rem",
+    padding: "3px 9px",
     borderRadius: 6,
     border: "1px solid var(--border)",
     background: "var(--surface1)",
     color: "var(--text)",
     textDecoration: "none",
   };
-  const navBtn: React.CSSProperties = { ...linkBtn, padding: "3px 9px", fontSize: ".8rem" };
   const thBase: React.CSSProperties = { whiteSpace: "nowrap" };
   const tdNoWrap: React.CSSProperties = {
     whiteSpace: "nowrap",
@@ -135,37 +154,23 @@ export default async function EditionsListePage({
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          gap: ".5rem",
-          alignItems: "center",
-          flexWrap: "wrap",
-          marginBottom: "1rem",
-        }}
-      >
-        <a href={`/services/${id}/editions`} className="no-print" style={linkBtn}>
-          ← Éditions
-        </a>
-        <div
-          className="agenda-mode-toggles-wrap no-print"
-          style={{ marginLeft: "auto", alignItems: "center", gap: ".6rem" }}
-        >
-          <ExerciceSelect exercices={exercices} selectedId={selected?.id ?? null} />
-          <ExportButton
-            href={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
-          />
-          <PrintButton iconOnly />
-        </div>
-      </div>
+      <RangeBar
+        serviceId={id}
+        screen="liste"
+        range={range}
+        exportHref={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
+        exercices={exercices}
+        selectedExerciceId={selected?.id ?? null}
+        showRuptures={false}
+      />
 
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
         Liste des réservations — {service.label}
       </h2>
 
-      {sorted.length === 0 ? (
+      {flat.length === 0 ? (
         <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucune réservation pour ce service.
+          Aucune réservation sur cette période.
         </p>
       ) : (
         <>
@@ -196,29 +201,33 @@ export default async function EditionsListePage({
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((r) => (
-                  <tr key={r.id}>
-                    <td style={tdNoWrap}>{r.jour}</td>
+                {pageRows.map(({ s, a }, i) => (
+                  <tr key={`${s.date}-${s.startTime}-${a.nom}-${a.prenom}-${i}`}>
                     <td style={tdNoWrap}>
-                      {r.debut && r.fin ? `${r.debut}–${r.fin}` : "Journée entière"}
+                      {s.dayLabel} {s.dateLabel}
                     </td>
-                    <td style={tdNoWrap}>{r.demandeur || "—"}</td>
+                    <td style={tdNoWrap}>
+                      {s.startTime && s.endTime
+                        ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
+                        : "Journée entière"}
+                    </td>
+                    <td style={tdNoWrap}>{a.demandeur || "—"}</td>
                     <td style={{ ...tdNoWrap, fontWeight: 600 }}>
-                      {`${r.nom} ${r.prenom}`.trim() || "—"}
+                      {`${a.nom} ${a.prenom}`.trim() || "—"}
                     </td>
-                    <td style={tdNoWrap}>{r.theme || "—"}</td>
+                    <td style={tdNoWrap}>{a.theme || "—"}</td>
                     <td style={tdCenter}>
-                      {r.enfants} + {r.accompagnants}
+                      {a.enfants} + {a.accompagnants}
                     </td>
                     <td style={tdNoWrap}>
                       <span
-                        className={`role-pill ${r.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
+                        className={`role-pill ${a.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
                         style={{ whiteSpace: "nowrap" }}
                       >
-                        {r.statut}
+                        {a.statut}
                       </span>
                     </td>
-                    <td style={tdCenter}>{r.pointage || "—"}</td>
+                    <td style={tdCenter}>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -244,7 +253,7 @@ export default async function EditionsListePage({
                 <span style={{ ...navBtn, opacity: 0.4 }}>◀</span>
               )}
               <span style={{ fontSize: ".8rem", color: "var(--muted)" }}>
-                Page {page} / {pages} · {sorted.length} ligne{sorted.length > 1 ? "s" : ""}
+                Page {page} / {pages} · {flat.length} ligne{flat.length > 1 ? "s" : ""}
               </span>
               {page < pages ? (
                 <a href={pageHref(page + 1)} style={navBtn} aria-label="Page suivante">
@@ -257,7 +266,12 @@ export default async function EditionsListePage({
           )}
 
           {page === pages && (
-            <ListeTotalsLine label="Total général" totals={computeRowTotals(sorted)} strong />
+            <TotalsLine
+              label="Total général"
+              totals={computeTotals(sessions)}
+              variant="planning"
+              strong
+            />
           )}
         </>
       )}
