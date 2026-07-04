@@ -67,6 +67,8 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
     if (dated.length === 0) continue;
 
     const directIds = dated.map((s) => s.id);
+    // Index slotId → slot pour éviter un dated.find() par réservation (O(n·m)) dans la boucle.
+    const datedById = new Map(dated.map((s) => [s.id, s]));
 
     // Réservations confirmées posées sur ces dates : réservations-enfants des
     // récurrentes OU ponctuelles autonomes (toutes deux sur un slot DATÉ). Plus de
@@ -138,7 +140,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
       if (!tpl) continue;
 
       // Slot d'occurrence à cette date = le slot daté direct de la réservation.
-      const occ = dated.find((s) => s.id === b.slotId);
+      const occ = datedById.get(b.slotId);
       if (!occ) continue;
 
       // Destinataire(s) selon le réglage GLOBAL de l'action « rappel » (défaut = usager concerné).
