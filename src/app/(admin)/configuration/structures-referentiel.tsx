@@ -15,7 +15,11 @@ export function StructuresReferentiel({
   demandeurs: DemandeurOption[];
 }) {
   return (
-    <ReferentielEntry title="Structures" subtitle="Structures rattachées aux demandeurs">
+    <ReferentielEntry
+      title="Structures"
+      subtitle="Structures rattachées aux demandeurs"
+      maxWidth={820}
+    >
       {(close) => <StructuresEditor initial={structures} demandeurs={demandeurs} onClose={close} />}
     </ReferentielEntry>
   );
