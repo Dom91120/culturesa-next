@@ -26,6 +26,11 @@ body {
 /* Impression : masque la barre utilisateur, la sidebar, les onglets et tout élément
    marqué .no-print ; la zone de contenu prend toute la largeur. */
 @media print {
+  /* Éditions imprimées en PAYSAGE (plus de largeur pour les tableaux, ex. Liste 8 colonnes). */
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
   .user-bar,
   #service-sidebar-wrap,
   .tabs-nav,
@@ -49,5 +54,21 @@ body {
     padding: 0 !important;
     height: auto !important;
     overflow: visible !important;
+  }
+  /* Tables larges (Liste des réservations, min-width 1080) : en impression on les laisse
+     tenir dans la page (fin du min-width + overflow) et les cellules passent à la ligne
+     (au lieu de l'ellipsis) pour n'amputer aucune donnée. */
+  .admin-table-wrap {
+    overflow: visible !important;
+  }
+  .admin-table {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .admin-table th,
+  .admin-table td {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
   }
 }
