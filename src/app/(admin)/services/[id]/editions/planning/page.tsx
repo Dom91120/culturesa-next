@@ -101,6 +101,10 @@ export default async function PlanningPage({
                   <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
                     {a.structure || a.demandeur || "—"}
                   </div>
+                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                    Tel : {a.tel || "—"}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.email || "—"}</div>
                   <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.theme || "—"}</div>
                   <div
                     style={{

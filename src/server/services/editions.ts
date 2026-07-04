@@ -41,6 +41,8 @@ export type SessionAttendee = {
   prenom: string;
   structure: string;
   demandeur: string;
+  email: string;
+  tel: string;
   enfants: number;
   accompagnants: number;
   theme: string;
@@ -92,6 +94,8 @@ export async function listDatedSessions(
         select: {
           nom: true,
           prenom: true,
+          email: true,
+          tel: true,
           structure: { select: { label: true } },
           demandeur: { select: { label: true } },
         },
@@ -123,6 +127,8 @@ export async function listDatedSessions(
       prenom: b.user.prenom,
       structure: b.user.structure?.label ?? "",
       demandeur: b.user.demandeur?.label ?? "",
+      email: b.user.email ?? "",
+      tel: b.user.tel ?? "",
       enfants: b.enfants,
       accompagnants: b.accompagnants,
       theme: b.themeLabel,
