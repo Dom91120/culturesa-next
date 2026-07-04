@@ -322,14 +322,69 @@ function BarRow({
   max,
   color,
   suffix,
+  labelAbove = false,
 }: {
   label: string;
   value: number;
   max: number;
   color?: string;
   suffix?: string;
+  // true = libellé sur sa propre ligne AU-DESSUS de la barre (texte entier, pas d'ellipsis) ;
+  // false (défaut) = libellé à gauche dans une colonne fixe (tronqué si trop long).
+  labelAbove?: boolean;
 }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  const bar = (
+    <div
+      style={{
+        flex: 1,
+        height: 16,
+        background: "rgba(127,127,127,.12)",
+        borderRadius: 4,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          width: `${pct}%`,
+          height: "100%",
+          background: color ?? "var(--accent)",
+          borderRadius: 4,
+        }}
+      />
+    </div>
+  );
+  const val = (
+    <div
+      style={{ width: 44, fontSize: ".75rem", fontWeight: 600, textAlign: "left", flexShrink: 0 }}
+    >
+      {value}
+      {suffix ?? ""}
+    </div>
+  );
+
+  if (labelAbove) {
+    return (
+      <div style={{ marginBottom: ".5rem" }}>
+        <div
+          style={{
+            fontSize: ".72rem",
+            color: "var(--muted)",
+            lineHeight: 1.2,
+            marginBottom: ".2rem",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {label}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+          {bar}
+          {val}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: ".75rem", marginBottom: ".5rem" }}>
       <div
@@ -346,30 +401,8 @@ function BarRow({
       >
         {label}
       </div>
-      <div
-        style={{
-          flex: 1,
-          height: 16,
-          background: "rgba(127,127,127,.12)",
-          borderRadius: 4,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            width: `${pct}%`,
-            height: "100%",
-            background: color ?? "var(--accent)",
-            borderRadius: 4,
-          }}
-        />
-      </div>
-      <div
-        style={{ width: 44, fontSize: ".75rem", fontWeight: 600, textAlign: "left", flexShrink: 0 }}
-      >
-        {value}
-        {suffix ?? ""}
-      </div>
+      {bar}
+      {val}
     </div>
   );
 }
@@ -753,6 +786,7 @@ export default async function StatsPage({
               max={100}
               color="#a07dd4"
               suffix="%"
+              labelAbove
             />
           ))}
         </Panel>
