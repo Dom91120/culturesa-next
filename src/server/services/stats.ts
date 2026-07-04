@@ -3,6 +3,8 @@ import { gaugeUnits } from "@/lib/gauge";
 import { schoolYearLabel } from "@/lib/school-year";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import { getServiceDemandeurSettings } from "@/server/services/demandeur-settings";
+import { deriveServiceModes } from "@/server/services/service-modes";
 
 // =====================================================================================
 // Statistiques d'un service. Agrégation 100 % serveur, sans dépendance de graphes :
@@ -147,6 +149,16 @@ export async function getServiceStats(
   const serviceCapacity = service?.capacity ?? 1;
   const gaugeAccompagnants = service?.gaugeAccompagnants ?? true;
 
+  // Jauge PAR MODE (même règle que assertSlotCapacity) : l'occupation ne se compte en
+  // unités-jauge (enfants + accompagnants selon gaugeAccompagnants) QUE si le mode a la
+  // jauge activée ; sinon 1 par réservation. `isRec` = réservation de mode récurrent
+  // (parent récurrent OU occurrence-miroir), false = ponctuel.
+  const modes = deriveServiceModes(await getServiceDemandeurSettings(serviceId));
+  const occUnits = (enfants: number, accompagnants: number, isRec: boolean): number =>
+    (isRec ? modes.gaugeRec : modes.gaugePonct)
+      ? gaugeUnits(enfants, accompagnants, gaugeAccompagnants)
+      : 1;
+
   const volPass = (b: (typeof volumeRows)[number]): boolean => {
     if (type === "rec" && b.bookingType !== "recurring") return false;
     if (type === "uniq" && b.bookingType !== "unique") return false;
@@ -182,7 +194,8 @@ export async function getServiceStats(
     capBySlot.set(b.slotId, b.slot.capacity ?? serviceCapacity);
     occBySlot.set(
       b.slotId,
-      (occBySlot.get(b.slotId) ?? 0) + gaugeUnits(b.enfants, b.accompagnants, gaugeAccompagnants),
+      (occBySlot.get(b.slotId) ?? 0) +
+        occUnits(b.enfants, b.accompagnants, b.bookingType === "recurring"),
     );
     // Mois : date du créneau (ponctuel) sinon début de période (récurrent), comme le legacy.
     const ref = b.slot.slotDate ?? periodsById.get(b.periodId ?? 0)?.dateStart ?? null;
@@ -277,7 +290,7 @@ export async function getServiceStats(
       cap: b.slot.capacity ?? serviceCapacity,
       month: dateStr.slice(0, 7),
     };
-    cur.occ += gaugeUnits(b.enfants, b.accompagnants, gaugeAccompagnants);
+    cur.occ += occUnits(b.enfants, b.accompagnants, b.parentBookingId != null);
     sessionAgg.set(key, cur);
   }
   const monthFillSum = new Map<string, number>();
