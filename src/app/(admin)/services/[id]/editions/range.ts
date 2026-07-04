@@ -30,6 +30,12 @@ const fmtShort = new Intl.DateTimeFormat("fr-FR", {
   year: "numeric",
   timeZone: "UTC",
 });
+// Jour + mois abrégé, sans année (ex. « 29 juin », « 5 juil. ») — nav de plage hebdo.
+const fmtDayMonth = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
 const fmtMonth = new Intl.DateTimeFormat("fr-FR", {
   month: "long",
   year: "numeric",
@@ -278,7 +284,7 @@ export function resolveRange(
     dateParam,
     trimIndex: null,
     trimestres: trimList,
-    subtitle: `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
+    subtitle: `${fmtDayMonth.format(from)} → ${fmtDayMonth.format(to)}`,
     prevHref:
       !es || prevWeekEnd >= es ? `${base}?mode=week&date=${ymd(addDays(from, -7))}${exq}` : null,
     nextHref:
