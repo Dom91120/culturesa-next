@@ -226,7 +226,8 @@ export default async function EditionsListePage({
                 {s.startTime && s.endTime ? (
                   <>
                     {s.startTime.slice(0, 5)}
-                    <span className="pr-2l">–{s.endTime.slice(0, 5)}</span>
+                    <span className="pr-dash">–</span>
+                    <span className="pr-2l">{s.endTime.slice(0, 5)}</span>
                   </>
                 ) : (
                   "Journée entière"

@@ -99,4 +99,9 @@ body {
   .admin-table td .pr-2l {
     display: block;
   }
+  /* Le tiret de séparation du créneau (« 15:00–16:00 ») disparaît à l'impression, où
+     début et fin sont sur 2 lignes. */
+  .admin-table td .pr-dash {
+    display: none;
+  }
 }
