@@ -1006,7 +1006,7 @@ textarea {
   opacity: 0.8;
   cursor: not-allowed;
 }
-/* Petite croix de suppression sur les badges "my-booking", visible au survol */
+/* Petite croix de suppression sur le badge « ma réservation », visible au survol */
 .slot-btn .slot-btn-close,
 .user-agenda-mine-badge .slot-btn-close {
   position: absolute;
@@ -1026,8 +1026,6 @@ textarea {
   user-select: none;
   z-index: 2;
 }
-.slot-btn.my-booking:hover .slot-btn-close,
-.slot-btn.my-booking-pending:hover .slot-btn-close,
 .user-agenda-mine-badge:hover .slot-btn-close {
   display: inline-flex;
 }
@@ -1143,7 +1141,7 @@ textarea.theme-pending:focus::placeholder {
   font-size: 0.85rem;
 }
 
-/* ── Gauge badge inputs : spinners natifs masqués, remplacés par .gauge-spin-btn ─ */
+/* ── Gauge badge inputs : spinners natifs masqués ─────────────────────────────── */
 .gauge-badge input[type="number"] {
   -moz-appearance: textfield;
 }
@@ -2085,9 +2083,6 @@ textarea.theme-pending:focus::placeholder {
   font-weight: 500;
   min-width: 3.5em;
 }
-.indic_r,
-.indic_v,
-.indic_e,
 .indic_p,
 .indic_a {
   display: block;
@@ -2508,8 +2503,6 @@ textarea.theme-pending:focus::placeholder {
    (overflow: hidden sur .planning-name-tag / .user-agenda-mine-badge), pas
    par chaque span individuellement. Donc pas de "…" en bout de chaque ligne,
    juste un clipping net du contenu qui dépasse globalement le badge. */
-.slot-btn.my-booking .slot-spots,
-.slot-btn.my-booking-pending .slot-spots,
 .user-agenda-mine-badge .slot-spots,
 .user-agenda-mine-badge .slot-spots > span,
 .planning-name-tag > span {
@@ -2518,8 +2511,8 @@ textarea.theme-pending:focus::placeholder {
 }
 
 /* Badge "ma réservation" posé en sticker absolu PAR-DESSUS l'affichage du créneau.
-   Les couleurs, l'ombre, ainsi que les dimensions (160×40) reprennent
-   .slot-btn.my-booking / .my-booking-pending du tableau de réservations.
+   Les couleurs, l'ombre et les dimensions (160×40) reprennent le badge
+   « ma réservation » du tableau de réservations.
    Centré dans le bloc ; rétrécit gracieusement si le bloc est plus étroit
    ou plus court que les dimensions cibles (overlap, créneau court).
    Variant .has-widgets : badge avec thème/jauge — laisse pousser en hauteur
@@ -2742,26 +2735,21 @@ textarea.theme-pending:focus::placeholder {
   background: none;
   cursor: pointer;
 }
-.rte-content table,
-.rte-preview table {
+.rte-content table {
   border-collapse: collapse;
   margin: 0 0 0.55rem;
 }
 .rte-content th,
-.rte-content td,
-.rte-preview th,
-.rte-preview td {
+.rte-content td {
   border: 1px solid var(--border);
   padding: 0.25rem 0.45rem;
   min-width: 2rem;
 }
-.rte-content th,
-.rte-preview th {
+.rte-content th {
   background: var(--surface2);
   font-weight: 700;
 }
-.rte-content img,
-.rte-preview img {
+.rte-content img {
   max-width: 100%;
   height: auto;
 }
