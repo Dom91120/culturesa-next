@@ -95,7 +95,7 @@ export default async function PointagesPage({
             <th style={th}>Thème</th>
             <th style={{ ...th, width: 150 }}>Participants</th>
             <th style={{ ...th, textAlign: "center", width: 110 }}>Pointage</th>
-            <th style={{ ...th, width: 180 }}>Émargement</th>
+            <th style={{ ...th, width: 120 }}>Émargement</th>
           </tr>
         </thead>
         <tbody>
