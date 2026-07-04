@@ -91,7 +91,7 @@ export default async function PlanningPage({
                 <div
                   key={`${a.nom}-${a.prenom}-${i}`}
                   style={{
-                    width: 200,
+                    width: 220,
                     border: "1px solid var(--border)",
                     borderRadius: "var(--rad-sm)",
                     padding: ".35rem .6rem",
