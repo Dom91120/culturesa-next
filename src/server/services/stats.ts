@@ -194,8 +194,8 @@ export async function getServiceStats(
   const pending = vol.filter((b) => !b.validated).length;
   const enfants = vol.reduce((s, b) => s + b.enfants, 0);
   const accompagnants = vol.reduce((s, b) => s + b.accompagnants, 0);
-  const recurringCount = vol.filter((b) => b.bookingType === "recurring").length;
-  const uniqueCount = vol.filter((b) => b.bookingType === "unique").length;
+  // recurringCount / uniqueCount : voir plus bas — comptés sur les OCCURRENCES DATÉES
+  // (miroir = récurrente, ponctuel autonome = ponctuelle), pas sur les réservations parentes.
 
   const dayMap = new Map<string, number>();
   const structMap = new Map<string, number>();
@@ -285,12 +285,18 @@ export async function getServiceStats(
   });
   const sessionAgg = new Map<string, { occ: number; cap: number; month: string }>();
   const monthCount = new Map<string, number>(); // occurrences/mois (Évolution mensuelle)
+  // Type de réservation : compté sur les OCCURRENCES (miroir = récurrente, ponctuel autonome
+  // = ponctuelle), pas sur les réservations parentes.
+  let recurringCount = 0;
+  let uniqueCount = 0;
   for (const b of datedFillRows) {
     if (type === "rec" && b.parentBookingId == null) continue; // miroir = occurrence récurrente
     if (type === "uniq" && b.parentBookingId != null) continue; // ponctuel autonome
     if (!b.slot.slotDate) continue;
     const dateStr = ymd(b.slot.slotDate);
     if (!inRange(dateStr, dateFrom, dateTo)) continue;
+    if (b.parentBookingId != null) recurringCount += 1;
+    else uniqueCount += 1;
     const bucket = dateStr.slice(0, 7);
     monthCount.set(bucket, (monthCount.get(bucket) ?? 0) + 1);
     // Clé de séance : le créneau récurrent parent (partagé par toutes les occurrences d'une

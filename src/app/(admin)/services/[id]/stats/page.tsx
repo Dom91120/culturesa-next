@@ -744,8 +744,8 @@ export default async function StatsPage({
             { label: "Récurrentes", value: stats.recurringCount, color: C_PRESENT },
             { label: "Ponctuelles", value: stats.uniqueCount, color: "#5ab4e8" },
           ]}
-          centerValue={String(stats.total)}
-          centerLabel="réservations"
+          centerValue={String(stats.recurringCount + stats.uniqueCount)}
+          centerLabel="séances"
         />
 
         <DonutPanel
