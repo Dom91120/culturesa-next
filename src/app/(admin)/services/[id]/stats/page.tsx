@@ -700,7 +700,7 @@ export default async function StatsPage({
         />
         <Panel
           title="Évolution mensuelle"
-          hint="Nombre de réservations par mois (les récurrentes comptent à chaque séance)"
+          hint="Nombre de séances par mois"
           empty={stats.byMonth.length === 0}
         >
           <AreaChart data={stats.byMonth} color="#e8a45a" />
