@@ -241,6 +241,10 @@ export function resolveRange(
   if (sp.mode === "month") {
     const from = monthStart(ref);
     const to = monthEnd(ref);
+    // Bornage sur l'exercice : on ne propose ◀/▶ que si le mois cible chevauche encore
+    // l'exercice (fin du mois précédent = veille du 1er ; début du mois suivant).
+    const prevMonthEnd = ymd(addDays(from, -1));
+    const nextMonthStart = ymd(addMonthsToFirst(from, 1));
     return {
       mode: "month",
       fromYmd: ymd(from),
@@ -249,14 +253,24 @@ export function resolveRange(
       trimIndex: null,
       trimestres: trimList,
       subtitle: cap(fmtMonth.format(from)),
-      prevHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, -1))}${exq}`,
-      nextHref: `${base}?mode=month&date=${ymd(addMonthsToFirst(from, 1))}${exq}`,
+      prevHref:
+        !es || prevMonthEnd >= es
+          ? `${base}?mode=month&date=${ymd(addMonthsToFirst(from, -1))}${exq}`
+          : null,
+      nextHref:
+        !ee || nextMonthStart <= ee
+          ? `${base}?mode=month&date=${ymd(addMonthsToFirst(from, 1))}${exq}`
+          : null,
     };
   }
 
   // ── Hebdomadaire (défaut) ──
   const from = mondayOf(ref);
   const to = addDays(from, 6);
+  // Bornage sur l'exercice : ◀/▶ masquée si la semaine cible ne chevauche plus l'exercice
+  // (fin de la semaine précédente = veille du lundi ; début de la semaine suivante).
+  const prevWeekEnd = ymd(addDays(from, -1));
+  const nextWeekStart = ymd(addDays(from, 7));
   return {
     mode: "week",
     fromYmd: ymd(from),
@@ -265,8 +279,10 @@ export function resolveRange(
     trimIndex: null,
     trimestres: trimList,
     subtitle: `du ${fmtShort.format(from)} au ${fmtShort.format(to)}`,
-    prevHref: `${base}?mode=week&date=${ymd(addDays(from, -7))}${exq}`,
-    nextHref: `${base}?mode=week&date=${ymd(addDays(from, 7))}${exq}`,
+    prevHref:
+      !es || prevWeekEnd >= es ? `${base}?mode=week&date=${ymd(addDays(from, -7))}${exq}` : null,
+    nextHref:
+      !ee || nextWeekStart <= ee ? `${base}?mode=week&date=${ymd(addDays(from, 7))}${exq}` : null,
   };
 }
 
