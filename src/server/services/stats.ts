@@ -182,7 +182,6 @@ export async function getServiceStats(
   const uniqueCount = vol.filter((b) => b.bookingType === "unique").length;
 
   const dayMap = new Map<string, number>();
-  const monthMap = new Map<string, number>();
   const structMap = new Map<string, number>();
   const niveauMap = new Map<string, number>();
   // Pour le remplissage : occupation (unités de jauge) et capacité par créneau.
@@ -197,12 +196,6 @@ export async function getServiceStats(
       (occBySlot.get(b.slotId) ?? 0) +
         occUnits(b.enfants, b.accompagnants, b.bookingType === "recurring"),
     );
-    // Mois : date du créneau (ponctuel) sinon début de période (récurrent), comme le legacy.
-    const ref = b.slot.slotDate ?? periodsById.get(b.periodId ?? 0)?.dateStart ?? null;
-    if (ref) {
-      const bucket = ymd(ref).slice(0, 7);
-      monthMap.set(bucket, (monthMap.get(bucket) ?? 0) + 1);
-    }
     // Structure de l'usager, repli sur son demandeur (cohérent avec les éditions/legacy) ;
     // « (sans structure) » réservé aux usagers sans structure NI demandeur.
     const struct = b.user.structure?.label || b.user.demandeur?.label || "(sans structure)";
@@ -215,13 +208,6 @@ export async function getServiceStats(
     label: DAY_NAMES[d],
     value: dayMap.get(d) ?? 0,
   }));
-  const byMonth = [...monthMap.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([bucket, value]) => {
-      const [y, m] = bucket.split("-");
-      return { label: `${MONTH_NAMES[Number(m) - 1]} ${y}`, value };
-    });
-
   // Taux de remplissage moyen par structure : pour chaque réservation, remplissage du
   // créneau (occupation jauge / capacité, plafonné à 100 %) ; moyenne par structure.
   const fillSum = new Map<string, number>();
@@ -252,11 +238,14 @@ export async function getServiceStats(
   }
   const avgFill = fillNG > 0 ? Math.round(fillTotG / fillNG) : null;
 
-  // Remplissage moyen PAR MOIS (évolution au fil de l'exercice). Base = occurrences DATÉES
-  // (ponctuels autonomes + miroirs des récurrentes, qui portent une slotDate), regroupées
-  // par SÉANCE = (créneau récurrent parent ?? créneau) + date, pour agréger plusieurs usagers
-  // d'une même séance et étaler le récurrent semaine par semaine. Fill/séance = min(100,
-  // occupation jauge / capacité) ; moyenne (arrondie) des séances de chaque mois.
+  // OCCURRENCES DATÉES (ponctuels autonomes + miroirs des récurrentes, qui portent une
+  // slotDate). Servent à DEUX graphes mensuels :
+  //   • « Évolution mensuelle » (byMonth) : NOMBRE d'occurrences par mois — les récurrents
+  //     sont comptés via leurs MIROIRS (une occurrence par date réelle), pas rattachés au
+  //     mois de début de période. Chaque occurrence (ponctuel ou miroir) = 1.
+  //   • « Remplissage moyen par mois » (fillByMonth) : regroupe par SÉANCE = (créneau
+  //     récurrent parent ?? créneau) + date, fill/séance = min(100, occ jauge / capacité),
+  //     moyenne des séances du mois.
   const datedFillRows = await prisma.booking.findMany({
     where: {
       serviceId,
@@ -276,12 +265,15 @@ export async function getServiceStats(
     },
   });
   const sessionAgg = new Map<string, { occ: number; cap: number; month: string }>();
+  const monthCount = new Map<string, number>(); // occurrences/mois (Évolution mensuelle)
   for (const b of datedFillRows) {
     if (type === "rec" && b.parentBookingId == null) continue; // miroir = occurrence récurrente
     if (type === "uniq" && b.parentBookingId != null) continue; // ponctuel autonome
     if (!b.slot.slotDate) continue;
     const dateStr = ymd(b.slot.slotDate);
     if (!inRange(dateStr, dateFrom, dateTo)) continue;
+    const bucket = dateStr.slice(0, 7);
+    monthCount.set(bucket, (monthCount.get(bucket) ?? 0) + 1);
     // Clé de séance : le créneau récurrent parent (partagé par toutes les occurrences d'une
     // même date) sinon le créneau lui-même (ponctuel).
     const key = `${b.slot.parentSlotId ?? b.slot.id}|${dateStr}`;
@@ -309,6 +301,15 @@ export async function getServiceStats(
         label: `${MONTH_NAMES[Number(m) - 1]} ${y}`,
         value: Math.round(sum / (monthFillCnt.get(bucket) ?? 1)),
       };
+    });
+
+  // Évolution mensuelle : nombre d'occurrences datées par mois (récurrents comptés via
+  // leurs miroirs, pas rattachés au mois de début de période).
+  const byMonth = [...monthCount.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([bucket, value]) => {
+      const [y, m] = bucket.split("-");
+      return { label: `${MONTH_NAMES[Number(m) - 1]} ${y}`, value };
     });
 
   // Effectifs (enfants) par exercice — TOUS exercices (pas de filtre de dates), filtre type.
