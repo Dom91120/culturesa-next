@@ -209,18 +209,33 @@ function Legend({
       {items.map((it) => (
         <div
           key={it.label}
-          style={{ display: "flex", alignItems: "center", gap: ".4rem", fontSize: ".71rem" }}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: ".4rem",
+            fontSize: ".71rem",
+            lineHeight: 1.3,
+          }}
         >
           <span
-            style={{ width: 9, height: 9, borderRadius: 3, background: it.color, flexShrink: 0 }}
+            style={{
+              width: 9,
+              height: 9,
+              borderRadius: 3,
+              background: it.color,
+              flexShrink: 0,
+              marginTop: 3,
+            }}
           />
+          {/* Libellé : colonne flexible bornée par les colonnes nombre/% ; passe à la ligne
+              (pas d'ellipsis) pour les noms longs, sans pousser le % hors du panneau. */}
           <span
             style={{
               color: "var(--muted)",
               letterSpacing: "-.2px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              flex: 1,
+              minWidth: 0,
+              overflowWrap: "anywhere",
             }}
           >
             {it.label}
