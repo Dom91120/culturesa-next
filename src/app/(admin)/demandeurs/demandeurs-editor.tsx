@@ -61,6 +61,7 @@ export function DemandeursEditor({
       renderExtraCells={(r, patch) => (
         <span style={{ display: "flex", justifyContent: "center" }}>
           <Switch
+            size="sm"
             on={r.openOnSchoolHolidays}
             onChange={(v) => patch(r.key, { openOnSchoolHolidays: v })}
           />
