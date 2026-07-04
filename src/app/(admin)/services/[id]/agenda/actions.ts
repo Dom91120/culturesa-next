@@ -173,7 +173,9 @@ export async function saveSlotConfigAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   const { serviceId, slotId, capacity, demandeurIds } = input;
-  if (!Number.isInteger(capacity) || capacity < 0) {
+  // Capacité alignée sur la création (schemas/slot.ts) : entier 1..9999. Un créneau à 0
+  // place le rendrait silencieusement irréservable.
+  if (!Number.isInteger(capacity) || capacity < 1 || capacity > 9999) {
     return { ok: false, error: "Capacité invalide." };
   }
   const ids = [...new Set(demandeurIds.filter((d) => Number.isInteger(d) && d > 0))];
