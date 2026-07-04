@@ -105,6 +105,8 @@ export default async function PlanningPage({
                   </div>
                   <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.email || "—"}</div>
                   <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.theme || "—"}</div>
+                  {/* Ligne(s) vierge(s) pour caler « enfants/adultes » sur la 7e ligne. */}
+                  <div aria-hidden="true" style={{ height: ".95rem" }} />
                   <div
                     style={{
                       display: "flex",
