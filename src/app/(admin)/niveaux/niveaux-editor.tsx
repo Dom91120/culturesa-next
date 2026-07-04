@@ -254,7 +254,7 @@ export function NiveauxEditor({
               gridTemplateColumns: GRID,
               gap: ".75rem",
               alignItems: "center",
-              padding: ".4rem .75rem",
+              padding: ".2rem .75rem",
               borderRadius: "var(--rad-sm)",
               // Bord haut réservé à l'indicateur de dépôt (drag) ; pas de trait de séparation.
               borderTop:

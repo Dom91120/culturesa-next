@@ -195,7 +195,7 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
               gridTemplateColumns: GRID,
               gap: ".75rem",
               alignItems: "center",
-              padding: ".4rem .75rem",
+              padding: ".2rem .75rem",
               borderRadius: "var(--rad-sm)",
             }}
           >
@@ -264,14 +264,14 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
                   placeholder="Nom du service"
                   onChange={(e) => patch(r.key, { label: e.target.value })}
                   style={{
-                    fontSize: ".85rem",
+                    fontSize: ".8rem",
                     fontWeight: 600,
                     color: "var(--text)",
                     border: "none",
                     background: "transparent",
                     outline: "none",
                     borderRadius: "var(--rad-sm)",
-                    padding: ".35rem .5rem",
+                    padding: ".2rem .5rem",
                     width: "100%",
                   }}
                 />

@@ -13,7 +13,7 @@ type Row = { id: number | null; label: string; demandeurId: number; users: numbe
 const GRID = "minmax(0, 1fr) 170px 64px 80px";
 
 const SELECT_STYLE = {
-  fontSize: ".78rem",
+  fontSize: ".8rem",
   padding: ".2rem .35rem",
   borderRadius: "var(--rad-sm)",
   border: "1px solid var(--border)",

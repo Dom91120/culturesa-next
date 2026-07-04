@@ -162,7 +162,7 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
               gridTemplateColumns: gridTemplate,
               gap: ".75rem",
               alignItems: "center",
-              padding: ".4rem .75rem",
+              padding: ".2rem .75rem",
               borderRadius: "var(--rad-sm)",
             }}
           >
@@ -173,14 +173,14 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
               placeholder={labels.placeholder}
               onChange={(e) => patch(r.key, { label: e.target.value } as Partial<Row>)}
               style={{
-                fontSize: ".85rem",
+                fontSize: ".8rem",
                 fontWeight: 600,
                 color: "var(--text)",
                 border: "none",
                 background: "transparent",
                 outline: "none",
                 borderRadius: "var(--rad-sm)",
-                padding: ".35rem .5rem",
+                padding: ".2rem .5rem",
                 width: "100%",
               }}
             />
