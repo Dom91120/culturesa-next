@@ -65,6 +65,9 @@ export function RangeBar({
     whiteSpace: "nowrap",
   };
 
+  // En mode annuel, la plage couvre tout l'exercice : la navigation ◀…▶ n'a pas de sens.
+  const showPlage = mode !== "year";
+
   // Plage ◀ <plage> ▶ (reste imprimée). Centrée : ligne 1 par défaut, ligne 2 si un titre
   // occupe déjà le centre de la ligne 1.
   const plageNav = (
@@ -139,7 +142,7 @@ export function RangeBar({
           />
         </div>
 
-        {title ? <div style={centerAbs}>{title}</div> : plageNav}
+        {title ? <div style={centerAbs}>{title}</div> : showPlage ? plageNav : null}
       </div>
 
       {/* Ligne 2 : plage ◀…▶ au centre ; « avec ruptures » + export/impression à droite. */}
@@ -154,7 +157,7 @@ export function RangeBar({
           minHeight: title ? "2rem" : undefined,
         }}
       >
-        {title && plageNav}
+        {title && showPlage && plageNav}
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
           {showRuptures && <RupturesToggle />}
           {exportHref && <ExportButton href={exportHref} />}
