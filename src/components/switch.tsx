@@ -20,7 +20,7 @@ export function Switch({
   // Dimensions par taille (pouce centré verticalement, décalage on/off symétrique).
   const S =
     size === "sm"
-      ? { w: 26, h: 14, knob: 10, top: 2, onLeft: 14, offLeft: 2 }
+      ? { w: 26, h: 14, knob: 12, top: 1, onLeft: 13, offLeft: 1 }
       : { w: 30, h: 16, knob: 12, top: 1, onLeft: 15, offLeft: 1 };
   return (
     <button
