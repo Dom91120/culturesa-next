@@ -261,7 +261,7 @@ export default async function EditionsListePage({
           >
             Liste des réservations
             <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
-            {service.label}
+            <span className="print-only">- {service.label}</span>
           </span>
         }
       />

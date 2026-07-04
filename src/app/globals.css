@@ -17,6 +17,12 @@ body {
   @apply bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
 }
 
+/* Élément réservé à l'impression (ex. nom du service dans le titre des éditions) :
+   masqué à l'écran, affiché uniquement sur la version imprimée. */
+.print-only {
+  display: none;
+}
+
 /* Impression : masque la barre utilisateur, la sidebar, les onglets et tout élément
    marqué .no-print ; la zone de contenu prend toute la largeur. */
 @media print {
@@ -25,6 +31,9 @@ body {
   .tabs-nav,
   .no-print {
     display: none !important;
+  }
+  .print-only {
+    display: inline !important;
   }
   .app-layout {
     display: block !important;

@@ -131,7 +131,7 @@ export default async function PointagesPage({
           >
             {titleLabel}
             <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
-            {service.label}
+            <span className="print-only">- {service.label}</span>
           </span>
         }
       />
