@@ -345,10 +345,12 @@ function BarRow({
 
 function Panel({
   title,
+  hint,
   empty,
   children,
 }: {
   title: string;
+  hint?: string;
   empty: boolean;
   children: React.ReactNode;
 }) {
@@ -358,6 +360,11 @@ function Panel({
         <span className="dot" />
         {title}
       </div>
+      {hint && (
+        <div style={{ fontSize: ".68rem", color: "var(--muted)", margin: "-.35rem 0 .6rem" }}>
+          {hint}
+        </div>
+      )}
       {empty ? (
         <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune donnée.</p>
       ) : (
@@ -691,7 +698,11 @@ export default async function StatsPage({
           centerValue={String(stats.distinctUsers)}
           centerLabel="usagers"
         />
-        <Panel title="Évolution mensuelle" empty={stats.byMonth.length === 0}>
+        <Panel
+          title="Évolution mensuelle"
+          hint="Nombre de réservations par mois (les récurrentes comptent à chaque séance)"
+          empty={stats.byMonth.length === 0}
+        >
           <AreaChart data={stats.byMonth} color="#e8a45a" />
         </Panel>
 
