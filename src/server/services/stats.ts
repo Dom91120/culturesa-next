@@ -90,6 +90,21 @@ function dayKeyOf(slotDay: string | null, slotDate: Date | null): string | null 
   return null;
 }
 
+// Raccourcit les libellés de structure/demandeur pour l'affichage des stats (colonnes
+// étroites) : « (É)cole maternelle » → « Maternelle », « (É)cole élémentaire » →
+// « Élémentaire », « Accueil de loisir(s) » → « ADL ». Insensible casse/accents/pluriel ;
+// seul le préfixe est remplacé, le reste (nom propre) est conservé.
+const LABEL_SHORTCUTS: [RegExp, string][] = [
+  [/[eé]cole maternelle/i, "Maternelle"],
+  [/[eé]cole [eé]l[eé]mentaire/i, "Élémentaire"],
+  [/accueil de loisirs?/i, "ADL"],
+];
+function shortStructureLabel(label: string): string {
+  let out = label;
+  for (const [re, rep] of LABEL_SHORTCUTS) out = out.replace(re, rep);
+  return out.trim();
+}
+
 function topN(map: Map<string, number>, n: number): LabeledCount[] {
   return [...map.entries()]
     .map(([label, value]) => ({ label, value }))
@@ -221,7 +236,10 @@ export async function getServiceStats(
     fillCnt.set(s, (fillCnt.get(s) ?? 0) + 1);
   }
   const fillByStructure = [...fillSum.entries()]
-    .map(([label, sum]) => ({ label, value: Math.round(sum / (fillCnt.get(label) ?? 1)) }))
+    .map(([label, sum]) => ({
+      label: shortStructureLabel(label),
+      value: Math.round(sum / (fillCnt.get(label) ?? 1)),
+    }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
 
@@ -380,7 +398,7 @@ export async function getServiceStats(
     byDay,
     byMonth,
     fillByMonth,
-    topStructures: topN(structMap, 10),
+    topStructures: topN(structMap, 10).map((r) => ({ ...r, label: shortStructureLabel(r.label) })),
     topNiveaux: topN(niveauMap, 10),
     fillByStructure,
     effectifsByExercice,
