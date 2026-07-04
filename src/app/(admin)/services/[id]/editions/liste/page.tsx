@@ -220,12 +220,17 @@ export default async function EditionsListePage({
           {rows.map(({ gi, s, a }) => (
             <tr key={gi}>
               <td style={tdNoWrap}>
-                {s.dayLabel} {s.dateLabel}
+                {s.dayLabel} <span className="pr-2l">{s.dateLabel}</span>
               </td>
               <td style={tdNoWrap}>
-                {s.startTime && s.endTime
-                  ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
-                  : "Journée entière"}
+                {s.startTime && s.endTime ? (
+                  <>
+                    {s.startTime.slice(0, 5)}
+                    <span className="pr-2l">–{s.endTime.slice(0, 5)}</span>
+                  </>
+                ) : (
+                  "Journée entière"
+                )}
               </td>
               <td style={tdNoWrap}>{a.demandeur || "—"}</td>
               <td style={{ ...tdNoWrap, fontWeight: 600 }}>

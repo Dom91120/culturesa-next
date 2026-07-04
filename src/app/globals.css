@@ -94,4 +94,9 @@ body {
     overflow: visible !important;
     text-overflow: clip !important;
   }
+  /* Liste : colonnes Date et Créneau sur 2 lignes à l'impression (jour / date, début /
+     fin) — le 2e segment passe en bloc. À l'écran, `.pr-2l` reste inline (une seule ligne). */
+  .admin-table td .pr-2l {
+    display: block;
+  }
 }
