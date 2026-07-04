@@ -98,22 +98,29 @@ export default async function PlanningPage({
                     fontSize: ".82rem",
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</div>
-                  <div style={{ fontSize: ".76rem" }}>{a.structure || a.demandeur || "—"}</div>
-                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                    Tel : {a.tel || "—"}
+                  {/* Zone haute réservée à 6 lignes (interligne fixe) : le contenu s'y répartit,
+                      les éléments longs peuvent occuper plusieurs lignes, et le reste est comblé
+                      par du vide. « enfants/adultes » suit donc toujours sur la 7e ligne. */}
+                  <div style={{ minHeight: "calc(1.2rem * 6)", lineHeight: "1.2rem" }}>
+                    <div style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</div>
+                    <div style={{ fontSize: ".76rem" }}>{a.structure || a.demandeur || "—"}</div>
+                    <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                      Tel : {a.tel || "—"}
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                      {a.email || "—"}
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
+                      {a.theme || "—"}
+                    </div>
                   </div>
-                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.email || "—"}</div>
-                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>{a.theme || "—"}</div>
-                  {/* Ligne(s) vierge(s) pour caler « enfants/adultes » sur la 7e ligne. */}
-                  <div aria-hidden="true" style={{ height: ".95rem" }} />
                   <div
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
                       gap: ".75rem",
                       fontSize: ".76rem",
-                      marginTop: ".15rem",
+                      lineHeight: "1.2rem",
                     }}
                   >
                     <span>
