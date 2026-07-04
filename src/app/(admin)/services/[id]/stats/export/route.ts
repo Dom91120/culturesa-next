@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   lines.push(["Filtre", `type=${type}`, `du=${dateFrom ?? ""}`, `au=${dateTo ?? ""}`]);
   lines.push([]);
   lines.push(["Indicateur", "Valeur"]);
-  lines.push(["Réservations", String(stats.total)]);
+  lines.push(["Séances", String(stats.total)]);
   lines.push(["Usagers distincts", String(stats.distinctUsers)]);
   lines.push(["Demandes en attente", String(stats.pending)]);
   lines.push(["Enfants", String(stats.enfants)]);

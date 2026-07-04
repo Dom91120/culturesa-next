@@ -693,13 +693,13 @@ export default async function StatsPage({
 
       {/* Bandeau KPIs */}
       <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-        <MetricCard value={stats.total} label="Réservations" sub={`${moyParUsager} / usager`} />
+        <MetricCard value={stats.total} label="Séances" sub={`${moyParUsager} / usager`} />
         <MetricCard value={stats.distinctUsers} label="Usagers distincts" color="#5ab4e8" />
         <MetricCard
           value={stats.enfants}
           label="Enfants"
           color="#e8a45a"
-          sub={`${moyEnfants} / réservation`}
+          sub={`${moyEnfants} / séance`}
         />
         {stats.accompagnants > 0 && (
           <MetricCard value={stats.accompagnants} label="Accompagnants" color="#a07dd4" />
