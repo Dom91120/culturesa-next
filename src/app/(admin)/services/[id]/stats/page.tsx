@@ -420,6 +420,82 @@ function AreaChart({ data, color }: { data: LabeledCount[]; color: string }) {
   );
 }
 
+/** Courbe de pourcentage (0–100 %) avec points et repères — ex. remplissage moyen/mois. */
+function FillCurve({ data, color }: { data: LabeledCount[]; color: string }) {
+  const W = 320;
+  const H = 130;
+  const pad = 14;
+  const n = data.length;
+  const x = (i: number) => ((i + 0.5) / n) * W;
+  const y = (v: number) => H - pad - (Math.min(100, v) / 100) * (H - 2 * pad);
+  const line = data.map((d, i) => `${x(i)},${y(d.value)}`).join(" ");
+  const grid = [0, 50, 100];
+  return (
+    <div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        style={{ height: "auto", display: "block" }}
+        aria-hidden="true"
+      >
+        {grid.map((g) => (
+          <g key={g}>
+            <line
+              x1={0}
+              x2={W}
+              y1={y(g)}
+              y2={y(g)}
+              stroke="rgba(127,127,127,.15)"
+              strokeWidth={0.5}
+            />
+            <text x={2} y={y(g) - 2} fontSize={7} fill="var(--muted)">
+              {g}%
+            </text>
+          </g>
+        ))}
+        <polyline
+          points={line}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+        />
+        {data.map((d, i) => (
+          <circle
+            key={d.label}
+            cx={x(i)}
+            cy={y(d.value)}
+            r={3}
+            fill={color}
+            stroke="var(--surface1)"
+            strokeWidth={1.5}
+          />
+        ))}
+      </svg>
+      <div
+        style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: ".3rem" }}
+      >
+        {data.map((d) => (
+          <div key={d.label} style={{ textAlign: "center", minWidth: 0 }}>
+            <div style={{ fontSize: ".8rem", fontWeight: 600 }}>{d.value}%</div>
+            <div
+              style={{
+                fontSize: ".62rem",
+                color: "var(--muted)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {d.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function parseType(v: string | undefined): StatsType {
   return v === "rec" || v === "uniq" ? v : "all";
 }
@@ -620,16 +696,7 @@ export default async function StatsPage({
         </Panel>
 
         <Panel title="Remplissage moyen par mois (séances)" empty={stats.fillByMonth.length === 0}>
-          {stats.fillByMonth.map((r) => (
-            <BarRow
-              key={r.label}
-              label={r.label}
-              value={r.value}
-              max={100}
-              color="#e8a45a"
-              suffix="%"
-            />
-          ))}
+          <FillCurve data={stats.fillByMonth} color="#e8a45a" />
         </Panel>
 
         <Panel
