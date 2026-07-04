@@ -98,6 +98,7 @@ const LABEL_SHORTCUTS: [RegExp, string][] = [
   [/[eé]cole maternelle/i, "Maternelle"],
   [/[eé]cole [eé]l[eé]mentaire/i, "Élémentaire"],
   [/accueil de loisirs?/i, "ADL"],
+  [/Langevin-Wallon/i, "LW"],
 ];
 function shortStructureLabel(label: string): string {
   let out = label;
