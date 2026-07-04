@@ -48,6 +48,21 @@ body {
   .print-block-only {
     display: block !important;
   }
+  /* Une « page » imprimée de la Liste = 20 lignes, chaque bloc sur sa propre feuille. */
+  .print-page {
+    break-after: page;
+    break-inside: avoid;
+  }
+  .print-page:last-child {
+    break-after: auto;
+  }
+  /* N° de page, aligné en bas à droite de chaque feuille. */
+  .print-page-num {
+    text-align: right;
+    margin-top: 0.5rem;
+    font-size: 0.72rem;
+    color: #555;
+  }
   /* Le châssis contraint la hauteur à l'écran (.app-layout 100dvh, .app-main scrollable) :
      sans réinitialisation, l'impression ne capture QUE la portion visible (« impression
      d'écran »). On libère hauteur + overflow pour que TOUT le contenu s'imprime, réparti

@@ -153,7 +153,6 @@ export default async function EditionsListePage({
     return out;
   };
   const groups = groupBy(pageRows);
-  const allGroups = groupBy(flat);
 
   // Base d'URL : conserve exercice + plage (mode/date/trim) + ruptures + tri.
   const baseParams = () => {
@@ -351,15 +350,28 @@ export default async function EditionsListePage({
             )}
           </div>
 
-          {/* Impression : liste COMPLÈTE (toutes les lignes) — masquée à l'écran. */}
+          {/* Impression : liste COMPLÈTE paginée (20 lignes/page comme à l'écran), un saut
+              de page entre chaque, n° de page en bas à droite. Masquée à l'écran. */}
           <div className="print-block-only">
-            {renderGroups(allGroups)}
-            <TotalsLine
-              label="Total général"
-              totals={computeTotals(sessions)}
-              variant="planning"
-              strong
-            />
+            {Array.from({ length: pages }, (_, i) => i + 1).map((p) => {
+              const rows = flat.slice((p - 1) * PER_PAGE, p * PER_PAGE);
+              return (
+                <div key={p} className="print-page">
+                  {renderGroups(groupBy(rows))}
+                  {p === pages && (
+                    <TotalsLine
+                      label="Total général"
+                      totals={computeTotals(sessions)}
+                      variant="planning"
+                      strong
+                    />
+                  )}
+                  <div className="print-page-num">
+                    Page {p} / {pages}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </>
       )}
