@@ -49,6 +49,30 @@ export function RangeBar({
   };
   // Flèches de navigation : plus petites que les autres boutons.
   const arrowBtn: React.CSSProperties = { ...linkBtn, fontSize: ".62rem", padding: "2px 6px" };
+  // Flèche grisée (bord d'exercice atteint) : même gabarit, non cliquable.
+  const arrowDisabled: React.CSSProperties = {
+    ...arrowBtn,
+    opacity: 0.35,
+    cursor: "not-allowed",
+    pointerEvents: "none",
+  };
+  // Rend une flèche ◀/▶ : lien actif si `href`, sinon variante grisée (au lieu de disparaître).
+  const arrow = (href: string | null, glyph: string, label: string) =>
+    href ? (
+      <a
+        href={`${href}${rq}`}
+        className="no-print"
+        style={arrowBtn}
+        title={label}
+        aria-label={label}
+      >
+        {glyph}
+      </a>
+    ) : (
+      <span className="no-print" style={arrowDisabled} aria-disabled="true" aria-label={label}>
+        {glyph}
+      </span>
+    );
   const unit = mode === "month" ? "Mois" : mode === "trimester" ? "Trimestre" : "Semaine";
   const prevLabel = `${unit} précédent${unit === "Semaine" ? "e" : ""}`;
   const nextLabel = `${unit} suivant${unit === "Semaine" ? "e" : ""}`;
@@ -72,17 +96,7 @@ export function RangeBar({
   // occupe déjà le centre de la ligne 1.
   const plageNav = (
     <div style={centerAbs}>
-      {prevHref && (
-        <a
-          href={`${prevHref}${rq}`}
-          className="no-print"
-          style={arrowBtn}
-          title={prevLabel}
-          aria-label={prevLabel}
-        >
-          ◀
-        </a>
-      )}
+      {arrow(prevHref, "◀", prevLabel)}
       <span
         style={{
           fontSize: ".8rem",
@@ -93,17 +107,7 @@ export function RangeBar({
       >
         {subtitle}
       </span>
-      {nextHref && (
-        <a
-          href={`${nextHref}${rq}`}
-          className="no-print"
-          style={arrowBtn}
-          title={nextLabel}
-          aria-label={nextLabel}
-        >
-          ▶
-        </a>
-      )}
+      {arrow(nextHref, "▶", nextLabel)}
     </div>
   );
 
