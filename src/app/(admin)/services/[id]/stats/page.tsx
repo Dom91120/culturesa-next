@@ -225,11 +225,27 @@ function Legend({
           >
             {it.label}
           </span>
-          <span style={{ marginLeft: "auto", fontWeight: 600, flexShrink: 0 }}>
+          <span
+            style={{
+              marginLeft: "auto",
+              minWidth: 28,
+              textAlign: "right",
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
             {it.value}
             {it.suffix ?? ""}
           </span>
-          <span style={{ color: "var(--muted)", width: 32, textAlign: "right", flexShrink: 0 }}>
+          <span
+            style={{
+              color: "var(--muted)",
+              width: 40,
+              textAlign: "right",
+              marginLeft: ".7rem",
+              flexShrink: 0,
+            }}
+          >
             {Math.round((100 * it.value) / tot)}%
           </span>
         </div>
