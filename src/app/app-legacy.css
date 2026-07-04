@@ -1632,6 +1632,31 @@ textarea.theme-pending:focus::placeholder {
   max-width: 620px;
   position: relative;
 }
+/* Ascenseur des modales (et de leurs zones scrollables internes) : très fin (6px), pouce
+   arrondi « en pilule », piste transparente. Remplace l'ascenseur natif de l'OS. */
+.modal-box,
+.modal-box .rte-content {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--border) transparent;
+}
+.modal-box::-webkit-scrollbar,
+.modal-box .rte-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.modal-box::-webkit-scrollbar-track,
+.modal-box .rte-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-box::-webkit-scrollbar-thumb,
+.modal-box .rte-content::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+.modal-box::-webkit-scrollbar-thumb:hover,
+.modal-box .rte-content::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
 .modal-title {
   font-size: 1rem;
   font-weight: 600;
