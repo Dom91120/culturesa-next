@@ -477,7 +477,7 @@ function FillCurve({ data, color }: { data: LabeledCount[]; color: string }) {
       >
         {data.map((d) => (
           <div key={d.label} style={{ textAlign: "center", minWidth: 0 }}>
-            <div style={{ fontSize: ".8rem", fontWeight: 600 }}>{d.value}%</div>
+            <div style={{ fontSize: ".72rem", fontWeight: 600 }}>{d.value}%</div>
             <div
               style={{
                 fontSize: ".62rem",
