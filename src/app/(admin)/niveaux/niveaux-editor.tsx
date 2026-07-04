@@ -202,6 +202,7 @@ export function NiveauxEditor({
           gap: ".75rem",
           alignItems: "center",
           padding: "0 .75rem .5rem",
+          borderBottom: "1px solid var(--border)",
           fontSize: ".66rem",
           fontWeight: 600,
           letterSpacing: ".05em",
@@ -255,10 +256,9 @@ export function NiveauxEditor({
               alignItems: "center",
               padding: ".4rem .75rem",
               borderRadius: "var(--rad-sm)",
+              // Bord haut réservé à l'indicateur de dépôt (drag) ; pas de trait de séparation.
               borderTop:
-                dragOverKey === r.key && !dragAfter
-                  ? "2px solid var(--accent)"
-                  : "1px solid var(--border)",
+                dragOverKey === r.key && !dragAfter ? "2px solid var(--accent)" : undefined,
               borderBottom:
                 dragOverKey === r.key && dragAfter ? "2px solid var(--accent)" : undefined,
               opacity: dragKey === r.key ? 0.4 : 1,
@@ -427,7 +427,6 @@ export function NiveauxEditor({
             textAlign: "center",
             fontSize: ".82rem",
             color: "var(--muted)",
-            borderTop: "1px solid var(--border)",
           }}
         >
           Aucun niveau. Cliquez sur « Ajouter ».

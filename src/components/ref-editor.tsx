@@ -134,6 +134,7 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
           gap: ".75rem",
           alignItems: "center",
           padding: "0 .75rem .5rem",
+          borderBottom: "1px solid var(--border)",
           fontSize: ".66rem",
           fontWeight: 600,
           letterSpacing: ".05em",
@@ -163,7 +164,6 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
               alignItems: "center",
               padding: ".4rem .75rem",
               borderRadius: "var(--rad-sm)",
-              borderTop: "1px solid var(--border)",
             }}
           >
             <input
@@ -255,7 +255,6 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
             textAlign: "center",
             fontSize: ".82rem",
             color: "var(--muted)",
-            borderTop: "1px solid var(--border)",
           }}
         >
           {labels.empty}
