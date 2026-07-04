@@ -619,6 +619,19 @@ export default async function StatsPage({
           <AreaChart data={stats.byMonth} color="#e8a45a" />
         </Panel>
 
+        <Panel title="Remplissage moyen par mois (séances)" empty={stats.fillByMonth.length === 0}>
+          {stats.fillByMonth.map((r) => (
+            <BarRow
+              key={r.label}
+              label={r.label}
+              value={r.value}
+              max={100}
+              color="#e8a45a"
+              suffix="%"
+            />
+          ))}
+        </Panel>
+
         <Panel
           title="Remplissage moyen par structure (jauge)"
           empty={stats.fillByStructure.length === 0}

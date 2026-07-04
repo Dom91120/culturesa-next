@@ -44,6 +44,9 @@ export type ServiceStats = {
   // Graphes
   byDay: LabeledCount[];
   byMonth: LabeledCount[];
+  // Remplissage moyen (%, unités de jauge) des SÉANCES datées, par mois — évolution du
+  // taux d'occupation au fil de l'exercice.
+  fillByMonth: LabeledCount[];
   topStructures: LabeledCount[];
   topNiveaux: LabeledCount[];
   // Taux de remplissage moyen (%, unités de jauge) des créneaux réservés, par structure.
@@ -236,6 +239,65 @@ export async function getServiceStats(
   }
   const avgFill = fillNG > 0 ? Math.round(fillTotG / fillNG) : null;
 
+  // Remplissage moyen PAR MOIS (évolution au fil de l'exercice). Base = occurrences DATÉES
+  // (ponctuels autonomes + miroirs des récurrentes, qui portent une slotDate), regroupées
+  // par SÉANCE = (créneau récurrent parent ?? créneau) + date, pour agréger plusieurs usagers
+  // d'une même séance et étaler le récurrent semaine par semaine. Fill/séance = min(100,
+  // occupation jauge / capacité) ; moyenne (arrondie) des séances de chaque mois.
+  const datedFillRows = await prisma.booking.findMany({
+    where: {
+      serviceId,
+      slot: {
+        slotDate: {
+          not: null,
+          ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+          ...(dateTo ? { lte: new Date(`${dateTo}T00:00:00.000Z`) } : {}),
+        },
+      },
+    },
+    select: {
+      enfants: true,
+      accompagnants: true,
+      parentBookingId: true,
+      slot: { select: { id: true, parentSlotId: true, slotDate: true, capacity: true } },
+    },
+  });
+  const sessionAgg = new Map<string, { occ: number; cap: number; month: string }>();
+  for (const b of datedFillRows) {
+    if (type === "rec" && b.parentBookingId == null) continue; // miroir = occurrence récurrente
+    if (type === "uniq" && b.parentBookingId != null) continue; // ponctuel autonome
+    if (!b.slot.slotDate) continue;
+    const dateStr = ymd(b.slot.slotDate);
+    if (!inRange(dateStr, dateFrom, dateTo)) continue;
+    // Clé de séance : le créneau récurrent parent (partagé par toutes les occurrences d'une
+    // même date) sinon le créneau lui-même (ponctuel).
+    const key = `${b.slot.parentSlotId ?? b.slot.id}|${dateStr}`;
+    const cur = sessionAgg.get(key) ?? {
+      occ: 0,
+      cap: b.slot.capacity ?? serviceCapacity,
+      month: dateStr.slice(0, 7),
+    };
+    cur.occ += gaugeUnits(b.enfants, b.accompagnants, gaugeAccompagnants);
+    sessionAgg.set(key, cur);
+  }
+  const monthFillSum = new Map<string, number>();
+  const monthFillCnt = new Map<string, number>();
+  for (const s of sessionAgg.values()) {
+    if (s.cap <= 0) continue;
+    const fill = Math.min(100, (100 * s.occ) / s.cap);
+    monthFillSum.set(s.month, (monthFillSum.get(s.month) ?? 0) + fill);
+    monthFillCnt.set(s.month, (monthFillCnt.get(s.month) ?? 0) + 1);
+  }
+  const fillByMonth = [...monthFillSum.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([bucket, sum]) => {
+      const [y, m] = bucket.split("-");
+      return {
+        label: `${MONTH_NAMES[Number(m) - 1]} ${y}`,
+        value: Math.round(sum / (monthFillCnt.get(bucket) ?? 1)),
+      };
+    });
+
   // Effectifs (enfants) par exercice — TOUS exercices (pas de filtre de dates), filtre type.
   const exoMap = new Map<string, number>();
   for (const b of volumeRows) {
@@ -303,6 +365,7 @@ export async function getServiceStats(
     tauxRealisation,
     byDay,
     byMonth,
+    fillByMonth,
     topStructures: topN(structMap, 10),
     topNiveaux: topN(niveauMap, 10),
     fillByStructure,
