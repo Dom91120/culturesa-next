@@ -141,13 +141,19 @@ export default async function EditionsListePage({
   const page = Math.min(Math.max(1, Number(sp.page) || 1), pages);
   const pageRows = flat.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // Groupes consécutifs (même rupture) dans la page courante.
-  const groups: { key: string; rows: FlatRow[] }[] = [];
-  for (const f of pageRows) {
-    const last = groups[groups.length - 1];
-    if (last && last.key === f.bucketKey) last.rows.push(f);
-    else groups.push({ key: f.bucketKey, rows: [f] });
-  }
+  // Groupes consécutifs (même rupture). `groups` = page courante (écran) ; `allGroups` =
+  // TOUTES les lignes (impression, qui ignore la pagination).
+  const groupBy = (rows: FlatRow[]): { key: string; rows: FlatRow[] }[] => {
+    const out: { key: string; rows: FlatRow[] }[] = [];
+    for (const f of rows) {
+      const last = out[out.length - 1];
+      if (last && last.key === f.bucketKey) last.rows.push(f);
+      else out.push({ key: f.bucketKey, rows: [f] });
+    }
+    return out;
+  };
+  const groups = groupBy(pageRows);
+  const allGroups = groupBy(flat);
 
   // Base d'URL : conserve exercice + plage (mode/date/trim) + ruptures + tri.
   const baseParams = () => {
@@ -246,6 +252,34 @@ export default async function EditionsListePage({
     </div>
   );
 
+  // Rendu d'une liste de groupes (ruptures) : en-tête + tableau + sous-total. Partagé par
+  // l'affichage écran (page courante) et l'impression (liste complète).
+  const renderGroups = (list: { key: string; rows: FlatRow[] }[]) =>
+    list.map((g) => {
+      const info = bucketInfo.get(g.key);
+      const label = info?.label ?? "";
+      const isContinuation = !!info && g.rows[0].gi > info.first;
+      const endsHere = !!info && g.rows[g.rows.length - 1].gi === info.last;
+      return (
+        <div key={`${g.key}-${g.rows[0].gi}`}>
+          {label && (
+            <RuptureHeading>
+              {label}
+              {isContinuation ? " (suite)" : ""}
+            </RuptureHeading>
+          )}
+          {renderRows(g.rows)}
+          {withSubtotals && endsHere && info && (
+            <TotalsLine
+              label={`Sous-total — ${label}`}
+              totals={computeTotals(info.sessions)}
+              variant="planning"
+            />
+          )}
+        </div>
+      );
+    });
+
   return (
     <div>
       <RangeBar
@@ -272,70 +306,61 @@ export default async function EditionsListePage({
         </p>
       ) : (
         <>
-          {groups.map((g) => {
-            const info = bucketInfo.get(g.key);
-            const label = info?.label ?? "";
-            const isContinuation = !!info && g.rows[0].gi > info.first;
-            const endsHere = !!info && g.rows[g.rows.length - 1].gi === info.last;
-            return (
-              <div key={`${g.key}-${g.rows[0].gi}`}>
-                {label && (
-                  <RuptureHeading>
-                    {label}
-                    {isContinuation ? " (suite)" : ""}
-                  </RuptureHeading>
+          {/* Écran : page courante (paginée) — masquée à l'impression. */}
+          <div className="no-print">
+            {renderGroups(groups)}
+
+            {pages > 1 && (
+              <div
+                className="no-print"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: ".75rem",
+                  margin: ".75rem 0",
+                }}
+              >
+                {page > 1 ? (
+                  <a href={pageHref(page - 1)} style={navBtn} aria-label="Page précédente">
+                    ◀
+                  </a>
+                ) : (
+                  <span style={{ ...navBtn, opacity: 0.4 }}>◀</span>
                 )}
-                {renderRows(g.rows)}
-                {withSubtotals && endsHere && info && (
-                  <TotalsLine
-                    label={`Sous-total — ${label}`}
-                    totals={computeTotals(info.sessions)}
-                    variant="planning"
-                  />
+                <span style={{ fontSize: ".8rem", color: "var(--muted)" }}>
+                  Page {page} / {pages} · {flat.length} ligne{flat.length > 1 ? "s" : ""}
+                </span>
+                {page < pages ? (
+                  <a href={pageHref(page + 1)} style={navBtn} aria-label="Page suivante">
+                    ▶
+                  </a>
+                ) : (
+                  <span style={{ ...navBtn, opacity: 0.4 }}>▶</span>
                 )}
               </div>
-            );
-          })}
+            )}
 
-          {pages > 1 && (
-            <div
-              className="no-print"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: ".75rem",
-                margin: ".75rem 0",
-              }}
-            >
-              {page > 1 ? (
-                <a href={pageHref(page - 1)} style={navBtn} aria-label="Page précédente">
-                  ◀
-                </a>
-              ) : (
-                <span style={{ ...navBtn, opacity: 0.4 }}>◀</span>
-              )}
-              <span style={{ fontSize: ".8rem", color: "var(--muted)" }}>
-                Page {page} / {pages} · {flat.length} ligne{flat.length > 1 ? "s" : ""}
-              </span>
-              {page < pages ? (
-                <a href={pageHref(page + 1)} style={navBtn} aria-label="Page suivante">
-                  ▶
-                </a>
-              ) : (
-                <span style={{ ...navBtn, opacity: 0.4 }}>▶</span>
-              )}
-            </div>
-          )}
+            {page === pages && (
+              <TotalsLine
+                label="Total général"
+                totals={computeTotals(sessions)}
+                variant="planning"
+                strong
+              />
+            )}
+          </div>
 
-          {page === pages && (
+          {/* Impression : liste COMPLÈTE (toutes les lignes) — masquée à l'écran. */}
+          <div className="print-block-only">
+            {renderGroups(allGroups)}
             <TotalsLine
               label="Total général"
               totals={computeTotals(sessions)}
               variant="planning"
               strong
             />
-          )}
+          </div>
         </>
       )}
 

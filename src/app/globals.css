@@ -22,6 +22,11 @@ body {
 .print-only {
   display: none;
 }
+/* Bloc réservé à l'impression (ex. liste COMPLÈTE des réservations, hors pagination
+   écran) : masqué à l'écran, affiché en bloc uniquement à l'impression. */
+.print-block-only {
+  display: none;
+}
 
 /* Impression : masque la barre utilisateur, la sidebar, les onglets et tout élément
    marqué .no-print ; la zone de contenu prend toute la largeur. */
@@ -39,6 +44,9 @@ body {
   }
   .print-only {
     display: inline !important;
+  }
+  .print-block-only {
+    display: block !important;
   }
   /* Le châssis contraint la hauteur à l'écran (.app-layout 100dvh, .app-main scrollable) :
      sans réinitialisation, l'impression ne capture QUE la portion visible (« impression
