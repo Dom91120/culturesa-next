@@ -171,6 +171,7 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
           gap: ".75rem",
           alignItems: "center",
           padding: "0 .75rem .5rem",
+          borderBottom: "1px solid var(--border)",
           fontSize: ".66rem",
           fontWeight: 600,
           letterSpacing: ".05em",
@@ -196,7 +197,6 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
               alignItems: "center",
               padding: ".4rem .75rem",
               borderRadius: "var(--rad-sm)",
-              borderTop: "1px solid var(--border)",
             }}
           >
             <button
@@ -304,7 +304,6 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
             textAlign: "center",
             fontSize: ".82rem",
             color: "var(--muted)",
-            borderTop: "1px solid var(--border)",
           }}
         >
           Aucun service. Cliquez sur « Ajouter ».
