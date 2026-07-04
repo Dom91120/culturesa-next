@@ -24,7 +24,12 @@ const nextConfig: NextConfig = {
   experimental: {
     // Server Actions : autorise les origines du domaine de prod
     serverActions: {
-      allowedOrigins: process.env.APP_DOMAIN ? [process.env.APP_DOMAIN] : undefined,
+      // APP_DOMAIN peut lister plusieurs origines séparées par des virgules.
+      allowedOrigins: process.env.APP_DOMAIN
+        ? process.env.APP_DOMAIN.split(",")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : undefined,
     },
   },
 };

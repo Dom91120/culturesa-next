@@ -3,8 +3,8 @@ import type { DAYS } from "@/schemas/config";
 
 export type DayKey = (typeof DAYS)[number];
 
-/** Jour ISO (1 = lundi … 7 = dimanche) → clé de jour. */
-export const ISO_DOW_KEY: Record<number, DayKey> = {
+/** Jour ISO (1 = lundi … 7 = dimanche) → clé de jour. Interne (usage local uniquement). */
+const ISO_DOW_KEY: Record<number, DayKey> = {
   1: "lun",
   2: "mar",
   3: "mer",

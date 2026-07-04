@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 export function GET(request: Request) {
   // Bride la génération (svg-captcha + crypto) pour éviter l'abus par appels en boucle.
   // Clé = IP transmise par le reverse-proxy (Caddy) ; à défaut, un seau global partagé.
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    "unknown";
   if (!rateLimit(`captcha:${ip}`, 30, 60_000)) {
     return NextResponse.json({ error: "Trop de requêtes." }, { status: 429 });
   }
