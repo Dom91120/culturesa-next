@@ -18,7 +18,7 @@ export function StructuresReferentiel({
     <ReferentielEntry
       title="Structures"
       subtitle="Structures rattachées aux demandeurs"
-      maxWidth={820}
+      maxWidth={730}
     >
       {(close) => <StructuresEditor initial={structures} demandeurs={demandeurs} onClose={close} />}
     </ReferentielEntry>
