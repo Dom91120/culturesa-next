@@ -52,6 +52,15 @@ export default async function PlanningPage({
   // Ruptures (case « avec ruptures ») : par semaine (vue mensuelle) / par mois (vue
   // période). OFF par défaut → un seul bloc sans en-tête ni sous-total.
   const withRuptures = sp.ruptures === "1";
+  // Impression = PDF serveur (Puppeteer) : même vue (plage/ruptures/exercice).
+  const pdfParams = new URLSearchParams();
+  if (selected) pdfParams.set("exercice", String(selected.id));
+  pdfParams.set("mode", range.mode);
+  if (range.mode === "week" || range.mode === "month") pdfParams.set("date", range.dateParam);
+  if (range.mode === "trimester" && range.trimIndex != null)
+    pdfParams.set("trim", String(range.trimIndex));
+  if (withRuptures) pdfParams.set("ruptures", "1");
+  const pdfHref = `/services/${id}/editions/pdf?kind=planning&${pdfParams.toString()}`;
   const buckets = withRuptures
     ? bucketSessions(range.mode, sessions, range.trimestres)
     : sessions.length > 0
@@ -146,6 +155,7 @@ export default async function PlanningPage({
         screen="planning"
         range={range}
         ruptures={withRuptures}
+        pdfHref={pdfHref}
         selectedExerciceId={selected?.id ?? null}
         title={
           <span

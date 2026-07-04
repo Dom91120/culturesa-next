@@ -153,6 +153,7 @@ export default async function EditionsListePage({
     return out;
   };
   const groups = groupBy(pageRows);
+  const allGroups = groupBy(flat);
 
   // Base d'URL : conserve exercice + plage (mode/date/trim) + ruptures + tri.
   const baseParams = () => {
@@ -178,6 +179,12 @@ export default async function EditionsListePage({
     p.set("page", String(n));
     return `/services/${id}/editions/liste?${p.toString()}`;
   };
+  // Impression = PDF serveur (Puppeteer) : même vue (plage/tri/ruptures), titre courant + n° de page.
+  const pdfParams = baseParams();
+  pdfParams.set("sort", sortKey);
+  pdfParams.set("dir", dir);
+  pdfParams.set("kind", "liste");
+  const pdfHref = `/services/${id}/editions/pdf?${pdfParams.toString()}`;
 
   const navBtn: React.CSSProperties = {
     fontSize: ".8rem",
@@ -293,6 +300,7 @@ export default async function EditionsListePage({
         range={range}
         ruptures={withRuptures}
         exportHref={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
+        pdfHref={pdfHref}
         selectedExerciceId={selected?.id ?? null}
         title={
           <span
@@ -356,28 +364,17 @@ export default async function EditionsListePage({
             )}
           </div>
 
-          {/* Impression : liste COMPLÈTE paginée (20 lignes/page comme à l'écran), un saut
-              de page entre chaque, n° de page en bas à droite. Masquée à l'écran. */}
+          {/* Impression (PDF Puppeteer) : liste COMPLÈTE en un seul flux — le <thead> de
+              chaque tableau répète les en-têtes à chaque page ; Puppeteer ajoute le titre
+              courant et le pied « Page X / N ». Masquée à l'écran. */}
           <div className="print-block-only">
-            {Array.from({ length: pages }, (_, i) => i + 1).map((p) => {
-              const rows = flat.slice((p - 1) * PER_PAGE, p * PER_PAGE);
-              return (
-                <div key={p} className="print-page">
-                  {renderGroups(groupBy(rows))}
-                  {p === pages && (
-                    <TotalsLine
-                      label="Total général"
-                      totals={computeTotals(sessions)}
-                      variant="planning"
-                      strong
-                    />
-                  )}
-                  <div className="print-page-num">
-                    Page {p} / {pages}
-                  </div>
-                </div>
-              );
-            })}
+            {renderGroups(allGroups)}
+            <TotalsLine
+              label="Total général"
+              totals={computeTotals(sessions)}
+              variant="planning"
+              strong
+            />
           </div>
         </>
       )}

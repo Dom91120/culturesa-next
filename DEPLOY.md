@@ -137,6 +137,18 @@ gunzip -c backups/culturesa-AAAAMMJJ-HHMMSS.sql.gz | docker compose exec -T db p
 cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
 ```
 
+## Impression PDF (Puppeteer)
+Les éditions (Liste / Planning / Pointages) s'impriment via un PDF généré côté serveur
+(route `/services/{id}/editions/pdf?kind=…`) qui pilote un Chromium headless.
+- **Docker** : le stage `runner` installe le paquet Alpine `chromium` + polices, et
+  `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser` dit à Puppeteer de l'utiliser
+  (le Chromium bundlé n'est PAS téléchargé — `PUPPETEER_SKIP_DOWNLOAD=true` au build).
+- **Dev local** : `pnpm install` télécharge automatiquement le Chromium bundlé (autorisé
+  via `pnpm.onlyBuiltDependencies` dans `package.json`) ; aucune variable à définir.
+- `PUPPETEER_BASE_URL` (optionnel) : origine interne que le conteneur utilise pour
+  recharger la page d'édition (par défaut l'origine de la requête). À renseigner si le
+  conteneur ne joint pas l'URL publique.
+
 ## Points d'attention
 - `next.config.ts` contient `output: "standalone"` (requis pour l'image Docker).
 - Le conteneur `app` tourne en utilisateur non-root (`nextjs`).

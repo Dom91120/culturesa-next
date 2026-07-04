@@ -41,6 +41,13 @@ ENV NODE_ENV=production
 # Désactive la télémétrie Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Chromium système + polices : requis par la génération PDF des éditions (Puppeteer).
+# On utilise le paquet Alpine plutôt que le Chromium bundlé (non téléchargé au build,
+# cf. PUPPETEER_SKIP_DOWNLOAD). ttf-freefont/font-noto couvrent les accents FR.
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 # Utilisateur non-root pour la sécurité
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs

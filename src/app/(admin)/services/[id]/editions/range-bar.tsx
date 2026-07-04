@@ -14,6 +14,7 @@ export function RangeBar({
   extra,
   ruptures = false,
   exportHref,
+  pdfHref,
   selectedExerciceId = null,
   showRuptures = true,
   title,
@@ -31,6 +32,8 @@ export function RangeBar({
   ruptures?: boolean;
   // Lien d'export CSV (Liste) → bouton export à gauche de l'impression. Absent ailleurs.
   exportHref?: string;
+  // Si fourni, le bouton d'impression ouvre ce PDF serveur (Puppeteer) au lieu de window.print().
+  pdfHref?: string;
   // Exercice courant : propagé aux liens de changement de vue pour le conserver.
   selectedExerciceId?: number | null;
   // Case « avec ruptures » : masquée quand la table est triable par colonne (Liste).
@@ -165,7 +168,7 @@ export function RangeBar({
         <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
           {showRuptures && <RupturesToggle />}
           {exportHref && <ExportButton href={exportHref} />}
-          <PrintButton iconOnly />
+          <PrintButton iconOnly href={pdfHref} title={pdfHref ? "Imprimer (PDF)" : "Imprimer"} />
         </div>
       </div>
     </div>
