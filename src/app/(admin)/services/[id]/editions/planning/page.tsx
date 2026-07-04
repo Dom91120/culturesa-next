@@ -116,7 +116,7 @@ export default async function PlanningPage({
                     }}
                   >
                     <span>
-                      {a.enfants} Enfant{a.enfants > 1 ? "s" : ""}
+                      {a.enfants} enfant{a.enfants > 1 ? "s" : ""}
                     </span>
                     <span>
                       {a.accompagnants} adulte{a.accompagnants > 1 ? "s" : ""}
