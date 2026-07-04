@@ -99,9 +99,7 @@ export default async function PlanningPage({
                   }}
                 >
                   <div style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</div>
-                  <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                    {a.structure || a.demandeur || "—"}
-                  </div>
+                  <div style={{ fontSize: ".76rem" }}>{a.structure || a.demandeur || "—"}</div>
                   <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
                     Tel : {a.tel || "—"}
                   </div>
