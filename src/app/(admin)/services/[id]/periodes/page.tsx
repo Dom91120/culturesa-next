@@ -39,6 +39,13 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
     dateEnd: toISODate(e.dateEnd),
   }));
 
+  // Exercice EN COURS = celui dont l'intervalle [dateStart, dateEnd] contient la date
+  // du jour (affiché à droite du titre du panneau Réservations). Aucun si hors plage.
+  const today = new Date().toISOString().slice(0, 10);
+  const currentExercice =
+    uiExercices.find((e) => e.dateStart && e.dateEnd && e.dateStart <= today && today <= e.dateEnd)
+      ?.label ?? null;
+
   return (
     <div>
       <ParamsSubnav serviceId={id} />
@@ -62,6 +69,7 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
       {/* Panneau « Réservations » déplacé sous les périodes (onglet « Périodes et réservations »). */}
       <ReservationsPanel
         serviceId={id}
+        exerciceLabel={currentExercice}
         maxReservations={service.maxReservations}
         maxReservationsPeriod={service.maxReservationsPeriod}
         bookingDelay={service.bookingDelay}

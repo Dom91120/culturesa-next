@@ -14,6 +14,8 @@ type NoticeMode = "none" | "hours" | "daily" | "weekly";
 
 type Props = {
   serviceId: string;
+  /** Libellé de l'exercice EN COURS (contient la date du jour), à droite du titre. */
+  exerciceLabel?: string | null;
   maxReservations: number;
   maxReservationsPeriod: number;
   bookingDelay: number;
@@ -199,6 +201,12 @@ export function ReservationsPanel(props: Props) {
       <div className="panel-title" style={{ marginBottom: ".75rem" }}>
         <span className="dot" style={{ background: "var(--warn)" }} />
         Réservations
+        {/* Exercice en cours : même rendu inline que le titre de l'Agenda. */}
+        {props.exerciceLabel && (
+          <span className="exercice-nav-inline">
+            <span className="ex-nav-label">{props.exerciceLabel}</span>
+          </span>
+        )}
       </div>
 
       <div
