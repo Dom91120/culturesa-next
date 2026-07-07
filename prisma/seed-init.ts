@@ -91,9 +91,9 @@ async function seedAdmin() {
     create: {
       email: ADMIN_EMAIL,
       emailVerified: true,
-      name: "Administrateur",
-      prenom: "Administrateur",
-      nom: "",
+      name: "Admin ADMIN",
+      prenom: "Admin",
+      nom: "ADMIN",
       role: "administrateur",
       rgpdOk: true,
     },

@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import type { Role } from "@/generated/prisma/client";
 import { formatTel } from "@/lib/format";
-import { anonymizeUserAction, resendVerificationAction } from "./actions";
+import { anonymizeUserAction, deleteEmptyUserAction, resendVerificationAction } from "./actions";
+import { AnonymizeUserModal } from "./anonymize-user-modal";
+import { DeleteUserModal } from "./delete-user-modal";
 import { UserModal } from "./user-modal";
 
 export type UserRow = {
@@ -25,6 +27,7 @@ export type UserRow = {
   anonymized: boolean;
   serviceIds: string[];
   serviceLabels: string[];
+  bookingCount: number;
 };
 
 export type Demandeur = { id: number; label: string };
@@ -32,7 +35,7 @@ export type StructureRef = { id: number; label: string; demandeurId: number };
 export type NiveauRef = { id: number; label: string; demandeurId: number | null };
 export type ServiceRef = { id: string; label: string };
 
-type SortKey = "default" | "nom" | "prenom" | "email" | "role";
+type SortKey = "default" | "nom" | "email" | "role";
 
 const ROLE_META: Record<Role, { cls: string; label: string }> = {
   administrateur: { cls: "role-admin", label: "Admin" },
@@ -107,6 +110,10 @@ export function UsersTable({
   const [modal, setModal] = useState<{ mode: "create" | "edit"; user: UserRow | null } | null>(
     null,
   );
+  // Compte visé par la modale de suppression physique (comptes vides uniquement).
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  // Compte visé par la modale d'anonymisation RGPD (barre d'actions ou bouton de ligne).
+  const [anonymizeTarget, setAnonymizeTarget] = useState<UserRow | null>(null);
 
   const filtered = useMemo(() => {
     const q = normSearch(query.trim());
@@ -121,7 +128,11 @@ export function UsersTable({
           a.prenom.localeCompare(b.prenom)
         );
       }
-      return (a[sortKey] || "").localeCompare(b[sortKey] || "");
+      // Colonne « Identité » (tri par nom) : départage par prénom.
+      return (
+        (a[sortKey] || "").localeCompare(b[sortKey] || "") ||
+        (sortKey === "nom" ? a.prenom.localeCompare(b.prenom) : 0)
+      );
     });
     return list;
   }, [users, query, sortKey]);
@@ -153,32 +164,28 @@ export function UsersTable({
     setModal({ mode: "edit", user: selected });
   }
 
-  function anonymizeSelected() {
-    if (!selected) return;
-    if (
-      !confirm(
-        "Anonymiser ce compte ? Les données personnelles seront anonymisées de façon irréversible (RGPD). Les réservations sont conservées.",
-      )
-    )
-      return;
-    const id = selected.id;
+  function confirmAnonymize() {
+    if (!anonymizeTarget) return;
+    const id = anonymizeTarget.id;
     startTransition(async () => {
-      await anonymizeUserAction(id);
-      setSelectedId(null);
+      const res = await anonymizeUserAction(id);
+      if (!res?.ok) alert(res?.error ?? "Échec de l'anonymisation.");
+      setAnonymizeTarget(null);
+      if (selectedId === id) setSelectedId(null);
       router.refresh();
     });
   }
 
-  function anonymizeRow(id: string) {
-    if (
-      !confirm(
-        "Anonymiser ce compte ? Les données personnelles seront anonymisées de façon irréversible (RGPD).",
-      )
-    )
-      return;
+  // Suppression physique — réservée aux comptes sans réservation (test, spam) ;
+  // le serveur re-vérifie (hardDeleteEmptyUser). La voie RGPD normale reste l'anonymisation.
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
     startTransition(async () => {
-      await anonymizeUserAction(id);
-      if (selectedId === id) setSelectedId(null);
+      const res = await deleteEmptyUserAction(id);
+      if (!res?.ok) alert(res?.error ?? "Échec de la suppression.");
+      setDeleteTarget(null);
+      setSelectedId(null);
       router.refresh();
     });
   }
@@ -234,12 +241,11 @@ export function UsersTable({
       </div>
 
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <table className="admin-table zebra">
           <thead>
             <tr>
               <th className="col-check" />
-              <SortTh label="Nom" sk="nom" minWidth={130} sortKey={sortKey} onSort={sortBy} />
-              <SortTh label="Prénom" sk="prenom" minWidth={130} sortKey={sortKey} onSort={sortBy} />
+              <SortTh label="Identité" sk="nom" minWidth={160} sortKey={sortKey} onSort={sortBy} />
               <SortTh label="E-mail" sk="email" sortKey={sortKey} onSort={sortBy} />
               <th style={{ textAlign: "center" }}>Téléphone</th>
               <th style={{ textAlign: "center" }}>Structure / Service</th>
@@ -271,11 +277,17 @@ export function UsersTable({
                       onChange={() => toggleRow(u.id)}
                     />
                   </td>
-                  <td>{u.nom || "—"}</td>
-                  <td>{u.prenom || "—"}</td>
+                  <td>{`${u.nom} ${u.prenom}`.trim() || "—"}</td>
                   <td style={{ color: "var(--muted)" }}>{u.email}</td>
                   <td style={{ whiteSpace: "nowrap" }}>{formatTel(u.tel)}</td>
-                  <td>{affiliation(u)}</td>
+                  {/* nowrap + maxWidth : ellipse au lieu de replier sur 2 lignes (hauteur
+                      de ligne constante) ; libellé complet en infobulle. */}
+                  <td
+                    style={{ whiteSpace: "nowrap", maxWidth: 220 }}
+                    title={affiliation(u)}
+                  >
+                    {affiliation(u)}
+                  </td>
                   <td>
                     <span className={`role-pill ${meta.cls}`}>{meta.label}</span>
                   </td>
@@ -309,7 +321,7 @@ export function UsersTable({
                         className="btn btn-ghost"
                         onClick={(e) => {
                           e.stopPropagation();
-                          anonymizeRow(u.id);
+                          setAnonymizeTarget(u);
                         }}
                         style={{
                           padding: ".05rem .45rem",
@@ -326,10 +338,18 @@ export function UsersTable({
                 </tr>
               );
             })}
+            {/* Lignes vides de complément : hauteur de page constante (20 lignes) */}
+            {total > 0 &&
+              pageRows.length < PAGE_SIZE &&
+              Array.from({ length: PAGE_SIZE - pageRows.length }, (_, i) => (
+                <tr key={`filler-${i}`} aria-hidden="true">
+                  <td colSpan={7}>&nbsp;</td>
+                </tr>
+              ))}
             {total === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={7}
                   style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)" }}
                 >
                   Aucun compte utilisateur.
@@ -337,27 +357,18 @@ export function UsersTable({
               </tr>
             )}
           </tbody>
-          <tfoot>
-            <tr>
-              <td
-                colSpan={8}
-                style={{
-                  border: "none",
-                  padding: ".55rem .6rem 0",
-                  fontSize: ".72rem",
-                  color: "var(--muted)",
-                }}
-              >
-                {total === 0
-                  ? "0 compte"
-                  : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
-              </td>
-            </tr>
-          </tfoot>
         </table>
       </div>
 
       <div style={{ marginTop: ".5rem", display: "flex", alignItems: "center", gap: ".75rem" }}>
+        {/* Compteur masqué quand une ligne est cochée : laisse la place à la barre d'actions. */}
+        {!selected && (
+          <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+            {total === 0
+              ? "0 compte"
+              : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
+          </span>
+        )}
         <div
           style={{
             visibility: selected ? "visible" : "hidden",
@@ -381,20 +392,40 @@ export function UsersTable({
           >
             ✏️ Modifier
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={anonymizeSelected}
-            disabled={pending}
-            style={{
-              borderColor: "rgba(220,80,80,.4)",
-              color: "#e05555",
-              fontSize: ".68rem",
-              padding: ".25rem .65rem",
-            }}
-          >
-            🗑️ Supprimer
-          </button>
+          {!selected?.anonymized && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => selected && setAnonymizeTarget(selected)}
+              disabled={pending}
+              style={{
+                borderColor: "rgba(220,80,80,.4)",
+                color: "#e05555",
+                fontSize: ".68rem",
+                padding: ".25rem .65rem",
+              }}
+              title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
+            >
+              🛡️ Anonymiser
+            </button>
+          )}
+          {selected?.bookingCount === 0 && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => selected && setDeleteTarget(selected)}
+              disabled={pending}
+              style={{
+                borderColor: "rgba(220,80,80,.4)",
+                color: "#e05555",
+                fontSize: ".68rem",
+                padding: ".25rem .65rem",
+              }}
+              title="Compte sans réservation : suppression physique de la base (test, spam)"
+            >
+              🗑️ Supprimer définitivement
+            </button>
+          )}
           {selected && !selected.emailVerified && (
             <button
               type="button"
@@ -445,6 +476,26 @@ export function UsersTable({
           </button>
         </div>
       </div>
+
+      {anonymizeTarget && (
+        <AnonymizeUserModal
+          name={`${anonymizeTarget.prenom} ${anonymizeTarget.nom}`.trim()}
+          email={anonymizeTarget.email}
+          pending={pending}
+          onCancel={() => setAnonymizeTarget(null)}
+          onConfirm={confirmAnonymize}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteUserModal
+          name={`${deleteTarget.prenom} ${deleteTarget.nom}`.trim()}
+          email={deleteTarget.email}
+          pending={pending}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+        />
+      )}
 
       {modal && (
         <UserModal

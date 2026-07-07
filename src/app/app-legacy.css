@@ -1497,11 +1497,20 @@ textarea.theme-pending:focus::placeholder {
 .admin-table tr:hover td {
   background: rgba(255, 255, 255, 0.02);
 }
+/* Variante zébrée : une ligne sur deux sur fond gris clair (surface2 selon le thème). */
+.admin-table.zebra tbody tr:nth-child(even) td {
+  background: var(--surface2);
+}
+/* Hauteur de ligne uniforme (vraies lignes ET lignes vides de complément) : toutes les
+   pages d'un tableau paginé gardent exactement la même hauteur. */
+.admin-table.zebra tbody td {
+  height: 22px;
+}
 .admin-table td:first-child {
   font-weight: 400;
 }
 .admin-table tr.role-break td {
-  border-top: 1px dotted lightgray;
+  border-top: 1px dotted var(--muted);
 }
 .search-wrap {
   position: relative;
@@ -1586,7 +1595,7 @@ textarea.theme-pending:focus::placeholder {
   display: inline-block;
   padding: 0.15rem 0.55rem;
   border-radius: 99px;
-  font-size: 0.65rem;
+  font-size: 0.5rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;

@@ -98,6 +98,47 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
   });
 }
 
+/**
+ * Suppression physique d'un compte VIDE — hygiène de la base (comptes de test,
+ * spam d'inscription), PAS la voie RGPD normale (= `anonymizeUser`).
+ *
+ * Refusée (`RgpdError`) si le compte a au moins une réservation : un DELETE
+ * emporterait l'historique métier par cascade (`bookings.userId`) et fausserait
+ * les statistiques — ces comptes doivent être anonymisés. Le garde-fou
+ * « dernier administrateur actif » s'applique aussi. Sessions, comptes auth et
+ * services gérés partent par cascade ; l'opération est journalisée dans
+ * `RgpdLog` (`hard_delete`, sans donnée nominative — la cible n'existe plus).
+ */
+export async function hardDeleteEmptyUser(
+  userId: string,
+  actorUserId: string | null,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new RgpdError("Compte introuvable.");
+
+    const bookings = await tx.booking.count({ where: { userId } });
+    if (bookings > 0) {
+      throw new RgpdError(
+        "Suppression impossible : ce compte a des réservations. Utilisez l'anonymisation (RGPD).",
+      );
+    }
+
+    await assertNotLastActiveAdmin(tx, userId);
+
+    await tx.user.delete({ where: { id: userId } });
+
+    await tx.rgpdLog.create({
+      data: {
+        action: "hard_delete",
+        targetUserId: userId,
+        actorUserId,
+        details: { reason: "empty_account" },
+      },
+    });
+  });
+}
+
 // ════════════════════════════════════════════════════════════
 //  Scan d'inactivité RGPD (admin)
 //

@@ -236,7 +236,7 @@ async function main() {
 
   // ── Compte administrateur par défaut (mot de passe : Admin123456!) ──
   // Idempotent : crée le compte si absent, et (re)cale toujours le mot de passe.
-  const adminEmail = "admin@culturesa.fr";
+  const adminEmail = "informatique@chatillon92.fr";
   const adminPassword = "Admin123456!";
   const ctxAdmin = await auth.$context;
   const admin = await prisma.user.upsert({
@@ -245,9 +245,9 @@ async function main() {
     create: {
       email: adminEmail,
       emailVerified: true,
-      name: "Admin CultuRésa",
+      name: "Admin ADMIN",
       prenom: "Admin",
-      nom: "CultuRésa",
+      nom: "ADMIN",
       role: "administrateur",
       rgpdOk: true,
     },

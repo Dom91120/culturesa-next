@@ -96,6 +96,10 @@ export function UserModal({
   }
 
   function submit() {
+    if (mode === "create" && !nom.trim()) {
+      setError("Le nom est obligatoire.");
+      return;
+    }
     if (mode === "create" && !email.trim()) {
       setError("L'e-mail est obligatoire");
       return;
@@ -111,6 +115,10 @@ export function UserModal({
         setError("Au moins 1 accompagnant est requis pour un utilisateur.");
         return;
       }
+    }
+    if (isManager && serviceIds.length === 0) {
+      setError("Sélectionnez au moins un service pour un gestionnaire.");
+      return;
     }
     setError(null);
     const common = {
@@ -163,7 +171,9 @@ export function UserModal({
 
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="uc-nom">Nom</label>
+            <label htmlFor="uc-nom">
+              Nom {mode === "create" && <span className="required-star">*</span>}
+            </label>
             <input
               id="uc-nom"
               type="text"
@@ -186,17 +196,20 @@ export function UserModal({
           </div>
           <div className="field">
             <label htmlFor="uc-email">
-              E-mail{" "}
-              <span
-                style={{
-                  color: "var(--muted)",
-                  fontSize: ".7rem",
-                  textTransform: "none",
-                  letterSpacing: 0,
-                }}
-              >
-                (non modifiable)
-              </span>
+              E-mail {mode === "create" && <span className="required-star">*</span>}
+              {mode === "edit" && (
+                <span
+                  style={{
+                    color: "var(--muted)",
+                    fontSize: ".7rem",
+                    textTransform: "none",
+                    letterSpacing: 0,
+                  }}
+                >
+                  {" "}
+                  (non modifiable)
+                </span>
+              )}
             </label>
             <input
               id="uc-email"
@@ -370,7 +383,9 @@ export function UserModal({
           </div>
 
           <div className="field full">
-            <label htmlFor="uc-services">Services</label>
+            <label htmlFor="uc-services">
+              Services {isManager && <span className="required-star">*</span>}
+            </label>
             <div
               id="uc-services"
               className="uc-services-list"

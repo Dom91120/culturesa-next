@@ -27,6 +27,7 @@ export default async function UsersPage() {
         managedServices: {
           select: { serviceId: true, service: { select: { label: true } } },
         },
+        _count: { select: { bookings: true } },
       },
     }),
     prisma.demandeur.findMany({ orderBy: { label: "asc" }, select: { id: true, label: true } }),
@@ -59,6 +60,7 @@ export default async function UsersPage() {
     anonymized: u.anonymizedAt != null,
     serviceIds: u.managedServices.map((m) => m.serviceId),
     serviceLabels: u.managedServices.map((m) => m.service.label),
+    bookingCount: u._count.bookings,
   }));
 
   return (

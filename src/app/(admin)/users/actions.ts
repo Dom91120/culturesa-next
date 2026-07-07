@@ -5,8 +5,8 @@ import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
-import { anonymizeUser, RgpdError } from "@/server/services/rgpd";
+import { getSession, requireRole } from "@/server/guards";
+import { anonymizeUser, hardDeleteEmptyUser, RgpdError } from "@/server/services/rgpd";
 
 const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
 
@@ -48,12 +48,30 @@ function requireKidsForUser(
   }
 }
 
+// Un gestionnaire sans service rattaché n'aurait accès à rien (ServiceManager,
+// liste vide = aucun service) : on impose au moins un service à la création
+// comme à l'édition. Sans objet pour les autres rôles (services vidés).
+function requireServicesForManager(d: { role: string; services: string[] }, ctx: z.RefinementCtx) {
+  if (d.role === "gestionnaire" && d.services.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["services"],
+      message: "Sélectionnez au moins un service pour un gestionnaire.",
+    });
+  }
+}
+
 const updateUserSchema = baseUserSchema
   .extend({ id: z.string().min(1) })
-  .superRefine(requireKidsForUser);
+  .superRefine(requireKidsForUser)
+  .superRefine(requireServicesForManager);
 const createUserSchema = baseUserSchema
-  .extend({ email: z.string().trim().pipe(z.email()) })
-  .superRefine(requireKidsForUser);
+  .extend({
+    email: z.string().trim().pipe(z.email()),
+    nom: z.string().trim().min(1, "Le nom est obligatoire.").max(100),
+  })
+  .superRefine(requireKidsForUser)
+  .superRefine(requireServicesForManager);
 
 export type UpdateUserInput = z.input<typeof updateUserSchema>;
 export type CreateUserInput = z.input<typeof createUserSchema>;
@@ -193,6 +211,23 @@ export async function anonymizeUserAction(id: string): Promise<ActionState> {
   } catch (e) {
     if (e instanceof RgpdError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de l'anonymisation." };
+  }
+  revalidatePath("/users");
+  return { ok: true };
+}
+
+/** Suppression physique d'un compte VIDE (0 réservation) — cf. `hardDeleteEmptyUser`. */
+export async function deleteEmptyUserAction(id: string): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = z.string().min(1).safeParse(id);
+  if (!parsed.success) return { ok: false, error: "Compte introuvable" };
+  const session = await getSession();
+  const actorId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  try {
+    await hardDeleteEmptyUser(parsed.data, actorId);
+  } catch (e) {
+    if (e instanceof RgpdError) return { ok: false, error: e.message };
+    return { ok: false, error: "Échec de la suppression." };
   }
   revalidatePath("/users");
   return { ok: true };

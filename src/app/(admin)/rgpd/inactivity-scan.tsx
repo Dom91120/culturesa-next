@@ -346,17 +346,21 @@ export function InactivityScan({
 
       {/* Tableau du scan */}
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <table className="admin-table zebra">
           <thead>
             <tr>
-              <th>Nom</th>
-              <th>E-mail</th>
-              <th title="Plus récent entre dernière connexion et dernière réservation">
+              {/* Nom et E-mail se partagent à parts égales la place laissée par les colonnes
+                  étroites ; « Dernière activité » est réduite à la largeur de son entête. */}
+              <th style={{ textAlign: "center", width: "30%" }}>Identité</th>
+              <th style={{ textAlign: "center", width: "30%" }}>E-mail</th>
+              <th
+                style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}
+                title="Plus récent entre dernière connexion et dernière réservation"
+              >
                 Dernière activité
               </th>
-              <th>Inactivité</th>
-              <th>Préavis</th>
-              <th />
+              <th style={{ textAlign: "center" }}>Préavis</th>
+              <th style={{ textAlign: "center" }}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -401,31 +405,38 @@ export function InactivityScan({
                 <tr key={u.id}>
                   <td>{fullName}</td>
                   <td style={{ color: "var(--muted)" }}>{u.email}</td>
-                  <td style={{ color: "var(--muted)" }}>
+                  <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
                     <span title={`via ${u.lastSeenSource}`}>
                       {dateFmt.format(new Date(u.lastSeen))}
+                    </span>{" "}
+                    ·{" "}
+                    <span
+                      style={
+                        eligible ? { color: "var(--danger)", fontWeight: 600 } : undefined
+                      }
+                    >
+                      {fmtDuration(u.daysInactive)}
                     </span>
                   </td>
-                  <td
-                    style={
-                      eligible
-                        ? { color: "var(--danger)", fontWeight: 600 }
-                        : { color: "var(--muted)" }
-                    }
-                  >
-                    {fmtDuration(u.daysInactive)}
-                  </td>
-                  <td>
+                  <td style={{ textAlign: "center" }}>
                     <NoticeCell row={u} eligible={eligible} graceDays={grace} />
                   </td>
-                  <td style={{ textAlign: "right" }}>{actionCell}</td>
+                  <td style={{ textAlign: "center" }}>{actionCell}</td>
                 </tr>
               );
             })}
+            {/* Lignes vides de complément : hauteur de page constante (10 lignes) */}
+            {total > 0 &&
+              pageRows.length < PAGE_SIZE &&
+              Array.from({ length: PAGE_SIZE - pageRows.length }, (_, i) => (
+                <tr key={`filler-${i}`} aria-hidden="true">
+                  <td colSpan={5}>&nbsp;</td>
+                </tr>
+              ))}
             {total === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={5}
                   style={{
                     textAlign: "center",
                     padding: "1.5rem",
@@ -443,7 +454,9 @@ export function InactivityScan({
 
       <div style={{ display: "flex", alignItems: "center", marginTop: ".6rem" }}>
         <span style={{ flex: 1, fontSize: ".7rem", color: "var(--muted)" }}>
-          {total} {countWord(total)}
+          {total === 0
+            ? "0 compte"
+            : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
           <button
