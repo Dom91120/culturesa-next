@@ -1797,9 +1797,11 @@ export function AgendaGrid({
           anchorMonday: string;
           weekAB: "A" | "B";
         }>;
-        // Ne restaure l'exercice que s'il existe encore (sinon défaut).
-        if (v.exerciceId == null || exercices.some((e) => e.id === v.exerciceId)) {
-          if (v.exerciceId !== undefined) setCurrentExerciceId(v.exerciceId);
+        // Ne restaure l'exercice que s'il existe encore ; un `null` mémorisé (vue
+        // enregistrée quand le service n'avait pas d'exercice) est ignoré, sinon il
+        // désactiverait le filtre d'exercice (toutes les périodes affichées, nav «—»).
+        if (v.exerciceId != null && exercices.some((e) => e.id === v.exerciceId)) {
+          setCurrentExerciceId(v.exerciceId);
         }
         if (typeof v.periodIdx === "number" && v.periodIdx >= 0) setPeriodIdx(v.periodIdx);
         if (v.weekAB === "A" || v.weekAB === "B") setWeekAB(v.weekAB);
