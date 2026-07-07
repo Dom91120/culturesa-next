@@ -79,11 +79,12 @@ export function CaptchaImage({
         )}
         <button
           type="button"
-          className="niveau-combo-btn"
+          className="btn btn-ghost"
           onClick={load}
           disabled={loading}
-          title="Nouveau code"
-          style={{ width: 40, height: 40, fontSize: "1.1rem" }}
+          title="Afficher un autre code"
+          aria-label="Afficher un autre code"
+          style={{ fontSize: "1.1rem", lineHeight: 1, padding: ".45rem .6rem" }}
         >
           ↻
         </button>

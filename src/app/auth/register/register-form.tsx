@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PrivacyPolicyModal } from "@/components/privacy-policy-modal";
 import { signUp } from "@/lib/auth-client";
 import { PWD_RULES } from "@/lib/password";
 import { useFormSubmit } from "@/lib/use-form-submit";
@@ -26,6 +27,8 @@ export function RegisterForm({
   const [structureId, setStructureId] = useState("");
   const [niveau, setNiveau] = useState("");
   const [niveauOpen, setNiveauOpen] = useState(false);
+  // Modale « Politique de confidentialité » (lien de l'encart RGPD).
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const comboRef = useRef<HTMLDivElement>(null);
 
   const structures = demandeurs.find((d) => String(d.id) === demandeurId)?.structures ?? [];
@@ -73,6 +76,9 @@ export function RegisterForm({
     const enfants = Number(form.get("enfants"));
     const accompagnants = Number(form.get("accompagnants"));
 
+    if (!demandeurId) return "Choisissez une catégorie.";
+    if (structures.length > 0 && !structureId)
+      return "Choisissez une structure pour cette catégorie.";
     if (!Number.isInteger(enfants) || enfants < 1) return "Indiquez au moins 1 enfant.";
     if (!Number.isInteger(accompagnants) || accompagnants < 1)
       return "Indiquez au moins 1 accompagnant.";
@@ -155,7 +161,9 @@ export function RegisterForm({
             <input id="c-tel" name="tel" type="tel" placeholder="06 12 34 56 78" />
           </div>
           <div className="field">
-            <label htmlFor="c-demandeur">Catégorie</label>
+            <label htmlFor="c-demandeur">
+              Catégorie <span className="required-star">*</span>
+            </label>
             <select
               id="c-demandeur"
               value={demandeurId}
@@ -184,7 +192,9 @@ export function RegisterForm({
             </select>
           </div>
           <div className="field">
-            <label htmlFor="c-structure">Structure</label>
+            <label htmlFor="c-structure">
+              Structure {structures.length > 0 && <span className="required-star">*</span>}
+            </label>
             <select
               id="c-structure"
               value={structureId}
@@ -274,7 +284,7 @@ export function RegisterForm({
                 required
                 min={1}
                 max={99}
-                placeholder="1"
+                defaultValue={1}
               />
             </div>
             <div>
@@ -288,7 +298,7 @@ export function RegisterForm({
                 required
                 min={1}
                 max={99}
-                placeholder="1"
+                defaultValue={1}
               />
             </div>
           </div>
@@ -343,7 +353,7 @@ export function RegisterForm({
           cliquez sur notre{" "}
           <button
             type="button"
-            onClick={(e) => e.preventDefault()}
+            onClick={() => setPrivacyOpen(true)}
             style={{
               color: "inherit",
               textDecoration: "underline",
@@ -382,6 +392,8 @@ export function RegisterForm({
           {pending ? "Création…" : "Créer mon compte →"}
         </button>
       </div>
+
+      {privacyOpen && <PrivacyPolicyModal onClose={() => setPrivacyOpen(false)} />}
     </form>
   );
 }

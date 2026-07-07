@@ -101,7 +101,14 @@ export const auth = betterAuth({
       // legacy) : on vérifie le token signé + la saisie, transmis par en-têtes,
       // AVANT toute création de compte. Désactivable via CAPTCHA_DISABLED=true
       // (utile en tests/seed). Cf. src/server/captcha.ts.
-      if (ctx.path === "/sign-up/email" && process.env.CAPTCHA_DISABLED !== "true") {
+      // `ctx.request` n'existe que pour les requêtes HTTP publiques : les appels
+      // serveur internes (auth.api.signUpEmail par un administrateur, cf.
+      // users/actions.ts) n'ont pas de captcha à présenter et en sont exemptés.
+      if (
+        ctx.path === "/sign-up/email" &&
+        ctx.request &&
+        process.env.CAPTCHA_DISABLED !== "true"
+      ) {
         const ok = verifyCaptcha(
           ctx.headers?.get("x-captcha-token"),
           ctx.headers?.get("x-captcha-answer"),
@@ -110,6 +117,30 @@ export const auth = betterAuth({
           throw new APIError("BAD_REQUEST", {
             message: "Code de vérification invalide ou expiré. Merci de recommencer.",
           });
+        }
+      }
+
+      // À l'inscription publique (requête HTTP), la catégorie (demandeur) est
+      // obligatoire, ainsi qu'une structure lui appartenant si la catégorie en a.
+      // Enforcement serveur en plus du formulaire. La création par un administrateur
+      // (appel interne sans Request) renseigne ces champs après coup : exemptée.
+      if (ctx.path === "/sign-up/email" && ctx.request) {
+        const b = (ctx.body ?? {}) as { demandeurId?: unknown; structureId?: unknown };
+        const demandeurId = Number(b.demandeurId);
+        if (!Number.isInteger(demandeurId) || demandeurId < 1) {
+          throw new APIError("BAD_REQUEST", { message: "Choisissez une catégorie." });
+        }
+        const structures = await prisma.structure.findMany({
+          where: { demandeurId },
+          select: { id: true },
+        });
+        if (structures.length > 0) {
+          const structureId = Number(b.structureId);
+          if (!structures.some((s) => s.id === structureId)) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Choisissez une structure pour cette catégorie.",
+            });
+          }
         }
       }
 

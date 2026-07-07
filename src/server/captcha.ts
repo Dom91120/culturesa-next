@@ -43,8 +43,8 @@ export function createCaptcha(): { svg: string; token: string } {
     charPreset: CHAR_PRESET,
     noise: 4,
     color: false,
-    inverse: true, // glyphes clairs sur fond sombre (thème de l'app)
-    background: "#0f1117",
+    inverse: true, // glyphes clairs sur fond sombre
+    background: "#252933", // gris très sombre (sans virer au noir)
     width: 230,
     height: 72,
     fontSize: 56,
