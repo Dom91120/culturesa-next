@@ -25,8 +25,9 @@ coverage
 prisma/generated
 src/generated
 
-# Sauvegardes de la base (dumps produits par le conteneur cron)
-backups/
+# Sauvegardes de la base (dumps produits par le conteneur cron et l'onglet
+# Sauvegardes) — ancré à la racine : ne PAS ignorer src/app/api/backups/.
+/backups/
 
 # config locale Claude Code
 .claude/settings.local.json

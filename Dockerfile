@@ -48,6 +48,10 @@ RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefo
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 
+# Client PostgreSQL (pg_dump/psql) : requis par l'onglet admin « Sauvegardes »
+# (export à la volée + restauration). Version 17 = celle du service db.
+RUN apk add --no-cache postgresql17-client
+
 # Utilisateur non-root pour la sécurité
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs

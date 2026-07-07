@@ -32,9 +32,14 @@ services:
       NEXT_PUBLIC_APP_URL: ${APP_URL}
       # Secret partagé avec le conteneur cron
       CRON_SECRET: ${CRON_SECRET}
+      # Dossier des dumps (onglet admin « Sauvegardes ») — partagé avec le conteneur cron
+      BACKUPS_DIR: /backups
       NODE_ENV: production
     expose:
       - "3000"
+    volumes:
+      # Mêmes dumps que le cron : liste/téléchargement/restauration depuis l'admin.
+      - ./backups:/backups
     networks:
       - web
 
