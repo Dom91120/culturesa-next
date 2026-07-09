@@ -12,6 +12,7 @@ import {
   PeriodError,
   reactivatePeriod,
   saveExerciceOpeningConfig,
+  setExerciceVisibleToUsers,
   updateExercice,
   updateServicePeriod,
 } from "@/server/services/periods";
@@ -280,6 +281,37 @@ export async function deleteExerciceAction(input: {
   } catch (e) {
     if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la suppression de l'exercice." };
+  }
+  revalidatePath(`/services/${serviceId}/periodes`);
+  return { ok: true };
+}
+
+const visibleToUsersSchema = z.object({
+  serviceId: z.string().trim().min(1),
+  exerciceId: z.number().int().positive(),
+  visible: z.boolean(),
+});
+
+/**
+ * « Affiché aux utilisateurs » : marque l'exercice comme l'unique exercice du
+ * service accessible côté usager (cocher décoche les autres).
+ */
+export async function setExerciceVisibleAction(input: {
+  serviceId: string;
+  exerciceId: number;
+  visible: boolean;
+}): Promise<ActionState> {
+  await requireServiceManager(input.serviceId);
+  const parsed = visibleToUsersSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Valeurs invalides." };
+  }
+  const { serviceId, exerciceId, visible } = parsed.data;
+  try {
+    await setExerciceVisibleToUsers(serviceId, exerciceId, visible);
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
+    return { ok: false, error: "Échec de l'enregistrement." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);
   return { ok: true };

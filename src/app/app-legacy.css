@@ -1394,9 +1394,13 @@ textarea.theme-pending:focus::placeholder {
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
-/* « Plages horaires » : à droite du tableau, bascule dessous quand la place manque. */
+/* « Plages horaires » (+ « Jours d'ouverture » dessous) : à droite du tableau, bascule
+   dessous quand la place manque. Base 300px + grow : sans base explicite, la ligne des
+   jours d'ouverture (large en max-content) forçait la bascule systématique sous le
+   tableau ; ici elle replie en plusieurs lignes dans la colonne. */
 #periods-row > .pr-hours {
   min-width: 0; /* autorise le rétrécissement (sinon min-width:auto = contenu → pas de wrap) */
+  flex: 1 1 240px;
 }
 #periods-row > .pr-hours .defaults-row {
   margin: 0.5rem 0 0;

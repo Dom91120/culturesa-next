@@ -162,6 +162,9 @@ async function main() {
           type: "scolaire",
           dateStart: new Date("2025-09-01"),
           dateEnd: new Date("2026-08-31"),
+          // Unique exercice du service → c'est lui que voient les usagers
+          // (« Affiché aux utilisateurs », un seul par service).
+          visibleToUsers: true,
         },
         select: { id: true },
       }));

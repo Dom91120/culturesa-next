@@ -57,6 +57,8 @@ export type ExerciceRow = {
   activeDays: string;
   openOnHolidays: boolean;
   openOnSchoolHolidays: boolean;
+  // « Affiché aux utilisateurs » : l'unique exercice du service accessible côté usager.
+  visibleToUsers: boolean;
 };
 
 const EXERCICE_SELECT = {
@@ -72,6 +74,7 @@ const EXERCICE_SELECT = {
   activeDays: true,
   openOnHolidays: true,
   openOnSchoolHolidays: true,
+  visibleToUsers: true,
 } as const;
 
 /** Exercices d'un service (triés par date de début, nulls en dernier, puis libellé). */
@@ -389,7 +392,8 @@ export async function deleteServicePeriod(serviceId: string, id: number) {
   return prisma.period.delete({ where: { id } });
 }
 
-/** Réactive une période (state → actif). Anti-IDOR par service. */
+/** Réactive une période ARCHIVÉE (state → actif ; seuls actif/archive subsistent,
+ *  la visibilité usager étant portée par l'exercice). Anti-IDOR par service. */
 export async function reactivatePeriod(serviceId: string, id: number): Promise<PeriodRow> {
   const cur = await prisma.period.findUnique({ where: { id }, select: { serviceId: true } });
   if (!cur || cur.serviceId !== serviceId) throw new PeriodError("Période introuvable.");
@@ -446,5 +450,32 @@ export async function saveExerciceOpeningConfig(
       afternoonStart: config.afternoonStart,
       afternoonEnd: config.afternoonEnd,
     },
+  });
+}
+
+/**
+ * « Affiché aux utilisateurs » : marque l'exercice comme l'UNIQUE exercice du
+ * service accessible côté usager (cocher décoche les autres — transaction) ;
+ * décocher laisse le service sans exercice visible (aucune réservation usager).
+ * Anti-IDOR : l'exercice doit appartenir au service.
+ */
+export async function setExerciceVisibleToUsers(
+  serviceId: string,
+  exerciceId: number,
+  visible: boolean,
+): Promise<void> {
+  const ex = await prisma.exercice.findUnique({
+    where: { id: exerciceId },
+    select: { serviceId: true },
+  });
+  if (!ex || ex.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  await prisma.$transaction(async (tx) => {
+    if (visible) {
+      await tx.exercice.updateMany({
+        where: { serviceId, visibleToUsers: true },
+        data: { visibleToUsers: false },
+      });
+    }
+    await tx.exercice.update({ where: { id: exerciceId }, data: { visibleToUsers: visible } });
   });
 }

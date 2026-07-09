@@ -289,6 +289,10 @@ model Exercice {
   openOnHolidays       Boolean @default(false)
   openOnSchoolHolidays Boolean @default(false)
 
+  // « Affiché aux utilisateurs » : l'UNIQUE exercice du service accessible côté
+  // usager (unicité par service maintenue par l'application, cf. periods.ts).
+  visibleToUsers Boolean @default(false)
+
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   periods Period[]
 

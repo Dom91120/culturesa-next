@@ -59,9 +59,12 @@ export function effectiveOpenOnSchoolHolidays(
 }
 
 /**
- * Disponibilité de la période (colonne « Dispo » du panneau Périodes) : refuse la
- * réservation USAGER tant que la date d'ouverture n'est pas atteinte. Période sans
- * date (null) ou réservation sans période : réservable sans restriction.
+ * Contrôles USAGER sur la période visée :
+ *   - exercice « Affiché aux utilisateurs » : la période doit appartenir à
+ *     l'exercice visible du service (un seul par service, cf. periods.ts) ;
+ *   - disponibilité (colonne « Dispo » du panneau Périodes) : refuse tant que la
+ *     date d'ouverture n'est pas atteinte. Période sans date (null) ou réservation
+ *     sans période : réservable sans restriction.
  * Comparaison en date LOCALE (le champ est un @db.Date à minuit UTC).
  */
 export async function assertPeriodOpenForUser(
@@ -71,8 +74,14 @@ export async function assertPeriodOpenForUser(
   if (!periodId) return;
   const period = await db.period.findUnique({
     where: { id: periodId },
-    select: { disponibilite: true },
+    select: { disponibilite: true, exercice: { select: { visibleToUsers: true } } },
   });
+  // Période rattachée à un exercice non affiché aux utilisateurs → hors de portée
+  // de la grille usager (la présence dans la grille est déjà filtrée ; ceci ferme
+  // la porte aux requêtes forgées).
+  if (period?.exercice && !period.exercice.visibleToUsers) {
+    throw new BookingError("Cet exercice n'est pas ouvert aux réservations.");
+  }
   const dispo = period?.disponibilite;
   if (!dispo) return;
   const dispoIso = dispo.toISOString().slice(0, 10);
@@ -602,14 +611,36 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     exerciceId: true,
   } as const;
 
-  // Périodes : celles du service, sinon les globales (fallback, comme l'agenda admin).
-  // Chargées AVANT les créneaux/réservations : elles servent de borne de chargement.
-  let periods = await prisma.period.findMany({
-    where: { serviceId, state: "actif" },
-    orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
-    select: periodSelect,
-  });
-  if (periods.length === 0) {
+  // Exercice « Affiché aux utilisateurs » : l'UNIQUE exercice du service accessible
+  // côté usager (case du panneau Périodes). Service avec exercices mais aucun coché
+  // → aucune période visible ; service SANS exercice → comportement historique
+  // (périodes actives du service, sinon les globales).
+  const [visibleExo, exoCount] = await Promise.all([
+    prisma.exercice.findFirst({
+      where: { serviceId, visibleToUsers: true },
+      select: { id: true },
+    }),
+    prisma.exercice.count({ where: { serviceId } }),
+  ]);
+
+  // Périodes : chargées AVANT les créneaux/réservations (borne de chargement).
+  // Exercice visible → ses périodes non archivées (les périodes des exercices passés
+  // restent « actif » depuis la simplification des états : cocher un exercice passé
+  // suffit à le montrer aux usagers).
+  let periods = visibleExo
+    ? await prisma.period.findMany({
+        where: { serviceId, state: "actif", exerciceId: visibleExo.id },
+        orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+        select: periodSelect,
+      })
+    : exoCount > 0
+      ? []
+      : await prisma.period.findMany({
+          where: { serviceId, state: "actif" },
+          orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+          select: periodSelect,
+        });
+  if (periods.length === 0 && exoCount === 0) {
     periods = await prisma.period.findMany({
       where: { serviceId: null, state: "actif" },
       orderBy: [{ position: "asc" }, { id: "asc" }],

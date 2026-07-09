@@ -11,6 +11,7 @@ import {
   deletePeriodAction,
   reactivatePeriodsAction,
   saveOpeningConfigAction,
+  setExerciceVisibleAction,
   updateExerciceAction,
   updatePeriodAction,
 } from "./actions";
@@ -38,6 +39,8 @@ type Exercice = {
   type: ExerciceType;
   dateStart: string; // "YYYY-MM-DD" ou ""
   dateEnd: string;
+  // « Affiché aux utilisateurs » : l'unique exercice accessible côté usager.
+  visibleToUsers: boolean;
   // Réglages d'ouverture RÉSOLUS de l'exercice (surcharge ?? défauts du service).
   opening: Opening;
 };
@@ -114,6 +117,12 @@ function sortPeriods(periods: UiPeriod[]): UiPeriod[] {
 function fmtDate(value: string): string {
   if (!value) return "—";
   return new Date(`${value}T00:00`).toLocaleDateString("fr-FR");
+}
+
+/** « 2025-09-01 » → « 01/09/25 » (JJ/MM/AA — colonnes Début/Fin/Dispo du tableau). */
+function fmtDateShort(value: string): string {
+  const m = /^\d{2}(\d{2})-(\d{2})-(\d{2})$/.exec(value);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "—";
 }
 
 type ModalForm = {
@@ -332,6 +341,34 @@ export function PeriodesPanel({
       setCurrentExerciceId(hasExercices ? sortedExercices[sortedExercices.length - 1].id : null);
     }
   }, [sortedExercices]);
+
+  // ── « Affiché aux utilisateurs » : l'UNIQUE exercice accessible côté usager. ─
+  // État optimiste (id de l'exercice coché, null = aucun), resynchronisé sur les
+  // props après chaque router.refresh().
+  const [visibleExerciceId, setVisibleExerciceId] = useState<number | null>(
+    exercices.find((e) => e.visibleToUsers)?.id ?? null,
+  );
+  useEffect(() => {
+    setVisibleExerciceId(exercices.find((e) => e.visibleToUsers)?.id ?? null);
+  }, [exercices]);
+
+  function toggleVisibleToUsers(checked: boolean) {
+    if (!currentExercice) return;
+    const exerciceId = currentExercice.id;
+    const previous = visibleExerciceId;
+    setListError(null);
+    // Cocher décoche l'exercice précédemment visible (unicité par service).
+    setVisibleExerciceId(checked ? exerciceId : null);
+    startTransition(async () => {
+      const res = await setExerciceVisibleAction({ serviceId, exerciceId, visible: checked });
+      if (res && !res.ok) {
+        setVisibleExerciceId(previous);
+        setListError(res.error ?? "Échec de l'enregistrement.");
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   function openCreateExercice() {
     setExoError(null);
@@ -577,7 +614,7 @@ export function PeriodesPanel({
       >
         <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
           <span className="dot" style={{ background: "var(--warn)" }} />
-          Exercices
+          Périodes
         </span>
         {/* Réglage service : afficher aussi les exercices passés dans la nav ◀ ▶. */}
         {hasExercices && (
@@ -614,115 +651,141 @@ export function PeriodesPanel({
         )}
       </div>
 
-      {/* Navigation « ◀ … ▶ · dates · ✏️ » : deux lignes sous le titre, puis une ligne
-          sautée avant les sous-titres « Périodes … » / « Plages horaires … ». */}
-      <div className="pr-head" style={{ margin: "2rem 0 1rem" }}>
-        {/* Libellé de la ligne, à gauche de la navigation ◀ … ▶. */}
-        <span style={{ fontSize: ".85rem", fontWeight: 500 }}>Exercice</span>
-        {hasExercices ? (
-          <div className="periode-nav">
-            <button
-              type="button"
-              className="ex-arrow"
-              onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
-              disabled={!canPrev}
-              aria-label="Exercice précédent"
-            >
-              ◀
-            </button>
-            <span className="ex-nav-label">{exerciceLabel}</span>
-            <button
-              type="button"
-              className="ex-arrow"
-              onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
-              disabled={!canNext}
-              aria-label="Exercice suivant"
-            >
-              ▶
-            </button>
-          </div>
-        ) : (
-          <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucun exercice</span>
-        )}
-
-        {/* Dates de l'exercice + bouton d'édition regroupés (une seule unité). */}
-        {currentExercice && (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: ".5rem",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {(currentExercice.dateStart || currentExercice.dateEnd) && (
-              <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
-                {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
-                {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
-              </span>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={openEditExercice}
-              title="Modifier l'exercice"
-              style={{
-                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                color: "var(--accent)",
-                padding: ".1rem .3rem",
-                fontSize: ".62rem",
-              }}
-            >
-              ✏️
-            </button>
-          </span>
-        )}
-
-        <div style={{ display: "flex", gap: ".4rem", alignItems: "center" }}>
-          {/* Corbeille masquée si l'exercice a des périodes : suppression interdite. */}
-          {currentExercice && !currentExerciceHasPeriods && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={deleteExercice}
-              disabled={pending}
-              title="Supprimer l'exercice"
-              style={{
-                borderColor: "rgba(220,80,80,.4)",
-                color: "#e05555",
-                padding: ".18rem .5rem",
-                fontSize: ".62rem",
-              }}
-            >
-              🗑️
-            </button>
-          )}
-          {/* « Nouvel exercice » : visible uniquement quand le service n'a AUCUN exercice
-                (sinon on crée les exercices suivants via la bascule). */}
-          {!hasExercices && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={openCreateExercice}
-              style={{
-                borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
-                color: "var(--warn)",
-                padding: ".18rem .5rem",
-                fontSize: ".62rem",
-                whiteSpace: "nowrap",
-              }}
-            >
-              ＋ Nouvel exercice
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* ── Multi-colonnage : tableau des périodes · actions · plages horaires ── */}
       <div id="periods-row">
         {/* Colonne gauche (tableau + bouton Ajouter) : la colonne « Plages horaires »
             bascule dessous quand la largeur manque (flex-wrap de #periods-row). */}
         <div className="pr-left">
+          {/* Navigation d'exercice, sur 2 lignes au-dessus du sous-titre « Périodes … » :
+              1) « Exercice ◀ … ▶ » — 2) type + dates + ✏️ (+ 🗑️ sans période). */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: ".3rem",
+              margin: "2rem 0 1rem",
+            }}
+          >
+            <div className="pr-head">
+              {/* Libellé de la ligne, à gauche de la navigation ◀ … ▶. */}
+              <span style={{ fontSize: ".85rem", fontWeight: 500 }}>Exercice</span>
+              {hasExercices ? (
+                <div className="periode-nav">
+                  <button
+                    type="button"
+                    className="ex-arrow"
+                    onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
+                    disabled={!canPrev}
+                    aria-label="Exercice précédent"
+                  >
+                    ◀
+                  </button>
+                  <span className="ex-nav-label">{exerciceLabel}</span>
+                  <button
+                    type="button"
+                    className="ex-arrow"
+                    onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
+                    disabled={!canNext}
+                    aria-label="Exercice suivant"
+                  >
+                    ▶
+                  </button>
+                </div>
+              ) : (
+                <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucun exercice</span>
+              )}
+              {/* « Nouvel exercice » : visible uniquement quand le service n'a AUCUN exercice
+                  (sinon on crée les exercices suivants via la bascule). */}
+              {!hasExercices && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={openCreateExercice}
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
+                    color: "var(--warn)",
+                    padding: ".18rem .5rem",
+                    fontSize: ".62rem",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  ＋ Nouvel exercice
+                </button>
+              )}
+            </div>
+
+            {/* Ligne 2 : type + dates de l'exercice + actions (édition / suppression). */}
+            {currentExercice && (
+              <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+                {(currentExercice.dateStart || currentExercice.dateEnd) && (
+                  <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                    {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
+                    {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={openEditExercice}
+                  title="Modifier l'exercice"
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                    color: "var(--accent)",
+                    padding: ".1rem .3rem",
+                    fontSize: ".62rem",
+                  }}
+                >
+                  ✏️
+                </button>
+                {/* Corbeille masquée si l'exercice a des périodes : suppression interdite. */}
+                {!currentExerciceHasPeriods && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={deleteExercice}
+                    disabled={pending}
+                    title="Supprimer l'exercice"
+                    style={{
+                      borderColor: "rgba(220,80,80,.4)",
+                      color: "#e05555",
+                      padding: ".18rem .5rem",
+                      fontSize: ".62rem",
+                    }}
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Ligne 3 : « Affiché aux utilisateurs » — l'UNIQUE exercice du service
+                accessible côté usager (cocher décoche l'exercice précédemment visible). */}
+            {currentExercice && (
+              <label
+                title="Un seul exercice par service peut être affiché : c'est celui que voient les utilisateurs dans Réservations."
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: ".3rem",
+                  cursor: "pointer",
+                  fontSize: ".62rem",
+                  fontWeight: 500,
+                  width: "fit-content",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  className="admin-cb"
+                  checked={visibleExerciceId === currentExercice.id}
+                  onChange={(e) => toggleVisibleToUsers(e.target.checked)}
+                  disabled={pending}
+                  style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+                />
+                Affiché aux utilisateurs
+              </label>
+            )}
+          </div>
+
           <div className="pr-editor">
             {/* Sous-titre discret entre « Exercices » et le tableau des périodes,
                 suffixé du libellé de l'exercice affiché. */}
@@ -774,11 +837,11 @@ export function PeriodesPanel({
                       </td>
                       <td>{p.etiquette || "—"}</td>
                       <td className="td-left">{p.label || "—"}</td>
-                      <td>{fmtDate(p.dateStart)}</td>
-                      <td>{fmtDate(p.dateEnd)}</td>
+                      <td>{fmtDateShort(p.dateStart)}</td>
+                      <td>{fmtDateShort(p.dateEnd)}</td>
                       {/* Lecture seule : la valeur se modifie via la modale (✏️ Modifier). */}
                       <td title="Date d'ouverture des réservations côté usager — vide : réservable sans restriction. Modifiable via ✏️ Modifier.">
-                        {fmtDate(p.disponibilite)}
+                        {fmtDateShort(p.disponibilite)}
                       </td>
                     </tr>
                   ))}
@@ -869,8 +932,10 @@ export function PeriodesPanel({
         </div>
         {/* Plages horaires : à droite du tableau, bascule dessous quand la place manque.
             Les réglages appartiennent à l'exercice → bloc masqué sans exercice. */}
+        {/* marginTop : aligne « Plages horaires … » sur la ligne « Exercice ◀ … ▶ »
+            de la colonne gauche (même décalage que le bloc de navigation). */}
         {currentExercice && (
-          <div className="pr-hours">
+          <div className="pr-hours" style={{ marginTop: "2rem" }}>
             <div
               className="panel-subtitle"
               style={{ fontSize: ".85rem", fontWeight: 500, whiteSpace: "nowrap" }}
@@ -954,28 +1019,81 @@ export function PeriodesPanel({
                 )}
               </div>
             </div>
-          </div>
-        )}
-      </div>
 
-      {listError && (
-        <div className="field-error" style={{ display: "block", marginBottom: ".75rem" }}>
-          {listError}
-        </div>
-      )}
-
-      {/* ── Jours d'ouverture (de l'exercice affiché — masqué sans exercice) ── */}
-      {currentExercice && (
-        <>
-          <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-            Jours d&apos;ouverture{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
-          </div>
-          <div style={{ display: "flex", gap: ".55rem", alignItems: "center", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}>
-              {DAYS.map((d) => (
+            {/* ── Jours d'ouverture : même colonne, sous les plages horaires ── */}
+            <div
+              className="panel-subtitle"
+              style={{ fontSize: ".85rem", fontWeight: 500, marginTop: ".9rem" }}
+            >
+              Jours d&apos;ouverture{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
+            </div>
+            {/* 2 lignes : lundi → vendredi, puis samedi + dimanche + fériés + vacances. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: ".45rem" }}>
+              <div
+                style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}
+              >
+                {DAYS.slice(0, 5).map((d) => (
+                  <label
+                    key={d.key}
+                    title={d.full}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: ".3rem",
+                      cursor: "pointer",
+                      fontSize: ".62rem",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="admin-cb"
+                      checked={activeDays.includes(d.key)}
+                      onChange={() => toggleDay(d.key)}
+                      style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+                    />
+                    {d.label}
+                  </label>
+                ))}
+              </div>
+              <div
+                style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}
+              >
+                {DAYS.slice(5).map((d) => (
+                  <label
+                    key={d.key}
+                    title={d.full}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: ".3rem",
+                      cursor: "pointer",
+                      fontSize: ".62rem",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="admin-cb"
+                      checked={activeDays.includes(d.key)}
+                      onChange={() => toggleDay(d.key)}
+                      style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+                    />
+                    {d.label}
+                  </label>
+                ))}
+                {/* Séparateur : jours de semaine ↔ fériés / vacances. */}
+                <span
+                  style={{
+                    width: 1,
+                    height: "1rem",
+                    background: "var(--border)",
+                    flexShrink: 0,
+                    margin: "0 .2rem",
+                    alignSelf: "center",
+                  }}
+                />
                 <label
-                  key={d.key}
-                  title={d.full}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -988,71 +1106,48 @@ export function PeriodesPanel({
                   <input
                     type="checkbox"
                     className="admin-cb"
-                    checked={activeDays.includes(d.key)}
-                    onChange={() => toggleDay(d.key)}
+                    checked={openOnHolidays}
+                    onChange={(e) => {
+                      setOpenOnHolidays(e.target.checked);
+                      persistOpening({ openOnHolidays: e.target.checked });
+                    }}
                     style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
                   />
-                  {d.full}
+                  Jours fériés
                 </label>
-              ))}
+                <label
+                  title="Décoché : les jours de vacances scolaires sont hachurés et non réservables (agenda + réservations)."
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: ".3rem",
+                    cursor: "pointer",
+                    fontSize: ".62rem",
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    className="admin-cb"
+                    checked={openOnSchoolHolidays}
+                    onChange={(e) => {
+                      setOpenOnSchoolHolidays(e.target.checked);
+                      persistOpening({ openOnSchoolHolidays: e.target.checked });
+                    }}
+                    style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+                  />
+                  Vacances
+                </label>
+              </div>
             </div>
-            <span
-              style={{
-                width: 1,
-                height: "1rem",
-                background: "var(--border)",
-                flexShrink: 0,
-                margin: "0 .2rem",
-                alignSelf: "center",
-              }}
-            />
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: ".3rem",
-                cursor: "pointer",
-                fontSize: ".62rem",
-                fontWeight: 500,
-              }}
-            >
-              <input
-                type="checkbox"
-                className="admin-cb"
-                checked={openOnHolidays}
-                onChange={(e) => {
-                  setOpenOnHolidays(e.target.checked);
-                  persistOpening({ openOnHolidays: e.target.checked });
-                }}
-                style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-              />
-              Jours fériés
-            </label>
-            <label
-              title="Décoché : les jours de vacances scolaires sont hachurés et non réservables (agenda + réservations)."
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: ".3rem",
-                cursor: "pointer",
-                fontSize: ".62rem",
-                fontWeight: 500,
-              }}
-            >
-              <input
-                type="checkbox"
-                className="admin-cb"
-                checked={openOnSchoolHolidays}
-                onChange={(e) => {
-                  setOpenOnSchoolHolidays(e.target.checked);
-                  persistOpening({ openOnSchoolHolidays: e.target.checked });
-                }}
-                style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-              />
-              Vacances scolaires
-            </label>
           </div>
-        </>
+        )}
+      </div>
+
+      {listError && (
+        <div className="field-error" style={{ display: "block", marginBottom: ".75rem" }}>
+          {listError}
+        </div>
       )}
 
       {/* ── Modale exercice (création / édition) ───────────────────────────── */}

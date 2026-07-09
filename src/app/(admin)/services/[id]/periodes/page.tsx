@@ -35,6 +35,8 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
     type: e.type,
     dateStart: toISODate(e.dateStart),
     dateEnd: toISODate(e.dateEnd),
+    // « Affiché aux utilisateurs » : l'unique exercice accessible côté usager.
+    visibleToUsers: e.visibleToUsers,
     // Réglages d'ouverture DE l'exercice (unique porteur, cf. opening.ts).
     opening: {
       activeDays: parseActiveDays(e.activeDays),
