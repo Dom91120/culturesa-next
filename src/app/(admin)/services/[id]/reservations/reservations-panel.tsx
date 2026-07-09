@@ -386,6 +386,7 @@ export function ReservationsPanel(props: Props) {
           />
           Toutes les
           <TimeStepper
+            compact
             value={hhmm(mgrInterval)}
             step={60}
             min={60}
@@ -415,6 +416,7 @@ export function ReservationsPanel(props: Props) {
           />
           Quotidienne à
           <TimeStepper
+            compact
             value={hhmm(mgrHour)}
             step={60}
             min={0}
@@ -449,7 +451,8 @@ export function ReservationsPanel(props: Props) {
               setMgrMode("weekly");
               save({ mgrNoticeMode: "weekly", mgrNoticeWeekday: e.target.value });
             }}
-            style={selectStyle}
+            // Aligné sur les TimeStepper compacts de la section (hauteur 17, police .75rem).
+            style={{ ...selectStyle, height: 17, fontSize: ".75rem" }}
           >
             {WEEKDAY_LABELS.map((d) => (
               <option key={d.value} value={d.value}>
@@ -459,6 +462,7 @@ export function ReservationsPanel(props: Props) {
           </select>
           à
           <TimeStepper
+            compact
             value={hhmm(mgrHour)}
             step={60}
             min={0}

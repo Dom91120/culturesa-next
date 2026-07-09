@@ -21,7 +21,27 @@ export function UserShell({
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Préférence sidebar repliée/étendue (clé PARTAGÉE avec le shell admin, persistée à
+  // chaque bascule). État initial = déplié, comme le rendu serveur (pas de mismatch
+  // d'hydratation) ; la restauration post-montage écrit .collapsed et les `title` dans
+  // le DOM. Le visuel replié AVANT ce point est assuré par `html.sb-collapsed`, posée
+  // par le script <head> de layout.tsx dès avant le premier paint (aucun « flash »).
   const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("sidebar-collapsed") === "1") setCollapsed(true);
+    } catch {}
+  }, []);
+  function toggleSidebar() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
+      // La classe html (posée par le script <head> avant le premier paint) doit
+      // suivre : les règles CSS `.collapsed` matchent aussi `html.sb-collapsed`.
+      document.documentElement.classList.toggle("sb-collapsed", next);
+    } catch {}
+  }
   // Menu « sandwich » des services en mode smartphone (replié par défaut).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Mode smartphone (même breakpoint que la media query CSS, 640px) : en mobile la sidebar
@@ -37,6 +57,15 @@ export function UserShell({
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
+
+  // La classe html `sb-collapsed` (alias CSS pré-hydratation, cf. layout.tsx) ne doit
+  // JAMAIS s'appliquer en mobile : on la retire en passant mobile, on la restaure en
+  // revenant desktop si la préférence « repliée » est active.
+  useEffect(() => {
+    try {
+      document.documentElement.classList.toggle("sb-collapsed", collapsed && !isMobile);
+    } catch {}
+  }, [collapsed, isMobile]);
 
   const match = pathname.match(/^\/reservations\/([^/]+)/);
   const activeServiceId = match ? match[1] : null;
@@ -141,7 +170,7 @@ export function UserShell({
             <button
               type="button"
               id="sidebar-toggle"
-              onClick={() => setCollapsed((c) => !c)}
+              onClick={toggleSidebar}
               title="Réduire / agrandir"
             >
               ☰
@@ -182,11 +211,14 @@ export function UserShell({
 
             <div className="sidebar-label">Réservations</div>
             <div id="service-sidebar">
+              {/* Sidebar repliée : seuls les icônes restent visibles → info-bulle native
+                  (title) avec le libellé au survol. Dépliée : pas de title (redondant). */}
               {services.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   className={activeServiceId === s.id ? "active" : ""}
+                  title={collapsed && !isMobile ? s.label : undefined}
                   onClick={() => router.push(`/reservations/${s.id}`)}
                 >
                   <span className="sb-icon">{s.icon || "📄"}</span>
@@ -204,6 +236,7 @@ export function UserShell({
                 type="button"
                 className={`sidebar-compte-btn${pathname === "/mon-compte" ? " active" : ""}`}
                 style={{ marginTop: ".6rem" }}
+                title={collapsed && !isMobile ? "Mon compte" : undefined}
                 onClick={() => router.push("/mon-compte")}
               >
                 <span className="sb-icon">👤</span>

@@ -403,27 +403,31 @@ main {
   color: var(--muted);
   margin-top: 0.3rem;
 }
-/* État réduit : largeur fixe ~52px, masquage des libellés */
-#service-sidebar-wrap.collapsed {
+/* État réduit : largeur fixe ~52px, masquage des libellés.
+   Chaque règle matche AUSSI `html.sb-collapsed` (classe posée par le script <head>
+   de layout.tsx AVANT le premier paint, comme le thème sombre) : la préférence
+   mémorisée s'applique sans « flash » déplié en attendant l'hydratation React,
+   qui pilote ensuite `.collapsed` et synchronise la classe html à chaque bascule. */
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) {
   width: 52px !important;
   min-width: 52px !important;
   max-width: 52px !important;
 }
-#service-sidebar-wrap.collapsed .sb-label {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sb-label {
   display: none !important;
 }
-#service-sidebar-wrap.collapsed .sidebar-title-resa,
-#service-sidebar-wrap.collapsed .sidebar-title em,
-#service-sidebar-wrap.collapsed .sidebar-tagline,
-#service-sidebar-wrap.collapsed .sidebar-label {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-title-resa,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-title em,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-tagline,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-label {
   visibility: hidden;
 }
-#service-sidebar-wrap.collapsed .sidebar-header {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-header {
   height: 60.8px;
 }
-#service-sidebar-wrap.collapsed #service-sidebar button,
-#service-sidebar-wrap.collapsed #sidebar-admin-btn,
-#service-sidebar-wrap.collapsed .sidebar-compte-btn {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #sidebar-admin-btn,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn {
   text-align: center !important;
   white-space: nowrap;
   overflow: hidden;
@@ -432,7 +436,7 @@ main {
   margin-right: 0.4rem;
   font-size: 1.3rem;
 }
-#service-sidebar-wrap.collapsed .sb-icon {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sb-icon {
   margin: 0 !important;
   font-size: 1.3rem;
 }
@@ -460,7 +464,7 @@ main {
     left 0.18s ease,
     top 0.18s ease;
 }
-#service-sidebar-wrap.collapsed #sidebar-toggle {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #sidebar-toggle {
   top: 0.8rem;
   left: 50%;
   transform: translateX(-50%);
@@ -510,9 +514,9 @@ main {
   min-height: 34px;
   box-sizing: border-box;
 }
-#service-sidebar-wrap.collapsed #service-sidebar button,
-#service-sidebar-wrap.collapsed #sidebar-admin-btn,
-#service-sidebar-wrap.collapsed .sidebar-compte-btn {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #sidebar-admin-btn,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn {
   justify-content: center;
 }
 #service-sidebar button:hover,
@@ -538,17 +542,17 @@ main {
 }
 
 /* Mode réduit : coins arrondis sur les 4 côtés (la bordure de base reste la même) */
-#service-sidebar-wrap.collapsed #service-sidebar button,
-#service-sidebar-wrap.collapsed #sidebar-admin-btn,
-#service-sidebar-wrap.collapsed .sidebar-compte-btn {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #sidebar-admin-btn,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn {
   border-radius: var(--rad-sm) !important;
 }
-#service-sidebar-wrap.collapsed #service-sidebar button.active,
-#service-sidebar-wrap.collapsed .sidebar-compte-btn.active {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button.active,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn.active {
   border-left-color: transparent;
   border-bottom-color: var(--accent);
 }
-#service-sidebar-wrap.collapsed .sidebar-admin-btn.active {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-admin-btn.active {
   border-left-color: transparent !important;
   border-bottom-color: var(--warn) !important;
 }
@@ -656,6 +660,11 @@ main {
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
+}
+/* Variante compacte (TimeStepper compact — plages horaires du panneau Périodes) :
+   flèches raccourcies EN HAUTEUR seulement, pile de 17px alignée sur le champ réduit. */
+.time-step-wrap.compact .time-step-btn {
+  height: 8px;
 }
 .time-step-btns .time-step-btn:hover {
   color: var(--accent);
@@ -1268,7 +1277,7 @@ textarea.theme-pending:focus::placeholder {
   border-collapse: collapse;
 }
 .periods-table th {
-  padding: 0.25rem 0.4rem;
+  padding: 0.25rem 0.25rem;
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1282,9 +1291,24 @@ textarea.theme-pending:focus::placeholder {
   padding-bottom: 0.18rem;
 }
 .periods-table td {
-  padding: 0.12rem 0.4rem;
+  padding: 0.12rem 0.25rem;
+  /* Lignes de données légèrement plus petites que le texte courant (13px → 12px). */
+  font-size: 0.75rem;
   text-align: center;
   vertical-align: middle;
+}
+/* Cases à cocher un cran plus petites que le 15px global (.admin-cb) : la colonne
+   de sélection reste discrète dans ce tableau compact. */
+.periods-table .admin-cb {
+  width: 13px;
+  height: 13px;
+}
+/* Première colonne (sélection) : collée au bord gauche du tableau, aligné sur le
+   titre « Périodes » au-dessus (pas de padding ni centrage qui décalent la case). */
+.periods-table th:first-child,
+.periods-table td:first-child {
+  padding-left: 0;
+  text-align: left;
 }
 /* Contenu inline des cellules (case à cocher, pastille couleur) centré verticalement
    comme le texte → tous les éléments d'une ligne à la même hauteur. */
@@ -1308,10 +1332,11 @@ textarea.theme-pending:focus::placeholder {
   width: 22px !important;
   height: 22px !important;
 }
+/* Même taille que les cases à cocher du tableau des périodes (.periods-table .admin-cb). */
 .period-swatch {
   display: inline-block;
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
   border-radius: 3px;
   border: 1px solid var(--border);
   vertical-align: middle;
@@ -1878,8 +1903,9 @@ textarea.theme-pending:focus::placeholder {
 .csm-slot-block {
   flex: 1;
   position: relative;
-  /* Couleur par défaut : jaune (récurrent / miroir). Surcharge en vert lime via .is-uniq. */
-  --agenda-block-color: #ffff00;
+  /* Couleur par défaut : jaune (récurrent / miroir). Surcharge en vert lime via .is-uniq.
+     DOIT rester synchrone avec .agenda-block et la légende (.agenda-legend-swatch). */
+  --agenda-block-color: #ffee24;
   --slot-color: var(--agenda-block-color);
   border-left: 2px dashed var(--slot-color, var(--accent));
   border-top: 2px dashed var(--slot-color, var(--accent));
@@ -2310,8 +2336,9 @@ textarea.theme-pending:focus::placeholder {
 .agenda-block {
   position: absolute;
   /* left & width sont injectés inline (layout multi-colonnes pour chevauchements) */
-  /* Couleur fixe pour tous les creneaux de l'agenda, quelle que soit la periode. */
-  --agenda-block-color: #ffff00;
+  /* Couleur fixe pour tous les creneaux de l'agenda, quelle que soit la periode.
+     DOIT rester synchrone avec .csm-slot-block et la légende (.agenda-legend-swatch). */
+  --agenda-block-color: #ffee24;
   --block-color: var(--agenda-block-color);
   border-radius: var(--rad-sm);
   background: color-mix(in srgb, var(--block-color) 25%, transparent);
@@ -2361,7 +2388,9 @@ textarea.theme-pending:focus::placeholder {
   gap: 0.35rem;
 }
 .agenda-legend-swatch {
-  /* Même jaune que la bordure des créneaux récurrents (--agenda-block-color). */
+  /* Même jaune que la bordure des créneaux récurrents : DOIT suivre la valeur de
+     --agenda-block-color (posée sur les blocs, .csm-slot-block et .agenda-block —
+     non héritable ici). */
   --legend-color: #ffee24;
   display: inline-block;
   width: 30px;

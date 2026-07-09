@@ -18,16 +18,21 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // `light` = mode clair par défaut (le CSS legacy bascule via html.light).
-    <html lang="fr" className="light">
+    // suppressHydrationWarning : le script <head> ci-dessous MUTE les classes de <html>
+    // avant l'hydratation (thème sombre, sidebar repliée) — divergence attendue avec le
+    // rendu serveur, sans conséquence (même patron que next-themes).
+    <html lang="fr" className="light" suppressHydrationWarning>
       <head>
-        {/* Applique le thème sombre AVANT le premier paint (anti-FOUC) : sans ce script,
-            un utilisateur en mode sombre voyait un flash clair tant que le useEffect de
-            ThemeToggle n'avait pas retiré la classe. */}
+        {/* Applique le thème sombre ET la sidebar repliée AVANT le premier paint
+            (anti-FOUC) : sans ce script, un utilisateur en mode sombre voyait un flash
+            clair, et une sidebar repliée mémorisée apparaissait dépliée le temps de
+            l'hydratation. `sb-collapsed` (jamais en mobile : la sidebar y est une barre
+            horizontale) est relayée par l'état React des shells après hydratation. */}
         <script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: script inline statique, sans donnée externe.
           dangerouslySetInnerHTML={{
             __html:
-              "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.remove('light');}catch(e){}",
+              "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.remove('light');if(!matchMedia('(max-width: 640px)').matches&&localStorage.getItem('sidebar-collapsed')==='1')document.documentElement.classList.add('sb-collapsed');}catch(e){}",
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

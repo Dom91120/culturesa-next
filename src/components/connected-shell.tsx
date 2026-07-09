@@ -43,7 +43,27 @@ export function ConnectedShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  // Préférence sidebar repliée/étendue (clé PARTAGÉE avec le shell usager, persistée à
+  // chaque bascule). État initial = déplié, comme le rendu serveur (pas de mismatch
+  // d'hydratation) ; la restauration post-montage écrit .collapsed et les `title` dans
+  // le DOM. Le visuel replié AVANT ce point est assuré par `html.sb-collapsed`, posée
+  // par le script <head> de layout.tsx dès avant le premier paint (aucun « flash »).
   const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("sidebar-collapsed") === "1") setCollapsed(true);
+    } catch {}
+  }, []);
+  function toggleSidebar() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
+      // La classe html (posée par le script <head> avant le premier paint) doit
+      // suivre : les règles CSS `.collapsed` matchent aussi `html.sb-collapsed`.
+      document.documentElement.classList.toggle("sb-collapsed", next);
+    } catch {}
+  }
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -194,7 +214,7 @@ export function ConnectedShell({
             <button
               type="button"
               id="sidebar-toggle"
-              onClick={() => setCollapsed((c) => !c)}
+              onClick={toggleSidebar}
               title="Réduire / agrandir"
             >
               ☰
@@ -212,11 +232,14 @@ export function ConnectedShell({
 
             <div className="sidebar-label">Services</div>
             <div id="service-sidebar">
+              {/* Sidebar repliée : seuls les icônes restent visibles → info-bulle native
+                  (title) avec le libellé au survol. Dépliée : pas de title (redondant). */}
               {services.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   className={activeServiceId === s.id ? "active" : ""}
+                  title={collapsed ? s.label : undefined}
                   onClick={() => goToService(s.id)}
                 >
                   <span className="sb-icon">{s.icon || "📄"}</span>
@@ -230,6 +253,7 @@ export function ConnectedShell({
                   id="sidebar-admin-btn"
                   className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
                   style={{ marginTop: "1rem" }}
+                  title={collapsed ? "Administration" : undefined}
                   onClick={goToAdmin}
                 >
                   <span className="sb-icon">⚙️</span>
@@ -241,6 +265,7 @@ export function ConnectedShell({
                 type="button"
                 className={`sidebar-compte-btn${pathname === "/mon-compte" ? " active" : ""}`}
                 style={{ marginTop: "1rem" }}
+                title={collapsed ? "Mon compte" : undefined}
                 onClick={() => router.push("/mon-compte")}
               >
                 <span className="sb-icon">👤</span>

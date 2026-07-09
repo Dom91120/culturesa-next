@@ -44,6 +44,7 @@ export function TimeStepper({
   max = DEFAULT_MAX,
   maxLength = 5,
   disabled = false,
+  compact = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -53,6 +54,10 @@ export function TimeStepper({
   max?: number;
   maxLength?: number;
   disabled?: boolean;
+  /** Variante réduite EN HAUTEUR seulement (plages horaires du panneau Périodes) :
+   * champ 17px au lieu de 21 (largeur et police inchangées), flèches raccourcies via
+   * .time-step-wrap.compact (2 × 8px + 1px de gap = 17px). */
+  compact?: boolean;
 }) {
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -86,7 +91,7 @@ export function TimeStepper({
   }, []);
 
   return (
-    <span className="time-step-wrap">
+    <span className={`time-step-wrap${compact ? " compact" : ""}`}>
       <input
         type="text"
         value={value}
@@ -95,13 +100,15 @@ export function TimeStepper({
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: 50,
-          // Hauteur calée sur la pile des flèches ▲/▼ : 2 × 10px + 1px de gap = 21px.
-          height: 21,
+          // Hauteur calée sur la pile des flèches ▲/▼ : 2 × 10px + 1px de gap = 21px
+          // (compact : 2 × 8px + 1px = 17px).
+          height: compact ? 17 : 21,
           boxSizing: "border-box",
           // flexShrink:0 indispensable : dans un conteneur flex (ex. lignes radio du panneau
           // Réservations) l'input serait sinon comprimé et le « HH:MM » rogné.
           flexShrink: 0,
-          fontSize: ".78rem",
+          // Compact : même taille que les lignes du tableau des périodes (.periods-table td).
+          fontSize: compact ? ".75rem" : ".78rem",
           fontWeight: 400,
           // letter-spacing:normal indispensable : la règle globale `label { letter-spacing:.1em }`
           // est héritée dans les lignes radio (panneau Notifications) et élargit « HH:MM » → rognage.
