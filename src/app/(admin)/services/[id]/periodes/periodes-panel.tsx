@@ -25,6 +25,8 @@ export type UiPeriod = {
   etiquette: string | null;
   dateStart: string; // "YYYY-MM-DD" ou ""
   dateEnd: string;
+  // Ouverture des réservations usager ("YYYY-MM-DD" ou "" = toujours ouvert).
+  disponibilite: string;
   color: string;
   state: PeriodState;
   exerciceId: number | null;
@@ -69,11 +71,11 @@ const DAYS: { key: string; label: string; full: string }[] = [
 
 // Libellé « Matin » / « Après-midi » de la grille des plages horaires.
 const timeLabelStyle: React.CSSProperties = {
-  // Même hauteur de boîte que les champs horaires (TimeStepper = 21px), texte centré :
-  // le libellé Matin / Après-midi est ainsi parfaitement aligné sur ses 2 champs.
+  // Même hauteur de boîte que les champs horaires (TimeStepper compact = 17px), texte
+  // centré : le libellé Matin / Après-midi est ainsi parfaitement aligné sur ses 2 champs.
   display: "inline-flex",
   alignItems: "center",
-  height: 21,
+  height: 17,
   lineHeight: 1,
   fontSize: ".62rem",
   fontWeight: 700,
@@ -107,6 +109,8 @@ type ModalForm = {
   etiquette: string;
   dateStart: string;
   dateEnd: string;
+  // Ouverture des réservations usager ("" = réservable sans restriction).
+  disponibilite: string;
   color: string;
 };
 
@@ -116,6 +120,7 @@ const EMPTY_FORM: ModalForm = {
   etiquette: "",
   dateStart: "",
   dateEnd: "",
+  disponibilite: "",
   color: "#6dceaa",
 };
 
@@ -233,6 +238,7 @@ export function PeriodesPanel({
       etiquette: p.etiquette ?? "",
       dateStart: p.dateStart,
       dateEnd: p.dateEnd,
+      disponibilite: p.disponibilite,
       color: p.color || "#6dceaa",
     });
     setModalOpen(true);
@@ -260,6 +266,7 @@ export function PeriodesPanel({
       etiquette: form.etiquette.trim(),
       dateStart: form.dateStart || null,
       dateEnd: form.dateEnd || null,
+      disponibilite: form.disponibilite || null,
       color: form.color || "#6dceaa",
     };
     startTransition(async () => {
@@ -515,17 +522,65 @@ export function PeriodesPanel({
 
   return (
     <div className="panel">
-      {/* Bandeau « Exercice ◀ … ▶ » + réglage « exercices précédents », regroupés. */}
-      <div className="pr-head-wrap">
-        <div className="pr-head">
-          <div className="panel-title pr-title" style={{ fontWeight: 500 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-              <span className="dot" style={{ background: "var(--warn)" }} />
-              Exercice
-            </span>
-          </div>
+      {/* Ligne de titre : « Exercices » + case « Afficher les exercices précédents »
+          alignée à droite sur la même ligne. */}
+      <div
+        className="panel-title pr-title"
+        style={{
+          fontWeight: 500,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+          flexWrap: "wrap",
+          marginBottom: 0,
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+          <span className="dot" style={{ background: "var(--warn)" }} />
+          Exercices
+        </span>
+        {/* Réglage service : afficher aussi les exercices passés dans la nav ◀ ▶. */}
+        {hasExercices && (
+          <label
+            className="check"
+            style={{
+              fontSize: ".62rem",
+              whiteSpace: "nowrap",
+              color: "var(--muted)",
+              fontWeight: 400,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showPrevious}
+              disabled={pending}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setShowPrevious(next); // optimiste
+                setListError(null);
+                startTransition(async () => {
+                  const res = await setShowPreviousExercicesAction(serviceId, next);
+                  if (res && !res.ok) {
+                    setShowPrevious(!next); // rollback
+                    setListError(res.error ?? "Échec de l'enregistrement.");
+                    return;
+                  }
+                  router.refresh();
+                });
+              }}
+            />{" "}
+            Afficher les exercices précédents
+          </label>
+        )}
+      </div>
 
-          {hasExercices ? (
+      {/* Navigation « ◀ … ▶ · dates · ✏️ » : deux lignes sous le titre, puis une ligne
+          sautée avant les sous-titres « Périodes … » / « Plages horaires … ». */}
+      <div className="pr-head" style={{ margin: "2rem 0 1rem" }}>
+        {/* Libellé de la ligne, à gauche de la navigation ◀ … ▶. */}
+        <span style={{ fontSize: ".85rem", fontWeight: 500 }}>Exercice</span>
+        {hasExercices ? (
             <div className="periode-nav">
               <button
                 type="button"
@@ -622,37 +677,6 @@ export function PeriodesPanel({
               </button>
             )}
           </div>
-        </div>
-
-        {/* Réglage service : afficher aussi les exercices passés dans la nav ◀ ▶.
-            Sibling de .pr-head dans le wrapper .pr-head-wrap ; autosave optimiste. */}
-        {hasExercices && (
-          <label
-            className="check"
-            style={{ fontSize: ".62rem", whiteSpace: "nowrap", color: "var(--muted)" }}
-          >
-            <input
-              type="checkbox"
-              checked={showPrevious}
-              disabled={pending}
-              onChange={(e) => {
-                const next = e.target.checked;
-                setShowPrevious(next); // optimiste
-                setListError(null);
-                startTransition(async () => {
-                  const res = await setShowPreviousExercicesAction(serviceId, next);
-                  if (res && !res.ok) {
-                    setShowPrevious(!next); // rollback
-                    setListError(res.error ?? "Échec de l'enregistrement.");
-                    return;
-                  }
-                  router.refresh();
-                });
-              }}
-            />{" "}
-            Afficher les exercices précédents
-          </label>
-        )}
       </div>
 
       {/* ── Multi-colonnage : tableau des périodes · actions · plages horaires ── */}
@@ -661,15 +685,16 @@ export function PeriodesPanel({
             bascule dessous quand la largeur manque (flex-wrap de #periods-row). */}
         <div className="pr-left">
           <div className="pr-editor">
-            {/* Sous-titre discret entre « Exercice » et le tableau des périodes. */}
+            {/* Sous-titre discret entre « Exercices » et le tableau des périodes,
+                suffixé du libellé de l'exercice affiché. */}
             <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-              Périodes
+              Périodes{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
             </div>
             {visiblePeriods.length > 0 ? (
               <table className="periods-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 32 }}>
+                    <th style={{ width: 18 }}>
                       <input
                         type="checkbox"
                         className="admin-cb"
@@ -686,6 +711,9 @@ export function PeriodesPanel({
                     <th className="td-left">Libellé</th>
                     <th>Début</th>
                     <th>Fin</th>
+                    <th title="Date d'ouverture des réservations côté usager — vide : réservable sans restriction">
+                      Dispo
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -709,6 +737,10 @@ export function PeriodesPanel({
                       <td className="td-left">{p.label || "—"}</td>
                       <td>{fmtDate(p.dateStart)}</td>
                       <td>{fmtDate(p.dateEnd)}</td>
+                      {/* Lecture seule : la valeur se modifie via la modale (✏️ Modifier). */}
+                      <td title="Date d'ouverture des réservations côté usager — vide : réservable sans restriction. Modifiable via ✏️ Modifier.">
+                        {fmtDate(p.disponibilite)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -802,7 +834,7 @@ export function PeriodesPanel({
             className="panel-subtitle"
             style={{ fontSize: ".85rem", fontWeight: 500, whiteSpace: "nowrap" }}
           >
-            Plages horaires
+            Plages horaires{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
           </div>
           <div
             className="defaults-row"
@@ -827,6 +859,7 @@ export function PeriodesPanel({
             >
               <span style={timeLabelStyle}>Matin</span>
               <TimeStepper
+                compact
                 value={morningStart}
                 onChange={(v) => {
                   hoursTouchedRef.current = true;
@@ -835,6 +868,7 @@ export function PeriodesPanel({
                 }}
               />
               <TimeStepper
+                compact
                 value={morningEnd}
                 onChange={(v) => {
                   hoursTouchedRef.current = true;
@@ -844,6 +878,7 @@ export function PeriodesPanel({
               />
               <span style={timeLabelStyle}>Après-midi</span>
               <TimeStepper
+                compact
                 value={afternoonStart}
                 onChange={(v) => {
                   hoursTouchedRef.current = true;
@@ -852,6 +887,7 @@ export function PeriodesPanel({
                 }}
               />
               <TimeStepper
+                compact
                 value={afternoonEnd}
                 onChange={(v) => {
                   hoursTouchedRef.current = true;
@@ -1256,6 +1292,17 @@ export function PeriodesPanel({
                   />
                 </label>
               </div>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>
+                  Disponibilité — ouverture des réservations côté usager (vide : réservable sans
+                  restriction)
+                </span>
+                <input
+                  type="date"
+                  value={form.disponibilite}
+                  onChange={(e) => setForm((f) => ({ ...f, disponibilite: e.target.value }))}
+                />
+              </label>
               <label style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
                 <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Couleur</span>
                 <input

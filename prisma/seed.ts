@@ -4,6 +4,8 @@
  *   pnpm db:seed
  */
 import { defaultMailTypes, SYSTEM_MAIL_KINDS } from "@/app/(admin)/echanges/mail-rows";
+import { holidaysInRange } from "@/lib/french-holidays";
+import { mirrorDates } from "@/lib/mirror-dates";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { defaultMailTriggers } from "@/server/services/mail-prefs";
@@ -192,6 +194,9 @@ async function main() {
   // Un créneau récurrent DOIT pointer une période : l'éditeur Créneaux filtre par
   // période, des slots à periodId null seraient invisibles.
   // Modèle « un slot = un jour » : chaque créneau récurrent porte son slotDay.
+  // Capacité TOUJOURS explicite : un créneau à capacity null replie sur celle du
+  // service partout dans l'app, mais ce cas particulier n'a pas à exister en données
+  // de démo (il a produit des clones « Clôturés » à la bascule d'exercice).
   const slots = [
     {
       id: "matin",
@@ -200,6 +205,7 @@ async function main() {
       slotDay: "lun",
       startTime: "09:30",
       endTime: "11:00",
+      capacity: 15,
     },
     {
       id: "aprem",
@@ -208,6 +214,7 @@ async function main() {
       slotDay: "jeu",
       startTime: "14:00",
       endTime: "15:30",
+      capacity: 15,
     },
     {
       id: "matin2",
@@ -216,6 +223,7 @@ async function main() {
       slotDay: "lun",
       startTime: "09:30",
       endTime: "11:00",
+      capacity: 10,
     },
     {
       id: "aprem2",
@@ -224,14 +232,50 @@ async function main() {
       slotDay: "jeu",
       startTime: "14:00",
       endTime: "15:30",
+      capacity: 10,
     },
   ] as const;
   for (const sl of slots) {
     await prisma.slot.upsert({
       where: { id: sl.id },
-      update: { periodId: sl.periodId },
+      update: { periodId: sl.periodId, capacity: sl.capacity },
       create: { ...sl, slotType: "recurring" },
     });
+  }
+
+  // ── Miroirs des créneaux récurrents de démo ──
+  // Sans occurrence datée, un créneau récurrent apparaît « Clôturé » côté usager :
+  // on matérialise ses miroirs comme le fait la création de créneau dans l'app
+  // (mêmes ids déterministes u_<slotId>_<date> → relançable sans dupliquer).
+  const periodRange: Record<number, { start: string; end: string }> = {
+    1: { start: "2025-09-01", end: "2025-12-31" },
+    4: { start: "2025-09-01", end: "2025-12-31" },
+  };
+  for (const sl of slots) {
+    const range = periodRange[sl.periodId];
+    const holidaySet = new Set(holidaysInRange(range.start, range.end).map((h) => h.date));
+    const dates = mirrorDates({
+      startDate: range.start,
+      endDate: range.end,
+      slotDay: sl.slotDay,
+      activeDays: ["lun", "mar", "mer", "jeu", "ven"],
+      allowedWeeks: ["A", "B"],
+      holidaySet,
+      openOnHolidays: false,
+    });
+    const rows = dates.map((d) => ({
+      id: `u_${sl.id}_${d}`,
+      serviceId: sl.serviceId,
+      slotType: "unique" as const,
+      startTime: sl.startTime,
+      endTime: sl.endTime,
+      slotDate: new Date(`${d}T00:00:00.000Z`),
+      capacity: sl.capacity,
+      periodId: sl.periodId,
+      parentSlotId: sl.id,
+      state: "actif" as const,
+    }));
+    if (rows.length > 0) await prisma.slot.createMany({ data: rows, skipDuplicates: true });
   }
 
   // ── Compte administrateur par défaut (mot de passe : Admin123456!) ──
@@ -271,11 +315,7 @@ async function main() {
   console.log(`✓ Admin : ${adminEmail} / ${adminPassword}`);
 
   // ── Données de démo pour l'Agenda (réservations récurrentes) ──
-  // Capacité des créneaux svc_001 (pour la jauge).
-  await prisma.slot.updateMany({
-    where: { id: { in: ["matin", "aprem"] } },
-    data: { capacity: 15 },
-  });
+  // (Les capacités des créneaux sont posées dans leurs définitions, plus haut.)
 
   // enfants/accompagnants ≥ 1 : un compte « utilisateur » doit toujours en déclarer
   // au moins 1 de chaque (cf. validation côté inscription et gestion des comptes).

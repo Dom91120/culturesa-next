@@ -300,6 +300,9 @@ model Period {
   etiquette  String?
   dateStart  DateTime?   @db.Date
   dateEnd    DateTime?   @db.Date
+  // Disponibilité : date à partir de laquelle les USAGERS peuvent réserver sur
+  // cette période. Vide = réservable sans restriction de date.
+  disponibilite DateTime? @db.Date @map("Disponibilite")
   color      String      @default("#6dceaa")
   position   Int         @default(0)
   state      EntityState @default(actif)

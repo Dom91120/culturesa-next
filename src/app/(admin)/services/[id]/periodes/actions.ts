@@ -50,6 +50,8 @@ const createSchema = z
     etiquette: z.string().trim().max(120).optional().default(""),
     dateStart: dateString,
     dateEnd: dateString,
+    // Ouverture des réservations usager (champ « Disponibilité ») ; vide = toujours ouvert.
+    disponibilite: dateString,
     color: colorString,
   })
   .refine(dateOrderOk, dateOrderError);
@@ -90,6 +92,8 @@ const updateSchema = z
     etiquette: z.string().trim().max(120).optional().default(""),
     dateStart: dateString,
     dateEnd: dateString,
+    // Ouverture des réservations usager (colonne « Dispo ») ; vide = toujours ouvert.
+    disponibilite: dateString,
     color: colorString,
   })
   .refine(dateOrderOk, dateOrderError);
@@ -127,7 +131,8 @@ export async function createPeriodAction(input: CreatePeriodInput): Promise<Acti
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
   }
-  const { serviceId, exerciceId, label, etiquette, dateStart, dateEnd, color } = parsed.data;
+  const { serviceId, exerciceId, label, etiquette, dateStart, dateEnd, disponibilite, color } =
+    parsed.data;
   try {
     await createServicePeriod(serviceId, {
       exerciceId,
@@ -135,6 +140,7 @@ export async function createPeriodAction(input: CreatePeriodInput): Promise<Acti
       etiquette: etiquette ? etiquette : null,
       dateStart: toDate(dateStart),
       dateEnd: toDate(dateEnd),
+      disponibilite: toDate(disponibilite),
       color,
     });
   } catch (e) {
@@ -151,13 +157,16 @@ export async function updatePeriodAction(input: UpdatePeriodInput): Promise<Acti
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
   }
-  const { id, serviceId, label, etiquette, dateStart, dateEnd, color } = parsed.data;
+  const { id, serviceId, label, etiquette, dateStart, dateEnd, disponibilite, color } = parsed.data;
   try {
     await updateServicePeriod(serviceId, id, {
       label,
       etiquette: etiquette ? etiquette : null,
       dateStart: toDate(dateStart),
       dateEnd: toDate(dateEnd),
+      // Absent (undefined) = inchangé — la modale d'édition ne gère pas ce champ ;
+      // null explicite = effacement (colonne « Dispo » vidée).
+      disponibilite: disponibilite !== undefined ? toDate(disponibilite) : undefined,
       color,
     });
   } catch (e) {

@@ -26,6 +26,7 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
     etiquette: p.etiquette,
     dateStart: toISODate(p.dateStart),
     dateEnd: toISODate(p.dateEnd),
+    disponibilite: toISODate(p.disponibilite),
     color: p.color,
     state: p.state,
     exerciceId: p.exerciceId,

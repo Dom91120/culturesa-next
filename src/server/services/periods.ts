@@ -217,6 +217,8 @@ export type PeriodRow = {
   etiquette: string | null;
   dateStart: Date | null;
   dateEnd: Date | null;
+  // Date d'ouverture des réservations USAGER pour la période (null = toujours ouvert).
+  disponibilite: Date | null;
   color: string;
   state: EntityState;
   exerciceId: number | null;
@@ -228,6 +230,7 @@ const PERIOD_SELECT = {
   etiquette: true,
   dateStart: true,
   dateEnd: true,
+  disponibilite: true,
   color: true,
   state: true,
   exerciceId: true,
@@ -274,6 +277,8 @@ export type CreateServicePeriodInput = {
   etiquette: string | null;
   dateStart: Date | null;
   dateEnd: Date | null;
+  // Ouverture des réservations usager (null = réservable sans restriction).
+  disponibilite: Date | null;
   color: string;
 };
 
@@ -291,6 +296,7 @@ export async function createServicePeriod(
       etiquette: input.etiquette,
       dateStart: input.dateStart,
       dateEnd: input.dateEnd,
+      disponibilite: input.disponibilite,
       color: input.color,
       state: "actif",
     },
@@ -305,6 +311,7 @@ export type UpdateServicePeriodInput = {
   etiquette?: string | null;
   dateStart?: Date | null;
   dateEnd?: Date | null;
+  disponibilite?: Date | null;
   color?: string;
   state?: EntityState;
 };
@@ -324,11 +331,13 @@ export async function updateServicePeriod(
     etiquette?: string | null;
     dateStart?: Date | null;
     dateEnd?: Date | null;
+    disponibilite?: Date | null;
     color?: string;
     state?: EntityState;
   } = {};
   if (input.label !== undefined) data.label = input.label;
   if (input.etiquette !== undefined) data.etiquette = input.etiquette;
+  if (input.disponibilite !== undefined) data.disponibilite = input.disponibilite;
   if (input.color !== undefined) data.color = input.color;
   if (input.state !== undefined) data.state = input.state;
 

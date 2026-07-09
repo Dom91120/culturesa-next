@@ -158,13 +158,25 @@ async function generateMirrorSlots(
     rangeEnd: string;
     activeDays: number[];
     openOnHolidays: boolean;
+    serviceCapacity: number;
   },
 ): Promise<string[]> {
-  const { serviceId, slotId, periodId, src, rangeStart, rangeEnd, activeDays, openOnHolidays } =
-    params;
-  // Slot mono-jour sans jour OU sans capacité → aucun miroir (ancien capForDay → null).
-  if (src.slotDay == null || src.capacity == null) return [];
-  const cap = src.capacity;
+  const {
+    serviceId,
+    slotId,
+    periodId,
+    src,
+    rangeStart,
+    rangeEnd,
+    activeDays,
+    openOnHolidays,
+    serviceCapacity,
+  } = params;
+  // Slot mono-jour sans jour → aucun miroir. Capacité vide : repli sur la capacité du
+  // service, comme partout ailleurs (agenda, réservation, copie A/B) — sauter la
+  // génération laissait les créneaux clonés « Clôturés » côté usager.
+  if (src.slotDay == null) return [];
+  const cap = src.capacity ?? serviceCapacity;
 
   const holidaySet = new Set<string>();
   if (!openOnHolidays) {
@@ -370,6 +382,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
                 rangeEnd: ne,
                 activeDays,
                 openOnHolidays: service.openOnHolidays,
+                serviceCapacity: service.capacity,
               });
               for (const mid of mirrors) newMirrorSlotIds.push(mid);
             }
