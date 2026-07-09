@@ -87,6 +87,9 @@ export type UniqueSlot = {
   capacity: number | null;
   slotDate: string;
   parentSlotId: string | null;
+  // Période du créneau (optionnel : fourni à l'agenda USAGER pour le contrôle
+  // de disponibilité « Dispo » ; absent côté admin).
+  periodId?: number | null;
 };
 
 export type Pointage = "present" | "absent" | null;

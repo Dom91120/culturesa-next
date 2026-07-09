@@ -63,6 +63,8 @@ type Period = {
   color: string;
   dateStart: string;
   dateEnd: string;
+  // Ouverture des réservations usager ("YYYY-MM-DD" ou "" = toujours ouvert).
+  disponibilite: string;
   exerciceId: number | null;
 };
 type Exercice = { id: number; label: string };
@@ -1904,9 +1906,11 @@ export function UserAgendaGrid({
           anchorMonday: string;
           weekAB: "A" | "B";
         }>;
-        // Ne restaure l'exercice que s'il existe encore (sinon défaut).
-        if (v.exerciceId == null || exercices.some((e) => e.id === v.exerciceId)) {
-          if (v.exerciceId !== undefined) setCurrentExerciceId(v.exerciceId);
+        // Ne restaure l'exercice que s'il existe encore ; un `null` mémorisé (vue
+        // enregistrée quand le service n'avait pas d'exercice) est ignoré, sinon il
+        // désactiverait le filtre d'exercice (périodes de tous les exercices mélangées).
+        if (v.exerciceId != null && exercices.some((e) => e.id === v.exerciceId)) {
+          setCurrentExerciceId(v.exerciceId);
         }
         if (typeof v.periodIdx === "number" && v.periodIdx >= 0) setPeriodIdx(v.periodIdx);
         if (v.weekAB === "A" || v.weekAB === "B") setWeekAB(v.weekAB);
@@ -2499,6 +2503,22 @@ export function UserAgendaGrid({
     return concernedDatesForBlock(b.slotId, b.dayKey).length === 0;
   };
 
+  // Disponibilité (colonne « Dispo » du panneau Périodes) : date d'ouverture des
+  // réservations USAGER de la période du créneau. Renvoie la date si elle est encore
+  // future (bloc non réservable, libellé « Réservable à partir du … »), sinon null. La période du
+  // bloc = celle du créneau (récurrent : la sienne ; ponctuel/miroir : celle du
+  // créneau daté). Le serveur applique la même règle (assertPeriodOpenForUser).
+  const dispoByPeriod = new Map(periods.map((p) => [p.id, p.disponibilite]));
+  const todayIso = ymd(new Date());
+  const slotOpensOn = (b: Block): string | null => {
+    const pid = uniqueIdSet.has(b.slotId)
+      ? uniqSlotById.get(b.slotId)?.periodId
+      : recurSlotById.get(b.slotId)?.periodId;
+    if (pid == null) return null;
+    const d = dispoByPeriod.get(pid);
+    return d && todayIso < d ? d : null;
+  };
+
   // Saisie de thème en cours (textarea/input focalisé dans un badge, ou picker liste
   // ouvert) → on n'affiche pas l'info-bulle pour ne pas gêner (port _isThemeBeingEdited).
   const isThemeBeingEdited = (): boolean => {
@@ -2544,9 +2564,10 @@ export function UserAgendaGrid({
         setPendingAdds,
         beginDrag,
       } = blockApiRef.current;
-      // Info-bulle « Journées concernées » : créneaux RÉCURRENTS en vue Modèle de période
-      // uniquement (en Semaine réelle, les dates sont déjà visibles → inutile).
-      const isRecurringModel = mode === "model" && !uniqueIdSet.has(b.slotId);
+      // Info-bulle « Journées concernées » : créneaux RÉCURRENTS, en Modèle de période
+      // COMME en Semaine réelle (même comportement que l'agenda admin) — elle liste les
+      // occurrences à venir du créneau, utile dans les deux vues.
+      const isRecurringBlock = !uniqueIdSet.has(b.slotId);
       const posStyle: React.CSSProperties = allday
         ? {}
         : (() => {
@@ -2563,12 +2584,14 @@ export function UserAgendaGrid({
           })();
       // Clôturé par le délai → bloc non réservable (grisé, clic ignoré, libellé « Clôturé »).
       const closed = isSlotClosed(b);
+      // Période pas encore ouverte (Dispo) → bloc non réservable, « Réservable à partir du … ».
+      const opensOn = slotOpensOn(b);
       return (
         // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
         <div
           key={`${b.dayKey}|${b.slotId}`}
           // data-* pour l'info-bulle déléguée « Journées concernées » (créneau récurrent).
-          data-slot-tip={isRecurringModel ? "" : undefined}
+          data-slot-tip={isRecurringBlock ? "" : undefined}
           data-slotid={b.slotId}
           data-daykey={b.dayKey}
           // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
@@ -2593,14 +2616,15 @@ export function UserAgendaGrid({
                   borderColor: "var(--slot-uniq-color)",
                 }
               : {}),
-            // Créneau clôturé (délai) : grisé + curseur « interdit ».
-            ...(closed ? { opacity: 0.6, cursor: "not-allowed" } : {}),
+            // Créneau clôturé (délai) ou période pas encore ouverte (Dispo) :
+            // grisé + curseur « interdit ».
+            ...(closed || opensOn ? { opacity: 0.6, cursor: "not-allowed" } : {}),
           }}
           onClick={(e) => {
             // Clic sur un créneau → coche/décoche pour réservation (brouillon).
             // (Si c'est ma résa, le badge interne gère l'annulation et stoppe la propagation.)
             e.stopPropagation();
-            if (b.full || closed) return;
+            if (b.full || closed || opensOn) return;
             const ponctuel = uniqueIdSet.has(b.slotId);
             if (!ponctuel && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
             togglePendingAdd(b.slotId, b.dayKey, ponctuel);
@@ -2828,6 +2852,21 @@ export function UserAgendaGrid({
                   />
                 );
               }
+              if (opensOn) {
+                // Période pas encore ouverte aux réservations (colonne « Dispo » admin).
+                return (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      color: "var(--muted)",
+                      fontWeight: 600,
+                      fontSize: ".62rem",
+                    }}
+                  >
+                    Réservable à partir du {new Date(`${opensOn}T00:00`).toLocaleDateString("fr-FR")}
+                  </div>
+                );
+              }
               if (closed) {
                 // Délai de réservation dépassé (ponctuel) ou aucun miroir réservable (récurrent).
                 return (
@@ -2935,6 +2974,8 @@ export function UserAgendaGrid({
       abMode,
       dragItem,
       isMobile,
+      // Disponibilité des périodes (slotOpensOn) : réagit aux changements de « Dispo ».
+      periods,
     ],
   );
 
@@ -3029,6 +3070,14 @@ export function UserAgendaGrid({
         <div className="panel-title res-title" style={{ marginBottom: 0 }}>
           <span className="dot" />
           Réservations
+          {/* Exercice en cours : même rendu inline que le titre de l'Agenda admin. */}
+          {currentExerciceId != null && (
+            <span className="exercice-nav-inline">
+              <span className="ex-nav-label">
+                {exercices.find((e) => e.id === currentExerciceId)?.label}
+              </span>
+            </span>
+          )}
         </div>
         {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
             titre et le sélecteur. */}
@@ -3450,34 +3499,75 @@ export function UserAgendaGrid({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: "2rem",
             width: "100%",
           }}
         >
+          {/* Zone gauche commune aux deux lignes : 50 % de la ligne (2 × 25 % pour le
+              libellé d'état et la légende Créneau), bornée par la somme des min-width. */}
           <span
-            style={{ display: "inline-flex", alignItems: "center", gap: ".45rem", flexShrink: 0 }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              flexShrink: 0,
+              width: "50%",
+              // Somme des planchers : libellé (160) + légende (130) + marge (1rem).
+              minWidth: 306,
+            }}
           >
+            {/* Largeur fixe commune aux deux lignes de légende : les items « Récurrent »
+                et « Ponctuel » qui suivent démarrent sur la même colonne. */}
             <span
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                width: 34,
-                height: 20,
-                borderRadius: "var(--rad-sm)",
-                background: "#ffe6a7",
-                boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-                flexShrink: 0,
+                gap: ".45rem",
+                // 25 % de la ligne (50 % de la zone gauche), plancher 160px → les légendes
+                // qui suivent démarrent sur la même colonne ; repli au besoin, interligne
+                // minimal.
+                width: "50%",
+                minWidth: 160,
+                lineHeight: 1,
+                letterSpacing: "-0.02em",
               }}
             >
               <span
-                className="slot-icon"
-                style={{ fontSize: ".85rem", lineHeight: 1, color: "#b2a478" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 34,
+                  height: 20,
+                  borderRadius: "var(--rad-sm)",
+                  background: "#ffe6a7",
+                  boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+                  flexShrink: 0,
+                }}
               >
-                ⏳
+                <span
+                  className="slot-icon"
+                  style={{ fontSize: ".85rem", lineHeight: 1, color: "#b2a478" }}
+                >
+                  ⏳
+                </span>
               </span>
+              Demande en attente de validation
             </span>
-            Demande en attente de validation
+            {/* Légende « Créneau récurrent » (même rendu que l'agenda admin), à droite. */}
+            <span
+              className="agenda-legend-item"
+              style={{
+                marginLeft: "1rem",
+                letterSpacing: "-0.02em",
+                // 25 % de la ligne (moitié restante de la zone gauche, marge déduite),
+                // plancher 130px ; repli au besoin, interligne minimal.
+                width: "calc(50% - 1rem)",
+                minWidth: 130,
+                lineHeight: 1.1,
+              }}
+            >
+              <span className="agenda-legend-swatch is-rec" />
+              Créneau récurrent
+            </span>
           </span>
           {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
           <div
@@ -3492,7 +3582,7 @@ export function UserAgendaGrid({
             <button
               type="button"
               className="btn btn-ghost"
-              style={{ padding: ".28rem .7rem", fontSize: ".7rem" }}
+              style={{ padding: ".22rem .6rem", fontSize: ".66rem" }}
               onClick={clearPending}
               disabled={pendingCount === 0}
             >
@@ -3503,8 +3593,8 @@ export function UserAgendaGrid({
               className="btn btn-primary"
               // Une suppression en attente → « Supprimer → » en rouge danger.
               style={{
-                padding: ".28rem .7rem",
-                fontSize: ".7rem",
+                padding: ".22rem .6rem",
+                fontSize: ".66rem",
                 ...(isDeletion
                   ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }
                   : {}),
@@ -3523,34 +3613,74 @@ export function UserAgendaGrid({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: "2rem",
             width: "100%",
           }}
         >
+          {/* Zone gauche commune aux deux lignes : 50 % de la ligne (2 × 25 % pour le
+              libellé d'état et la légende Créneau), bornée par la somme des min-width. */}
           <span
-            style={{ display: "inline-flex", alignItems: "center", gap: ".45rem", flexShrink: 0 }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              flexShrink: 0,
+              width: "50%",
+              // Somme des planchers : libellé (160) + légende (130) + marge (1rem).
+              minWidth: 306,
+            }}
           >
+            {/* Même largeur fixe que la ligne « en attente » ci-dessus → colonnes alignées. */}
             <span
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                width: 34,
-                height: 20,
-                borderRadius: "var(--rad-sm)",
-                background: "#c8e8b8",
-                boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-                flexShrink: 0,
+                gap: ".45rem",
+                // 25 % de la ligne (50 % de la zone gauche), plancher 160px → les légendes
+                // qui suivent démarrent sur la même colonne ; repli au besoin, interligne
+                // minimal.
+                width: "50%",
+                minWidth: 160,
+                lineHeight: 1,
+                letterSpacing: "-0.02em",
               }}
             >
               <span
-                className="slot-icon"
-                style={{ fontSize: ".85rem", lineHeight: 1, color: "#3e7e2f" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 34,
+                  height: 20,
+                  borderRadius: "var(--rad-sm)",
+                  background: "#c8e8b8",
+                  boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+                  flexShrink: 0,
+                }}
               >
-                ✔
+                <span
+                  className="slot-icon"
+                  style={{ fontSize: ".85rem", lineHeight: 1, color: "#3e7e2f" }}
+                >
+                  ✔
+                </span>
               </span>
+              Réservation validée
             </span>
-            Réservation validée
+            {/* Légende « Créneau ponctuel » (même rendu que l'agenda admin), à droite. */}
+            <span
+              className="agenda-legend-item"
+              style={{
+                marginLeft: "1rem",
+                letterSpacing: "-0.02em",
+                // 25 % de la ligne (moitié restante de la zone gauche, marge déduite),
+                // plancher 130px ; repli au besoin, interligne minimal.
+                width: "calc(50% - 1rem)",
+                minWidth: 130,
+                lineHeight: 1.1,
+              }}
+            >
+              <span className="agenda-legend-swatch is-uniq" />
+              Créneau ponctuel
+            </span>
           </span>
           {/* Compteur du brouillon (aligné à droite). */}
           <p

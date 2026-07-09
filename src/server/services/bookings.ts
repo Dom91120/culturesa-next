@@ -58,6 +58,32 @@ export function effectiveOpenOnSchoolHolidays(
 }
 
 /**
+ * Disponibilité de la période (colonne « Dispo » du panneau Périodes) : refuse la
+ * réservation USAGER tant que la date d'ouverture n'est pas atteinte. Période sans
+ * date (null) ou réservation sans période : réservable sans restriction.
+ * Comparaison en date LOCALE (le champ est un @db.Date à minuit UTC).
+ */
+export async function assertPeriodOpenForUser(
+  db: Prisma.TransactionClient,
+  periodId: number | null | undefined,
+) {
+  if (!periodId) return;
+  const period = await db.period.findUnique({
+    where: { id: periodId },
+    select: { disponibilite: true },
+  });
+  const dispo = period?.disponibilite;
+  if (!dispo) return;
+  const dispoIso = dispo.toISOString().slice(0, 10);
+  const todayIso = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+  if (todayIso < dispoIso) {
+    throw new BookingError(
+      `Les réservations pour cette période ouvriront le ${dispo.toLocaleDateString("fr-FR", { timeZone: "UTC" })}.`,
+    );
+  }
+}
+
+/**
  * L'usager a-t-il accès à ce service ? Accès = son demandeur effectif est référencé
  * dans `service_demandeur_settings`. Sans demandeur effectif (ex. administrateur) →
  * accès libre (voit/réserve tout). Port legacy `require_service_access` (scoping par
@@ -328,7 +354,11 @@ export async function createUniqueBookingInTx(
 ) {
   const slot = await tx.slot.findUnique({
     where: { id: input.slotId },
-    include: { service: true },
+    include: {
+      service: true,
+      demandeurs: { select: { demandeurId: true } },
+      parent: { select: { demandeurs: { select: { demandeurId: true } } } },
+    },
   });
   if (slot?.slotType !== "unique" || slot.state !== "actif") {
     throw new BookingError("Ce créneau n'est pas disponible.");
@@ -337,9 +367,20 @@ export async function createUniqueBookingInTx(
   if (!(await userCanAccessService(tx, userId, slot.serviceId))) {
     throw new BookingError("Vous n'avez pas accès à ce service.");
   }
+  // Demandeurs autorisés (SlotDemandeur) : restriction du créneau, sinon celle de
+  // son parent pour un miroir. Compte sans demandeur effectif (ex. admin) : autorisé.
+  const restriction = slot.demandeurs.length ? slot.demandeurs : (slot.parent?.demandeurs ?? []);
+  if (restriction.length > 0) {
+    const demId = await effectiveDemandeurId(tx, userId);
+    if (demId != null && !restriction.some((d) => d.demandeurId === demId)) {
+      throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+    }
+  }
   if (!slot.slotDate || slot.slotDate < startOfToday()) {
     throw new BookingError("Ce créneau est passé.");
   }
+  // Disponibilité de la période du créneau (colonne « Dispo ») : pas encore ouverte → refus.
+  await assertPeriodOpenForUser(tx, slot.periodId);
   // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai.
   const earliest = earliestBookableISO(
     slot.service.bookingDelay,
@@ -546,6 +587,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     color: true,
     dateStart: true,
     dateEnd: true,
+    disponibilite: true,
     exerciceId: true,
   } as const;
 
@@ -591,6 +633,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         capacity: true,
         slotDate: true,
         parentSlotId: true,
+        periodId: true,
       },
     }),
     prisma.booking.findMany({
@@ -623,6 +666,48 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         })
       : Promise.resolve([] as { label: string }[]),
   ]);
+
+  // Créneaux restreints par demandeur (SlotDemandeur) : l'usager ne voit que les
+  // créneaux ouverts à tous (aucune ligne) ou autorisés à SON demandeur effectif.
+  // Un miroir suit son créneau récurrent parent (les restrictions sont portées par
+  // le parent). Compte sans demandeur effectif (ex. admin) : tout est visible.
+  // Exception : un créneau où l'usager a DÉJÀ réservé reste visible même si
+  // l'admin l'a restreint après coup (sa réservation reste consultable/annulable).
+  let visibleRecur = recurSlots;
+  let visibleUnique = uniqueSlots;
+  let visibleBookings = bookings;
+  if (effDemandeurId != null) {
+    const allSlotIds = [...recurSlots.map((s) => s.id), ...uniqueSlots.map((s) => s.id)];
+    const demRows = allSlotIds.length
+      ? await prisma.slotDemandeur.findMany({
+          where: { slotId: { in: allSlotIds } },
+          select: { slotId: true, demandeurId: true },
+        })
+      : [];
+    const restricted = new Map<string, number[]>();
+    for (const r of demRows) {
+      const list = restricted.get(r.slotId) ?? [];
+      list.push(r.demandeurId);
+      restricted.set(r.slotId, list);
+    }
+    const myBookedSlotIds = new Set(
+      bookings.filter((b) => b.userId === userId).map((b) => b.slotId),
+    );
+    const allowed = (slotId: string) => {
+      const list = restricted.get(slotId);
+      return !list || list.includes(effDemandeurId) || myBookedSlotIds.has(slotId);
+    };
+    visibleRecur = recurSlots.filter((s) => allowed(s.id));
+    const recurVisibleIds = new Set(visibleRecur.map((s) => s.id));
+    visibleUnique = uniqueSlots.filter((s) =>
+      s.parentSlotId ? recurVisibleIds.has(s.parentSlotId) : allowed(s.id),
+    );
+    const visibleSlotIds = new Set([
+      ...recurVisibleIds,
+      ...visibleUnique.map((s) => s.id),
+    ]);
+    visibleBookings = bookings.filter((b) => visibleSlotIds.has(b.slotId));
+  }
 
   // Modes dérivés du demandeur EFFECTIF de l'usager (repli sur tous si non rattaché).
   const mineSettings =
@@ -679,18 +764,21 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       color: p.color,
       dateStart: toDateInput(p.dateStart),
       dateEnd: toDateInput(p.dateEnd),
+      // Ouverture des réservations usager ("" = réservable sans restriction).
+      disponibilite: toDateInput(p.disponibilite),
       exerciceId: p.exerciceId,
     })),
-    slots: recurSlots.map((s) => ({ ...s, weeks: s.weeks ?? null })),
-    uniqueSlots: uniqueSlots.map((s) => ({
+    slots: visibleRecur.map((s) => ({ ...s, weeks: s.weeks ?? null })),
+    uniqueSlots: visibleUnique.map((s) => ({
       id: s.id,
       startTime: s.startTime,
       endTime: s.endTime,
       capacity: s.capacity,
       slotDate: toDateInput(s.slotDate),
       parentSlotId: s.parentSlotId,
+      periodId: s.periodId,
     })),
-    bookings: bookings.map(
+    bookings: visibleBookings.map(
       (b): UserAgendaBooking => ({
         id: b.id,
         slotId: b.slotId,

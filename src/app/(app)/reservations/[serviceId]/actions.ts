@@ -15,11 +15,13 @@ import {
 import {
   assertBookingUnlocked,
   assertNotSchoolHolidayForUser,
+  assertPeriodOpenForUser,
   assertReservationLimits,
   assertSlotCapacity,
   BookingError,
   cancelUserBookingInTx,
   createUniqueBookingInTx,
+  effectiveDemandeurId,
   userCanAccessService,
 } from "@/server/services/bookings";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
@@ -94,6 +96,8 @@ async function reserveRecurringInTx(
   if (!(await userCanAccessService(tx, userId, serviceId))) {
     throw new BookingError("Vous n'avez pas accès à ce service.");
   }
+  // Disponibilité de la période (colonne « Dispo ») : pas encore ouverte → refus.
+  await assertPeriodOpenForUser(tx, periodId);
   const user = await tx.user.findUnique({
     where: { id: userId },
     select: { enfants: true, demandeurId: true },
@@ -101,11 +105,14 @@ async function reserveRecurringInTx(
   // Compteurs : valeurs saisies (jauge) si fournies, sinon profil.
   const myEnfants = enfants > 0 ? enfants : (user?.enfants ?? 0);
   const myAcc = accompagnants > 0 ? accompagnants : 0;
-  if (
-    slot.demandeurs.length > 0 &&
-    !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
-  ) {
-    throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+  // Demandeurs autorisés (SlotDemandeur) : évalués sur le demandeur EFFECTIF (le
+  // sien, sinon celui de sa structure) — cohérent avec l'affichage de l'agenda
+  // usager. Compte sans demandeur effectif (ex. admin) : autorisé.
+  if (slot.demandeurs.length > 0) {
+    const demId = await effectiveDemandeurId(tx, userId);
+    if (demId != null && !slot.demandeurs.some((d) => d.demandeurId === demId)) {
+      throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+    }
   }
   // Anti-surbooking : règle canonique partagée (assertSlotCapacity) — jauge =
   // enfants + adultes ; hors jauge = 1 par réservation.
@@ -398,12 +405,17 @@ async function moveInTx(
     where: { id: userId },
     select: { demandeurId: true },
   });
-  if (
-    slot.demandeurs.length > 0 &&
-    !slot.demandeurs.some((d) => d.demandeurId === user?.demandeurId)
-  ) {
-    throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+  // Demandeurs autorisés (SlotDemandeur) : évalués sur le demandeur EFFECTIF (le
+  // sien, sinon celui de sa structure) — cohérent avec l'affichage de l'agenda
+  // usager. Compte sans demandeur effectif (ex. admin) : autorisé.
+  if (slot.demandeurs.length > 0) {
+    const demId = await effectiveDemandeurId(tx, userId);
+    if (demId != null && !slot.demandeurs.some((d) => d.demandeurId === demId)) {
+      throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
+    }
   }
+  // Disponibilité de la période CIBLE (colonne « Dispo ») : pas encore ouverte → refus.
+  await assertPeriodOpenForUser(tx, target.ponctuel ? slot.periodId : target.periodId);
   // Vacances scolaires : déplacement vers un créneau PONCTUEL daté en vacances refusé
   // si le service OU le demandeur ferme pendant les vacances (cohérent avec la création).
   if (target.ponctuel && slot.slotDate) {
