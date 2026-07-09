@@ -15,10 +15,12 @@ import {
   type AgendaBlockBase,
   addDays,
   badgeStyle,
+  coveringForYmd,
   DAY_NAMES,
   DAY_OFFSET,
   dayCap,
   dayKeyFromYmd,
+  type ExerciceOpening,
   gridGeometry,
   type LayoutItem,
   layoutOverlaps,
@@ -90,7 +92,14 @@ type Period = {
   dateEnd: string;
   exerciceId: number | null;
 };
-type Exercice = { id: number; label: string };
+type Exercice = {
+  id: number;
+  label: string;
+  dateStart: string; // "YYYY-MM-DD" ou ""
+  dateEnd: string;
+  // Réglages d'ouverture RÉSOLUS de l'exercice (surcharge ?? service, côté serveur).
+  opening: ExerciceOpening;
+};
 
 export type Booking = {
   id: number;
@@ -411,26 +420,77 @@ export function AgendaGrid({
     suppressed: () => ctxMenu !== null,
   });
 
-  // Mémoïsé : `days` est une dép de blocksByDay et de la mémo des blocs ; un nouveau
-  // tableau à chaque rendu invaliderait toute la chaîne de mémoïsation (perf).
-  const days = useMemo(
-    () =>
-      service.activeDays
-        .split(",")
-        .map((d) => d.trim())
-        .filter(Boolean),
-    [service.activeDays],
+  // ── Réglages d'ouverture PAR EXERCICE ──────────────────────────────────────
+  // Repli pour une date hors de tout exercice : réglages du service.
+  const fallbackOpening: ExerciceOpening = useMemo(
+    () => ({
+      activeDays: service.activeDays,
+      openOnHolidays: service.openOnHolidays,
+      openOnSchoolHolidays: service.openOnSchoolHolidays,
+      morningStart: service.morningStart,
+      morningEnd: service.morningEnd,
+      afternoonStart: service.afternoonStart,
+      afternoonEnd: service.afternoonEnd,
+    }),
+    [service],
   );
-  // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
-  // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00 pour « fermé l'après-midi »)
-  // est ignorée — sinon afternoonEnd=00:00 ramenait la fin de grille à minuit et
-  // n'affichait plus aucune ligne. Repli matin/après-midi standard si tout est fermé.
-  const openRanges = (
-    [
-      [toMinutes(service.morningStart, 9 * 60), toMinutes(service.morningEnd, 12 * 60)],
-      [toMinutes(service.afternoonStart, 14 * 60), toMinutes(service.afternoonEnd, 18 * 60)],
-    ] as const
-  ).filter(([s, e]) => e > s);
+  // Ouverture effective d'une DATE : réglages de l'exercice qui la couvre, sinon
+  // service. Décision produit : « la grille suit l'exercice couvrant chaque jour ».
+  const openingForYmd = useCallback(
+    (d: string): ExerciceOpening => coveringForYmd(exercices, d)?.opening ?? fallbackOpening,
+    [exercices, fallbackOpening],
+  );
+
+  // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
+  // Modèle de période → l'exercice affiché ; Semaine réelle → chaque jour de la
+  // semaine (dédupliqué) — une semaine à cheval sur deux exercices agrège les deux.
+  const contextOpenings = useMemo(() => {
+    if (mode === "model") {
+      const ex = exercices.find((e) => e.id === currentExerciceId);
+      return [ex ? openingForYmd(ex.dateStart || "") : fallbackOpening];
+    }
+    if (!anchorMonday) return [fallbackOpening];
+    const uniq = new Map<string, ExerciceOpening>();
+    for (let i = 0; i < 7; i++) {
+      const o = openingForYmd(ymd(addDays(anchorMonday, i)));
+      uniq.set(`${o.activeDays}|${o.morningStart}|${o.morningEnd}|${o.afternoonStart}|${o.afternoonEnd}`, o);
+    }
+    return [...uniq.values()];
+  }, [mode, exercices, currentExerciceId, fallbackOpening, anchorMonday, openingForYmd]);
+
+  // Colonnes de la grille : jours actifs du contexte. En Modèle = ceux de l'exercice
+  // affiché ; en Semaine réelle = UNION des exercices de la semaine (le grisage par
+  // date via isDayDisabled ferme les dates des exercices où un jour est inactif).
+  // Mémoïsé : `days` est une dép de blocksByDay et de la mémo des blocs ; un nouveau
+  // tableau à chaque rendu invaliderait la chaîne (perf).
+  const days = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of contextOpenings) {
+      for (const d of o.activeDays.split(",")) {
+        const t = d.trim();
+        if (t) set.add(t);
+      }
+    }
+    return ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].filter((d) => set.has(d));
+  }, [contextOpenings]);
+
+  // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes
+  // (union sur les ouvertures de contexte). Une plage « fermée » (fin ≤ début,
+  // p.ex. 00:00–00:00 pour « fermé l'après-midi ») est ignorée — sinon
+  // afternoonEnd=00:00 ramenait la fin de grille à minuit et n'affichait plus
+  // aucune ligne. Repli matin/après-midi standard si tout est fermé.
+  const openRanges = useMemo(() => {
+    const ranges: [number, number][] = [];
+    for (const o of contextOpenings) {
+      for (const [s, e] of [
+        [toMinutes(o.morningStart, 9 * 60), toMinutes(o.morningEnd, 12 * 60)],
+        [toMinutes(o.afternoonStart, 14 * 60), toMinutes(o.afternoonEnd, 18 * 60)],
+      ] as const) {
+        if (e > s) ranges.push([s, e]);
+      }
+    }
+    return ranges;
+  }, [contextOpenings]);
   const startMin = openRanges.length ? Math.min(...openRanges.map((r) => r[0])) : 9 * 60;
   const endMin = openRanges.length ? Math.max(...openRanges.map((r) => r[1])) : 18 * 60;
   const baseFirst = Math.floor(startMin / 60);
@@ -607,6 +667,17 @@ export function AgendaGrid({
     (dayKey: string): boolean => {
       if (mode !== "realweek" || !mondayStr) return false;
       const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+      // Réglages de l'exercice couvrant CE jour (les colonnes étant l'union des
+      // jours actifs, un jour inactif pour cet exercice est fermé ici).
+      const o = openingForYmd(dayYmd);
+      if (
+        !o.activeDays
+          .split(",")
+          .map((s) => s.trim())
+          .includes(dayKey)
+      ) {
+        return true;
+      }
       if (
         coveringPeriod?.dateStart &&
         coveringPeriod.dateEnd &&
@@ -614,20 +685,24 @@ export function AgendaGrid({
       ) {
         return true;
       }
-      if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
-      return !service.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays);
+      if (!o.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
+      return !o.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays);
     },
-    [mode, mondayStr, coveringPeriod, service, schoolHolidays],
+    [mode, mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
-  // Jour férié (service fermé les fériés), en semaine réelle.
+  // Jour férié (exercice fermé les fériés), en semaine réelle.
   const isHolidayDay = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr || service.openOnHolidays) return false;
-    return isFrenchHoliday(ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)));
+    if (mode !== "realweek" || !mondayStr) return false;
+    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+    if (openingForYmd(dayYmd).openOnHolidays) return false;
+    return isFrenchHoliday(dayYmd);
   };
-  // Jour de vacances scolaires (service fermé les vacances), en semaine réelle.
+  // Jour de vacances scolaires (exercice fermé les vacances), en semaine réelle.
   const isSchoolHolidayDay = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr || service.openOnSchoolHolidays) return false;
-    return inSchoolHolidayRange(ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)), schoolHolidays);
+    if (mode !== "realweek" || !mondayStr) return false;
+    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+    if (openingForYmd(dayYmd).openOnSchoolHolidays) return false;
+    return inSchoolHolidayRange(dayYmd, schoolHolidays);
   };
   // Classe de grisage : jour férié ou vacances scolaires → hachis (is-holiday) ;
   // hors période → hachis dédié (is-out-of-period).
@@ -680,8 +755,13 @@ export function AgendaGrid({
   // que 2 quarts visuels (30 min) — les quarts au-delà de lunchStart+30 sont sautés.
   // Le reste de la grille (lignes, heures, blocs, clics) suit un mapping par quarts
   // d'heure VISIBLES (mapMinToY), au lieu d'un mapping linéaire heure/heure.
-  const lunchStart = toMinutes(service.morningEnd, Number.NaN);
-  const lunchEnd = toMinutes(service.afternoonStart, Number.NaN);
+  // Bornes de pause de l'ouverture de contexte principale (exercice affiché en
+  // Modèle ; premier exercice de la semaine en Semaine réelle).
+  const lunchStart = toMinutes(contextOpenings[0]?.morningEnd ?? service.morningEnd, Number.NaN);
+  const lunchEnd = toMinutes(
+    contextOpenings[0]?.afternoonStart ?? service.afternoonStart,
+    Number.NaN,
+  );
   const hasLunch =
     Number.isFinite(lunchStart) &&
     Number.isFinite(lunchEnd) &&

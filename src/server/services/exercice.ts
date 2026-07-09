@@ -4,6 +4,7 @@ import { holidaysInRange } from "@/lib/french-holidays";
 import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
 import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";
+import { EXERCICE_OPENING_SELECT, resolveOpening } from "@/server/services/opening";
 
 // =====================================================================================
 // Types
@@ -282,7 +283,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       const currentExo = currentExoId
         ? await tx.exercice.findUnique({
             where: { id: currentExoId },
-            select: { type: true, dateStart: true, dateEnd: true },
+            select: { type: true, dateStart: true, dateEnd: true, ...EXERCICE_OPENING_SELECT },
           })
         : null;
       const shiftedStarts = actives
@@ -309,13 +310,24 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
           type: exoType,
           dateStart: dateFromYmd(exoStart),
           dateEnd: exoEnd ? dateFromYmd(exoEnd) : null,
+          // Réglages d'ouverture REPRIS de l'exercice reconduit (null = héritait du
+          // service → le nouveau continue d'hériter ; valeur posée → recopiée).
+          morningStart: currentExo?.morningStart ?? null,
+          morningEnd: currentExo?.morningEnd ?? null,
+          afternoonStart: currentExo?.afternoonStart ?? null,
+          afternoonEnd: currentExo?.afternoonEnd ?? null,
+          activeDays: currentExo?.activeDays ?? null,
+          openOnHolidays: currentExo?.openOnHolidays ?? null,
+          openOnSchoolHolidays: currentExo?.openOnSchoolHolidays ?? null,
         },
         select: { id: true },
       });
       const exId = newExo.id;
 
-      // 6. recopie des périodes
-      const activeDays = parseActiveDays(service.activeDays);
+      // 6. recopie des périodes — jours actifs / fériés RÉSOLUS pour le nouvel
+      // exercice (mêmes surcharges que l'exercice reconduit, repli service).
+      const opening = resolveOpening(service, currentExo);
+      const activeDays = parseActiveDays(opening.activeDays);
       const newPeriodIds: number[] = [];
       const newRecurringSlotIds: string[] = [];
       const newMirrorSlotIds: string[] = [];
@@ -381,7 +393,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
                 rangeStart: ns,
                 rangeEnd: ne,
                 activeDays,
-                openOnHolidays: service.openOnHolidays,
+                openOnHolidays: opening.openOnHolidays,
                 serviceCapacity: service.capacity,
               });
               for (const mid of mirrors) newMirrorSlotIds.push(mid);

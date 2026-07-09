@@ -6,6 +6,7 @@ import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { type BookingCreateInput, bookingCreateSchema } from "@/schemas/booking";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
+import { openingForDate, resolveOpening } from "@/server/services/opening";
 import { getSession } from "@/server/guards";
 import { getServiceDemandeurSettings } from "./demandeur-settings";
 import { deriveServiceModes } from "./service-modes";
@@ -381,10 +382,18 @@ export async function createUniqueBookingInTx(
   }
   // Disponibilité de la période du créneau (colonne « Dispo ») : pas encore ouverte → refus.
   await assertPeriodOpenForUser(tx, slot.periodId);
+  // Réglages d'ouverture RÉSOLUS par l'exercice couvrant la DATE RÉSERVÉE (repli
+  // service, cf. opening.ts) : jours ouvrés du délai + politique vacances scolaires.
+  const opening = await openingForDate(
+    tx,
+    slot.serviceId,
+    slot.service,
+    slot.slotDate.toISOString().slice(0, 10),
+  );
   // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai.
   const earliest = earliestBookableISO(
     slot.service.bookingDelay,
-    slot.service.activeDays
+    opening.activeDays
       .split(",")
       .map((d) => d.trim())
       .filter(Boolean),
@@ -393,7 +402,7 @@ export async function createUniqueBookingInTx(
     throw new BookingError("Le délai de réservation pour ce créneau n'est pas encore atteint.");
   }
   // Vacances scolaires : service OU demandeur fermé en vacances → créneau ponctuel refusé.
-  await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate, slot.service.openOnSchoolHolidays);
+  await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate, opening.openOnSchoolHolidays);
   // Anti-surbooking : règle canonique partagée (jauge/capacité) — une seule
   // implémentation pour création usager, édition et déplacement admin.
   await assertSlotCapacity(tx, {
@@ -728,14 +737,46 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   const exerciceIds = [
     ...new Set(periods.map((p) => p.exerciceId).filter((x): x is number => x != null)),
   ];
-  const exercices = (
+  const exerciceRows = (
     exerciceIds.length
       ? await prisma.exercice.findMany({
           where: { id: { in: exerciceIds } },
-          select: { id: true, label: true },
+          select: {
+            id: true,
+            label: true,
+            dateStart: true,
+            dateEnd: true,
+            morningStart: true,
+            morningEnd: true,
+            afternoonStart: true,
+            afternoonEnd: true,
+            activeDays: true,
+            openOnHolidays: true,
+            openOnSchoolHolidays: true,
+          },
         })
       : []
   ).sort((a, b) => a.label.localeCompare(b.label));
+  // Réglages d'ouverture RÉSOLUS par exercice (surcharge ?? service, cf. opening.ts) :
+  // la grille les applique à l'exercice couvrant chaque jour affiché.
+  const exercices = exerciceRows.map((e) => ({
+    id: e.id,
+    label: e.label,
+    dateStart: toDateInput(e.dateStart),
+    dateEnd: toDateInput(e.dateEnd),
+    opening: (() => {
+      const o = resolveOpening(service, e);
+      return {
+        activeDays: o.activeDays,
+        openOnHolidays: o.openOnHolidays,
+        openOnSchoolHolidays: o.openOnSchoolHolidays,
+        morningStart: o.morningStart,
+        morningEnd: o.morningEnd,
+        afternoonStart: o.afternoonStart,
+        afternoonEnd: o.afternoonEnd,
+      };
+    })(),
+  }));
 
   return {
     service: {
@@ -809,6 +850,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     // réservables. (Demandeur effectif = le sien, sinon celui de sa structure ; défaut true
     // si aucun. Service : défaut false.)
     openOnSchoolHolidays: service.openOnSchoolHolidays && effectiveOpenOnSchoolHolidays(user),
+    // Part DEMANDEUR seule : la grille la combine avec la politique de l'exercice
+    // couvrant chaque date (les réglages par exercice ne portent que le côté service).
+    demandeurOpenOnSchoolHolidays: effectiveOpenOnSchoolHolidays(user),
     // Plages de vacances scolaires (YYYY-MM-DD) de la zone configurée.
     schoolHolidays,
     // Infos usager pour le récapitulatif de la modale de confirmation (legacy).

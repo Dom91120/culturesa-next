@@ -49,6 +49,14 @@ export type ExerciceRow = {
   type: ExerciceType;
   dateStart: Date | null;
   dateEnd: Date | null;
+  // Surcharges d'ouverture par exercice (null = hérite du service, cf. opening.ts).
+  morningStart: string | null;
+  morningEnd: string | null;
+  afternoonStart: string | null;
+  afternoonEnd: string | null;
+  activeDays: string | null;
+  openOnHolidays: boolean | null;
+  openOnSchoolHolidays: boolean | null;
 };
 
 const EXERCICE_SELECT = {
@@ -57,6 +65,13 @@ const EXERCICE_SELECT = {
   type: true,
   dateStart: true,
   dateEnd: true,
+  morningStart: true,
+  morningEnd: true,
+  afternoonStart: true,
+  afternoonEnd: true,
+  activeDays: true,
+  openOnHolidays: true,
+  openOnSchoolHolidays: true,
 } as const;
 
 /** Exercices d'un service (triés par date de début, nulls en dernier, puis libellé). */
@@ -395,7 +410,7 @@ export type ServiceOpeningConfig = {
   afternoonEnd: string;
 };
 
-function parseActiveDays(raw: string): string[] {
+export function parseActiveDays(raw: string): string[] {
   const set = new Set(
     raw
       .split(",")
@@ -431,6 +446,35 @@ export async function getServiceOpeningConfig(
     afternoonStart: s.afternoonStart,
     afternoonEnd: s.afternoonEnd,
   };
+}
+
+/**
+ * Enregistre la config d'ouverture sur UN EXERCICE (surcharges des défauts du
+ * service, cf. opening.ts). Anti-IDOR : l'exercice doit appartenir au service.
+ */
+export async function saveExerciceOpeningConfig(
+  serviceId: string,
+  exerciceId: number,
+  config: ServiceOpeningConfig,
+): Promise<void> {
+  const ex = await prisma.exercice.findUnique({
+    where: { id: exerciceId },
+    select: { serviceId: true },
+  });
+  if (!ex || ex.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  const activeDays = DAYS.filter((d) => config.activeDays.includes(d)).join(",");
+  await prisma.exercice.update({
+    where: { id: exerciceId },
+    data: {
+      activeDays,
+      openOnHolidays: config.openOnHolidays,
+      openOnSchoolHolidays: config.openOnSchoolHolidays,
+      morningStart: config.morningStart,
+      morningEnd: config.morningEnd,
+      afternoonStart: config.afternoonStart,
+      afternoonEnd: config.afternoonEnd,
+    },
+  });
 }
 
 /** Enregistre la config d'ouverture d'un service (activeDays sérialisé « lun,mar,… »). */

@@ -38,6 +38,8 @@ type Exercice = {
   type: ExerciceType;
   dateStart: string; // "YYYY-MM-DD" ou ""
   dateEnd: string;
+  // Réglages d'ouverture RÉSOLUS de l'exercice (surcharge ?? défauts du service).
+  opening: Opening;
 };
 
 type Opening = {
@@ -442,19 +444,41 @@ export function PeriodesPanel({
     });
   }
 
-  // ── Jours d'ouverture + fériés + plages horaires. ───────────────────────────
-  const [activeDays, setActiveDays] = useState<string[]>(opening.activeDays);
-  const [openOnHolidays, setOpenOnHolidays] = useState(opening.openOnHolidays);
-  const [openOnSchoolHolidays, setOpenOnSchoolHolidays] = useState(opening.openOnSchoolHolidays);
-  const [morningStart, setMorningStart] = useState(opening.morningStart);
-  const [morningEnd, setMorningEnd] = useState(opening.morningEnd);
-  const [afternoonStart, setAfternoonStart] = useState(opening.afternoonStart);
-  const [afternoonEnd, setAfternoonEnd] = useState(opening.afternoonEnd);
+  // ── Jours d'ouverture + fériés + plages horaires — PAR EXERCICE. ────────────
+  // Les réglages affichés/édités sont ceux de l'exercice sélectionné (◀ ▶) ;
+  // repli sur les défauts du service quand le service n'a aucun exercice.
+  const currentOpening = currentExercice?.opening ?? opening;
+  const [activeDays, setActiveDays] = useState<string[]>(currentOpening.activeDays);
+  const [openOnHolidays, setOpenOnHolidays] = useState(currentOpening.openOnHolidays);
+  const [openOnSchoolHolidays, setOpenOnSchoolHolidays] = useState(
+    currentOpening.openOnSchoolHolidays,
+  );
+  const [morningStart, setMorningStart] = useState(currentOpening.morningStart);
+  const [morningEnd, setMorningEnd] = useState(currentOpening.morningEnd);
+  const [afternoonStart, setAfternoonStart] = useState(currentOpening.afternoonStart);
+  const [afternoonEnd, setAfternoonEnd] = useState(currentOpening.afternoonEnd);
   const [openingError, setOpeningError] = useState<string | null>(null);
   const [openingSaved, setOpeningSaved] = useState(false);
   // Vrai dès que l'usager a modifié une plage horaire → arme l'auto-save débouncé
   // (évite une sauvegarde au montage / après router.refresh).
   const hoursTouchedRef = useRef(false);
+
+  // Changement d'exercice (◀ ▶) : recharge les réglages de l'exercice affiché.
+  // hoursTouchedRef repasse à false AVANT les setters → l'auto-save débouncé des
+  // plages horaires ne se déclenche pas sur cette resynchronisation.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resynchronisation pilotée par l'exercice affiché
+  useEffect(() => {
+    hoursTouchedRef.current = false;
+    const o = currentExercice?.opening ?? opening;
+    setActiveDays(o.activeDays);
+    setOpenOnHolidays(o.openOnHolidays);
+    setOpenOnSchoolHolidays(o.openOnSchoolHolidays);
+    setMorningStart(o.morningStart);
+    setMorningEnd(o.morningEnd);
+    setAfternoonStart(o.afternoonStart);
+    setAfternoonEnd(o.afternoonEnd);
+    setOpeningError(null);
+  }, [currentExerciceId]);
 
   // Enregistre la config d'ouverture. `overrides` permet de sauvegarder une valeur
   // qui vient d'être calculée sans attendre le re-render (setState asynchrone) — sert
@@ -474,6 +498,8 @@ export function PeriodesPanel({
     startTransition(async () => {
       const res = await saveOpeningConfigAction({
         serviceId,
+        // Réglages écrits sur l'exercice affiché (null = service sans exercice).
+        exerciceId: currentExerciceId,
         activeDays: (overrides.activeDays ?? activeDays) as (
           | "lun"
           | "mar"

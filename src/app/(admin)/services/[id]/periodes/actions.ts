@@ -11,6 +11,7 @@ import {
   deleteServicePeriod,
   PeriodError,
   reactivatePeriod,
+  saveExerciceOpeningConfig,
   saveServiceOpeningConfig,
   updateExercice,
   updateServicePeriod,
@@ -110,6 +111,9 @@ const deleteSchema = z.object({
 
 const openingSchema = z.object({
   serviceId: z.string().trim().min(1),
+  // Exercice cible des réglages (surcharges par exercice) ; null = service sans
+  // exercice → écrit les défauts du service (comportement historique).
+  exerciceId: z.number().int().positive().nullable().default(null),
   activeDays: z.array(z.enum(["lun", "mar", "mer", "jeu", "ven", "sam", "dim"])).max(7),
   openOnHolidays: z.boolean(),
   openOnSchoolHolidays: z.boolean(),
@@ -289,10 +293,15 @@ export async function saveOpeningConfigAction(input: SaveOpeningConfigInput): Pr
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
   }
-  const { serviceId, ...config } = parsed.data;
+  const { serviceId, exerciceId, ...config } = parsed.data;
   try {
-    await saveServiceOpeningConfig(serviceId, config);
-  } catch {
+    if (exerciceId != null) {
+      await saveExerciceOpeningConfig(serviceId, exerciceId, config);
+    } else {
+      await saveServiceOpeningConfig(serviceId, config);
+    }
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de l'enregistrement." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);

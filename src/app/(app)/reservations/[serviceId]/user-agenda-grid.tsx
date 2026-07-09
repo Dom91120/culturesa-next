@@ -12,10 +12,12 @@ import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
   addDays,
+  coveringForYmd,
   DAY_NAMES,
   DAY_OFFSET,
   dayCap,
   dayKeyFromYmd,
+  type ExerciceOpening,
   gridGeometry,
   type LayoutItem,
   layoutOverlaps,
@@ -67,7 +69,14 @@ type Period = {
   disponibilite: string;
   exerciceId: number | null;
 };
-type Exercice = { id: number; label: string };
+type Exercice = {
+  id: number;
+  label: string;
+  dateStart: string; // "YYYY-MM-DD" ou ""
+  dateEnd: string;
+  // Réglages d'ouverture RÉSOLUS de l'exercice (surcharge ?? service, côté serveur).
+  opening: ExerciceOpening;
+};
 
 // Échelle proportionnelle BORNÉE des badges « ma réservation ». 1 unité = `--bu`, défini
 // en CSS sur .user-agenda-mine-badge comme `clamp(0.3px, 1cqmin, 0.8px)` : proportionnel
@@ -972,6 +981,7 @@ export function UserAgendaGrid({
   exercices,
   demandeurLabel,
   openOnSchoolHolidays,
+  demandeurOpenOnSchoolHolidays,
   schoolHolidays,
   userInfo,
   autoRefreshSeconds,
@@ -987,8 +997,11 @@ export function UserAgendaGrid({
   modes: ServiceModes;
   exercices: Exercice[];
   demandeurLabel: string | null;
-  // Demandeur de l'usager ouvert pendant les vacances scolaires (filtre des dates prédites).
+  // Ouvert pendant les vacances scolaires : combinaison SERVICE ∧ DEMANDEUR (repli
+  // pour les dates hors de tout exercice).
   openOnSchoolHolidays: boolean;
+  // Part DEMANDEUR seule : combinée avec la politique de l'exercice couvrant chaque date.
+  demandeurOpenOnSchoolHolidays: boolean;
   // Plages de vacances scolaires (YYYY-MM-DD) de la zone configurée.
   schoolHolidays: { dateStart: string; dateEnd: string }[];
   userInfo: {
@@ -1111,14 +1124,66 @@ export function UserAgendaGrid({
     };
   }, [toast?.id]);
 
-  const days = useMemo(
-    () =>
-      service.activeDays
-        .split(",")
-        .map((d) => d.trim())
-        .filter(Boolean),
-    [service.activeDays],
+  // ── Réglages d'ouverture PAR EXERCICE ──────────────────────────────────────
+  // Repli pour une date hors de tout exercice : réglages du service (la prop
+  // openOnSchoolHolidays est déjà la combinaison service ∧ demandeur).
+  const fallbackOpening: ExerciceOpening = useMemo(
+    () => ({
+      activeDays: service.activeDays,
+      openOnHolidays: service.openOnHolidays,
+      openOnSchoolHolidays,
+      morningStart: service.morningStart,
+      morningEnd: service.morningEnd,
+      afternoonStart: service.afternoonStart,
+      afternoonEnd: service.afternoonEnd,
+    }),
+    [service, openOnSchoolHolidays],
   );
+  // Ouverture effective d'une DATE : réglages de l'exercice qui la couvre (politique
+  // vacances combinée ∧ demandeur), sinon repli service. Décision produit : « la
+  // grille suit l'exercice couvrant chaque jour affiché ».
+  const openingForYmd = useCallback(
+    (d: string): ExerciceOpening => {
+      const ex = coveringForYmd(exercices, d);
+      if (!ex) return fallbackOpening;
+      return {
+        ...ex.opening,
+        openOnSchoolHolidays: ex.opening.openOnSchoolHolidays && demandeurOpenOnSchoolHolidays,
+      };
+    },
+    [exercices, fallbackOpening, demandeurOpenOnSchoolHolidays],
+  );
+
+  // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
+  // Modèle de période → l'exercice affiché ; Semaine réelle → chaque jour de la
+  // semaine (dédupliqué) — une semaine à cheval sur deux exercices agrège les deux.
+  const contextOpenings = useMemo(() => {
+    if (mode === "model") {
+      const ex = exercices.find((e) => e.id === currentExerciceId);
+      return [ex ? openingForYmd(ex.dateStart || "") : fallbackOpening];
+    }
+    if (!anchorMonday) return [fallbackOpening];
+    const uniq = new Map<string, ExerciceOpening>();
+    for (let i = 0; i < 7; i++) {
+      const o = openingForYmd(ymd(addDays(anchorMonday, i)));
+      uniq.set(`${o.activeDays}|${o.morningStart}|${o.morningEnd}|${o.afternoonStart}|${o.afternoonEnd}`, o);
+    }
+    return [...uniq.values()];
+  }, [mode, exercices, currentExerciceId, fallbackOpening, anchorMonday, openingForYmd]);
+
+  // Colonnes de la grille : jours actifs du contexte. En Modèle = ceux de l'exercice
+  // affiché ; en Semaine réelle = UNION des exercices de la semaine (le grisage par
+  // date via isDayDisabled ferme les dates des exercices où un jour est inactif).
+  const days = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of contextOpenings) {
+      for (const d of o.activeDays.split(",")) {
+        const t = d.trim();
+        if (t) set.add(t);
+      }
+    }
+    return ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].filter((d) => set.has(d));
+  }, [contextOpenings]);
 
   // ── Mobile : vue « un jour à la fois » ──────────────────────────────────────
   // Sur smartphone, la grille hebdo (5-7 colonnes) est illisible : on n'affiche
@@ -1142,19 +1207,22 @@ export function UserAgendaGrid({
   // case est masquée et n'est donc pas modifiable) → on affiche toute la plage horaire.
   const hideNoSlot = isMobile ? false : hideNoSlotPref;
 
-  // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes.
-  // Une plage « fermée » (fin ≤ début, p.ex. 00:00–00:00) est ignorée — sinon
-  // afternoonEnd=00:00 ramenait la fin de grille à minuit et masquait toute la grille.
-  const openRanges = useMemo(
-    () =>
-      (
-        [
-          [toMinutes(service.morningStart, 9 * 60), toMinutes(service.morningEnd, 12 * 60)],
-          [toMinutes(service.afternoonStart, 14 * 60), toMinutes(service.afternoonEnd, 18 * 60)],
-        ] as const
-      ).filter(([s, e]) => e > s),
-    [service.morningStart, service.morningEnd, service.afternoonStart, service.afternoonEnd],
-  );
+  // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes
+  // (union sur les ouvertures de contexte). Une plage « fermée » (fin ≤ début,
+  // p.ex. 00:00–00:00) est ignorée — sinon afternoonEnd=00:00 ramenait la fin de
+  // grille à minuit et masquait toute la grille.
+  const openRanges = useMemo(() => {
+    const ranges: [number, number][] = [];
+    for (const o of contextOpenings) {
+      for (const [s, e] of [
+        [toMinutes(o.morningStart, 9 * 60), toMinutes(o.morningEnd, 12 * 60)],
+        [toMinutes(o.afternoonStart, 14 * 60), toMinutes(o.afternoonEnd, 18 * 60)],
+      ] as const) {
+        if (e > s) ranges.push([s, e]);
+      }
+    }
+    return ranges;
+  }, [contextOpenings]);
   const startMin = openRanges.length ? Math.min(...openRanges.map((r) => r[0])) : 9 * 60;
   const endMin = openRanges.length ? Math.max(...openRanges.map((r) => r[1])) : 18 * 60;
   const baseFirst = Math.floor(startMin / 60);
@@ -1368,6 +1436,17 @@ export function UserAgendaGrid({
     (dayKey: string): boolean => {
       if (mode !== "realweek" || !mondayStr) return false;
       const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+      // Réglages de l'exercice couvrant CE jour (les colonnes étant l'union des
+      // jours actifs, un jour inactif pour cet exercice est fermé ici).
+      const o = openingForYmd(dayYmd);
+      if (
+        !o.activeDays
+          .split(",")
+          .map((s) => s.trim())
+          .includes(dayKey)
+      ) {
+        return true;
+      }
       if (
         coveringPeriod?.dateStart &&
         coveringPeriod.dateEnd &&
@@ -1375,16 +1454,18 @@ export function UserAgendaGrid({
       ) {
         return true;
       }
-      if (!service.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
-      // Vacances scolaires : fermé pour un demandeur fermé pendant les vacances.
-      return !openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
+      if (!o.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
+      // Vacances scolaires : fermé si l'exercice (∧ demandeur) ferme pendant les vacances.
+      return !o.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
     },
-    [mode, mondayStr, coveringPeriod, service.openOnHolidays, openOnSchoolHolidays, schoolHolidays],
+    [mode, mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
-  // Jour férié français (service fermé les fériés), en semaine réelle.
+  // Jour férié français (exercice fermé les fériés), en semaine réelle.
   const isHolidayDay = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr || service.openOnHolidays) return false;
-    return isFrenchHoliday(ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)));
+    if (mode !== "realweek" || !mondayStr) return false;
+    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+    if (openingForYmd(dayYmd).openOnHolidays) return false;
+    return isFrenchHoliday(dayYmd);
   };
   // Classe de grisage : jour férié → hachis de la pause méridienne (is-holiday) ;
   // hors période / vacances scolaires → hachis dédié (is-out-of-period).
@@ -1442,8 +1523,13 @@ export function UserAgendaGrid({
   // que 2 quarts visuels (30 min) — les quarts au-delà de lunchStart+30 sont sautés.
   // Le reste de la grille (lignes, heures, blocs, clics) suit un mapping par quarts
   // d'heure VISIBLES (mapMinToY), au lieu d'un mapping linéaire heure/heure.
-  const lunchStart = toMinutes(service.morningEnd, Number.NaN);
-  const lunchEnd = toMinutes(service.afternoonStart, Number.NaN);
+  // Bornes de pause de l'ouverture de contexte principale (exercice affiché en
+  // Modèle ; premier exercice de la semaine en Semaine réelle).
+  const lunchStart = toMinutes(contextOpenings[0]?.morningEnd ?? service.morningEnd, Number.NaN);
+  const lunchEnd = toMinutes(
+    contextOpenings[0]?.afternoonStart ?? service.afternoonStart,
+    Number.NaN,
+  );
   const hasLunch =
     Number.isFinite(lunchStart) &&
     Number.isFinite(lunchEnd) &&
@@ -1850,7 +1936,7 @@ export function UserAgendaGrid({
           .map((u) => u.slotDate as string)
           .filter((d) => inPeriod(d))
           .filter((d) => (b.week === "A" || b.week === "B" ? slotWeekTag(d) === b.week : true))
-          .filter((d) => openOnSchoolHolidays || !isSchoolVacance(d))
+          .filter((d) => openingForYmd(d).openOnSchoolHolidays || !isSchoolVacance(d))
           .sort();
         for (const d of occ) {
           const child = childByDate.get(d);
@@ -2456,13 +2542,26 @@ export function UserAgendaGrid({
   // scolaires si le demandeur ferme alors. Trié. Port _predictedDatesForCurrentUser.
   // Date la plus proche réservable (aujourd'hui + délai du service) : côté USAGER, les
   // occurrences antérieures ne seront pas créées → on ne les affiche pas.
-  const earliestBookable = earliestBookableISO(
-    service.bookingDelay,
-    service.activeDays
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
+  // Première date réservable PAR DATE VISÉE : jours ouvrés de l'exercice couvrant
+  // la date (décision produit), mémoïsé par jeu de jours actifs (peu de variantes).
+  const earliestFor = useMemo(() => {
+    const cache = new Map<string, string>();
+    return (d: string): string => {
+      const o = openingForYmd(d);
+      let v = cache.get(o.activeDays);
+      if (!v) {
+        v = earliestBookableISO(
+          service.bookingDelay,
+          o.activeDays
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        );
+        cache.set(o.activeDays, v);
+      }
+      return v;
+    };
+  }, [openingForYmd, service.bookingDelay]);
   // Dates concernées indexées par (slot parent | jour), précalculées une fois par jeu de
   // miroirs/réglages — au lieu d'un balayage O(uniqueSlots) à CHAQUE appel par bloc, lui-même
   // déclenché à chaque survol/pas de drag (onAgendaTip/canDropItem) : O(blocs×uniqueSlots).
@@ -2471,12 +2570,14 @@ export function UserAgendaGrid({
     for (const u of uniqueSlots) {
       if (!u.parentSlotId || !u.slotDate) continue;
       const d = u.slotDate;
-      // Délai de réservation : occurrences ≥ aujourd'hui + délai seulement.
-      if (d < earliestBookable) continue;
+      // Délai de réservation : occurrences ≥ aujourd'hui + délai seulement (jours
+      // ouvrés de l'exercice couvrant la date).
+      if (d < earliestFor(d)) continue;
       // Convention UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B (lib/iso-week).
       if (abMode && effectiveWeek != null && slotWeekTag(d) !== effectiveWeek) continue;
-      // Vacances scolaires exclues si le demandeur ferme alors.
-      if (!openOnSchoolHolidays && inSchoolHolidayRange(d, schoolHolidays ?? [])) continue;
+      // Vacances scolaires exclues si l'exercice (∧ demandeur) ferme alors.
+      if (!openingForYmd(d).openOnSchoolHolidays && inSchoolHolidayRange(d, schoolHolidays ?? []))
+        continue;
       const key = `${u.parentSlotId}|${dayKeyFromYmd(d)}`;
       const arr = m.get(key);
       if (arr) arr.push(d);
@@ -2484,7 +2585,7 @@ export function UserAgendaGrid({
     }
     for (const arr of m.values()) arr.sort();
     return m;
-  }, [uniqueSlots, earliestBookable, abMode, effectiveWeek, openOnSchoolHolidays, schoolHolidays]);
+  }, [uniqueSlots, earliestFor, abMode, effectiveWeek, openingForYmd, schoolHolidays]);
 
   // Dates concrètes couvertes par un créneau récurrent un jour donné (cf. memo ci-dessus).
   // Port _predictedDatesForCurrentUser.
@@ -2498,7 +2599,7 @@ export function UserAgendaGrid({
   const isSlotClosed = (b: Block): boolean => {
     if (uniqueIdSet.has(b.slotId)) {
       const u = uniqSlotById.get(b.slotId);
-      return !!u?.slotDate && u.slotDate < earliestBookable;
+      return !!u?.slotDate && u.slotDate < earliestFor(u.slotDate);
     }
     return concernedDatesForBlock(b.slotId, b.dayKey).length === 0;
   };
@@ -2957,7 +3058,7 @@ export function UserAgendaGrid({
       uniqueIdSet,
       uniqSlotById,
       recurSlotById,
-      earliestBookable,
+      earliestFor,
       concernedDatesByKey,
       mapMinToY,
       gridStartMin,

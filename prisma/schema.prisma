@@ -285,6 +285,17 @@ model Exercice {
   dateEnd   DateTime?    @db.Date
   createdAt DateTime     @default(now()) @db.Timestamptz
 
+  // Réglages d'ouverture PAR EXERCICE — null = hérite de la valeur du service
+  // (résolution unique : resolveOpening, server/services/opening.ts). Édités dans
+  // Paramètres > Périodes et réservations, copiés par la bascule d'exercice.
+  morningStart         String?
+  morningEnd           String?
+  afternoonStart       String?
+  afternoonEnd         String?
+  activeDays           String?
+  openOnHolidays       Boolean?
+  openOnSchoolHolidays Boolean?
+
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   periods Period[]
 

@@ -33,6 +33,7 @@ export default async function ReservationsServicePage({
       exercices={data.exercices}
       demandeurLabel={data.demandeurLabel}
       openOnSchoolHolidays={data.openOnSchoolHolidays}
+      demandeurOpenOnSchoolHolidays={data.demandeurOpenOnSchoolHolidays}
       schoolHolidays={data.schoolHolidays}
       userInfo={data.user}
       autoRefreshSeconds={autoRefreshSeconds}

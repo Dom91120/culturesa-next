@@ -4,6 +4,7 @@ import { slotWeekTag } from "@/lib/iso-week";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { getConfigMany } from "@/server/config";
 import { effectiveOpenOnSchoolHolidays } from "@/server/services/bookings";
+import { EXERCICE_OPENING_SELECT, resolveOpening } from "@/server/services/opening";
 
 // ════════════════════════════════════════════════════════════
 //  Matérialisation des réservations-enfants d'une récurrente (port legacy
@@ -58,7 +59,9 @@ export async function syncRecurringChildren(
 
   // Politique vacances scolaires = combinaison SERVICE ∧ DEMANDEUR : on ne matérialise une
   // occurrence en vacances que si le service ET le demandeur acceptent les vacances.
-  const [user, svc] = await Promise.all([
+  // Réglages côté service RÉSOLUS par l'exercice de la période de la récurrente
+  // (toutes ses occurrences appartiennent à cette période, cf. opening.ts).
+  const [user, svc, period] = await Promise.all([
     tx.user.findUnique({
       where: { id: parent.userId },
       select: {
@@ -68,10 +71,31 @@ export async function syncRecurringChildren(
     }),
     tx.service.findUnique({
       where: { id: parent.serviceId },
-      select: { openOnSchoolHolidays: true },
+      select: {
+        bookingDelay: true,
+        activeDays: true,
+        openOnHolidays: true,
+        openOnSchoolHolidays: true,
+        morningStart: true,
+        morningEnd: true,
+        afternoonStart: true,
+        afternoonEnd: true,
+      },
+    }),
+    tx.period.findUnique({
+      where: { id: parent.periodId },
+      select: { exerciceId: true },
     }),
   ]);
-  const openOnSchool = (svc?.openOnSchoolHolidays ?? false) && effectiveOpenOnSchoolHolidays(user);
+  const exercice =
+    period?.exerciceId != null
+      ? await tx.exercice.findUnique({
+          where: { id: period.exerciceId },
+          select: EXERCICE_OPENING_SELECT,
+        })
+      : null;
+  const opening = svc ? resolveOpening(svc, exercice) : null;
+  const openOnSchool = (opening?.openOnSchoolHolidays ?? false) && effectiveOpenOnSchoolHolidays(user);
   let schoolRanges: { dateStart: string; dateEnd: string }[] = [];
   if (!openOnSchool) {
     const zone = opts?.schoolZone ?? (await getSchoolZone());
@@ -93,13 +117,11 @@ export async function syncRecurringChildren(
   // passées) — seules les occurrences devenues invalides (semaine/fériés/vacances) le sont.
   let cutoff = opts?.cutoffISO;
   if (!cutoff) {
-    const svc = await tx.service.findUnique({
-      where: { id: parent.serviceId },
-      select: { bookingDelay: true, activeDays: true },
-    });
+    // Jours ouvrés du délai = ceux de l'exercice de la période réservée (décision
+    // produit : « jours ouvrés de l'exercice de la date réservée »).
     cutoff = earliestBookableISO(
       svc?.bookingDelay ?? 0,
-      (svc?.activeDays ?? "")
+      (opening?.activeDays ?? "")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),

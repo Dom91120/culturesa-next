@@ -24,6 +24,7 @@ import {
   effectiveDemandeurId,
   userCanAccessService,
 } from "@/server/services/bookings";
+import { openingForDate } from "@/server/services/opening";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 
 function revalidate(serviceId: string) {
@@ -417,14 +418,16 @@ async function moveInTx(
   // Disponibilité de la période CIBLE (colonne « Dispo ») : pas encore ouverte → refus.
   await assertPeriodOpenForUser(tx, target.ponctuel ? slot.periodId : target.periodId);
   // Vacances scolaires : déplacement vers un créneau PONCTUEL daté en vacances refusé
-  // si le service OU le demandeur ferme pendant les vacances (cohérent avec la création).
+  // si le service OU le demandeur ferme pendant les vacances (cohérent avec la
+  // création). Politique service résolue par l'exercice couvrant la date visée.
   if (target.ponctuel && slot.slotDate) {
-    await assertNotSchoolHolidayForUser(
+    const opening = await openingForDate(
       tx,
-      userId,
-      slot.slotDate,
-      slot.service.openOnSchoolHolidays,
+      serviceId,
+      slot.service,
+      slot.slotDate.toISOString().slice(0, 10),
     );
+    await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate, opening.openOnSchoolHolidays);
   }
   // Anti-surbooking : règle canonique partagée (assertSlotCapacity), la réservation
   // déplacée étant exclue du décompte.

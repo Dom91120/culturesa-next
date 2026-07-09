@@ -92,6 +92,28 @@ export type UniqueSlot = {
   periodId?: number | null;
 };
 
+// ── Réglages d'ouverture PAR EXERCICE (résolus côté serveur : surcharge ?? service) ──
+// Portés par le payload des grilles : chaque exercice publie ses réglages effectifs,
+// la grille les applique à l'exercice couvrant chaque jour affiché.
+export type ExerciceOpening = {
+  activeDays: string; // CSV « lun,mar,… »
+  openOnHolidays: boolean;
+  // Politique du SERVICE seul — la grille USAGER la combine (∧) avec le demandeur.
+  openOnSchoolHolidays: boolean;
+  morningStart: string;
+  morningEnd: string;
+  afternoonStart: string;
+  afternoonEnd: string;
+};
+
+/** Élément dont la plage [dateStart, dateEnd] couvre `d` (bornes "" = jamais). */
+export function coveringForYmd<T extends { dateStart: string; dateEnd: string }>(
+  items: T[],
+  d: string,
+): T | null {
+  return items.find((e) => e.dateStart && e.dateEnd && e.dateStart <= d && d <= e.dateEnd) ?? null;
+}
+
 export type Pointage = "present" | "absent" | null;
 
 // Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.

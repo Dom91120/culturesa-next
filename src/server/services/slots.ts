@@ -2,6 +2,12 @@ import { Prisma } from "@/generated/prisma/client";
 import { mirrorDates } from "@/lib/mirror-dates";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import {
+  EXERCICE_OPENING_SELECT,
+  type OpeningConfig,
+  resolveOpening,
+  type ServiceOpeningDefaults,
+} from "@/server/services/opening";
 
 // Helpers de l'agenda admin (mode « Création de créneau ») : ajout/copie/déplacement/
 // suppression de créneaux + génération de leurs miroirs. L'API « upsert en masse »
@@ -32,6 +38,33 @@ function parseWeeks(weeks: string | null | undefined): string[] {
 
 function newRecurId(): string {
   return `sl_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+/**
+ * Réglages d'ouverture effectifs pour une PÉRIODE : surcharges de son exercice,
+ * sinon défauts du service (cf. opening.ts). La génération des miroirs (jours
+ * actifs, jours fériés) doit suivre l'exercice de la période du créneau.
+ */
+async function openingForPeriod(
+  service: ServiceOpeningDefaults,
+  exerciceId: number | null,
+): Promise<OpeningConfig> {
+  const exercice =
+    exerciceId != null
+      ? await prisma.exercice.findUnique({
+          where: { id: exerciceId },
+          select: EXERCICE_OPENING_SELECT,
+        })
+      : null;
+  return resolveOpening(service, exercice);
+}
+
+/** CSV « lun,mar,… » → DayKey[] (jours reconnus uniquement). */
+function activeDayKeys(csv: string): DayKey[] {
+  return csv
+    .split(",")
+    .map((d) => d.trim())
+    .filter((d): d is DayKey => DAYS.includes(d as DayKey));
 }
 
 /** Un service est-il en mode semaine A/B ? (au moins un demandeur avec semaineAb). */
@@ -136,9 +169,9 @@ export async function addRecurringSlot(
     const err = abWeekError(input.weeks);
     if (err) return { ok: false, error: err };
   }
-  const activeDays = service.activeDays
-    .split(",")
-    .filter((d): d is DayKey => DAYS.includes(d as DayKey));
+  // Jours actifs / fériés de l'EXERCICE de la période (repli service, cf. opening.ts).
+  const opening = await openingForPeriod(service, period.exerciceId);
+  const activeDays = activeDayKeys(opening.activeDays);
   const weeks = normalizeWeeks(input.weeks);
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId },
@@ -178,7 +211,7 @@ export async function addRecurringSlot(
         endDate,
         activeDays,
         holidaySet,
-        openOnHolidays: service.openOnHolidays,
+        openOnHolidays: opening.openOnHolidays,
         weeks: parseWeeks(weeks),
         slotDay: input.dayKey,
         capacity: input.capacity,
@@ -225,9 +258,9 @@ export async function copyRecurringWeek(
   if (!period?.dateStart || !period?.dateEnd) {
     return { ok: false, error: "Période introuvable ou sans dates" };
   }
-  const activeDays = service.activeDays
-    .split(",")
-    .filter((d): d is DayKey => DAYS.includes(d as DayKey));
+  // Jours actifs / fériés de l'EXERCICE de la période (repli service, cf. opening.ts).
+  const opening = await openingForPeriod(service, period.exerciceId);
+  const activeDays = activeDayKeys(opening.activeDays);
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId },
     select: { date: true },
@@ -293,7 +326,7 @@ export async function copyRecurringWeek(
             endDate,
             activeDays,
             holidaySet,
-            openOnHolidays: service.openOnHolidays,
+            openOnHolidays: opening.openOnHolidays,
             weeks: parseWeeks(toWeek),
             slotDay: s.slotDay,
             capacity: s.capacity ?? service.capacity,
@@ -422,9 +455,9 @@ export async function moveRecurringSlot(
 
   const capVal = slot.capacity ?? service.capacity;
   const weeks = normalizeWeeks(slot.weeks);
-  const activeDays = service.activeDays
-    .split(",")
-    .filter((d): d is DayKey => DAYS.includes(d as DayKey));
+  // Jours actifs / fériés de l'EXERCICE de la période (repli service, cf. opening.ts).
+  const opening = await openingForPeriod(service, period.exerciceId);
+  const activeDays = activeDayKeys(opening.activeDays);
   const holidays = await prisma.periodHoliday.findMany({
     where: { periodId: period.id },
     select: { date: true },
@@ -446,7 +479,7 @@ export async function moveRecurringSlot(
         endDate,
         activeDays,
         holidaySet,
-        openOnHolidays: service.openOnHolidays,
+        openOnHolidays: opening.openOnHolidays,
         weeks: parseWeeks(weeks),
         slotDay: toDayKey,
         capacity: capVal,
