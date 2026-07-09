@@ -172,8 +172,8 @@ model Service {
   id                    String     @id
   label                 String
   validationBloquante   Boolean    @default(false)
-  maxReservations       Int        @default(1)
-  maxReservationsPeriod Int        @default(1)
+  // (Les maximums de réservation — par période, par an — vivent sur CHAQUE
+  // EXERCICE, comme les réglages d'ouverture.)
   position              Int        @default(0)
   createdAt             DateTime   @default(now()) @db.Timestamptz
 
@@ -292,6 +292,12 @@ model Exercice {
   // « Affiché aux utilisateurs » : l'UNIQUE exercice du service accessible côté
   // usager (unicité par service maintenue par l'application, cf. periods.ts).
   visibleToUsers Boolean @default(false)
+
+  // Maximums de réservation PAR USAGER, portés par l'exercice (copiés par la
+  // bascule) : maxReservationsPeriod = par période, maxReservations = sur
+  // l'exercice entier (« par an » — nommage legacy conservé).
+  maxReservations       Int @default(1)
+  maxReservationsPeriod Int @default(1)
 
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   periods Period[]

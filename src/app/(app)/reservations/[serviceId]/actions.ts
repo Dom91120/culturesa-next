@@ -125,14 +125,13 @@ async function reserveRecurringInTx(
     enfants: myEnfants,
     accompagnants: myAcc,
   });
-  // Limites de réservation de l'usager (max par période + max annuel du service).
+  // Limites de réservation de l'usager (max par période + max sur l'exercice, lus
+  // sur l'exercice de la période visée).
   await assertReservationLimits(tx, {
     serviceId,
     userId,
     bookingType: "recurring",
     periodId,
-    maxReservations: slot.service.maxReservations,
-    maxReservationsPeriod: slot.service.maxReservationsPeriod,
   });
   // Validation : validée d'emblée sauf si le demandeur est en mode « validation ».
   const setting = user?.demandeurId

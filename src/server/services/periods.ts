@@ -59,6 +59,9 @@ export type ExerciceRow = {
   openOnSchoolHolidays: boolean;
   // « Affiché aux utilisateurs » : l'unique exercice du service accessible côté usager.
   visibleToUsers: boolean;
+  // Maximums de réservation PAR USAGER (par période / sur l'exercice « par an »).
+  maxReservations: number;
+  maxReservationsPeriod: number;
 };
 
 const EXERCICE_SELECT = {
@@ -75,6 +78,8 @@ const EXERCICE_SELECT = {
   openOnHolidays: true,
   openOnSchoolHolidays: true,
   visibleToUsers: true,
+  maxReservations: true,
+  maxReservationsPeriod: true,
 } as const;
 
 /** Exercices d'un service (triés par date de début, nulls en dernier, puis libellé). */
@@ -449,6 +454,29 @@ export async function saveExerciceOpeningConfig(
       morningEnd: config.morningEnd,
       afternoonStart: config.afternoonStart,
       afternoonEnd: config.afternoonEnd,
+    },
+  });
+}
+
+/**
+ * Maximums de réservation d'UN EXERCICE (par période / sur l'exercice).
+ * Anti-IDOR : l'exercice doit appartenir au service. Valeurs ≥ 1.
+ */
+export async function saveExerciceMaxima(
+  serviceId: string,
+  exerciceId: number,
+  maxima: { maxReservations: number; maxReservationsPeriod: number },
+): Promise<void> {
+  const ex = await prisma.exercice.findUnique({
+    where: { id: exerciceId },
+    select: { serviceId: true },
+  });
+  if (!ex || ex.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  await prisma.exercice.update({
+    where: { id: exerciceId },
+    data: {
+      maxReservations: Math.max(1, maxima.maxReservations),
+      maxReservationsPeriod: Math.max(1, maxima.maxReservationsPeriod),
     },
   });
 }

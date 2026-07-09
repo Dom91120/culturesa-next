@@ -37,6 +37,9 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
     dateEnd: toISODate(e.dateEnd),
     // « Affiché aux utilisateurs » : l'unique exercice accessible côté usager.
     visibleToUsers: e.visibleToUsers,
+    // Maximums de réservation par usager (par période / sur l'exercice).
+    maxReservations: e.maxReservations,
+    maxReservationsPeriod: e.maxReservationsPeriod,
     // Réglages d'ouverture DE l'exercice (unique porteur, cf. opening.ts).
     opening: {
       activeDays: parseActiveDays(e.activeDays),
@@ -69,8 +72,6 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
       <ReservationsPanel
         serviceId={id}
         exerciceLabel={currentExercice}
-        maxReservations={service.maxReservations}
-        maxReservationsPeriod={service.maxReservationsPeriod}
         bookingDelay={service.bookingDelay}
         autoValidationDelay={service.autoValidationDelay}
         validationBloquante={service.validationBloquante}

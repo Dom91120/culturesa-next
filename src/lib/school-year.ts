@@ -3,9 +3,6 @@
  * (1-indexé), sinon année-1. Convention UNIQUE de l'app (bascule d'exercice + stats), pour
  * éviter des libellés divergents. Accepte une chaîne ISO `YYYY-MM-DD` (lue telle quelle) ou
  * une `Date` (interprétée en UTC, comme les colonnes `@db.Date` stockées à minuit UTC).
- *
- * NB : distinct de `schoolYearStart` (bookings.ts), qui borne la limite ANNUELLE de
- * réservations sur une frontière SEPTEMBRE et renvoie une Date — ne pas confondre.
  */
 export function schoolYearLabel(date: Date | string): string {
   const y =

@@ -10,6 +10,7 @@ import {
   deleteExerciceAction,
   deletePeriodAction,
   reactivatePeriodsAction,
+  saveExerciceMaximaAction,
   saveOpeningConfigAction,
   setExerciceVisibleAction,
   updateExerciceAction,
@@ -41,6 +42,9 @@ type Exercice = {
   dateEnd: string;
   // « Affiché aux utilisateurs » : l'unique exercice accessible côté usager.
   visibleToUsers: boolean;
+  // Maximums de réservation par usager (par période / sur l'exercice « par an »).
+  maxReservations: number;
+  maxReservationsPeriod: number;
   // Réglages d'ouverture RÉSOLUS de l'exercice (surcharge ?? défauts du service).
   opening: Opening;
 };
@@ -510,6 +514,47 @@ export function PeriodesPanel({
   // (évite une sauvegarde au montage / après router.refresh).
   const hoursTouchedRef = useRef(false);
 
+  // ── Maximums de réservation — PAR EXERCICE (par période / sur l'exercice). ──
+  const [maxReservations, setMaxReservations] = useState(currentExercice?.maxReservations ?? 1);
+  const [maxReservationsPeriod, setMaxReservationsPeriod] = useState(
+    currentExercice?.maxReservationsPeriod ?? 1,
+  );
+  // Auto-save DÉBOUNCÉ des maximums (clics rapides sur ± coalescés en un appel).
+  const maximaRef = useRef({ maxReservations, maxReservationsPeriod });
+  const maximaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Nettoyage au DÉMONTAGE uniquement (deps []) — sans quoi le timer débouncé
+  // serait annulé à chaque re-render.
+  useEffect(
+    () => () => {
+      if (maximaTimer.current) clearTimeout(maximaTimer.current);
+    },
+    [],
+  );
+
+  function stepMaxima(field: "maxReservations" | "maxReservationsPeriod", delta: number) {
+    if (currentExerciceId == null) return;
+    const exerciceId = currentExerciceId;
+    const next = { ...maximaRef.current };
+    next[field] = Math.max(1, next[field] + delta);
+    maximaRef.current = next;
+    setMaxReservations(next.maxReservations);
+    setMaxReservationsPeriod(next.maxReservationsPeriod);
+    setOpeningSaved(false);
+    setOpeningError(null);
+    if (maximaTimer.current) clearTimeout(maximaTimer.current);
+    maximaTimer.current = setTimeout(() => {
+      startTransition(async () => {
+        const res = await saveExerciceMaximaAction({ serviceId, exerciceId, ...maximaRef.current });
+        if (res && !res.ok) {
+          setOpeningError(res.error ?? "Échec de l'enregistrement.");
+          return;
+        }
+        setOpeningSaved(true);
+        router.refresh();
+      });
+    }, 700);
+  }
+
   // Changement d'exercice (◀ ▶) : recharge les réglages de l'exercice affiché.
   // hoursTouchedRef repasse à false AVANT les setters → l'auto-save débouncé des
   // plages horaires ne se déclenche pas sur cette resynchronisation.
@@ -525,6 +570,14 @@ export function PeriodesPanel({
     setAfternoonStart(o.afternoonStart);
     setAfternoonEnd(o.afternoonEnd);
     setOpeningError(null);
+    // Maximums de l'exercice affiché (resynchronisés sans déclencher de save).
+    if (maximaTimer.current) clearTimeout(maximaTimer.current);
+    maximaRef.current = {
+      maxReservations: currentExercice?.maxReservations ?? 1,
+      maxReservationsPeriod: currentExercice?.maxReservationsPeriod ?? 1,
+    };
+    setMaxReservations(maximaRef.current.maxReservations);
+    setMaxReservationsPeriod(maximaRef.current.maxReservationsPeriod);
   }, [currentExerciceId]);
 
   // Enregistre la config d'ouverture. `overrides` permet de sauvegarder une valeur
@@ -1179,6 +1232,29 @@ export function PeriodesPanel({
                 </label>
               </div>
             </div>
+
+            {/* ── Maximums de réservation : même colonne, sous les jours d'ouverture.
+                Par usager, portés par l'EXERCICE (« par an » = sur l'exercice). */}
+            <div
+              className="panel-subtitle"
+              style={{ fontSize: ".85rem", fontWeight: 500, marginTop: ".9rem" }}
+            >
+              Maximums{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
+            </div>
+            <div style={{ display: "flex", gap: "2.5rem", flexWrap: "wrap" }}>
+              <MaxStepper
+                label="Maximum par période"
+                value={maxReservationsPeriod}
+                onMinus={() => stepMaxima("maxReservationsPeriod", -1)}
+                onPlus={() => stepMaxima("maxReservationsPeriod", 1)}
+              />
+              <MaxStepper
+                label="Maximum par an"
+                value={maxReservations}
+                onMinus={() => stepMaxima("maxReservations", -1)}
+                onPlus={() => stepMaxima("maxReservations", 1)}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -1524,6 +1600,80 @@ export function PeriodesPanel({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Compteur « − n + » des maximums de réservation (repris du panneau Réservations,
+ *  dont le bloc a déménagé ici — portée par exercice). Minimum 1. */
+function MaxStepper({
+  label,
+  value,
+  onMinus,
+  onPlus,
+}: {
+  label: string;
+  value: number;
+  onMinus: () => void;
+  onPlus: () => void;
+}) {
+  const round: React.CSSProperties = {
+    width: 18,
+    height: 18,
+    borderRadius: "50%",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+    fontSize: ".82rem",
+    lineHeight: 1,
+  };
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: ".78rem",
+          color: "var(--muted)",
+          marginBottom: ".3rem",
+          textAlign: "center",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: ".5rem" }}
+      >
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={round}
+          onClick={onMinus}
+          disabled={value <= 1}
+          aria-label={`${label} : diminuer`}
+        >
+          −
+        </button>
+        <span
+          style={{
+            fontSize: "1rem",
+            fontWeight: 700,
+            color: "var(--warn)",
+            minWidth: "1.5ch",
+            textAlign: "center",
+          }}
+        >
+          {value}
+        </span>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={round}
+          onClick={onPlus}
+          aria-label={`${label} : augmenter`}
+        >
+          +
+        </button>
+      </div>
     </div>
   );
 }

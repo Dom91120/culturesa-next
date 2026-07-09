@@ -16,8 +16,7 @@ import { WEEKDAYS } from "@/server/services/manager-notice";
  */
 const reservationSettingsSchema = z.object({
   id: z.string().trim().min(1),
-  maxReservations: z.coerce.number().int().min(1),
-  maxReservationsPeriod: z.coerce.number().int().min(1),
+  // (Les maximums de réservation sont portés par l'EXERCICE — cf. periodes/actions.ts.)
   bookingDelay: z.coerce.number().int(),
   autoValidationDelay: z.coerce.number().int(),
   validationBloquante: z.boolean(),

@@ -11,6 +11,7 @@ import {
   deleteServicePeriod,
   PeriodError,
   reactivatePeriod,
+  saveExerciceMaxima,
   saveExerciceOpeningConfig,
   setExerciceVisibleToUsers,
   updateExercice,
@@ -281,6 +282,35 @@ export async function deleteExerciceAction(input: {
   } catch (e) {
     if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la suppression de l'exercice." };
+  }
+  revalidatePath(`/services/${serviceId}/periodes`);
+  return { ok: true };
+}
+
+const maximaSchema = z.object({
+  serviceId: z.string().trim().min(1),
+  exerciceId: z.number().int().positive(),
+  maxReservations: z.coerce.number().int().min(1),
+  maxReservationsPeriod: z.coerce.number().int().min(1),
+});
+
+export type SaveExerciceMaximaInput = z.input<typeof maximaSchema>;
+
+/** Maximums de réservation de l'exercice (par période / « par an » = sur l'exercice). */
+export async function saveExerciceMaximaAction(
+  input: SaveExerciceMaximaInput,
+): Promise<ActionState> {
+  await requireServiceManager(input.serviceId);
+  const parsed = maximaSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Valeurs invalides." };
+  }
+  const { serviceId, exerciceId, maxReservations, maxReservationsPeriod } = parsed.data;
+  try {
+    await saveExerciceMaxima(serviceId, exerciceId, { maxReservations, maxReservationsPeriod });
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
+    return { ok: false, error: "Échec de l'enregistrement." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);
   return { ok: true };

@@ -236,24 +236,16 @@ export async function assertSlotCapacity(
 }
 
 /**
- * 1er septembre de l'ANNÉE SCOLAIRE en cours (port legacy bookings.php :
- * `date('n') >= 9 ? date('Y')-09-01 : (date('Y')-1)-09-01`). Borne de la limite
- * annuelle de réservations.
- */
-function schoolYearStart(now: Date): Date {
-  // getMonth() 0-indexé : septembre = 8 → mois ≥ 9 (humain) ⇔ getMonth() ≥ 8.
-  const y = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  return new Date(Date.UTC(y, 8, 1));
-}
-
-/**
- * Limites de réservation USAGER d'un service (port legacy api/bookings.php) :
+ * Limites de réservation USAGER, portées par l'EXERCICE de la période visée :
  *   - `maxReservationsPeriod` : nombre max de réservations de l'usager sur UNE période ;
- *   - `maxReservations` : nombre max sur l'ANNÉE SCOLAIRE en cours.
+ *   - `maxReservations` : nombre max sur l'EXERCICE entier (« par an ») — comptées sur
+ *     les périodes du MÊME exercice (exact pour les exercices civils comme scolaires,
+ *     et remis à zéro à chaque exercice, y compris pour les ponctuelles).
  * Comptées par TYPE : une création récurrente compte les récurrentes ; une ponctuelle
  * compte les ponctuelles STANDALONE (miroirs/enfants exclus). Lève `BookingError` si
  * une limite est atteinte. N'est PAS appliquée aux créations ADMIN (override de gestion).
- * Doit tourner DANS la transaction de création (mêmes garanties que le legacy).
+ * Période sans exercice (legacy) : aucune limite — le flux usager exige de toute façon
+ * un exercice (visibilité + ouverture). Doit tourner DANS la transaction de création.
  */
 export async function assertReservationLimits(
   db: Prisma.TransactionClient,
@@ -263,14 +255,29 @@ export async function assertReservationLimits(
     bookingType: "recurring" | "unique";
     // Récurrent : periodId de la réservation ; ponctuel : periodId du SLOT (0 = aucun).
     periodId: number;
-    maxReservations: number;
-    maxReservationsPeriod: number;
   },
 ) {
-  const { serviceId, userId, bookingType, periodId, maxReservations, maxReservationsPeriod } =
-    params;
+  const { serviceId, userId, bookingType, periodId } = params;
+  if (!(periodId > 0)) return;
+  const period = await db.period.findUnique({
+    where: { id: periodId },
+    select: {
+      exercice: { select: { id: true, maxReservations: true, maxReservationsPeriod: true } },
+    },
+  });
+  const exercice = period?.exercice;
+  if (!exercice) return;
+  const { maxReservations, maxReservationsPeriod } = exercice;
+
   const tooManyPeriod = new BookingError("Limite de réservations atteinte pour cette période.");
   const tooManyYear = new BookingError("Limite annuelle de réservations atteinte.");
+
+  // Périmètre « annuel » = toutes les périodes de l'exercice de la période visée.
+  const exoPeriods = await db.period.findMany({
+    where: { exerciceId: exercice.id },
+    select: { id: true },
+  });
+  const exoPeriodIds = exoPeriods.map((p) => p.id);
 
   if (bookingType === "recurring") {
     // Par période.
@@ -279,34 +286,42 @@ export async function assertReservationLimits(
     });
     if (perPeriod >= maxReservationsPeriod) throw tooManyPeriod;
 
-    // Annuelle : récurrentes dont la période démarre dans l'année scolaire en cours
-    // (équivalent du JOIN periods + `p.date_start >= yearStart` du legacy).
-    const yearPeriods = await db.period.findMany({
-      where: { dateStart: { gte: schoolYearStart(new Date()) } },
-      select: { id: true },
-    });
+    // Sur l'exercice : récurrentes rattachées à l'une de ses périodes.
     const perYear = await db.booking.count({
       where: {
         serviceId,
         userId,
         bookingType: "recurring",
-        periodId: { in: yearPeriods.map((p) => p.id) },
+        periodId: { in: exoPeriodIds },
       },
     });
     if (perYear >= maxReservations) throw tooManyYear;
   } else {
     // Ponctuel : on ne compte que les réservations STANDALONE (parentBookingId null),
-    // pour ne pas inclure les miroirs/enfants des récurrentes.
-    if (periodId > 0) {
-      const perPeriod = await db.booking.count({
-        where: { serviceId, userId, periodId, bookingType: "unique", parentBookingId: null },
-      });
-      if (perPeriod >= maxReservationsPeriod) throw tooManyPeriod;
-    }
-    // Annuelle : total des ponctuelles standalone du service (le legacy ne filtre pas
-    // l'année pour ce cas — les ponctuelles n'étant pas rattachées à une période datée).
+    // pour ne pas inclure les miroirs/enfants des récurrentes. Comptage via le
+    // CRÉNEAU : les ponctuelles stockent periodId null — l'ancien comptage sur
+    // booking.periodId ne matchait jamais (limite par période inopérante).
+    const perPeriod = await db.booking.count({
+      where: {
+        serviceId,
+        userId,
+        bookingType: "unique",
+        parentBookingId: null,
+        slot: { periodId },
+      },
+    });
+    if (perPeriod >= maxReservationsPeriod) throw tooManyPeriod;
+
+    // Sur l'exercice : ponctuelles standalone dont le CRÉNEAU appartient à l'une de
+    // ses périodes (les ponctuelles portent le periodId via leur slot).
     const perYear = await db.booking.count({
-      where: { serviceId, userId, bookingType: "unique", parentBookingId: null },
+      where: {
+        serviceId,
+        userId,
+        bookingType: "unique",
+        parentBookingId: null,
+        slot: { periodId: { in: exoPeriodIds } },
+      },
     });
     if (perYear >= maxReservations) throw tooManyYear;
   }
@@ -424,15 +439,13 @@ export async function createUniqueBookingInTx(
     enfants: input.enfants,
     accompagnants: input.accompagnants,
   });
-  // Limites de réservation de l'usager (max par période + max annuel). La période est
-  // portée par le SLOT (la réservation ponctuelle stocke periodId=0).
+  // Limites de réservation de l'usager (max par période + max sur l'exercice, lus
+  // sur l'exercice de la période du SLOT — la réservation ponctuelle stocke periodId null).
   await assertReservationLimits(tx, {
     serviceId: slot.serviceId,
     userId,
     bookingType: "unique",
     periodId: slot.periodId ?? 0,
-    maxReservations: slot.service.maxReservations,
-    maxReservationsPeriod: slot.service.maxReservationsPeriod,
   });
   return await tx.booking.create({
     data: {
@@ -618,7 +631,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   const [visibleExo, exoCount] = await Promise.all([
     prisma.exercice.findFirst({
       where: { serviceId, visibleToUsers: true },
-      select: { id: true },
+      // Maximums de réservation : portés par l'exercice (affichés dans le bandeau
+      // « Vous pouvez réserver … » de la grille usager).
+      select: { id: true, maxReservations: true, maxReservationsPeriod: true },
     }),
     prisma.exercice.count({ where: { serviceId } }),
   ]);
@@ -813,8 +828,11 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       capacity: service.capacity,
       semaineAb: service.semaineAb,
       themesMode: service.themesMode,
-      maxReservations: service.maxReservations,
-      maxReservationsPeriod: service.maxReservationsPeriod,
+      // Maximums de l'exercice VISIBLE (portés par l'exercice ; le DTO garde les
+      // clés historiques pour la grille). Sans exercice visible : 1/1 (rien n'est
+      // réservable de toute façon).
+      maxReservations: visibleExo?.maxReservations ?? 1,
+      maxReservationsPeriod: visibleExo?.maxReservationsPeriod ?? 1,
       gaugeAccompagnants: service.gaugeAccompagnants,
       validationBloquante: service.validationBloquante,
     },

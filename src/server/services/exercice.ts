@@ -315,7 +315,14 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       const currentExo = currentExoRow
         ? await tx.exercice.findUnique({
             where: { id: currentExoRow.id },
-            select: { type: true, dateStart: true, dateEnd: true, ...EXERCICE_OPENING_SELECT },
+            select: {
+              type: true,
+              dateStart: true,
+              dateEnd: true,
+              maxReservations: true,
+              maxReservationsPeriod: true,
+              ...EXERCICE_OPENING_SELECT,
+            },
           })
         : null;
       const shiftedStarts = actives
@@ -357,6 +364,14 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
           dateStart: dateFromYmd(exoStart),
           dateEnd: exoEnd ? dateFromYmd(exoEnd) : null,
           ...opening,
+          // Maximums de réservation REPRIS de l'exercice reconduit (défauts du
+          // schéma sinon).
+          ...(currentExo
+            ? {
+                maxReservations: currentExo.maxReservations,
+                maxReservationsPeriod: currentExo.maxReservationsPeriod,
+              }
+            : {}),
         },
         select: { id: true },
       });

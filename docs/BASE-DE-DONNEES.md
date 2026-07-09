@@ -155,17 +155,11 @@ Activité réservable. PK = id applicatif (`svc_00N`).
 | id | texte 🔑 | | `svc_00N` |
 | label | texte | | nom |
 | validationBloquante | booléen | false | verrouille les réservations validées (annulation/déplacement) |
-| maxReservations | entier | 1 | quota par usager |
-| maxReservationsPeriod | entier | 1 | quota par période |
-| activeDays | texte | "lun,mar,mer,jeu,ven" | jours ouvrés (CSV) |
 | position | entier | 0 | ordre d'affichage |
 | duration | entier | 60 | durée créneau (min) |
 | capacity | entier | 1 | capacité par défaut |
-| morningStart/End, afternoonStart/End | texte | 09:00/12:00/14:00/18:00 | plages horaires |
 | icon | texte? | | icône |
 | bookingDelay | entier | 0 | délai mini de réservation (min) |
-| openOnHolidays | booléen | false | ouvert les jours fériés |
-| openOnSchoolHolidays | booléen | false | ouvert pendant les vacances scolaires |
 | showPreviousExercices | booléen | false | afficher les exercices passés |
 | semaineAb | booléen | false | alternance A/B activée |
 | themesMode | `ThemesMode` | libre | saisie du thème |
@@ -199,7 +193,27 @@ Créneau. **1 slot = 1 jour.** Récurrent (modèle) **ou** unique/miroir (daté)
 Index : `serviceId`, `parentSlotId`, `periodId`, `(slotDate, state)`.
 
 #### `Exercice` → `exercice`
-Année/cycle de fonctionnement. | id 🔑 (auto), `label`, `createdAt`. Relation : `periods`.
+Année/cycle de fonctionnement d'un service. Porte les réglages d'ouverture et les
+maximums de réservation (le service ne les porte plus) ; une date hors de tout
+exercice est FERMÉE.
+
+| Colonne | Type | Défaut | Clé | Description |
+|---|---|---|---|---|
+| id | entier | auto | 🔑 | |
+| serviceId | texte? | | ↗ `services` (Cascade) | |
+| label | texte | | | ex. « 2025-2026 » |
+| type | `ExerciceType` | scolaire | | scolaire / civile |
+| dateStart / dateEnd | date? | | | bornes |
+| morningStart/End, afternoonStart/End | texte | 09:00/12:00/14:00/18:00 | | plages horaires |
+| activeDays | texte | "lun,mar,mer,jeu,ven" | | jours ouvrés (CSV) |
+| openOnHolidays | booléen | false | | ouvert les jours fériés |
+| openOnSchoolHolidays | booléen | false | | ouvert pendant les vacances scolaires |
+| visibleToUsers | booléen | false | | « Affiché aux utilisateurs » — UNIQUE exercice du service accessible côté usager |
+| maxReservations | entier | 1 | | quota usager sur l'EXERCICE (« par an ») |
+| maxReservationsPeriod | entier | 1 | | quota usager par période |
+| createdAt | horodatage | now() | | |
+
+Relation : `periods`. Index `serviceId`.
 
 #### `Period` → `periods`
 Période d'un service (vacances, trimestre…).
