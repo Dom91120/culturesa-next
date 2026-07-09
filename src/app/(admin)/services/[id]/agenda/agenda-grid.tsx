@@ -15,6 +15,7 @@ import {
   type AgendaBlockBase,
   addDays,
   badgeStyle,
+  CLOSED_OPENING,
   coveringForYmd,
   DAY_NAMES,
   DAY_OFFSET,
@@ -68,19 +69,14 @@ import { DefaultDemandeursModal } from "./default-demandeurs-modal";
 import { OccurrencesField } from "./occurrences-field";
 import { SlotConfigModal } from "./slot-config-modal";
 
+// (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — sont portés
+// par CHAQUE EXERCICE, cf. type Exercice.opening ; hors exercice = fermé.)
 type Service = {
   id: string;
   label: string;
-  activeDays: string;
-  morningStart: string;
-  morningEnd: string;
-  afternoonStart: string;
-  afternoonEnd: string;
   capacity: number;
   semaineAb: boolean;
   themesMode: "libre" | "liste";
-  openOnHolidays: boolean;
-  openOnSchoolHolidays: boolean;
   gaugeAccompagnants: boolean;
 };
 type Period = {
@@ -421,24 +417,12 @@ export function AgendaGrid({
   });
 
   // ── Réglages d'ouverture PAR EXERCICE ──────────────────────────────────────
-  // Repli pour une date hors de tout exercice : réglages du service.
-  const fallbackOpening: ExerciceOpening = useMemo(
-    () => ({
-      activeDays: service.activeDays,
-      openOnHolidays: service.openOnHolidays,
-      openOnSchoolHolidays: service.openOnSchoolHolidays,
-      morningStart: service.morningStart,
-      morningEnd: service.morningEnd,
-      afternoonStart: service.afternoonStart,
-      afternoonEnd: service.afternoonEnd,
-    }),
-    [service],
-  );
-  // Ouverture effective d'une DATE : réglages de l'exercice qui la couvre, sinon
-  // service. Décision produit : « la grille suit l'exercice couvrant chaque jour ».
+  // Une date hors de tout exercice est FERMÉE (CLOSED_OPENING — le service ne
+  // porte plus de réglages). Décision produit : « la grille suit l'exercice
+  // couvrant chaque jour ».
   const openingForYmd = useCallback(
-    (d: string): ExerciceOpening => coveringForYmd(exercices, d)?.opening ?? fallbackOpening,
-    [exercices, fallbackOpening],
+    (d: string): ExerciceOpening => coveringForYmd(exercices, d)?.opening ?? CLOSED_OPENING,
+    [exercices],
   );
 
   // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
@@ -447,16 +431,19 @@ export function AgendaGrid({
   const contextOpenings = useMemo(() => {
     if (mode === "model") {
       const ex = exercices.find((e) => e.id === currentExerciceId);
-      return [ex ? openingForYmd(ex.dateStart || "") : fallbackOpening];
+      return [ex ? openingForYmd(ex.dateStart || "") : CLOSED_OPENING];
     }
-    if (!anchorMonday) return [fallbackOpening];
+    if (!anchorMonday) return [CLOSED_OPENING];
     const uniq = new Map<string, ExerciceOpening>();
     for (let i = 0; i < 7; i++) {
       const o = openingForYmd(ymd(addDays(anchorMonday, i)));
-      uniq.set(`${o.activeDays}|${o.morningStart}|${o.morningEnd}|${o.afternoonStart}|${o.afternoonEnd}`, o);
+      uniq.set(
+        `${o.activeDays}|${o.morningStart}|${o.morningEnd}|${o.afternoonStart}|${o.afternoonEnd}`,
+        o,
+      );
     }
     return [...uniq.values()];
-  }, [mode, exercices, currentExerciceId, fallbackOpening, anchorMonday, openingForYmd]);
+  }, [mode, exercices, currentExerciceId, anchorMonday, openingForYmd]);
 
   // Colonnes de la grille : jours actifs du contexte. En Modèle = ceux de l'exercice
   // affiché ; en Semaine réelle = UNION des exercices de la semaine (le grisage par
@@ -757,11 +744,8 @@ export function AgendaGrid({
   // d'heure VISIBLES (mapMinToY), au lieu d'un mapping linéaire heure/heure.
   // Bornes de pause de l'ouverture de contexte principale (exercice affiché en
   // Modèle ; premier exercice de la semaine en Semaine réelle).
-  const lunchStart = toMinutes(contextOpenings[0]?.morningEnd ?? service.morningEnd, Number.NaN);
-  const lunchEnd = toMinutes(
-    contextOpenings[0]?.afternoonStart ?? service.afternoonStart,
-    Number.NaN,
-  );
+  const lunchStart = toMinutes(contextOpenings[0]?.morningEnd ?? "", Number.NaN);
+  const lunchEnd = toMinutes(contextOpenings[0]?.afternoonStart ?? "", Number.NaN);
   const hasLunch =
     Number.isFinite(lunchStart) &&
     Number.isFinite(lunchEnd) &&
@@ -4011,17 +3995,19 @@ export function AgendaGrid({
                     // « Créneaux concernés » = occurrences qui seront EFFECTIVEMENT créées :
                     // miroirs du slot ≥ aujourd'hui (le gestionnaire ne crée pas le passé),
                     // de la semaine A/B effective (en mode A/B), et hors vacances scolaires
-                    // si le SERVICE ferme les vacances ou si le demandeur sélectionné est fermé.
+                    // si l'EXERCICE de la date ferme les vacances ou si le demandeur
+                    // sélectionné est fermé.
                     dates={(() => {
                       const todayISO = ymd(new Date());
                       const selUser = users.find((u) => u.id === cUser);
-                      const closedOnSchool =
-                        !service.openOnSchoolHolidays || selUser?.openOnSchoolHolidays === false;
                       return uniqueSlots
                         .filter((u) => u.parentSlotId === createCtx.slotId && u.slotDate)
                         .map((u) => u.slotDate as string)
                         .filter((d) => {
                           if (d < todayISO) return false;
+                          const closedOnSchool =
+                            !openingForYmd(d).openOnSchoolHolidays ||
+                            selUser?.openOnSchoolHolidays === false;
                           if (closedOnSchool && inSchoolHolidayRange(d, schoolHolidays))
                             return false;
                           if (!abMode || effectiveWeek == null) return true;

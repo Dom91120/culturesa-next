@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getServiceOpeningConfig, listServicePeriods, parseActiveDays } from "@/server/services/periods";
+import { listServicePeriods, parseActiveDays } from "@/server/services/periods";
 import { getService } from "@/server/services/services";
 import { ParamsSubnav } from "../params-subnav";
 import { ReservationsPanel } from "../reservations/reservations-panel";
@@ -15,10 +15,7 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
   const service = await getService(id);
   if (!service) notFound();
 
-  const [{ periods, exercices }, opening] = await Promise.all([
-    listServicePeriods(id),
-    getServiceOpeningConfig(id),
-  ]);
+  const { periods, exercices } = await listServicePeriods(id);
 
   const initialPeriods = periods.map((p) => ({
     id: p.id,
@@ -32,33 +29,21 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
     exerciceId: p.exerciceId,
   }));
 
-  // Défauts d'ouverture du service (repli quand l'exercice n'a pas de surcharge,
-  // ou quand le service n'a aucun exercice).
-  const svcOpening = opening ?? {
-    activeDays: [],
-    openOnHolidays: false,
-    openOnSchoolHolidays: false,
-    morningStart: "09:00",
-    morningEnd: "12:00",
-    afternoonStart: "14:00",
-    afternoonEnd: "18:00",
-  };
-
   const uiExercices = exercices.map((e) => ({
     id: e.id,
     label: e.label,
     type: e.type,
     dateStart: toISODate(e.dateStart),
     dateEnd: toISODate(e.dateEnd),
-    // Réglages d'ouverture RÉSOLUS de l'exercice (surcharge ?? défaut service).
+    // Réglages d'ouverture DE l'exercice (unique porteur, cf. opening.ts).
     opening: {
-      activeDays: e.activeDays != null ? parseActiveDays(e.activeDays) : svcOpening.activeDays,
-      openOnHolidays: e.openOnHolidays ?? svcOpening.openOnHolidays,
-      openOnSchoolHolidays: e.openOnSchoolHolidays ?? svcOpening.openOnSchoolHolidays,
-      morningStart: e.morningStart ?? svcOpening.morningStart,
-      morningEnd: e.morningEnd ?? svcOpening.morningEnd,
-      afternoonStart: e.afternoonStart ?? svcOpening.afternoonStart,
-      afternoonEnd: e.afternoonEnd ?? svcOpening.afternoonEnd,
+      activeDays: parseActiveDays(e.activeDays),
+      openOnHolidays: e.openOnHolidays,
+      openOnSchoolHolidays: e.openOnSchoolHolidays,
+      morningStart: e.morningStart,
+      morningEnd: e.morningEnd,
+      afternoonStart: e.afternoonStart,
+      afternoonEnd: e.afternoonEnd,
     },
   }));
 
@@ -77,7 +62,6 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
         initialPeriods={initialPeriods}
         exercices={uiExercices}
         showPreviousExercices={service.showPreviousExercices}
-        opening={svcOpening}
       />
       {/* Panneau « Réservations » déplacé sous les périodes (onglet « Périodes et réservations »). */}
       <ReservationsPanel

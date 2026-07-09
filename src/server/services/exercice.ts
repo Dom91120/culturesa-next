@@ -4,7 +4,7 @@ import { holidaysInRange } from "@/lib/french-holidays";
 import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
 import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";
-import { EXERCICE_OPENING_SELECT, resolveOpening } from "@/server/services/opening";
+import { DEFAULT_OPENING, EXERCICE_OPENING_SELECT } from "@/server/services/opening";
 
 // =====================================================================================
 // Types
@@ -303,6 +303,20 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         shiftedEnds[shiftedEnds.length - 1] ??
         null;
       const exoType = currentExo?.type ?? "scolaire";
+      // Réglages d'ouverture REPRIS de l'exercice reconduit (défauts applicatifs
+      // si le service n'avait aucun exercice — cas théorique, la bascule exige des
+      // périodes actives donc un exercice).
+      const opening = currentExo
+        ? {
+            morningStart: currentExo.morningStart,
+            morningEnd: currentExo.morningEnd,
+            afternoonStart: currentExo.afternoonStart,
+            afternoonEnd: currentExo.afternoonEnd,
+            activeDays: currentExo.activeDays,
+            openOnHolidays: currentExo.openOnHolidays,
+            openOnSchoolHolidays: currentExo.openOnSchoolHolidays,
+          }
+        : DEFAULT_OPENING;
       const newExo = await tx.exercice.create({
         data: {
           serviceId,
@@ -310,23 +324,13 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
           type: exoType,
           dateStart: dateFromYmd(exoStart),
           dateEnd: exoEnd ? dateFromYmd(exoEnd) : null,
-          // Réglages d'ouverture REPRIS de l'exercice reconduit (null = héritait du
-          // service → le nouveau continue d'hériter ; valeur posée → recopiée).
-          morningStart: currentExo?.morningStart ?? null,
-          morningEnd: currentExo?.morningEnd ?? null,
-          afternoonStart: currentExo?.afternoonStart ?? null,
-          afternoonEnd: currentExo?.afternoonEnd ?? null,
-          activeDays: currentExo?.activeDays ?? null,
-          openOnHolidays: currentExo?.openOnHolidays ?? null,
-          openOnSchoolHolidays: currentExo?.openOnSchoolHolidays ?? null,
+          ...opening,
         },
         select: { id: true },
       });
       const exId = newExo.id;
 
-      // 6. recopie des périodes — jours actifs / fériés RÉSOLUS pour le nouvel
-      // exercice (mêmes surcharges que l'exercice reconduit, repli service).
-      const opening = resolveOpening(service, currentExo);
+      // 6. recopie des périodes — jours actifs / fériés du nouvel exercice.
       const activeDays = parseActiveDays(opening.activeDays);
       const newPeriodIds: number[] = [];
       const newRecurringSlotIds: string[] = [];

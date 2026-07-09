@@ -4,7 +4,7 @@ import { slotWeekTag } from "@/lib/iso-week";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { getConfigMany } from "@/server/config";
 import { effectiveOpenOnSchoolHolidays } from "@/server/services/bookings";
-import { EXERCICE_OPENING_SELECT, resolveOpening } from "@/server/services/opening";
+import { EXERCICE_OPENING_SELECT } from "@/server/services/opening";
 
 // ════════════════════════════════════════════════════════════
 //  Matérialisation des réservations-enfants d'une récurrente (port legacy
@@ -57,10 +57,9 @@ export async function syncRecurringChildren(
     return { created: 0, updated: 0, deleted: del.count };
   }
 
-  // Politique vacances scolaires = combinaison SERVICE ∧ DEMANDEUR : on ne matérialise une
-  // occurrence en vacances que si le service ET le demandeur acceptent les vacances.
-  // Réglages côté service RÉSOLUS par l'exercice de la période de la récurrente
-  // (toutes ses occurrences appartiennent à cette période, cf. opening.ts).
+  // Politique vacances scolaires = combinaison EXERCICE ∧ DEMANDEUR : on ne matérialise
+  // une occurrence en vacances que si l'exercice de la période de la récurrente ET le
+  // demandeur acceptent les vacances. Période sans exercice = FERMÉ (rien à créer).
   const [user, svc, period] = await Promise.all([
     tx.user.findUnique({
       where: { id: parent.userId },
@@ -71,31 +70,22 @@ export async function syncRecurringChildren(
     }),
     tx.service.findUnique({
       where: { id: parent.serviceId },
-      select: {
-        bookingDelay: true,
-        activeDays: true,
-        openOnHolidays: true,
-        openOnSchoolHolidays: true,
-        morningStart: true,
-        morningEnd: true,
-        afternoonStart: true,
-        afternoonEnd: true,
-      },
+      select: { bookingDelay: true },
     }),
     tx.period.findUnique({
       where: { id: parent.periodId },
       select: { exerciceId: true },
     }),
   ]);
-  const exercice =
+  const opening =
     period?.exerciceId != null
       ? await tx.exercice.findUnique({
           where: { id: period.exerciceId },
           select: EXERCICE_OPENING_SELECT,
         })
       : null;
-  const opening = svc ? resolveOpening(svc, exercice) : null;
-  const openOnSchool = (opening?.openOnSchoolHolidays ?? false) && effectiveOpenOnSchoolHolidays(user);
+  const openOnSchool =
+    (opening?.openOnSchoolHolidays ?? false) && effectiveOpenOnSchoolHolidays(user);
   let schoolRanges: { dateStart: string; dateEnd: string }[] = [];
   if (!openOnSchool) {
     const zone = opts?.schoolZone ?? (await getSchoolZone());
@@ -118,14 +108,16 @@ export async function syncRecurringChildren(
   let cutoff = opts?.cutoffISO;
   if (!cutoff) {
     // Jours ouvrés du délai = ceux de l'exercice de la période réservée (décision
-    // produit : « jours ouvrés de l'exercice de la date réservée »).
-    cutoff = earliestBookableISO(
-      svc?.bookingDelay ?? 0,
-      (opening?.activeDays ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    );
+    // produit). Période sans exercice → rien n'est matérialisable (cutoff infini).
+    cutoff = opening
+      ? earliestBookableISO(
+          svc?.bookingDelay ?? 0,
+          opening.activeDays
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        )
+      : "9999-12-31";
   }
 
   // Miroirs de la période : jours fériés + parité A/B du SLOT déjà exclus à leur

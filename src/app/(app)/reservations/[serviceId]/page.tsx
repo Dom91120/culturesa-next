@@ -32,7 +32,6 @@ export default async function ReservationsServicePage({
       modes={data.modes}
       exercices={data.exercices}
       demandeurLabel={data.demandeurLabel}
-      openOnSchoolHolidays={data.openOnSchoolHolidays}
       demandeurOpenOnSchoolHolidays={data.demandeurOpenOnSchoolHolidays}
       schoolHolidays={data.schoolHolidays}
       userInfo={data.user}

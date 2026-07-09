@@ -1,6 +1,11 @@
 import { ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { prisma } from "@/server/db";
 import { sendBookingConfirmationMailsBatch } from "@/server/services/booking-mail";
+import {
+  DEFAULT_OPENING,
+  EXERCICE_OPENING_SELECT,
+  type OpeningConfig,
+} from "@/server/services/opening";
 
 // ════════════════════════════════════════════════════════════
 //  Auto-validation des réservations (port du legacy auto_validate_bookings.php)
@@ -157,11 +162,6 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
       id: true,
       label: true,
       autoValidationDelay: true,
-      activeDays: true,
-      morningStart: true,
-      morningEnd: true,
-      afternoonStart: true,
-      afternoonEnd: true,
     },
   });
 
@@ -174,6 +174,37 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
   const mails: Parameters<typeof sendBookingConfirmationMailsBatch>[0][number][] = [];
 
   const svcIds = services.map((s) => s.id);
+
+  // Réglages d'ouverture PAR EXERCICE (source unique, cf. opening.ts) : le temps
+  // OUVRÉ d'une réservation se compte avec les jours/plages de l'exercice couvrant
+  // sa date de départ (autoValidateFrom), repli DEFAULT_OPENING hors exercice —
+  // sinon les échéances ouvrées gèleraient.
+  const allExercices = svcIds.length
+    ? await prisma.exercice.findMany({
+        where: { serviceId: { in: svcIds } },
+        select: {
+          serviceId: true,
+          dateStart: true,
+          dateEnd: true,
+          ...EXERCICE_OPENING_SELECT,
+        },
+      })
+    : [];
+  const exercicesByService = new Map<string, typeof allExercices>();
+  for (const e of allExercices) {
+    if (!e.serviceId) continue;
+    const arr = exercicesByService.get(e.serviceId);
+    if (arr) arr.push(e);
+    else exercicesByService.set(e.serviceId, [e]);
+  }
+  const openingForFrom = (serviceId: string, from: Date): OpeningConfig => {
+    const fromIso = toIso(from);
+    const ex = (exercicesByService.get(serviceId) ?? []).find(
+      (e) =>
+        e.dateStart && e.dateEnd && toIso(e.dateStart) <= fromIso && fromIso <= toIso(e.dateEnd),
+    );
+    return ex ?? DEFAULT_OPENING;
+  };
 
   // Toutes les réservations candidates de TOUS les services en UNE requête (au lieu
   // d'un findMany par service — audit perf P4 : N+1 sur les services).
@@ -236,10 +267,6 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
     const delay = svc.autoValidationDelay;
     const delayMinutes = Math.abs(delay);
     const isBusiness = delay < 0;
-    const activeDays = svc.activeDays
-      .split(",")
-      .map((d) => d.trim())
-      .filter(Boolean);
 
     for (const c of cands) {
       // Séance déjà passée → on n'auto-valide pas.
@@ -257,17 +284,23 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
 
       const from = c.autoValidateFrom;
       if (!from) continue;
-      const deadline = isBusiness
-        ? businessDeadline(
-            from,
-            delayMinutes,
-            activeDays,
-            svc.morningStart,
-            svc.morningEnd,
-            svc.afternoonStart,
-            svc.afternoonEnd,
-          )
-        : new Date(from.getTime() + delayMinutes * 60000);
+      // Jours/plages ouvrés de l'exercice couvrant la date de départ de la résa.
+      const opening = isBusiness ? openingForFrom(svc.id, from) : null;
+      const deadline =
+        isBusiness && opening
+          ? businessDeadline(
+              from,
+              delayMinutes,
+              opening.activeDays
+                .split(",")
+                .map((d) => d.trim())
+                .filter(Boolean),
+              opening.morningStart,
+              opening.morningEnd,
+              opening.afternoonStart,
+              opening.afternoonEnd,
+            )
+          : new Date(from.getTime() + delayMinutes * 60000);
 
       if (deadline.getTime() > now.getTime()) {
         stats.notYet += 1;

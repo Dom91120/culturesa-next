@@ -56,8 +56,19 @@ type Props = {
   serviceId: string;
   initialPeriods: UiPeriod[];
   exercices: Exercice[];
-  opening: Opening;
   showPreviousExercices: boolean;
+};
+
+// Réglages affichés quand le service n'a AUCUN exercice (blocs masqués de toute
+// façon — valeurs de confort pour initialiser les états React).
+const NO_EXERCICE_OPENING: Opening = {
+  activeDays: [],
+  openOnHolidays: false,
+  openOnSchoolHolidays: false,
+  morningStart: "09:00",
+  morningEnd: "12:00",
+  afternoonStart: "14:00",
+  afternoonEnd: "18:00",
 };
 
 // Ordre + libellés des jours (legacy : ALL_DKEYS / ALL_DAYS).
@@ -158,7 +169,6 @@ export function PeriodesPanel({
   serviceId,
   initialPeriods,
   exercices,
-  opening,
   showPreviousExercices,
 }: Props) {
   const router = useRouter();
@@ -445,9 +455,9 @@ export function PeriodesPanel({
   }
 
   // ── Jours d'ouverture + fériés + plages horaires — PAR EXERCICE. ────────────
-  // Les réglages affichés/édités sont ceux de l'exercice sélectionné (◀ ▶) ;
-  // repli sur les défauts du service quand le service n'a aucun exercice.
-  const currentOpening = currentExercice?.opening ?? opening;
+  // Les réglages affichés/édités sont ceux de l'exercice sélectionné (◀ ▶) —
+  // unique porteur ; sans exercice, les blocs sont masqués plus bas.
+  const currentOpening = currentExercice?.opening ?? NO_EXERCICE_OPENING;
   const [activeDays, setActiveDays] = useState<string[]>(currentOpening.activeDays);
   const [openOnHolidays, setOpenOnHolidays] = useState(currentOpening.openOnHolidays);
   const [openOnSchoolHolidays, setOpenOnSchoolHolidays] = useState(
@@ -469,7 +479,7 @@ export function PeriodesPanel({
   // biome-ignore lint/correctness/useExhaustiveDependencies: resynchronisation pilotée par l'exercice affiché
   useEffect(() => {
     hoursTouchedRef.current = false;
-    const o = currentExercice?.opening ?? opening;
+    const o = currentExercice?.opening ?? NO_EXERCICE_OPENING;
     setActiveDays(o.activeDays);
     setOpenOnHolidays(o.openOnHolidays);
     setOpenOnSchoolHolidays(o.openOnSchoolHolidays);
@@ -494,11 +504,14 @@ export function PeriodesPanel({
     afternoonEnd: string;
   }>;
   function persistOpening(overrides: OpeningOverrides = {}) {
+    // Les réglages appartiennent à un exercice : sans exercice, rien à enregistrer
+    // (les blocs sont masqués — garde défensive).
+    if (currentExerciceId == null) return;
     setOpeningError(null);
     startTransition(async () => {
       const res = await saveOpeningConfigAction({
         serviceId,
-        // Réglages écrits sur l'exercice affiché (null = service sans exercice).
+        // Réglages écrits sur l'exercice affiché (unique porteur).
         exerciceId: currentExerciceId,
         activeDays: (overrides.activeDays ?? activeDays) as (
           | "lun"
@@ -607,102 +620,102 @@ export function PeriodesPanel({
         {/* Libellé de la ligne, à gauche de la navigation ◀ … ▶. */}
         <span style={{ fontSize: ".85rem", fontWeight: 500 }}>Exercice</span>
         {hasExercices ? (
-            <div className="periode-nav">
-              <button
-                type="button"
-                className="ex-arrow"
-                onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
-                disabled={!canPrev}
-                aria-label="Exercice précédent"
-              >
-                ◀
-              </button>
-              <span className="ex-nav-label">{exerciceLabel}</span>
-              <button
-                type="button"
-                className="ex-arrow"
-                onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
-                disabled={!canNext}
-                aria-label="Exercice suivant"
-              >
-                ▶
-              </button>
-            </div>
-          ) : (
-            <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucun exercice</span>
-          )}
+          <div className="periode-nav">
+            <button
+              type="button"
+              className="ex-arrow"
+              onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
+              disabled={!canPrev}
+              aria-label="Exercice précédent"
+            >
+              ◀
+            </button>
+            <span className="ex-nav-label">{exerciceLabel}</span>
+            <button
+              type="button"
+              className="ex-arrow"
+              onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
+              disabled={!canNext}
+              aria-label="Exercice suivant"
+            >
+              ▶
+            </button>
+          </div>
+        ) : (
+          <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucun exercice</span>
+        )}
 
-          {/* Dates de l'exercice + bouton d'édition regroupés (une seule unité). */}
-          {currentExercice && (
-            <span
+        {/* Dates de l'exercice + bouton d'édition regroupés (une seule unité). */}
+        {currentExercice && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: ".5rem",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {(currentExercice.dateStart || currentExercice.dateEnd) && (
+              <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+                {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
+                {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
+              </span>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={openEditExercice}
+              title="Modifier l'exercice"
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: ".5rem",
+                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                color: "var(--accent)",
+                padding: ".1rem .3rem",
+                fontSize: ".62rem",
+              }}
+            >
+              ✏️
+            </button>
+          </span>
+        )}
+
+        <div style={{ display: "flex", gap: ".4rem", alignItems: "center" }}>
+          {/* Corbeille masquée si l'exercice a des périodes : suppression interdite. */}
+          {currentExercice && !currentExerciceHasPeriods && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={deleteExercice}
+              disabled={pending}
+              title="Supprimer l'exercice"
+              style={{
+                borderColor: "rgba(220,80,80,.4)",
+                color: "#e05555",
+                padding: ".18rem .5rem",
+                fontSize: ".62rem",
+              }}
+            >
+              🗑️
+            </button>
+          )}
+          {/* « Nouvel exercice » : visible uniquement quand le service n'a AUCUN exercice
+                (sinon on crée les exercices suivants via la bascule). */}
+          {!hasExercices && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={openCreateExercice}
+              style={{
+                borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
+                color: "var(--warn)",
+                padding: ".18rem .5rem",
+                fontSize: ".62rem",
                 whiteSpace: "nowrap",
               }}
             >
-              {(currentExercice.dateStart || currentExercice.dateEnd) && (
-                <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
-                  {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
-                  {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
-                </span>
-              )}
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={openEditExercice}
-                title="Modifier l'exercice"
-                style={{
-                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                  color: "var(--accent)",
-                  padding: ".1rem .3rem",
-                  fontSize: ".62rem",
-                }}
-              >
-                ✏️
-              </button>
-            </span>
+              ＋ Nouvel exercice
+            </button>
           )}
-
-          <div style={{ display: "flex", gap: ".4rem", alignItems: "center" }}>
-            {/* Corbeille masquée si l'exercice a des périodes : suppression interdite. */}
-            {currentExercice && !currentExerciceHasPeriods && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={deleteExercice}
-                disabled={pending}
-                title="Supprimer l'exercice"
-                style={{
-                  borderColor: "rgba(220,80,80,.4)",
-                  color: "#e05555",
-                  padding: ".18rem .5rem",
-                  fontSize: ".62rem",
-                }}
-              >
-                🗑️
-              </button>
-            )}
-            {/* « Nouvel exercice » : visible uniquement quand le service n'a AUCUN exercice
-                (sinon on crée les exercices suivants via la bascule). */}
-            {!hasExercices && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={openCreateExercice}
-                style={{
-                  borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
-                  color: "var(--warn)",
-                  padding: ".18rem .5rem",
-                  fontSize: ".62rem",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                ＋ Nouvel exercice
-              </button>
-            )}
-          </div>
+        </div>
       </div>
 
       {/* ── Multi-colonnage : tableau des périodes · actions · plages horaires ── */}
@@ -854,92 +867,95 @@ export function PeriodesPanel({
             </button>
           </div>
         </div>
-        {/* Plages horaires : à droite du tableau, bascule dessous quand la place manque. */}
-        <div className="pr-hours">
-          <div
-            className="panel-subtitle"
-            style={{ fontSize: ".85rem", fontWeight: 500, whiteSpace: "nowrap" }}
-          >
-            Plages horaires{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
-          </div>
-          <div
-            className="defaults-row"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              gap: ".5rem",
-            }}
-          >
-            {/* Matin / Après-midi : grille « libellé | début | fin » → les deux lignes sont
-                alignées en colonnes, avec un interligne réduit (rowGap). */}
+        {/* Plages horaires : à droite du tableau, bascule dessous quand la place manque.
+            Les réglages appartiennent à l'exercice → bloc masqué sans exercice. */}
+        {currentExercice && (
+          <div className="pr-hours">
             <div
+              className="panel-subtitle"
+              style={{ fontSize: ".85rem", fontWeight: 500, whiteSpace: "nowrap" }}
+            >
+              Plages horaires{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
+            </div>
+            <div
+              className="defaults-row"
               style={{
-                display: "grid",
-                gridTemplateColumns: "auto auto auto",
-                columnGap: ".5rem",
-                rowGap: ".3rem",
-                alignItems: "center",
-                justifyContent: "start",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: ".5rem",
               }}
             >
-              <span style={timeLabelStyle}>Matin</span>
-              <TimeStepper
-                compact
-                value={morningStart}
-                onChange={(v) => {
-                  hoursTouchedRef.current = true;
-                  setOpeningSaved(false);
-                  setMorningStart(v);
+              {/* Matin / Après-midi : grille « libellé | début | fin » → les deux lignes sont
+                alignées en colonnes, avec un interligne réduit (rowGap). */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "auto auto auto",
+                  columnGap: ".5rem",
+                  rowGap: ".3rem",
+                  alignItems: "center",
+                  justifyContent: "start",
                 }}
-              />
-              <TimeStepper
-                compact
-                value={morningEnd}
-                onChange={(v) => {
-                  hoursTouchedRef.current = true;
-                  setOpeningSaved(false);
-                  setMorningEnd(v);
-                }}
-              />
-              <span style={timeLabelStyle}>Après-midi</span>
-              <TimeStepper
-                compact
-                value={afternoonStart}
-                onChange={(v) => {
-                  hoursTouchedRef.current = true;
-                  setOpeningSaved(false);
-                  setAfternoonStart(v);
-                }}
-              />
-              <TimeStepper
-                compact
-                value={afternoonEnd}
-                onChange={(v) => {
-                  hoursTouchedRef.current = true;
-                  setOpeningSaved(false);
-                  setAfternoonEnd(v);
-                }}
-              />
-            </div>
-            {/* Auto-save : statut, sur sa propre ligne sous les plages. */}
-            <div
-              style={{ display: "flex", alignItems: "center", gap: ".5rem", minHeight: ".75rem" }}
-            >
-              {openingError && (
-                <span className="field-error" style={{ display: "inline" }}>
-                  {openingError}
-                </span>
-              )}
-              {!openingError && pending && (
-                <span style={{ fontSize: ".78rem", color: "var(--muted)" }}>Enregistrement…</span>
-              )}
-              {!openingError && !pending && openingSaved && (
-                <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
-              )}
+              >
+                <span style={timeLabelStyle}>Matin</span>
+                <TimeStepper
+                  compact
+                  value={morningStart}
+                  onChange={(v) => {
+                    hoursTouchedRef.current = true;
+                    setOpeningSaved(false);
+                    setMorningStart(v);
+                  }}
+                />
+                <TimeStepper
+                  compact
+                  value={morningEnd}
+                  onChange={(v) => {
+                    hoursTouchedRef.current = true;
+                    setOpeningSaved(false);
+                    setMorningEnd(v);
+                  }}
+                />
+                <span style={timeLabelStyle}>Après-midi</span>
+                <TimeStepper
+                  compact
+                  value={afternoonStart}
+                  onChange={(v) => {
+                    hoursTouchedRef.current = true;
+                    setOpeningSaved(false);
+                    setAfternoonStart(v);
+                  }}
+                />
+                <TimeStepper
+                  compact
+                  value={afternoonEnd}
+                  onChange={(v) => {
+                    hoursTouchedRef.current = true;
+                    setOpeningSaved(false);
+                    setAfternoonEnd(v);
+                  }}
+                />
+              </div>
+              {/* Auto-save : statut, sur sa propre ligne sous les plages. */}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: ".5rem", minHeight: ".75rem" }}
+              >
+                {openingError && (
+                  <span className="field-error" style={{ display: "inline" }}>
+                    {openingError}
+                  </span>
+                )}
+                {!openingError && pending && (
+                  <span style={{ fontSize: ".78rem", color: "var(--muted)" }}>Enregistrement…</span>
+                )}
+                {!openingError && !pending && openingSaved && (
+                  <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {listError && (
@@ -948,16 +964,49 @@ export function PeriodesPanel({
         </div>
       )}
 
-      {/* ── Jours d'ouverture ──────────────────────────────────────────────── */}
-      <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-        Jours d&apos;ouverture
-      </div>
-      <div style={{ display: "flex", gap: ".55rem", alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}>
-          {DAYS.map((d) => (
+      {/* ── Jours d'ouverture (de l'exercice affiché — masqué sans exercice) ── */}
+      {currentExercice && (
+        <>
+          <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+            Jours d&apos;ouverture{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
+          </div>
+          <div style={{ display: "flex", gap: ".55rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}>
+              {DAYS.map((d) => (
+                <label
+                  key={d.key}
+                  title={d.full}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: ".3rem",
+                    cursor: "pointer",
+                    fontSize: ".62rem",
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    className="admin-cb"
+                    checked={activeDays.includes(d.key)}
+                    onChange={() => toggleDay(d.key)}
+                    style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+                  />
+                  {d.full}
+                </label>
+              ))}
+            </div>
+            <span
+              style={{
+                width: 1,
+                height: "1rem",
+                background: "var(--border)",
+                flexShrink: 0,
+                margin: "0 .2rem",
+                alignSelf: "center",
+              }}
+            />
             <label
-              key={d.key}
-              title={d.full}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -970,70 +1019,41 @@ export function PeriodesPanel({
               <input
                 type="checkbox"
                 className="admin-cb"
-                checked={activeDays.includes(d.key)}
-                onChange={() => toggleDay(d.key)}
+                checked={openOnHolidays}
+                onChange={(e) => {
+                  setOpenOnHolidays(e.target.checked);
+                  persistOpening({ openOnHolidays: e.target.checked });
+                }}
                 style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
               />
-              {d.full}
+              Jours fériés
             </label>
-          ))}
-        </div>
-        <span
-          style={{
-            width: 1,
-            height: "1rem",
-            background: "var(--border)",
-            flexShrink: 0,
-            margin: "0 .2rem",
-            alignSelf: "center",
-          }}
-        />
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: ".3rem",
-            cursor: "pointer",
-            fontSize: ".62rem",
-            fontWeight: 500,
-          }}
-        >
-          <input
-            type="checkbox"
-            className="admin-cb"
-            checked={openOnHolidays}
-            onChange={(e) => {
-              setOpenOnHolidays(e.target.checked);
-              persistOpening({ openOnHolidays: e.target.checked });
-            }}
-            style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-          />
-          Jours fériés
-        </label>
-        <label
-          title="Décoché : les jours de vacances scolaires sont hachurés et non réservables (agenda + réservations)."
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: ".3rem",
-            cursor: "pointer",
-            fontSize: ".62rem",
-            fontWeight: 500,
-          }}
-        >
-          <input
-            type="checkbox"
-            className="admin-cb"
-            checked={openOnSchoolHolidays}
-            onChange={(e) => {
-              setOpenOnSchoolHolidays(e.target.checked);
-              persistOpening({ openOnSchoolHolidays: e.target.checked });
-            }}
-            style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-          />
-          Vacances scolaires
-        </label>
-      </div>
+            <label
+              title="Décoché : les jours de vacances scolaires sont hachurés et non réservables (agenda + réservations)."
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: ".3rem",
+                cursor: "pointer",
+                fontSize: ".62rem",
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="checkbox"
+                className="admin-cb"
+                checked={openOnSchoolHolidays}
+                onChange={(e) => {
+                  setOpenOnSchoolHolidays(e.target.checked);
+                  persistOpening({ openOnSchoolHolidays: e.target.checked });
+                }}
+                style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+              />
+              Vacances scolaires
+            </label>
+          </div>
+        </>
+      )}
 
       {/* ── Modale exercice (création / édition) ───────────────────────────── */}
       {exoModalOpen && (

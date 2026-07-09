@@ -6,8 +6,8 @@ import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { type BookingCreateInput, bookingCreateSchema } from "@/schemas/booking";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
-import { openingForDate, resolveOpening } from "@/server/services/opening";
 import { getSession } from "@/server/guards";
+import { openingForDate } from "@/server/services/opening";
 import { getServiceDemandeurSettings } from "./demandeur-settings";
 import { deriveServiceModes } from "./service-modes";
 
@@ -382,14 +382,16 @@ export async function createUniqueBookingInTx(
   }
   // Disponibilité de la période du créneau (colonne « Dispo ») : pas encore ouverte → refus.
   await assertPeriodOpenForUser(tx, slot.periodId);
-  // Réglages d'ouverture RÉSOLUS par l'exercice couvrant la DATE RÉSERVÉE (repli
-  // service, cf. opening.ts) : jours ouvrés du délai + politique vacances scolaires.
+  // Réglages d'ouverture de l'exercice couvrant la DATE RÉSERVÉE — aucune
+  // couverture = FERMÉ (cf. opening.ts) : jours ouvrés du délai + vacances.
   const opening = await openingForDate(
     tx,
     slot.serviceId,
-    slot.service,
     slot.slotDate.toISOString().slice(0, 10),
   );
+  if (!opening) {
+    throw new BookingError("Cette date n'est couverte par aucun exercice du service.");
+  }
   // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai.
   const earliest = earliestBookableISO(
     slot.service.bookingDelay,
@@ -711,10 +713,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     visibleUnique = uniqueSlots.filter((s) =>
       s.parentSlotId ? recurVisibleIds.has(s.parentSlotId) : allowed(s.id),
     );
-    const visibleSlotIds = new Set([
-      ...recurVisibleIds,
-      ...visibleUnique.map((s) => s.id),
-    ]);
+    const visibleSlotIds = new Set([...recurVisibleIds, ...visibleUnique.map((s) => s.id)]);
     visibleBookings = bookings.filter((b) => visibleSlotIds.has(b.slotId));
   }
 
@@ -757,44 +756,34 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         })
       : []
   ).sort((a, b) => a.label.localeCompare(b.label));
-  // Réglages d'ouverture RÉSOLUS par exercice (surcharge ?? service, cf. opening.ts) :
+  // Réglages d'ouverture de chaque exercice (source unique, cf. opening.ts) :
   // la grille les applique à l'exercice couvrant chaque jour affiché.
   const exercices = exerciceRows.map((e) => ({
     id: e.id,
     label: e.label,
     dateStart: toDateInput(e.dateStart),
     dateEnd: toDateInput(e.dateEnd),
-    opening: (() => {
-      const o = resolveOpening(service, e);
-      return {
-        activeDays: o.activeDays,
-        openOnHolidays: o.openOnHolidays,
-        openOnSchoolHolidays: o.openOnSchoolHolidays,
-        morningStart: o.morningStart,
-        morningEnd: o.morningEnd,
-        afternoonStart: o.afternoonStart,
-        afternoonEnd: o.afternoonEnd,
-      };
-    })(),
+    opening: {
+      activeDays: e.activeDays,
+      openOnHolidays: e.openOnHolidays,
+      openOnSchoolHolidays: e.openOnSchoolHolidays,
+      morningStart: e.morningStart,
+      morningEnd: e.morningEnd,
+      afternoonStart: e.afternoonStart,
+      afternoonEnd: e.afternoonEnd,
+    },
   }));
 
   return {
     service: {
       id: service.id,
       label: service.label,
-      activeDays: service.activeDays,
       bookingDelay: service.bookingDelay,
-      morningStart: service.morningStart,
-      morningEnd: service.morningEnd,
-      afternoonStart: service.afternoonStart,
-      afternoonEnd: service.afternoonEnd,
       capacity: service.capacity,
       semaineAb: service.semaineAb,
       themesMode: service.themesMode,
       maxReservations: service.maxReservations,
       maxReservationsPeriod: service.maxReservationsPeriod,
-      openOnHolidays: service.openOnHolidays,
-      openOnSchoolHolidays: service.openOnSchoolHolidays,
       showPreviousExercices: service.showPreviousExercices,
       gaugeAccompagnants: service.gaugeAccompagnants,
       validationBloquante: service.validationBloquante,
@@ -845,13 +834,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     themes: themeRows.map((t) => t.label),
     // Libellé du demandeur de l'usager (bandeau debug, cf. legacy #dem-info).
     demandeurLabel: user?.demandeur?.label ?? null,
-    // Ouvert pendant les vacances scolaires ? Combinaison SERVICE ∧ DEMANDEUR EFFECTIF :
-    // il faut que les deux acceptent les vacances pour que les jours de vacances restent
-    // réservables. (Demandeur effectif = le sien, sinon celui de sa structure ; défaut true
-    // si aucun. Service : défaut false.)
-    openOnSchoolHolidays: service.openOnSchoolHolidays && effectiveOpenOnSchoolHolidays(user),
-    // Part DEMANDEUR seule : la grille la combine avec la politique de l'exercice
-    // couvrant chaque date (les réglages par exercice ne portent que le côté service).
+    // Vacances scolaires — part DEMANDEUR EFFECTIF seule : la grille la combine (∧)
+    // avec la politique de l'exercice couvrant chaque date. (Il n'y a plus de part
+    // « service » : hors exercice, tout est fermé.)
     demandeurOpenOnSchoolHolidays: effectiveOpenOnSchoolHolidays(user),
     // Plages de vacances scolaires (YYYY-MM-DD) de la zone configurée.
     schoolHolidays,

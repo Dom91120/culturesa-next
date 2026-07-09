@@ -174,24 +174,17 @@ model Service {
   validationBloquante   Boolean    @default(false)
   maxReservations       Int        @default(1)
   maxReservationsPeriod Int        @default(1)
-  activeDays            String     @default("lun,mar,mer,jeu,ven")
   position              Int        @default(0)
   createdAt             DateTime   @default(now()) @db.Timestamptz
 
   // Durée (min) et capacité (places) par défaut des créneaux du service.
   // Fusion des anciens champs ponct*/recur* (un seul jeu de valeurs par défaut).
+  // (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — vivent
+  // désormais sur CHAQUE EXERCICE, cf. Exercice + opening.ts.)
   duration              Int        @default(60)
   capacity              Int        @default(1)
-  morningStart          String     @default("09:00")
-  morningEnd            String     @default("12:00")
-  afternoonStart        String     @default("14:00")
-  afternoonEnd          String     @default("18:00")
   icon                  String?
   bookingDelay          Int        @default(0)
-  openOnHolidays        Boolean    @default(false)
-  // Vacances scolaires : disponibilité des jours de vacances scolaires (zone configurée).
-  // false (défaut) = jours de vacances hachurés / non réservables (agenda + réservations).
-  openOnSchoolHolidays  Boolean    @default(false)
   showPreviousExercices Boolean    @default(false)
   semaineAb             Boolean    @default(false)
   themesMode            ThemesMode @default(libre)
@@ -285,16 +278,16 @@ model Exercice {
   dateEnd   DateTime?    @db.Date
   createdAt DateTime     @default(now()) @db.Timestamptz
 
-  // Réglages d'ouverture PAR EXERCICE — null = hérite de la valeur du service
-  // (résolution unique : resolveOpening, server/services/opening.ts). Édités dans
-  // Paramètres > Périodes et réservations, copiés par la bascule d'exercice.
-  morningStart         String?
-  morningEnd           String?
-  afternoonStart       String?
-  afternoonEnd         String?
-  activeDays           String?
-  openOnHolidays       Boolean?
-  openOnSchoolHolidays Boolean?
+  // Réglages d'ouverture DE L'EXERCICE — source unique (le service n'en porte plus).
+  // Édités dans Paramètres > Périodes et réservations, copiés par la bascule
+  // d'exercice. Une date couverte par aucun exercice est FERMÉE (opening.ts).
+  morningStart         String  @default("09:00")
+  morningEnd           String  @default("12:00")
+  afternoonStart       String  @default("14:00")
+  afternoonEnd         String  @default("18:00")
+  activeDays           String  @default("lun,mar,mer,jeu,ven")
+  openOnHolidays       Boolean @default(false)
+  openOnSchoolHolidays Boolean @default(false)
 
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   periods Period[]

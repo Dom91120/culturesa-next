@@ -114,6 +114,18 @@ export function coveringForYmd<T extends { dateStart: string; dateEnd: string }>
   return items.find((e) => e.dateStart && e.dateEnd && e.dateStart <= d && d <= e.dateEnd) ?? null;
 }
 
+/** Ouverture « FERMÉ » : repli des dates couvertes par aucun exercice (le service
+ * ne porte plus de réglages d'ouverture) — aucun jour actif, aucune plage. */
+export const CLOSED_OPENING: ExerciceOpening = {
+  activeDays: "",
+  openOnHolidays: false,
+  openOnSchoolHolidays: false,
+  morningStart: "00:00",
+  morningEnd: "00:00",
+  afternoonStart: "00:00",
+  afternoonEnd: "00:00",
+};
+
 export type Pointage = "present" | "absent" | null;
 
 // Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.

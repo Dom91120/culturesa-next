@@ -1,4 +1,5 @@
 import { prisma } from "@/server/db";
+import { openingForDate } from "@/server/services/opening";
 
 /**
  * Une ligne de la matrice service × demandeur : le demandeur (référentiel
@@ -42,8 +43,9 @@ export async function getServiceDemandeurSettings(
 /**
  * Une ligne de la matrice enrichie pour le bandeau debug admin :
  *   - `label`                : libellé du demandeur.
- *   - `openOnHolidays`       : ouvert les jours fériés (niveau SERVICE, donc même
- *                              valeur sur toutes les lignes).
+ *   - `openOnHolidays`       : ouvert les jours fériés (niveau EXERCICE — on lit
+ *                              l'exercice couvrant AUJOURD'HUI, même valeur sur
+ *                              toutes les lignes ; hors exercice = fermé).
  *   - `openOnSchoolHolidays` : ouvert pendant les vacances scolaires (niveau
  *                              DEMANDEUR, propre à chaque ligne).
  */
@@ -61,8 +63,9 @@ export type DemandeurSettingLabeledRow = DemandeurSettingRow & {
 export async function getServiceDemandeurSettingsLabeled(
   serviceId: string,
 ): Promise<DemandeurSettingLabeledRow[]> {
-  const [service, rows] = await Promise.all([
-    prisma.service.findUnique({ where: { id: serviceId }, select: { openOnHolidays: true } }),
+  const today = new Date().toISOString().slice(0, 10);
+  const [opening, rows] = await Promise.all([
+    openingForDate(prisma, serviceId, today),
     prisma.serviceDemandeurSettings.findMany({
       where: { serviceId },
       select: {
@@ -76,7 +79,7 @@ export async function getServiceDemandeurSettingsLabeled(
       },
     }),
   ]);
-  const openOnHolidays = service?.openOnHolidays ?? false;
+  const openOnHolidays = opening?.openOnHolidays ?? false;
   return rows
     .map((r) => ({
       demandeurId: r.demandeurId,

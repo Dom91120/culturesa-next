@@ -49,14 +49,14 @@ export type ExerciceRow = {
   type: ExerciceType;
   dateStart: Date | null;
   dateEnd: Date | null;
-  // Surcharges d'ouverture par exercice (null = hérite du service, cf. opening.ts).
-  morningStart: string | null;
-  morningEnd: string | null;
-  afternoonStart: string | null;
-  afternoonEnd: string | null;
-  activeDays: string | null;
-  openOnHolidays: boolean | null;
-  openOnSchoolHolidays: boolean | null;
+  // Réglages d'ouverture DE l'exercice (unique porteur, cf. opening.ts).
+  morningStart: string;
+  morningEnd: string;
+  afternoonStart: string;
+  afternoonEnd: string;
+  activeDays: string;
+  openOnHolidays: boolean;
+  openOnSchoolHolidays: boolean;
 };
 
 const EXERCICE_SELECT = {
@@ -420,37 +420,9 @@ export function parseActiveDays(raw: string): string[] {
   return DAYS.filter((d) => set.has(d));
 }
 
-/** Lit la config d'ouverture (jours + fériés + plages horaires) d'un service. */
-export async function getServiceOpeningConfig(
-  serviceId: string,
-): Promise<ServiceOpeningConfig | null> {
-  const s = await prisma.service.findUnique({
-    where: { id: serviceId },
-    select: {
-      activeDays: true,
-      openOnHolidays: true,
-      openOnSchoolHolidays: true,
-      morningStart: true,
-      morningEnd: true,
-      afternoonStart: true,
-      afternoonEnd: true,
-    },
-  });
-  if (!s) return null;
-  return {
-    activeDays: parseActiveDays(s.activeDays),
-    openOnHolidays: s.openOnHolidays,
-    openOnSchoolHolidays: s.openOnSchoolHolidays,
-    morningStart: s.morningStart,
-    morningEnd: s.morningEnd,
-    afternoonStart: s.afternoonStart,
-    afternoonEnd: s.afternoonEnd,
-  };
-}
-
 /**
- * Enregistre la config d'ouverture sur UN EXERCICE (surcharges des défauts du
- * service, cf. opening.ts). Anti-IDOR : l'exercice doit appartenir au service.
+ * Enregistre la config d'ouverture d'UN EXERCICE (unique porteur des réglages,
+ * cf. opening.ts). Anti-IDOR : l'exercice doit appartenir au service.
  */
 export async function saveExerciceOpeningConfig(
   serviceId: string,
@@ -465,26 +437,6 @@ export async function saveExerciceOpeningConfig(
   const activeDays = DAYS.filter((d) => config.activeDays.includes(d)).join(",");
   await prisma.exercice.update({
     where: { id: exerciceId },
-    data: {
-      activeDays,
-      openOnHolidays: config.openOnHolidays,
-      openOnSchoolHolidays: config.openOnSchoolHolidays,
-      morningStart: config.morningStart,
-      morningEnd: config.morningEnd,
-      afternoonStart: config.afternoonStart,
-      afternoonEnd: config.afternoonEnd,
-    },
-  });
-}
-
-/** Enregistre la config d'ouverture d'un service (activeDays sérialisé « lun,mar,… »). */
-export async function saveServiceOpeningConfig(
-  serviceId: string,
-  config: ServiceOpeningConfig,
-): Promise<void> {
-  const activeDays = DAYS.filter((d) => config.activeDays.includes(d)).join(",");
-  await prisma.service.update({
-    where: { id: serviceId },
     data: {
       activeDays,
       openOnHolidays: config.openOnHolidays,

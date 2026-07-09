@@ -4,27 +4,20 @@ import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
-import { resolveOpening } from "@/server/services/opening";
 import { deriveServiceModes } from "@/server/services/service-modes";
 import { AgendaGrid } from "./agenda-grid";
 
 export default async function AgendaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // (Les réglages d'ouverture sont portés par chaque exercice, cf. plus bas.)
   const service = await prisma.service.findUnique({
     where: { id },
     select: {
       id: true,
       label: true,
-      activeDays: true,
-      morningStart: true,
-      morningEnd: true,
-      afternoonStart: true,
-      afternoonEnd: true,
       capacity: true,
       semaineAb: true,
       themesMode: true,
-      openOnHolidays: true,
-      openOnSchoolHolidays: true,
       showPreviousExercices: true,
       gaugeAccompagnants: true,
     },
@@ -232,24 +225,21 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         })
       : []
   ).sort((a, b) => a.label.localeCompare(b.label));
-  const exercices = exerciceRows.map((e) => {
-    const o = resolveOpening(service, e);
-    return {
-      id: e.id,
-      label: e.label,
-      dateStart: toDateInput(e.dateStart),
-      dateEnd: toDateInput(e.dateEnd),
-      opening: {
-        activeDays: o.activeDays,
-        openOnHolidays: o.openOnHolidays,
-        openOnSchoolHolidays: o.openOnSchoolHolidays,
-        morningStart: o.morningStart,
-        morningEnd: o.morningEnd,
-        afternoonStart: o.afternoonStart,
-        afternoonEnd: o.afternoonEnd,
-      },
-    };
-  });
+  const exercices = exerciceRows.map((e) => ({
+    id: e.id,
+    label: e.label,
+    dateStart: toDateInput(e.dateStart),
+    dateEnd: toDateInput(e.dateEnd),
+    opening: {
+      activeDays: e.activeDays,
+      openOnHolidays: e.openOnHolidays,
+      openOnSchoolHolidays: e.openOnSchoolHolidays,
+      morningStart: e.morningStart,
+      morningEnd: e.morningEnd,
+      afternoonStart: e.afternoonStart,
+      afternoonEnd: e.afternoonEnd,
+    },
+  }));
 
   // En mode thèmes "liste", la modale d'édition propose un <select> des thèmes du
   // service (sinon champ libre). On ne charge la liste qu'au besoin.

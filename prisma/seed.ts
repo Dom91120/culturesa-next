@@ -143,6 +143,31 @@ async function main() {
     await prisma.service.upsert({ where: { id: s.id }, update: {}, create: s });
   }
 
+  // ── Exercices par défaut (un « 2025-2026 » par service) ──
+  // Les réglages d'ouverture (plages, jours actifs, fériés, vacances) sont portés
+  // par l'EXERCICE (défauts du schéma) ; une date hors exercice est fermée — les
+  // périodes doivent donc être rattachées à un exercice pour être utilisables.
+  const exerciceByService = new Map<string, number>();
+  for (const s of services) {
+    const existing = await prisma.exercice.findFirst({
+      where: { serviceId: s.id, label: "2025-2026" },
+      select: { id: true },
+    });
+    const exo =
+      existing ??
+      (await prisma.exercice.create({
+        data: {
+          serviceId: s.id,
+          label: "2025-2026",
+          type: "scolaire",
+          dateStart: new Date("2025-09-01"),
+          dateEnd: new Date("2026-08-31"),
+        },
+        select: { id: true },
+      }));
+    exerciceByService.set(s.id, exo.id);
+  }
+
   // ── Périodes par défaut (année scolaire 2025-2026) ──
   // Rattachées à CHAQUE service : pas de période globale (serviceId null).
   // svc_001 → ids 1-3, svc_002 → ids 4-6 (les réservations de démo ciblent l'id 1).
@@ -178,6 +203,9 @@ async function main() {
         create: {
           id: periodId,
           serviceId: s.id,
+          // Rattachement à l'exercice du service (les réglages d'ouverture et la
+          // visibilité des grilles en dépendent — hors exercice = fermé).
+          exerciceId: exerciceByService.get(s.id) ?? null,
           label: p.label,
           dateStart: new Date(p.dateStart),
           dateEnd: new Date(p.dateEnd),

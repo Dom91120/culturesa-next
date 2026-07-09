@@ -71,26 +71,26 @@ async function main() {
     `period_holidays : ${phInserted} jours fériés insérés sur ${periods.length} périodes.`,
   );
 
-  // 2) Supprimer les miroirs actifs tombant un férié (services fermés les fériés),
-  //    seulement s'ils n'ont AUCUNE réservation (sinon on alerte sans supprimer).
-  const closedServices = await prisma.service.findMany({
-    where: { openOnHolidays: false },
-    select: { id: true },
-  });
-  const closedIds = closedServices.map((s) => s.id);
+  // 2) Supprimer les miroirs actifs tombant un férié quand l'EXERCICE de leur
+  //    période est fermé les fériés (openOnHolidays porté par l'exercice ; sans
+  //    exercice = fermé), seulement s'ils n'ont AUCUNE réservation (sinon alerte).
   const mirrors = await prisma.slot.findMany({
     where: {
-      serviceId: { in: closedIds },
       slotType: "unique",
       state: "actif",
       parentSlotId: { not: null },
     },
-    select: { id: true, slotDate: true },
+    select: {
+      id: true,
+      slotDate: true,
+      period: { select: { exercice: { select: { openOnHolidays: true } } } },
+    },
   });
   let deleted = 0;
   const kept: string[] = [];
   for (const m of mirrors) {
     if (!m.slotDate) continue;
+    if (m.period?.exercice?.openOnHolidays) continue;
     const ymd = iso(m.slotDate);
     const yearHols = new Set(frenchHolidays(m.slotDate.getUTCFullYear()).map((h) => h.date));
     if (!yearHols.has(ymd)) continue;
