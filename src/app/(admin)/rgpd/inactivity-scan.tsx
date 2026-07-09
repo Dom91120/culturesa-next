@@ -427,6 +427,7 @@ export function InactivityScan({
             {total > 0 &&
               pageRows.length < PAGE_SIZE &&
               Array.from({ length: PAGE_SIZE - pageRows.length }, (_, i) => (
+                // biome-ignore lint/a11y/noAriaHiddenOnFocusable: ligne purement décorative (aucun contenu focusable) — le masquage aux lecteurs d'écran est voulu
                 <tr key={`filler-${i}`} aria-hidden="true">
                   <td colSpan={5}>&nbsp;</td>
                 </tr>
