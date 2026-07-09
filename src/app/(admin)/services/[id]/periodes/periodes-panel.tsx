@@ -1237,19 +1237,21 @@ export function PeriodesPanel({
                 Par usager, portés par l'EXERCICE (« par an » = sur l'exercice). */}
             <div
               className="panel-subtitle"
-              style={{ fontSize: ".85rem", fontWeight: 500, marginTop: ".9rem" }}
+              style={{ fontSize: ".85rem", fontWeight: 500, marginTop: "2.15rem" }}
             >
-              Maximums{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
+              Réservations maxi{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
             </div>
-            <div style={{ display: "flex", gap: "2.5rem", flexWrap: "wrap" }}>
+            {/* Une ligne par compteur (− n + libellé), interligne calé sur celui des
+                jours d'ouverture (.45rem). */}
+            <div style={{ display: "flex", flexDirection: "column", gap: ".45rem" }}>
               <MaxStepper
-                label="Maximum par période"
+                label="par période"
                 value={maxReservationsPeriod}
                 onMinus={() => stepMaxima("maxReservationsPeriod", -1)}
                 onPlus={() => stepMaxima("maxReservationsPeriod", 1)}
               />
               <MaxStepper
-                label="Maximum par an"
+                label="par an"
                 value={maxReservations}
                 onMinus={() => stepMaxima("maxReservations", -1)}
                 onPlus={() => stepMaxima("maxReservations", 1)}
@@ -1605,7 +1607,8 @@ export function PeriodesPanel({
 }
 
 /** Compteur « − n + » des maximums de réservation (repris du panneau Réservations,
- *  dont le bloc a déménagé ici — portée par exercice). Minimum 1. */
+ *  dont le bloc a déménagé ici — portée par exercice). Minimum 1.
+ *  Compteur À GAUCHE du libellé, sur une seule ligne, en taille réduite. */
 function MaxStepper({
   label,
   value,
@@ -1618,62 +1621,49 @@ function MaxStepper({
   onPlus: () => void;
 }) {
   const round: React.CSSProperties = {
-    width: 18,
-    height: 18,
+    width: 14,
+    height: 14,
     borderRadius: "50%",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     padding: 0,
-    fontSize: ".82rem",
+    fontSize: ".68rem",
     lineHeight: 1,
   };
   return (
-    <div>
-      <div
+    <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        style={round}
+        onClick={onMinus}
+        disabled={value <= 1}
+        aria-label={`${label} : diminuer`}
+      >
+        −
+      </button>
+      <span
         style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          marginBottom: ".3rem",
+          fontSize: ".82rem",
+          fontWeight: 700,
+          color: "var(--warn)",
+          minWidth: "1.5ch",
           textAlign: "center",
         }}
       >
-        {label}
-      </div>
-      <div
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: ".5rem" }}
+        {value}
+      </span>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        style={round}
+        onClick={onPlus}
+        aria-label={`${label} : augmenter`}
       >
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={round}
-          onClick={onMinus}
-          disabled={value <= 1}
-          aria-label={`${label} : diminuer`}
-        >
-          −
-        </button>
-        <span
-          style={{
-            fontSize: "1rem",
-            fontWeight: 700,
-            color: "var(--warn)",
-            minWidth: "1.5ch",
-            textAlign: "center",
-          }}
-        >
-          {value}
-        </span>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={round}
-          onClick={onPlus}
-          aria-label={`${label} : augmenter`}
-        >
-          +
-        </button>
-      </div>
+        +
+      </button>
+      <span style={{ fontSize: ".78rem", color: "var(--muted)" }}>{label}</span>
     </div>
   );
 }
