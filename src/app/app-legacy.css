@@ -425,7 +425,9 @@ main {
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-header {
   height: 60.8px;
 }
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap)
+  #service-sidebar
+  button,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #sidebar-admin-btn,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn {
   text-align: center !important;
@@ -514,7 +516,9 @@ main {
   min-height: 34px;
   box-sizing: border-box;
 }
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap)
+  #service-sidebar
+  button,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #sidebar-admin-btn,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn {
   justify-content: center;
@@ -542,17 +546,23 @@ main {
 }
 
 /* Mode réduit : coins arrondis sur les 4 côtés (la bordure de base reste la même) */
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap)
+  #service-sidebar
+  button,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #sidebar-admin-btn,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn {
   border-radius: var(--rad-sm) !important;
 }
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #service-sidebar button.active,
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-compte-btn.active {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap)
+  #service-sidebar
+  button.active,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap)
+  .sidebar-compte-btn.active {
   border-left-color: transparent;
   border-bottom-color: var(--accent);
 }
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-admin-btn.active {
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap)
+  .sidebar-admin-btn.active {
   border-left-color: transparent !important;
   border-bottom-color: var(--warn) !important;
 }

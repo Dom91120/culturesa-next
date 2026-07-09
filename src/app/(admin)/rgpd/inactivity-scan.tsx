@@ -411,9 +411,7 @@ export function InactivityScan({
                     </span>{" "}
                     ·{" "}
                     <span
-                      style={
-                        eligible ? { color: "var(--danger)", fontWeight: 600 } : undefined
-                      }
+                      style={eligible ? { color: "var(--danger)", fontWeight: 600 } : undefined}
                     >
                       {fmtDuration(u.daysInactive)}
                     </span>

@@ -148,9 +148,9 @@ export function BackupsPanel({
           lineHeight: 1.5,
         }}
       >
-        Dumps PostgreSQL complets (schéma + données), restaurables tels quels. En production,
-        un export automatique est créé chaque nuit à 02h00 (rotation : 7 jours) ; les exports
-        manuels et téléversés ne sont pas soumis à la rotation.
+        Dumps PostgreSQL complets (schéma + données), restaurables tels quels. En production, un
+        export automatique est créé chaque nuit à 02h00 (rotation : 7 jours) ; les exports manuels
+        et téléversés ne sont pas soumis à la rotation.
       </p>
 
       {!toolsAvailable && (
@@ -162,9 +162,9 @@ export function BackupsPanel({
             lineHeight: 1.5,
           }}
         >
-          ⚠️ Outils PostgreSQL indisponibles (ni pg_dump/psql locaux, ni conteneur Docker
-          joignable) : la création d'export et la restauration sont désactivées. Le
-          téléchargement des fichiers existants reste possible.
+          ⚠️ Outils PostgreSQL indisponibles (ni pg_dump/psql locaux, ni conteneur Docker joignable)
+          : la création d'export et la restauration sont désactivées. Le téléchargement des fichiers
+          existants reste possible.
         </p>
       )}
 
@@ -301,8 +301,8 @@ export function BackupsPanel({
         }}
       >
         Remplace <strong>l'intégralité</strong> de la base par le contenu du dump sélectionné
-        (tout-ou-rien : en cas d'erreur, la base actuelle est conservée). Choisissez un export
-        de la liste ci-dessus ou téléversez un fichier <code>.sql</code> / <code>.sql.gz</code>.
+        (tout-ou-rien : en cas d'erreur, la base actuelle est conservée). Choisissez un export de la
+        liste ci-dessus ou téléversez un fichier <code>.sql</code> / <code>.sql.gz</code>.
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>

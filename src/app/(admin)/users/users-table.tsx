@@ -282,10 +282,7 @@ export function UsersTable({
                   <td style={{ whiteSpace: "nowrap" }}>{formatTel(u.tel)}</td>
                   {/* nowrap + maxWidth : ellipse au lieu de replier sur 2 lignes (hauteur
                       de ligne constante) ; libellé complet en infobulle. */}
-                  <td
-                    style={{ whiteSpace: "nowrap", maxWidth: 220 }}
-                    title={affiliation(u)}
-                  >
+                  <td style={{ whiteSpace: "nowrap", maxWidth: 220 }} title={affiliation(u)}>
                     {affiliation(u)}
                   </td>
                   <td>

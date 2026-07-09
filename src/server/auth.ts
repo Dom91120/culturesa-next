@@ -104,11 +104,7 @@ export const auth = betterAuth({
       // `ctx.request` n'existe que pour les requêtes HTTP publiques : les appels
       // serveur internes (auth.api.signUpEmail par un administrateur, cf.
       // users/actions.ts) n'ont pas de captcha à présenter et en sont exemptés.
-      if (
-        ctx.path === "/sign-up/email" &&
-        ctx.request &&
-        process.env.CAPTCHA_DISABLED !== "true"
-      ) {
+      if (ctx.path === "/sign-up/email" && ctx.request && process.env.CAPTCHA_DISABLED !== "true") {
         const ok = verifyCaptcha(
           ctx.headers?.get("x-captcha-token"),
           ctx.headers?.get("x-captcha-answer"),
