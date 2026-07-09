@@ -815,7 +815,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       themesMode: service.themesMode,
       maxReservations: service.maxReservations,
       maxReservationsPeriod: service.maxReservationsPeriod,
-      showPreviousExercices: service.showPreviousExercices,
       gaugeAccompagnants: service.gaugeAccompagnants,
       validationBloquante: service.validationBloquante,
     },

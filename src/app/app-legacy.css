@@ -1372,9 +1372,16 @@ textarea.theme-pending:focus::placeholder {
 }
 .pr-head {
   display: flex;
-  align-items: baseline;
+  /* Centrage vertical : la nav ◀ … ▶ est un flex centré dont la « baseline » exportée
+     est celle des flèches — align-items:baseline décalait « Exercice » du libellé
+     d'année. Le centrage + line-height:1 sur les deux textes harmonise la ligne. */
+  align-items: center;
   gap: 0 0.5rem;
   flex-wrap: wrap;
+}
+.pr-head > span:first-child,
+.pr-head .ex-nav-label {
+  line-height: 1;
 }
 .pr-head > .pr-title {
   margin-bottom: 0;

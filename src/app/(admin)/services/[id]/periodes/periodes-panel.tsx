@@ -598,16 +598,15 @@ export function PeriodesPanel({
 
   return (
     <div className="panel">
-      {/* Ligne de titre : « Exercices » + case « Afficher les exercices précédents »
-          alignée à droite sur la même ligne. */}
+      {/* Ligne de titre : « Périodes » suivi (aligné à gauche) de la case
+          « Afficher les exercices précédents », espacée de 2.5rem. */}
       <div
         className="panel-title pr-title"
         style={{
           fontWeight: 500,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
+          gap: "2.5rem",
           flexWrap: "wrap",
           marginBottom: 0,
         }}
@@ -656,17 +655,20 @@ export function PeriodesPanel({
         {/* Colonne gauche (tableau + bouton Ajouter) : la colonne « Plages horaires »
             bascule dessous quand la largeur manque (flex-wrap de #periods-row). */}
         <div className="pr-left">
-          {/* Navigation d'exercice, sur 2 lignes au-dessus du sous-titre « Périodes … » :
-              1) « Exercice ◀ … ▶ » — 2) type + dates + ✏️ (+ 🗑️ sans période). */}
+          {/* Navigation d'exercice, sur 3 lignes au-dessus du sous-titre « Périodes … » :
+              1) « Exercice ◀ … ▶ » — 2) type + dates + ✏️ (+ 🗑️) — 3) case usagers.
+              Rythme vertical CALQUÉ sur la colonne « Plages horaires » d'en face :
+              ligne 1 = hauteur du sous-titre (.85rem × 1.5), puis .75rem d'écart,
+              lignes 2 et 3 = 17px (TimeStepper compact) espacées de .3rem (rowGap). */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: ".3rem",
-              margin: "2rem 0 1rem",
+              gap: 0,
+              margin: "2rem 0 0",
             }}
           >
-            <div className="pr-head">
+            <div className="pr-head" style={{ minHeight: "calc(.85rem * 1.5)" }}>
               {/* Libellé de la ligne, à gauche de la navigation ◀ … ▶. */}
               <span style={{ fontSize: ".85rem", fontWeight: 500 }}>Exercice</span>
               {hasExercices ? (
@@ -714,9 +716,18 @@ export function PeriodesPanel({
               )}
             </div>
 
-            {/* Ligne 2 : type + dates de l'exercice + actions (édition / suppression). */}
+            {/* Ligne 2 : type + dates de l'exercice + actions (édition / suppression) —
+                hauteur 17px alignée sur la ligne « Matin » d'en face. */}
             {currentExercice && (
-              <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: ".5rem",
+                  height: 17,
+                  marginTop: ".75rem",
+                }}
+              >
                 {(currentExercice.dateStart || currentExercice.dateEnd) && (
                   <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
                     {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
@@ -731,8 +742,11 @@ export function PeriodesPanel({
                   style={{
                     borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
                     color: "var(--accent)",
-                    padding: ".1rem .3rem",
+                    padding: "0 .3rem",
                     fontSize: ".62rem",
+                    height: 17,
+                    display: "inline-flex",
+                    alignItems: "center",
                   }}
                 >
                   ✏️
@@ -748,8 +762,11 @@ export function PeriodesPanel({
                     style={{
                       borderColor: "rgba(220,80,80,.4)",
                       color: "#e05555",
-                      padding: ".18rem .5rem",
+                      padding: "0 .5rem",
                       fontSize: ".62rem",
+                      height: 17,
+                      display: "inline-flex",
+                      alignItems: "center",
                     }}
                   >
                     🗑️
@@ -759,7 +776,8 @@ export function PeriodesPanel({
             )}
 
             {/* Ligne 3 : « Affiché aux utilisateurs » — l'UNIQUE exercice du service
-                accessible côté usager (cocher décoche l'exercice précédemment visible). */}
+                accessible côté usager (cocher décoche l'exercice précédemment visible).
+                Hauteur 17px alignée sur la ligne « Après-midi » d'en face. */}
             {currentExercice && (
               <label
                 title="Un seul exercice par service peut être affiché : c'est celui que voient les utilisateurs dans Réservations."
@@ -771,6 +789,8 @@ export function PeriodesPanel({
                   fontSize: ".62rem",
                   fontWeight: 500,
                   width: "fit-content",
+                  height: 17,
+                  marginTop: ".3rem",
                 }}
               >
                 <input
@@ -788,8 +808,17 @@ export function PeriodesPanel({
 
           <div className="pr-editor">
             {/* Sous-titre discret entre « Exercices » et le tableau des périodes,
-                suffixé du libellé de l'exercice affiché. */}
-            <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+                suffixé du libellé de l'exercice affiché. marginTop = somme des espaces
+                de la colonne d'en face sous « Après-midi » (gap .5rem + ligne de statut
+                .75rem + marge .9rem) → aligné sur « Jours d'ouverture … ». */}
+            <div
+              className="panel-subtitle"
+              style={{
+                fontSize: ".85rem",
+                fontWeight: 500,
+                marginTop: "calc(.5rem + .75rem + .9rem)",
+              }}
+            >
               Périodes{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
             </div>
             {visiblePeriods.length > 0 ? (
@@ -1027,8 +1056,18 @@ export function PeriodesPanel({
             >
               Jours d&apos;ouverture{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
             </div>
-            {/* 2 lignes : lundi → vendredi, puis samedi + dimanche + fériés + vacances. */}
-            <div style={{ display: "flex", flexDirection: "column", gap: ".45rem" }}>
+            {/* 2 lignes : lundi → vendredi, puis samedi + dimanche + fériés + vacances.
+                paddingTop = padding haut des th du tableau d'en face (.25rem) → la ligne
+                lun-ven est centrée à la même hauteur que « Coul Étiq Libellé … »
+                (padding et non margin : la marge fusionnerait avec celle du sous-titre). */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: ".45rem",
+                paddingTop: ".25rem",
+              }}
+            >
               <div
                 style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}
               >
