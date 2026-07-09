@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db";
 import type { DatedSession } from "@/server/services/editions";
+import { currentExerciceIdForService } from "@/server/services/exercice";
 
 // Plage de dates partagée par les écrans « Plannings » et « Pointages » : vue
 // Hebdomadaire / Mensuelle / par Période (> 1 mois). Tout en UTC (cf. slots /
@@ -84,8 +85,10 @@ export type EditionExerciceOption = EditionExercice & { id: number; periodIds: n
 
 /**
  * Exercices proposés au sélecteur des Éditions et exercice sélectionné.
- * Éligibles = exercices ayant des périodes ACTIVES, + celles DÉSACTIVÉES si le service
- * « affiche les exercices précédents » (même règle que l'agenda). Défaut = le plus récent.
+ * Éligibles = l'exercice COURANT, + les exercices passés (non archivés) si le service
+ * « affiche les exercices précédents » (même règle que l'agenda ; les périodes des
+ * exercices passés restent « actif » depuis la simplification des états).
+ * Défaut = le plus récent.
  */
 export async function resolveEditionExercice(
   serviceId: string,
@@ -95,11 +98,13 @@ export async function resolveEditionExercice(
     where: { id: serviceId },
     select: { showPreviousExercices: true },
   });
-  const states: ("actif" | "desactive")[] = svc?.showPreviousExercices
-    ? ["actif", "desactive"]
-    : ["actif"];
+  const currentExoId = await currentExerciceIdForService(serviceId);
   const periods = await prisma.period.findMany({
-    where: { serviceId, state: { in: states } },
+    where: {
+      serviceId,
+      state: "actif",
+      ...(!svc?.showPreviousExercices && currentExoId != null ? { exerciceId: currentExoId } : {}),
+    },
     select: {
       id: true,
       exercice: { select: { id: true, label: true, type: true, dateStart: true, dateEnd: true } },

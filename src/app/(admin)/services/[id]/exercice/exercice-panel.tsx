@@ -160,8 +160,9 @@ export function ExercicePanel({ serviceId, data }: Props) {
           <div className="panel" style={columnStyle}>
             <div className="panel-title">Création d&apos;un nouvel exercice</div>
             <p style={{ fontSize: ".85rem", color: "var(--muted)", marginTop: 6 }}>
-              Pour chaque période active : une nouvelle période sera créée avec des dates décalées
-              d&apos;un an. L&apos;originale sera désactivée mais conservée.
+              Pour chaque période de l&apos;exercice en cours : une nouvelle période sera créée avec
+              des dates décalées d&apos;un an. L&apos;originale est conservée, et si l&apos;exercice
+              en cours était « Affiché aux utilisateurs », le nouvel exercice prend le relais.
             </p>
             <div
               style={{
@@ -326,9 +327,9 @@ export function ExercicePanel({ serviceId, data }: Props) {
           </div>
           <p style={{ fontSize: ".85rem", lineHeight: 1.5, marginBottom: ".75rem" }}>
             Vous êtes sur le point de créer <strong>l&apos;exercice {data.nextName}</strong>. Les
-            périodes actives de l&apos;exercice actuel seront recréées avec les dates décalées
-            d&apos;un an, et l&apos;exercice en cours sera désactivé (mais conservé dans
-            l&apos;historique).
+            périodes de l&apos;exercice actuel seront recréées avec les dates décalées d&apos;un an
+            ; l&apos;exercice actuel est conservé et, s&apos;il était « Affiché aux utilisateurs »,
+            le nouvel exercice prend le relais.
           </p>
           <p
             style={{

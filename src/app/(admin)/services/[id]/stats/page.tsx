@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { currentExerciceIdForService } from "@/server/services/exercice";
 import { getServiceStats, type LabeledCount, type StatsType } from "@/server/services/stats";
 import { StatsFilters } from "./stats-filters";
 import { StatsToolbar } from "./stats-toolbar";
@@ -593,13 +594,19 @@ export default async function StatsPage({
   const rawFrom = parseDate(sp.from);
   const rawTo = parseDate(sp.to);
 
-  // Exercices éligibles (comme l'agenda) : périodes actives + désactivées si le service
-  // « affiche les exercices précédents ». Le sélecteur porte sur ces exercices.
-  const periodStates: ("actif" | "desactive")[] = service.showPreviousExercices
-    ? ["actif", "desactive"]
-    : ["actif"];
+  // Exercices éligibles (comme l'agenda) : l'exercice COURANT par défaut, tous les
+  // exercices non archivés si le service « affiche les exercices précédents »
+  // (les périodes des exercices passés restent « actif » depuis la simplification
+  // des états). Le sélecteur porte sur ces exercices.
+  const currentExoId = await currentExerciceIdForService(id);
   const periodRows = await prisma.period.findMany({
-    where: { serviceId: id, state: { in: periodStates } },
+    where: {
+      serviceId: id,
+      state: "actif",
+      ...(!service.showPreviousExercices && currentExoId != null
+        ? { exerciceId: currentExoId }
+        : {}),
+    },
     orderBy: [{ dateStart: "asc" }, { id: "asc" }],
     select: {
       id: true,

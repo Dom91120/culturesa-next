@@ -4,6 +4,7 @@ import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
+import { currentExerciceIdForService } from "@/server/services/exercice";
 import { deriveServiceModes } from "@/server/services/service-modes";
 import { AgendaGrid } from "./agenda-grid";
 
@@ -47,19 +48,24 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     { dateStart: { sort: "asc" as const, nulls: "last" as const } },
     { id: "asc" as const },
   ];
-  // Avec « Afficher les exercices précédents », on inclut aussi les périodes
-  // désactivées (celles des exercices passés) pour permettre la nav ◀ exercice.
-  const periodStates = service.showPreviousExercices
-    ? (["actif", "desactive"] as const)
-    : (["actif"] as const);
+  // Périmètre par défaut = l'exercice COURANT (le plus récent) ; avec « Afficher les
+  // exercices précédents », toutes les périodes non archivées (les exercices passés
+  // restent « actif » depuis la simplification des états) pour la nav ◀ exercice.
+  const currentExoId = await currentExerciceIdForService(id);
   let periods = await prisma.period.findMany({
-    where: { serviceId: id, state: { in: [...periodStates] } },
+    where: {
+      serviceId: id,
+      state: "actif",
+      ...(!service.showPreviousExercices && currentExoId != null
+        ? { exerciceId: currentExoId }
+        : {}),
+    },
     orderBy: periodOrder,
     select: periodSelect,
   });
   if (periods.length === 0) {
     periods = await prisma.period.findMany({
-      where: { serviceId: null, state: { in: [...periodStates] } },
+      where: { serviceId: null, state: "actif" },
       orderBy: periodOrder,
       select: periodSelect,
     });

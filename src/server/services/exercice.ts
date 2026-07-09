@@ -40,9 +40,15 @@ type CycleEventData = {
   newPeriodIds: number[];
   newRecurringSlotIds: string[];
   newMirrorSlotIds: string[];
+  // Historique (événements antérieurs à la simplification des états) : périodes
+  // passées en desactive par la bascule — l'annulation les repasse en actif.
+  // Les bascules récentes laissent les périodes reconduites en actif ([] ici).
   oldDeactivatedPeriodIds: number[];
   // Exercice créé par la bascule (par service) → supprimé tel quel à l'annulation.
   newExerciceId: number | null;
+  // Exercice qui portait « Affiché aux utilisateurs » avant la bascule (le flag est
+  // transféré au nouvel exercice) — restauré à l'annulation. Absent/null : aucun.
+  visibleFromExerciceId?: number | null;
 };
 
 // =====================================================================================
@@ -235,9 +241,30 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       const service = await tx.service.findUnique({ where: { id: serviceId } });
       if (!service) throw new Error("Service introuvable.");
 
-      // 1. périodes actives triées (date_start nulls last, id)
+      // 1. exercice COURANT = le plus récent du service (date de début la plus tardive,
+      // nulls en dernier, puis id). C'est lui qu'on reconduit : depuis la simplification
+      // des états, les périodes des exercices passés restent « actif » — l'état ne
+      // distingue plus l'exercice courant, seul le rattachement exerciceId le fait.
+      const exercicesRows = await tx.exercice.findMany({
+        where: { serviceId },
+        select: { id: true, dateStart: true, visibleToUsers: true },
+      });
+      const currentExoRow =
+        exercicesRows.slice().sort((a, b) => {
+          const as = a.dateStart?.getTime();
+          const bs = b.dateStart?.getTime();
+          if (as != null && bs != null) return bs - as || b.id - a.id;
+          if (as != null) return -1;
+          if (bs != null) return 1;
+          return b.id - a.id;
+        })[0] ?? null;
+
+      // Périodes à reconduire : celles (actives) de l'exercice courant — repli legacy
+      // sans exercice : toutes les périodes actives du service.
       const actives = await tx.period.findMany({
-        where: { serviceId, state: "actif" },
+        where: currentExoRow
+          ? { serviceId, state: "actif", exerciceId: currentExoRow.id }
+          : { serviceId, state: "actif" },
         orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
       });
       if (actives.length === 0) {
@@ -262,14 +289,20 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         );
       }
 
-      // 3. capture des périodes désactivées (à archiver)
-      const deactivated = await tx.period.findMany({
-        where: { serviceId, state: "desactive" },
-        select: { id: true },
-      });
-      const archivedPeriodIds = deactivated.map((r) => r.id);
-
-      // 4. désactivées → archivées
+      // 3./4. archivage des exercices PLUS ANCIENS que l'exercice courant : leurs
+      // périodes encore actives passent en archive (équivalent de l'ancien
+      // « desactive → archive », identifié par le lignage d'exercice et non par l'état).
+      const toArchive = currentExoRow
+        ? await tx.period.findMany({
+            where: {
+              serviceId,
+              state: "actif",
+              exerciceId: { not: null, notIn: [currentExoRow.id] },
+            },
+            select: { id: true },
+          })
+        : [];
+      const archivedPeriodIds = toArchive.map((r) => r.id);
       if (archivedPeriodIds.length > 0) {
         await tx.period.updateMany({
           where: { id: { in: archivedPeriodIds } },
@@ -279,10 +312,9 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
 
       // 5. Nouvel exercice PAR SERVICE : on reconduit l'exercice courant en copiant son
       // type et en décalant ses dates d'un an (repli sur les dates des périodes décalées).
-      const currentExoId = actives.find((p) => p.exerciceId != null)?.exerciceId ?? null;
-      const currentExo = currentExoId
+      const currentExo = currentExoRow
         ? await tx.exercice.findUnique({
-            where: { id: currentExoId },
+            where: { id: currentExoRow.id },
             select: { type: true, dateStart: true, dateEnd: true, ...EXERCICE_OPENING_SELECT },
           })
         : null;
@@ -405,8 +437,20 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
           }
         }
 
-        // 7. ancienne période active → desactive
-        await tx.period.update({ where: { id: p.id }, data: { state: "desactive" } });
+        // (Les périodes reconduites RESTENT actives : « exercice précédent » se déduit
+        // de leur exerciceId, la visibilité usager de la case « Affiché aux utilisateurs ».)
+      }
+
+      // 7. transfert de « Affiché aux utilisateurs » : si l'exercice reconduit était
+      // celui affiché aux usagers, le nouvel exercice prend le relais (unicité par
+      // service) — les usagers basculent sur le nouvel exercice comme avant.
+      const visibleFromExerciceId = currentExoRow?.visibleToUsers ? currentExoRow.id : null;
+      if (visibleFromExerciceId != null) {
+        await tx.exercice.update({
+          where: { id: visibleFromExerciceId },
+          data: { visibleToUsers: false },
+        });
+        await tx.exercice.update({ where: { id: exId }, data: { visibleToUsers: true } });
       }
 
       // 8. journaliser le cycle
@@ -415,8 +459,9 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         newPeriodIds,
         newRecurringSlotIds,
         newMirrorSlotIds,
-        oldDeactivatedPeriodIds: actives.map((p) => p.id),
+        oldDeactivatedPeriodIds: [],
         newExerciceId: exId,
+        visibleFromExerciceId,
       };
       await tx.cycleEvent.create({
         data: { serviceId, data: payload as unknown as Prisma.InputJsonValue },
@@ -478,7 +523,9 @@ export async function undoCycle(serviceId: string): Promise<void> {
         await tx.period.deleteMany({ where: { id: { in: newPeriodIds } } });
       }
 
-      // 4. anciennes désactivées → actif
+      // 4. périodes reconduites : les bascules récentes les laissent actives ([]) ;
+      // les événements antérieurs à la simplification des états les avaient passées
+      // en desactive → on les repasse en actif (l'état desactive n'existe plus).
       if (oldDeactivatedPeriodIds.length > 0) {
         await tx.period.updateMany({
           where: { id: { in: oldDeactivatedPeriodIds } },
@@ -486,11 +533,26 @@ export async function undoCycle(serviceId: string): Promise<void> {
         });
       }
 
-      // 5. archivées → desactive
+      // 5. archivées par la bascule → actif (elles l'étaient avant ; l'état
+      // intermédiaire desactive a disparu du cycle de vie des périodes).
       if (archivedPeriodIds.length > 0) {
         await tx.period.updateMany({
           where: { id: { in: archivedPeriodIds } },
-          data: { state: "desactive" },
+          data: { state: "actif" },
+        });
+      }
+
+      // 5 bis. restaurer « Affiché aux utilisateurs » sur l'exercice qui le portait
+      // avant la bascule (le flag avait été transféré au nouvel exercice).
+      const visibleFromExerciceId = data.visibleFromExerciceId ?? null;
+      if (visibleFromExerciceId != null) {
+        await tx.exercice.updateMany({
+          where: { serviceId, visibleToUsers: true },
+          data: { visibleToUsers: false },
+        });
+        await tx.exercice.update({
+          where: { id: visibleFromExerciceId },
+          data: { visibleToUsers: true },
         });
       }
 
@@ -548,6 +610,29 @@ export async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
 // Données du pane exercice
 // =====================================================================================
 
+/**
+ * Id de l'exercice COURANT d'un service = le plus récent (date de début la plus
+ * tardive, nulls en dernier, puis id décroissant). Null si le service n'a aucun
+ * exercice. Sert aux vues admin (agenda, stats, éditions) : depuis la
+ * simplification des états, les périodes des exercices passés restent « actif »
+ * — le périmètre par défaut est donc l'exercice courant, pas l'état.
+ */
+export async function currentExerciceIdForService(serviceId: string): Promise<number | null> {
+  const rows = await prisma.exercice.findMany({
+    where: { serviceId },
+    select: { id: true, dateStart: true },
+  });
+  const current = rows.slice().sort((a, b) => {
+    const as = a.dateStart?.getTime();
+    const bs = b.dateStart?.getTime();
+    if (as != null && bs != null) return bs - as || b.id - a.id;
+    if (as != null) return -1;
+    if (bs != null) return 1;
+    return b.id - a.id;
+  })[0];
+  return current?.id ?? null;
+}
+
 export async function setShowPreviousExercices(serviceId: string, value: boolean): Promise<void> {
   await prisma.service.update({
     where: { id: serviceId },
@@ -556,12 +641,11 @@ export async function setShowPreviousExercices(serviceId: string, value: boolean
 }
 
 export async function getExercicePaneData(serviceId: string): Promise<ExercicePaneData> {
-  const [exercices, activeCount, svc] = await Promise.all([
+  const [exercices, svc] = await Promise.all([
     prisma.exercice.findMany({
       where: { serviceId },
-      select: { label: true, type: true, dateStart: true, dateEnd: true },
+      select: { id: true, label: true, type: true, dateStart: true, dateEnd: true },
     }),
-    prisma.period.count({ where: { serviceId, state: "actif" } }),
     prisma.service.findUnique({
       where: { id: serviceId },
       select: { showPreviousExercices: true },
@@ -578,6 +662,14 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
     return b.label.localeCompare(a.label);
   });
   const current = sorted[0] ?? null;
+
+  // La bascule reconduit les périodes actives de l'exercice COURANT (les périodes
+  // des exercices passés restent actives depuis la simplification des états).
+  const activeCount = await prisma.period.count({
+    where: current
+      ? { serviceId, state: "actif", exerciceId: current.id }
+      : { serviceId, state: "actif" },
+  });
 
   const currentName = current?.label ?? "—";
   const startYmd = fmtDateUtc(current?.dateStart ?? null);
