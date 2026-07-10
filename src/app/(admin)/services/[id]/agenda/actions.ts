@@ -161,18 +161,23 @@ export async function setBookingPointageAction(
 }
 
 /**
- * Mode création (agenda) : enregistre la CONFIGURATION d'un créneau — sa capacité et
- * la liste des demandeurs autorisés (vide = ouvert à tous). Remplace l'ensemble des
- * SlotDemandeur du créneau. Fonctionne pour les créneaux récurrents comme ponctuels.
+ * Mode création (agenda) : enregistre la CONFIGURATION d'un créneau — sa capacité,
+ * son mode jauge et la liste des demandeurs autorisés (vide = ouvert à tous).
+ * Remplace l'ensemble des SlotDemandeur du créneau. Fonctionne pour les créneaux
+ * récurrents comme ponctuels ; la jauge d'un récurrent est PROPAGÉE à ses miroirs
+ * (ils portent la valeur du parent — la règle de capacité des réservations
+ * ponctuelles se joue sur le miroir).
  */
 export async function saveSlotConfigAction(input: {
   serviceId: string;
   slotId: string;
   capacity: number;
+  jauge: boolean;
   demandeurIds: number[];
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   const { serviceId, slotId, capacity, demandeurIds } = input;
+  const jauge = input.jauge === true;
   // Capacité alignée sur la création (schemas/slot.ts) : entier 1..9999. Un créneau à 0
   // place le rendrait silencieusement irréservable.
   if (!Number.isInteger(capacity) || capacity < 1 || capacity > 9999) {
@@ -183,7 +188,9 @@ export async function saveSlotConfigAction(input: {
     await prisma.$transaction(async (tx) => {
       const slot = await tx.slot.findFirst({ where: { id: slotId, serviceId } });
       if (!slot) throw new Error("Créneau introuvable");
-      await tx.slot.update({ where: { id: slotId }, data: { capacity } });
+      await tx.slot.update({ where: { id: slotId }, data: { capacity, jauge } });
+      // Miroirs d'un récurrent : la jauge suit le parent (cf. addRecurringSlot).
+      await tx.slot.updateMany({ where: { parentSlotId: slotId }, data: { jauge } });
       await tx.slotDemandeur.deleteMany({ where: { slotId } });
       if (ids.length > 0) {
         await tx.slotDemandeur.createMany({

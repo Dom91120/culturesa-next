@@ -4120,6 +4120,7 @@ export function AgendaGrid({
               slotId={capModal.slotId}
               title={slot ? ` · ${slot.startTime}–${slot.endTime}` : ""}
               initialCapacity={String(slot?.capacity ?? service.capacity)}
+              initialJauge={slot?.jauge ?? false}
               initialDemIds={slotDemandeurs[capModal.slotId] ?? []}
               serviceDemandeurs={serviceDemandeurs}
               onClose={() => setCapModal(null)}
