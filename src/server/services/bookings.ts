@@ -197,22 +197,18 @@ export async function assertSlotCapacity(
   // pointant vers un autre service que celui couvert par le guard de l'appelant).
   const slot = await db.slot.findFirst({
     where: { id: params.slotId, serviceId: params.serviceId },
-    select: { capacity: true, service: { select: { capacity: true, gaugeAccompagnants: true } } },
+    select: {
+      capacity: true,
+      jauge: true,
+      service: { select: { capacity: true, gaugeAccompagnants: true } },
+    },
   });
   if (!slot) throw new BookingError("Créneau introuvable.");
   const capacity = slot.capacity ?? slot.service.capacity;
-  // Jauge per-MODE (cf. deriveServiceModes : gaugeRec = récurrent ∧ jauge ; gaugePonct =
-  // ponctuel ∧ jauge). Le décompte en unités-jauge ne s'applique qu'au mode de CETTE
-  // réservation : un service où seuls les demandeurs PONCTUELS ont la jauge ne jauge pas
-  // les réservations récurrentes (et inversement) — sinon décompte « 1 par réservation ».
-  const gaugeOn = !!(await db.serviceDemandeurSettings.findFirst({
-    where: {
-      serviceId: params.serviceId,
-      jauge: true,
-      recurrent: params.bookingType === "recurring",
-    },
-    select: { serviceId: true },
-  }));
+  // « A une jauge » = propriété DU CRÉNEAU (slots.jauge, posée à la création via le
+  // mode jauge de l'agenda admin ; miroirs = valeur du parent). Jauge → décompte en
+  // unités-jauge (enfants + adultes si comptés) ; sinon « 1 par réservation ».
+  const gaugeOn = slot.jauge;
   const occWhere: Prisma.BookingWhereInput =
     params.bookingType === "unique"
       ? { slotId: params.slotId, bookingType: "unique" }
@@ -679,6 +675,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         slotDay: true,
         periodId: true,
         weeks: true,
+        jauge: true,
       },
     }),
     prisma.slot.findMany({
@@ -691,6 +688,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         slotDate: true,
         parentSlotId: true,
         periodId: true,
+        jauge: true,
       },
     }),
     prisma.booking.findMany({
@@ -855,6 +853,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       slotDate: toDateInput(s.slotDate),
       parentSlotId: s.parentSlotId,
       periodId: s.periodId,
+      jauge: s.jauge,
     })),
     bookings: visibleBookings.map(
       (b): UserAgendaBooking => ({

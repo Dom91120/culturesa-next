@@ -134,6 +134,8 @@ type SlotSnapshot = {
   capacity: number | null;
   slotDay: DayOfWeek | null;
   weeks: string | null;
+  // « A une jauge » : reconduit à l'identique par la bascule (clone + miroirs).
+  jauge: boolean;
 };
 
 // Jour de la semaine (clé) pour un jour ISO 1..7.
@@ -219,6 +221,8 @@ async function generateMirrorSlots(
       parentSlotId: slotId,
       weeks: null,
       state: "actif",
+      // Miroirs : jauge du récurrent cloné.
+      jauge: src.jauge,
     });
   }
 
@@ -285,6 +289,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
             capacity: s.capacity,
             slotDay: s.slotDay,
             weeks: s.weeks,
+            jauge: s.jauge,
           })),
         );
       }
@@ -431,6 +436,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
                 parentSlotId: null,
                 weeks: s.weeks,
                 state: "actif",
+                jauge: s.jauge,
               },
             });
             newRecurringSlotIds.push(newSlotId);

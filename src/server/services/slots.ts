@@ -133,6 +133,8 @@ export async function addRecurringSlot(
     dayKey: DayKey;
     capacity: number;
     demandeurIds?: number[];
+    // « A une jauge » : mode jauge de l'agenda au moment de la création.
+    jauge?: boolean;
   },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
@@ -174,6 +176,7 @@ export async function addRecurringSlot(
           state: "actif",
           slotDay: input.dayKey,
           capacity: input.capacity,
+          jauge: input.jauge ?? false,
         },
       });
       // Demandeurs autorisés posés dans la même transaction : un échec ici annule
@@ -206,6 +209,8 @@ export async function addRecurringSlot(
         periodId,
         parentSlotId: slId,
         state: "actif" as const,
+        // Les miroirs héritent de la jauge du récurrent parent.
+        jauge: input.jauge ?? false,
       }));
       if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
     });
@@ -297,6 +302,8 @@ export async function copyRecurringWeek(
               state: "actif",
               slotDay: s.slotDay,
               capacity: s.capacity,
+              // La copie A↔B conserve la jauge du créneau source.
+              jauge: s.jauge,
             },
           });
           const wanted = computeWantedMirrors({
@@ -321,6 +328,7 @@ export async function copyRecurringWeek(
             periodId,
             parentSlotId: newId,
             state: "actif" as const,
+            jauge: s.jauge,
           }));
           if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
           const ids = demBySlot.get(s.id);
@@ -350,6 +358,8 @@ export async function addUniqueSlot(
     endTime: string;
     capacity: number;
     demandeurIds?: number[];
+    // « A une jauge » : mode jauge de l'agenda au moment de la création.
+    jauge?: boolean;
   },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
@@ -381,6 +391,7 @@ export async function addUniqueSlot(
           capacity: input.capacity,
           periodId: period.id,
           state: "actif",
+          jauge: input.jauge ?? false,
         },
       });
       // Demandeurs autorisés posés dans la même transaction (cf. addRecurringSlot) :
@@ -475,6 +486,8 @@ export async function moveRecurringSlot(
         periodId: period.id,
         parentSlotId: slotId,
         state: "actif" as const,
+        // Miroirs régénérés : jauge du récurrent déplacé.
+        jauge: slot.jauge,
       }));
       if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
     });

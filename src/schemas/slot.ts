@@ -26,6 +26,9 @@ const capacity = z.coerce
 // dédoublonne ensuite côté service.
 const demandeurIds = z.array(z.coerce.number().int().positive()).optional();
 
+// « A une jauge » : mode jauge de l'agenda au moment de la création (off par défaut).
+const jauge = z.boolean().optional().default(false);
+
 // Journée entière (deux heures vides) → pas de contrôle d'ordre ; sinon les deux heures
 // doivent être renseignées ET ordonnées (start < end).
 const hoursOrdered = (v: { startTime: string; endTime: string }) =>
@@ -47,6 +50,7 @@ export const recurringSlotCreateSchema = z
     endTime: time("Heure de fin"),
     capacity,
     demandeurIds,
+    jauge,
   })
   .refine(hoursOrdered, hoursOrderedMsg);
 
@@ -58,6 +62,7 @@ export const uniqueSlotCreateSchema = z
     endTime: time("Heure de fin"),
     capacity,
     demandeurIds,
+    jauge,
   })
   .refine(hoursOrdered, hoursOrderedMsg);
 

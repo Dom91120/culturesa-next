@@ -245,6 +245,9 @@ model Slot {
   periodId     Int?
   parentSlotId String?
   weeks        String?
+  // « A une jauge » : posé À LA CRÉATION selon le mode jauge de l'agenda admin
+  // (icône capsule) ; les miroirs héritent du récurrent parent.
+  jauge        Boolean     @default(false)
   state        EntityState @default(actif)
 
   service     Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)

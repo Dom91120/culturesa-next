@@ -88,6 +88,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         slotDay: true,
         periodId: true,
         weeks: true,
+        jauge: true,
       },
     }),
     // Créneaux ponctuels (datés) : affichés dans l'agenda en mode « Semaine réelle »
@@ -101,6 +102,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         capacity: true,
         slotDate: true,
         parentSlotId: true,
+        jauge: true,
       },
     }),
     prisma.booking.findMany({
@@ -183,6 +185,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     slotDay: s.slotDay,
     periodId: s.periodId,
     weeks: s.weeks ?? null,
+    jauge: s.jauge,
   }));
 
   const uniqueSlotsData = uniqueSlots.map((s) => ({
@@ -192,6 +195,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     capacity: s.capacity,
     slotDate: toDateInput(s.slotDate),
     parentSlotId: s.parentSlotId,
+    jauge: s.jauge,
   }));
 
   const periodsData = periods.map((p) => ({

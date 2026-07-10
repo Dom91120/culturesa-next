@@ -3,8 +3,6 @@ import { gaugeUnits } from "@/lib/gauge";
 import { schoolYearLabel } from "@/lib/school-year";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
-import { getServiceDemandeurSettings } from "@/server/services/demandeur-settings";
-import { deriveServiceModes } from "@/server/services/service-modes";
 
 // =====================================================================================
 // Statistiques d'un service. Agrégation 100 % serveur, sans dépendance de graphes :
@@ -129,15 +127,12 @@ export async function getServiceStats(
   const serviceCapacity = service?.capacity ?? 1;
   const gaugeAccompagnants = service?.gaugeAccompagnants ?? true;
 
-  // Jauge PAR MODE (même règle que assertSlotCapacity) : l'occupation ne se compte en
-  // unités-jauge (enfants + accompagnants selon gaugeAccompagnants) QUE si le mode a la
-  // jauge activée ; sinon 1 par occurrence. `isRec` = occurrence récurrente (miroir),
-  // false = ponctuel.
-  const modes = deriveServiceModes(await getServiceDemandeurSettings(serviceId));
-  const occUnits = (enfants: number, accompagnants: number, isRec: boolean): number =>
-    (isRec ? modes.gaugeRec : modes.gaugePonct)
-      ? gaugeUnits(enfants, accompagnants, gaugeAccompagnants)
-      : 1;
+  // Jauge DU CRÉNEAU (même règle que assertSlotCapacity et les grilles) :
+  // l'occupation ne se compte en unités-jauge (enfants + accompagnants selon
+  // gaugeAccompagnants) QUE si le créneau de l'occurrence a la jauge (slots.jauge) ;
+  // sinon 1 par occurrence.
+  const occUnits = (enfants: number, accompagnants: number, slotJauge: boolean): number =>
+    slotJauge ? gaugeUnits(enfants, accompagnants, gaugeAccompagnants) : 1;
 
   // ── Population OCCURRENCES DATÉES ─────────────────────────────────────────────
   // TOUTES les stats se comptent sur les SÉANCES datées : ponctuels autonomes
@@ -154,7 +149,14 @@ export async function getServiceStats(
       userId: true,
       parentBookingId: true,
       slot: {
-        select: { id: true, parentSlotId: true, slotDay: true, slotDate: true, capacity: true },
+        select: {
+          id: true,
+          parentSlotId: true,
+          slotDay: true,
+          slotDate: true,
+          capacity: true,
+          jauge: true,
+        },
       },
       user: {
         select: {
@@ -210,7 +212,7 @@ export async function getServiceStats(
       cap: b.slot.capacity ?? serviceCapacity,
       month: bucket,
     };
-    cur.occ += occUnits(b.enfants, b.accompagnants, b.parentBookingId != null);
+    cur.occ += occUnits(b.enfants, b.accompagnants, b.slot.jauge);
     sessionAgg.set(key, cur);
   }
 

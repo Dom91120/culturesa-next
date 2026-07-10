@@ -73,6 +73,9 @@ export type Slot = {
   slotDay: string | null;
   periodId: number | null;
   weeks: string | null;
+  // « A une jauge » : occupation comptée en unités-jauge (enfants + adultes) si
+  // vrai, en nombre de réservations sinon — propriété DU créneau (slots.jauge).
+  jauge: boolean;
   // Renseigné uniquement pour les créneaux ponctuels projetés (slots virtuels).
   slotDate?: string | null;
 };
@@ -87,6 +90,8 @@ export type UniqueSlot = {
   capacity: number | null;
   slotDate: string;
   parentSlotId: string | null;
+  // « A une jauge » (cf. Slot.jauge ; les miroirs portent la valeur du parent).
+  jauge: boolean;
   // Période du créneau (optionnel : fourni à l'agenda USAGER pour le contrôle
   // de disponibilité « Dispo » ; absent côté admin).
   periodId?: number | null;
@@ -190,6 +195,10 @@ export type AgendaBlockBase<TBooking> = {
   used: number;
   capacity: number;
   full: boolean;
+  // « A une jauge » du créneau : `used` est déjà compté selon cette règle
+  // (unités-jauge si vrai, 1 par réservation sinon) ; sert aussi à l'affichage
+  // (badge jauge éditable, barre de remplissage).
+  jauge: boolean;
   // Créneau « journée entière » (sans horaire) : rendu dans la bande dédiée en
   // haut de l'agenda, pas sur la grille horaire (cf. legacy alldayBlocks).
   isAllDay: boolean;

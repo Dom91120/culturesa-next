@@ -289,6 +289,8 @@ export async function createRecurringSlotAction(input: {
   weeks: string;
   capacity: number;
   demandeurIds?: number[];
+  // « A une jauge » : mode jauge de l'agenda au moment de la création.
+  jauge?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   // Validation de la frontière : horaires (HH:MM, fin > début), capacité (entier ≥ 1),
@@ -305,6 +307,7 @@ export async function createRecurringSlotAction(input: {
     dayKey: d.dayKey,
     capacity: d.capacity,
     demandeurIds: d.demandeurIds,
+    jauge: d.jauge,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
@@ -318,6 +321,8 @@ export async function createUniqueSlotAction(input: {
   endTime: string;
   capacity: number;
   demandeurIds?: number[];
+  // « A une jauge » : mode jauge de l'agenda au moment de la création.
+  jauge?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   // Validation de la frontière : date (AAAA-MM-JJ), horaires (HH:MM, fin > début),
@@ -333,6 +338,7 @@ export async function createUniqueSlotAction(input: {
     endTime: d.endTime,
     capacity: d.capacity,
     demandeurIds: d.demandeurIds,
+    jauge: d.jauge,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };

@@ -266,6 +266,9 @@ export function AgendaGrid({
   // Mode « Création de créneau » : clic = créneau d'1 quart d'heure ; glisser
   // haut/bas = créneau de plusieurs quarts (validé au relâché). Cf. plus bas.
   const [creationMode, setCreationMode] = useState(false);
+  // Mode « Jauge » (icône capsule, OFF par défaut) : les créneaux créés portent
+  // jauge = ce mode au moment de la création (colonne slots.jauge).
+  const [jaugeMode, setJaugeMode] = useState(false);
   // Capacité appliquée aux créneaux créés en mode création (champ remplaçant la
   // légende). Capacité par défaut UNIQUE du service, autosauvegardée.
   const [capStr, setCapStr] = useState(String(service.capacity));
@@ -877,6 +880,7 @@ export function AgendaGrid({
           // periodId aligné sur la période effective pour passer le filtre de période.
           periodId: effectivePeriodId,
           weeks: null,
+          jauge: u.jauge,
           slotDate: u.slotDate,
         });
       }
@@ -973,11 +977,11 @@ export function AgendaGrid({
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
       const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
-      // Places occupées, conditionnées au mode jauge DE CE CRÉNEAU (ponctuel → gaugePonct,
-      // récurrent → gaugeRec, comme l'agenda usager) : en jauge = somme (enfants + adultes
-      // si comptés) ; hors jauge = nombre de réservations. Gater ici rend `used`/`full`
-      // cohérents pour TOUS les consommateurs (libellé, barre, flag « complet », modale pile).
-      const gaugeForSlot = uniqueIdSet.has(slotId) ? modes.gaugePonct : modes.gaugeRec;
+      // Places occupées, conditionnées à la jauge DE CE CRÉNEAU (slots.jauge, posée à
+      // la création) : en jauge = somme (enfants + adultes si comptés) ; hors jauge =
+      // nombre de réservations. Gater ici rend `used`/`full` cohérents pour TOUS les
+      // consommateurs (libellé, barre, flag « complet », modale pile).
+      const gaugeForSlot = slot.jauge;
       const used = gaugeForSlot
         ? list.reduce(
             (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
@@ -998,6 +1002,7 @@ export function AgendaGrid({
         used,
         capacity,
         full,
+        jauge: gaugeForSlot,
         isAllDay: allday,
       });
     }
@@ -1042,8 +1047,6 @@ export function AgendaGrid({
     gridStartMin,
     service.capacity,
     service.gaugeAccompagnants,
-    modes.gaugeRec,
-    modes.gaugePonct,
   ]);
 
   // Blocs affichés pour un jour : AUCUN sur un jour fermé (hors période active ou
@@ -1288,6 +1291,7 @@ export function AgendaGrid({
                 weeks,
                 capacity: createCap,
                 demandeurIds: createDemIds,
+                jauge: jaugeMode,
               }),
             ),
           ),
@@ -1306,6 +1310,7 @@ export function AgendaGrid({
                 endTime: minToHHMM(e),
                 capacity: createCap,
                 demandeurIds: createDemIds,
+                jauge: jaugeMode,
               }),
             ),
           ),
@@ -1361,6 +1366,7 @@ export function AgendaGrid({
               weeks,
               capacity: createCap,
               demandeurIds: createDemIds,
+              jauge: jaugeMode,
             }),
           ),
         ),
@@ -1377,6 +1383,7 @@ export function AgendaGrid({
               endTime: "",
               capacity: createCap,
               demandeurIds: createDemIds,
+              jauge: jaugeMode,
             }),
           ),
         ),
@@ -1416,9 +1423,8 @@ export function AgendaGrid({
     if (creationMode) return false;
     const isPonctuel = uniqueIdSet.has(b.slotId);
     if (mode === "realweek" && !isPonctuel) return false;
-    const gauge = isPonctuel ? modes.gaugePonct : modes.gaugeRec;
-    const used = gauge ? b.used : b.bookings.length;
-    if (used >= b.capacity) return false;
+    // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
+    if (b.used >= b.capacity) return false;
     return isPonctuel || (effectivePeriodId != null && effectivePeriodId > 0);
   }
 
@@ -1695,6 +1701,7 @@ export function AgendaGrid({
               endTime,
               capacity: createCap,
               demandeurIds: createDemIds,
+              jauge: jaugeMode,
             }),
           ),
         ),
@@ -1714,6 +1721,7 @@ export function AgendaGrid({
               weeks,
               capacity: createCap,
               demandeurIds: createDemIds,
+              jauge: jaugeMode,
             }),
           ),
         ),
@@ -2099,8 +2107,9 @@ export function AgendaGrid({
       // Créneau récurrent en semaine réelle : non éditable (ni déplacement, ni
       // redimension, ni config, ni suppression) — cf. vue Modèle de période.
       const realWeekRecurring = mode === "realweek" && !isPonctuelCell;
-      const gaugeForCell = isPonctuelCell ? modes.gaugePonct : modes.gaugeRec;
-      const cellFull = (gaugeForCell ? b.used : b.bookings.length) >= b.capacity;
+      // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
+      const gaugeForCell = b.jauge;
+      const cellFull = b.used >= b.capacity;
       // Le créneau est cliquable pour créer une réservation (hors mode création).
       const cellCreatable =
         !creationMode &&
@@ -2812,6 +2821,56 @@ export function AgendaGrid({
                   ✓
                 </span>
               </span>
+              {/* Bascule « mode Jauge » (capsule vert/orange/rouge), à droite de la
+                  capacité. Icône NUE (pas de boîte de bouton), hauteur des boutons
+                  voisins (~26px). OFF par défaut : grisée ; ON : en couleur. Les
+                  créneaux créés portent jauge = ce mode. */}
+              <button
+                type="button"
+                onClick={() => setJaugeMode((v) => !v)}
+                data-tip="Jauge"
+                aria-label="Jauge"
+                aria-pressed={jaugeMode}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  ...(jaugeMode ? {} : { filter: "grayscale(1)", opacity: 0.55 }),
+                }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="13"
+                  height="26"
+                  viewBox="6 0 12 24"
+                  aria-hidden="true"
+                >
+                  {/* Capsule extérieure : intérieur BLANC (pourtour interne et liserés
+                    entre segments), contour externe var(--border). Puis 3 segments
+                    (thème : accent/warn/danger) arrondis par le clip interne. */}
+                  <rect
+                    x="6.5"
+                    y="1"
+                    width="11"
+                    height="22"
+                    rx="5.5"
+                    fill="#fff"
+                    stroke="var(--border)"
+                    strokeWidth="1.4"
+                  />
+                  <clipPath id="tricolor-pill-clip">
+                    <rect x="9" y="3.4" width="6" height="17.2" rx="3" />
+                  </clipPath>
+                  <g clipPath="url(#tricolor-pill-clip)">
+                    <rect x="9" y="3.4" width="6" height="5.4" fill="var(--accent)" />
+                    <rect x="9" y="9.3" width="6" height="5.4" fill="var(--warn)" />
+                    <rect x="9" y="15.2" width="6" height="5.4" fill="var(--danger)" />
+                  </g>
+                </svg>
+              </button>
               {/* 👥 : demandeurs autorisés par défaut des créneaux créés (modale). */}
               <button
                 type="button"
@@ -3384,7 +3443,7 @@ export function AgendaGrid({
             const gaugePct =
               gaugeTotal > 0 ? Math.min(100, Math.round((gaugeSum / gaugeTotal) * 100)) : 0;
             const gaugeFill = gaugeColor(gaugePct);
-            const showGauge = isPonctuel ? modes.gaugePonct : modes.gaugeRec;
+            const showGauge = stackBlock.jauge;
             const sMin = stackSlot ? toMinutes(stackSlot.startTime, 0) : 0;
             const eMin = stackSlot ? toMinutes(stackSlot.endTime, sMin + 60) : sMin + 60;
             const hasRange = eMin > sMin;

@@ -1640,6 +1640,7 @@ export function UserAgendaGrid({
           // periodId aligné sur la période effective pour passer le filtre de période.
           periodId: effectivePeriodId,
           weeks: null,
+          jauge: u.jauge,
           slotDate: u.slotDate,
         });
       }
@@ -1768,15 +1769,15 @@ export function UserAgendaGrid({
       const s = toMinutes(slot.startTime, gridStartMin);
       const e = toMinutes(slot.endTime, s + 60);
       const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
-      // Places occupées (même règle que l'agenda admin) : en mode jauge = enfants +
-      // adultes (accompagnants) ; hors jauge = 1 par réservation.
-      const used =
-        modes.gaugeRec || modes.gaugePonct
-          ? list.reduce(
-              (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
-              0,
-            )
-          : list.length;
+      // Places occupées, conditionnées à la jauge DE CE CRÉNEAU (slots.jauge, même
+      // règle que l'agenda admin) : en jauge = enfants + adultes (accompagnants) ;
+      // hors jauge = 1 par réservation.
+      const used = slot.jauge
+        ? list.reduce(
+            (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
+            0,
+          )
+        : list.length;
       // Un bloc vide (used=0) n'est jamais "complet".
       const full = used >= capacity && used > 0;
       // biome-ignore lint/suspicious/noAssignInExpressions: init-or-push concis sur la map par jour
@@ -1791,6 +1792,7 @@ export function UserAgendaGrid({
         used,
         capacity,
         full,
+        jauge: slot.jauge,
         isAllDay: allday,
       });
     }
@@ -1836,8 +1838,6 @@ export function UserAgendaGrid({
     gridStartMin,
     service.capacity,
     service.gaugeAccompagnants,
-    modes.gaugeRec,
-    modes.gaugePonct,
   ]);
 
   // Blocs affichés pour un jour : AUCUN sur un jour fermé (hors période active,
@@ -2742,9 +2742,9 @@ export function UserAgendaGrid({
               // sinon complet → « Complet » ; sinon créneau libre → repère « + »
               // (clic sur le bloc = réserver). On n'affiche jamais les autres réservants.
               const isPonctuelCell = uniqueIdSet.has(b.slotId);
-              // L'usager n'a qu'UN demandeur : sa jauge est active dès que gaugeRec OU
-              // gaugePonct l'est (peu importe le type du créneau cliqué).
-              const gaugeOn = modes.gaugeRec || modes.gaugePonct;
+              // Jauge DU créneau (slots.jauge) : compteurs enfants/adultes éditables
+              // sur le badge si vrai, libellé d'état sinon.
+              const gaugeOn = b.jauge;
               // Badge sans thème NI jauge : on affiche toujours l'état (Validé / En attente).
               const noWidgets = !modes.themeMode && !gaugeOn;
               // Créneau court (≤ 30 min) : badge ras → on sort l'icône d'état du flux pour

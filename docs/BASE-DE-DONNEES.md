@@ -188,6 +188,7 @@ Créneau. **1 slot = 1 jour.** Récurrent (modèle) **ou** unique/miroir (daté)
 | periodId | entier? | | ↗ `periods` (Cascade) | période de rattachement |
 | parentSlotId | texte? | | ↗ `slots` (Cascade, self) | créneau parent (pour un miroir) |
 | weeks | texte? | | | parité(s) A/B (CSV) |
+| jauge | booléen | false | | « a une jauge » — posé à la création (mode jauge de l'agenda), miroirs = parent |
 | state | `EntityState` | actif | | |
 
 Index : `serviceId`, `parentSlotId`, `periodId`, `(slotDate, state)`.
