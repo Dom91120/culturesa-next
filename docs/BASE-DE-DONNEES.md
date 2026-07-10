@@ -271,7 +271,8 @@ Thèmes prédéfinis d'un service (mode `liste`). | id 🔑 ; `serviceId` ↗ `s
 | semaineAb | booléen | false | alternance A/B |
 | validation | booléen | false | validation requise |
 | themes | booléen | false | thèmes activés |
-| jauge | booléen | false | décompte en jauge (places) |
+
+> (La jauge est portée par CHAQUE CRÉNEAU — `slots.jauge` — plus par la matrice.)
 
 > La **présence** d'une ligne = le demandeur a accès au service. Index `demandeurId`.
 

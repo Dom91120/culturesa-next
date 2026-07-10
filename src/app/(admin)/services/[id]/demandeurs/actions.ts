@@ -15,7 +15,6 @@ const rowSchema = z.object({
   semaineAb: z.boolean(),
   validation: z.boolean(),
   themes: z.boolean(),
-  jauge: z.boolean(),
 });
 
 const saveSchema = z.object({

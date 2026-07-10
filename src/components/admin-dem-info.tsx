@@ -9,13 +9,13 @@ export type DemInfoRow = {
   semaineAb: boolean;
   validation: boolean;
   themes: boolean;
-  jauge: boolean;
   openOnHolidays: boolean;
   openOnSchoolHolidays: boolean;
 };
 
 // Bandeau debug admin (port du legacy `dem-info-*`) : liste des demandeurs du
-// service avec leurs modes (Récurrent, Sem. A/B, Validation, Thèmes, Jauge) et les
+// service avec leurs modes (Récurrent, Sem. A/B, Validation, Thèmes — la jauge est
+// désormais portée par chaque créneau, cf. slots.jauge) et les
 // deux flags d'ouverture (jours fériés / vacances scolaires), comme le bandeau debug
 // de la page réservations. Affiché uniquement quand le mode debug est actif
 // (localStorage `rc_debug` / classe `body.debug-mode`), activable depuis Configuration.
@@ -67,7 +67,6 @@ export function AdminDemInfo({ rows }: { rows: DemInfoRow[] }) {
             <Flag on={r.semaineAb} label="Sem. A/B" />
             <Flag on={r.validation} label="Validation" />
             <Flag on={r.themes} label="Thèmes" />
-            <Flag on={r.jauge} label="Jauge" />
             <Flag on={r.openOnHolidays} label="Ouvert les jours fériés" />
             <Flag on={r.openOnSchoolHolidays} label="Ouvert vacances scolaires" />
           </div>

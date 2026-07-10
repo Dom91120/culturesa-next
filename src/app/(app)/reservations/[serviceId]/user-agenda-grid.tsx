@@ -3827,7 +3827,7 @@ export function UserAgendaGrid({
               ["Sem. A/B", modes.abMode],
               ["Validation", modes.validationMode],
               ["Thèmes", modes.themeMode],
-              ["Jauge", modes.gaugeRec || modes.gaugePonct],
+              // (Jauge : portée par chaque créneau — slots.jauge — plus un mode service.)
               // Ouvert les jours fériés = niveau service ; Ouvert vacances scolaires =
               // niveau demandeur de l'usager (openOnSchoolHolidays).
               ["Ouvert les jours fériés", contextOpenings[0]?.openOnHolidays ?? false],

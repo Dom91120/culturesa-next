@@ -147,9 +147,10 @@ export async function listBookableServices() {
 }
 
 /**
- * Le demandeur EFFECTIF de l'usager courant a-t-il la jauge (participants) activée sur au
- * moins un service ? Sert à adapter la présentation (onboarding) : créneau AVEC jauge si
- * vrai, SANS jauge sinon. Compte sans demandeur effectif (ex. admin) → true par défaut
+ * L'usager courant peut-il rencontrer un créneau AVEC jauge ? (au moins un créneau
+ * actif `jauge=true` dans un service qui accepte son demandeur effectif). Sert à
+ * adapter la présentation (onboarding) : créneau AVEC jauge si vrai, SANS jauge
+ * sinon. Compte sans demandeur effectif (ex. admin) → true par défaut
  * (illustration la plus complète).
  */
 export async function userHasAnyGauge(): Promise<boolean> {
@@ -158,9 +159,18 @@ export async function userHasAnyGauge(): Promise<boolean> {
   if (!userId) return false;
   const demandeurId = await effectiveDemandeurId(prisma, userId);
   if (demandeurId == null) return true;
-  const withGauge = await prisma.serviceDemandeurSettings.findFirst({
-    where: { demandeurId, jauge: true },
+  const services = await prisma.serviceDemandeurSettings.findMany({
+    where: { demandeurId },
     select: { serviceId: true },
+  });
+  if (services.length === 0) return false;
+  const withGauge = await prisma.slot.findFirst({
+    where: {
+      serviceId: { in: services.map((s) => s.serviceId) },
+      state: "actif",
+      jauge: true,
+    },
+    select: { id: true },
   });
   return !!withGauge;
 }

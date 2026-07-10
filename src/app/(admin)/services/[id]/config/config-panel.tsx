@@ -84,13 +84,9 @@ type Props = {
   initialGaugeAccompagnants: boolean;
 };
 
-/** Reprojette l'état (globaux + par-demandeur) vers la matrice service × demandeur. */
-function buildMatrix(
-  rows: DemRow[],
-  semaineAb: boolean,
-  jaugeRec: boolean,
-  jaugePonct: boolean,
-): DemandeurSettingRow[] {
+/** Reprojette l'état (globaux + par-demandeur) vers la matrice service × demandeur.
+ *  (La jauge n'en fait plus partie : elle est portée par chaque créneau — slots.jauge.) */
+function buildMatrix(rows: DemRow[], semaineAb: boolean): DemandeurSettingRow[] {
   return rows
     .filter((r) => r.demandeurId > 0)
     .map((r) => {
@@ -101,7 +97,6 @@ function buildMatrix(
         semaineAb: recurrent && semaineAb,
         validation: r.validation,
         themes: r.themes,
-        jauge: recurrent ? jaugeRec : jaugePonct,
       };
     });
 }
@@ -162,10 +157,6 @@ export function ConfigPanel({
   const [semaineAb, setSemaineAb] = useState(() =>
     initialRows.some((r) => r.recurrent && r.semaineAb),
   );
-  const [jaugeRec, setJaugeRec] = useState(() => initialRows.some((r) => r.recurrent && r.jauge));
-  const [jaugePonct, setJaugePonct] = useState(() =>
-    initialRows.some((r) => !r.recurrent && r.jauge),
-  );
   const [rows, setRows] = useState<DemRow[]>(() =>
     initialRows.map((r, i) => ({
       key: `db-${i}`,
@@ -181,7 +172,7 @@ export function ConfigPanel({
   // rendu (l'argument de useRef est évalué à chaque rendu même s'il n'est utilisé qu'une fois).
   const lastSavedSig = useRef<string | null>(null);
   if (lastSavedSig.current === null) {
-    lastSavedSig.current = matrixSig(buildMatrix(rows, semaineAb, jaugeRec, jaugePonct));
+    lastSavedSig.current = matrixSig(buildMatrix(rows, semaineAb));
   }
   const [savedFlash, setSavedFlash] = useState(false);
   const flashTimer = useRef<number | null>(null);
@@ -194,7 +185,7 @@ export function ConfigPanel({
       firstRender.current = false;
       return;
     }
-    const payload = buildMatrix(rows, semaineAb, jaugeRec, jaugePonct);
+    const payload = buildMatrix(rows, semaineAb);
     const sig = matrixSig(payload);
     if (sig === lastSavedSig.current) return; // rien de neuf à persister
     const handle = window.setTimeout(() => {
@@ -212,7 +203,7 @@ export function ConfigPanel({
       });
     }, 450);
     return () => window.clearTimeout(handle);
-  }, [rows, semaineAb, jaugeRec, jaugePonct, serviceId]);
+  }, [rows, semaineAb, serviceId]);
 
   // Thèmes : barre de sauvegarde explicite (base « enregistrée » mutable).
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode);
@@ -332,32 +323,14 @@ export function ConfigPanel({
           >
             <Switch on={semaineAb} disabled={!hasRecurrent} onChange={setSemaineAb} />
           </GlobalRow>
-          <GlobalRow
-            label="Jauge — créneaux récurrents"
-            desc="Affiche une jauge de places sur les créneaux récurrents."
-          >
-            <Switch on={jaugeRec} onChange={setJaugeRec} />
-          </GlobalRow>
-          <GlobalRow
-            label="Jauge — créneaux ponctuels"
-            desc="Affiche une jauge de places sur les créneaux ponctuels."
-          >
-            <Switch on={jaugePonct} onChange={setJaugePonct} />
-          </GlobalRow>
+          {/* La jauge s'active désormais PAR CRÉNEAU (icône capsule du mode création
+              de l'agenda, colonne slots.jauge) — plus de bascule globale ici. */}
           <GlobalRow
             label="Jauge — prise en compte des accompagnants"
-            desc={
-              jaugeRec || jaugePonct
-                ? "Prendre en compte les accompagnants dans le calcul de la jauge."
-                : "Sans effet : aucune jauge active pour ce service."
-            }
+            desc="Prendre en compte les accompagnants dans le calcul de la jauge des créneaux qui en ont une."
             last
           >
-            <Switch
-              on={gaugeAccompagnants}
-              disabled={!(jaugeRec || jaugePonct)}
-              onChange={toggleGaugeAccompagnants}
-            />
+            <Switch on={gaugeAccompagnants} onChange={toggleGaugeAccompagnants} />
           </GlobalRow>
         </section>
 

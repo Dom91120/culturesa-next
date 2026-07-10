@@ -5,8 +5,7 @@ export type ServiceModes = {
   abMode: boolean; // au moins un demandeur en semaine A/B
   validationMode: boolean; // au moins un demandeur en validation
   themeMode: boolean; // au moins un demandeur en thèmes
-  gaugeRec: boolean; // jauge sur au moins un demandeur récurrent
-  gaugePonct: boolean; // jauge sur au moins un demandeur ponctuel
+  // (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge — plus par la matrice.)
 };
 
 export function deriveServiceModes(rows: DemandeurSettingRow[]): ServiceModes {
@@ -15,7 +14,5 @@ export function deriveServiceModes(rows: DemandeurSettingRow[]): ServiceModes {
     abMode: rows.some((r) => r.semaineAb),
     validationMode: rows.some((r) => r.validation),
     themeMode: rows.some((r) => r.themes),
-    gaugeRec: rows.some((r) => r.recurrent && r.jauge),
-    gaugePonct: rows.some((r) => !r.recurrent && r.jauge),
   };
 }

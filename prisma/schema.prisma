@@ -439,7 +439,7 @@ model ServiceDemandeurSettings {
   semaineAb   Boolean @default(false)
   validation  Boolean @default(false)
   themes      Boolean @default(false)
-  jauge       Boolean @default(false)
+  // (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge — plus par la matrice.)
 
   service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   demandeur Demandeur @relation(fields: [demandeurId], references: [id], onDelete: Cascade)

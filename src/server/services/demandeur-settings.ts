@@ -3,14 +3,13 @@ import { openingForDate } from "@/server/services/opening";
 
 /**
  * Une ligne de la matrice service × demandeur : le demandeur (référentiel
- * global) activé pour ce service, avec ses 5 modes booléens.
+ * global) activé pour ce service, avec ses 4 modes booléens.
  *   - `recurrent`   : le demandeur réserve en mode récurrent.
  *   - `semaineAb`   : alternance Semaine A / Semaine B (n'a de sens que pour
  *                     les récurrents ; uniforme parmi tous les récurrents).
  *   - `validation`  : les réservations passent par une validation.
  *   - `themes`      : la saisie d'un thème est demandée.
- *   - `jauge`       : une jauge s'applique (uniforme par mode : une valeur pour
- *                     les récurrents, une pour les ponctuels).
+ * (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge — plus par la matrice.)
  */
 export type DemandeurSettingRow = {
   demandeurId: number;
@@ -18,7 +17,6 @@ export type DemandeurSettingRow = {
   semaineAb: boolean;
   validation: boolean;
   themes: boolean;
-  jauge: boolean;
 };
 
 /** Lit la matrice des demandeurs configurés pour un service, ordonnée par demandeurId. */
@@ -34,7 +32,6 @@ export async function getServiceDemandeurSettings(
       semaineAb: true,
       validation: true,
       themes: true,
-      jauge: true,
     },
   });
   return rows;
@@ -74,7 +71,6 @@ export async function getServiceDemandeurSettingsLabeled(
         semaineAb: true,
         validation: true,
         themes: true,
-        jauge: true,
         demandeur: { select: { label: true, openOnSchoolHolidays: true } },
       },
     }),
@@ -88,7 +84,6 @@ export async function getServiceDemandeurSettingsLabeled(
       semaineAb: r.semaineAb,
       validation: r.validation,
       themes: r.themes,
-      jauge: r.jauge,
       openOnHolidays,
       openOnSchoolHolidays: r.demandeur?.openOnSchoolHolidays ?? false,
     }))
@@ -125,7 +120,6 @@ export async function saveServiceDemandeurSettings(
           semaineAb: r.semaineAb,
           validation: r.validation,
           themes: r.themes,
-          jauge: r.jauge,
         })),
       });
     }
