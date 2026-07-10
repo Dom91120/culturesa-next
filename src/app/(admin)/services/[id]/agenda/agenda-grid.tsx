@@ -2047,11 +2047,16 @@ export function AgendaGrid({
   ): {
     capacity?: number | null;
     demandeurs?: string[];
+    jauge?: boolean;
     recurInfo?: { period: string; dayHours: string };
   } => {
     const slot = slots.find((s) => s.id === slotId);
     const block = blocksByDay[dayKey]?.find((bl) => bl.slotId === slotId);
     const capacity = block?.capacity ?? slot?.capacity ?? service.capacity;
+    // État de la jauge DU créneau (slots.jauge) : bloc affiché, sinon récurrent,
+    // sinon ponctuel/miroir.
+    const jauge =
+      block?.jauge ?? slot?.jauge ?? uniqueSlots.find((u) => u.id === slotId)?.jauge ?? false;
     // Résumé récurrent affiché dans l'info-bulle : période active + jour/heures du
     // créneau PARENT (remplace la liste des dates côté admin).
     const recurInfo = slot
@@ -2060,10 +2065,10 @@ export function AgendaGrid({
           dayHours: `${DAY_NAMES[slot.slotDay ?? ""] ?? slot.slotDay ?? ""} · ${slot.startTime}–${slot.endTime}`,
         }
       : undefined;
-    if (!serviceDemandeurs.length) return { capacity, recurInfo };
+    if (!serviceDemandeurs.length) return { capacity, jauge, recurInfo };
     const ids = slotDemandeurs[slotId] ?? [];
     const demandeurs = serviceDemandeurs.filter((d) => ids.includes(d.id)).map((d) => d.label);
-    return { capacity, demandeurs, recurInfo };
+    return { capacity, demandeurs, jauge, recurInfo };
   };
 
   // Handlers de renderBlock via un ref STABLE : réassignés à chaque rendu (toujours

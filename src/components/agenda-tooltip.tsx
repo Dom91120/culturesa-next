@@ -17,6 +17,8 @@ export type AgendaTip =
       dates: string[];
       capacity?: number | null;
       demandeurs?: string[];
+      // « A une jauge » du créneau (slots.jauge) — absent = ligne masquée.
+      jauge?: boolean;
       recurInfo?: { period: string; dayHours: string };
     }
   | null;
@@ -42,6 +44,7 @@ export function useAgendaTooltip(opts: {
   ) => {
     capacity?: number | null;
     demandeurs?: string[];
+    jauge?: boolean;
     recurInfo?: { period: string; dayHours: string };
   };
   // Quand true, aucune info-bulle (ex. saisie de thème en cours côté usager).
@@ -97,6 +100,7 @@ export function useAgendaTooltip(opts: {
             dates,
             capacity: meta.capacity,
             demandeurs: meta.demandeurs,
+            jauge: meta.jauge,
             recurInfo: meta.recurInfo,
           };
         }
@@ -185,6 +189,11 @@ export function AgendaTooltip({
           {typeof tip.capacity === "number" && (
             <div>
               <span style={{ fontWeight: 600 }}>Capacité :</span> {tip.capacity}
+            </div>
+          )}
+          {typeof tip.jauge === "boolean" && (
+            <div>
+              <span style={{ fontWeight: 600 }}>Jauge :</span> {tip.jauge ? "active" : "inactive"}
             </div>
           )}
         </>

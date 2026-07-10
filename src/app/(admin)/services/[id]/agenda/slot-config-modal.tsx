@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
-import { Switch } from "@/components/switch";
 import { saveSlotConfigAction } from "./actions";
 
 /**
@@ -66,8 +65,13 @@ export function SlotConfigModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div className="modal-title">Configuration du créneau{title}</div>
-      <div className="form-grid">
-        <div className="field full">
+      {/* Capacité (colonne fixe 10rem) et Jauge (le reste) côte à côte. L'icône
+          capsule (18×36) EST la bascule de la jauge : un clic la fait passer
+          d'activée (couleur) à inactivée (grisée). Propagé aux miroirs pour un
+          récurrent. */}
+      <div className="form-grid" style={{ gridTemplateColumns: "10rem minmax(0, 1fr)" }}>
+        {/* Contenu centré verticalement dans la rangée (face au bloc jauge, plus haut). */}
+        <div className="field" style={{ justifyContent: "center" }}>
           <label htmlFor="cap-input">Capacité (places)</label>
           <input
             id="cap-input"
@@ -75,78 +79,78 @@ export function SlotConfigModal({
             min={0}
             value={capValue}
             onChange={(e) => setCapValue(e.target.value)}
+            // Largeur au besoin réel : 3 chiffres (999) + les flèches du spinner.
+            // Hauteur compacte (21px) : même gabarit que les champs des panneaux
+            // Réservations / plages horaires.
+            style={{
+              width: "4rem",
+              height: 21,
+              boxSizing: "border-box",
+              fontSize: ".78rem",
+              padding: "0 .35rem",
+            }}
           />
         </div>
-      </div>
-      {/* Mode jauge DU créneau : statut affiché (icône capsule, grisée si inactif)
-          + interrupteur. Propagé aux miroirs pour un récurrent. */}
-      <div className="field full" style={{ marginTop: ".6rem" }}>
-        <span
-          style={{
-            display: "block",
-            fontSize: ".7rem",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: ".06em",
-            color: "var(--muted)",
-            marginBottom: ".2rem",
-          }}
-        >
-          Jauge
-        </span>
-        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginTop: ".3rem" }}>
+        <div className="field">
+          <div style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+            <button
+              type="button"
+              onClick={() => setJauge((v) => !v)}
+              aria-label="Jauge"
+              aria-pressed={jauge}
+              title={jauge ? "Désactiver la jauge" : "Activer la jauge"}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                ...(jauge ? {} : { filter: "grayscale(1)", opacity: 0.55 }),
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="36"
+                viewBox="6 0 12 24"
+                aria-hidden="true"
+              >
+                <rect
+                  x="6.5"
+                  y="1"
+                  width="11"
+                  height="22"
+                  rx="5.5"
+                  fill="#fff"
+                  stroke="var(--border)"
+                  strokeWidth="1.4"
+                />
+                <clipPath id="slot-config-pill-clip">
+                  <rect x="9" y="3.4" width="6" height="17.2" rx="3" />
+                </clipPath>
+                <g clipPath="url(#slot-config-pill-clip)">
+                  <rect x="9" y="3.4" width="6" height="5.4" fill="var(--accent)" />
+                  <rect x="9" y="9.3" width="6" height="5.4" fill="var(--warn)" />
+                  <rect x="9" y="15.2" width="6" height="5.4" fill="var(--danger)" />
+                </g>
+              </svg>
+            </button>
+            <span style={{ fontSize: ".82rem", color: "var(--text)" }}>
+              {jauge ? "Jauge active" : "Jauge inactive"}
+            </span>
+          </div>
           <span
-            aria-hidden="true"
             style={{
-              display: "flex",
-              alignItems: "center",
-              ...(jauge ? {} : { filter: "grayscale(1)", opacity: 0.55 }),
+              fontSize: ".72rem",
+              fontStyle: "italic",
+              color: "var(--muted)",
             }}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="11"
-              height="22"
-              viewBox="6 0 12 24"
-              aria-hidden="true"
-            >
-              <rect
-                x="6.5"
-                y="1"
-                width="11"
-                height="22"
-                rx="5.5"
-                fill="#fff"
-                stroke="var(--border)"
-                strokeWidth="1.4"
-              />
-              <clipPath id="slot-config-pill-clip">
-                <rect x="9" y="3.4" width="6" height="17.2" rx="3" />
-              </clipPath>
-              <g clipPath="url(#slot-config-pill-clip)">
-                <rect x="9" y="3.4" width="6" height="5.4" fill="var(--accent)" />
-                <rect x="9" y="9.3" width="6" height="5.4" fill="var(--warn)" />
-                <rect x="9" y="15.2" width="6" height="5.4" fill="var(--danger)" />
-              </g>
-            </svg>
-          </span>
-          <Switch on={jauge} onChange={setJauge} />
-          <span style={{ fontSize: ".82rem", color: "var(--text)" }}>
-            {jauge ? "Jauge active" : "Jauge inactive"}
+            Active : les places se décomptent en participants (enfants + accompagnants) ; inactive :
+            une place par réservation.
           </span>
         </div>
-        <span
-          style={{
-            display: "block",
-            marginTop: ".4rem",
-            fontSize: ".72rem",
-            fontStyle: "italic",
-            color: "var(--muted)",
-          }}
-        >
-          Active : les places se décomptent en participants (enfants + accompagnants) ; inactive :
-          une place par réservation.
-        </span>
       </div>
       <div className="field full" style={{ marginTop: ".6rem" }}>
         <span
