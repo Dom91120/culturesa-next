@@ -3196,7 +3196,9 @@ export function UserAgendaGrid({
                 position: "relative",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: ".5rem",
+                // Flèches rapprochées du libellé (largeur du libellé figée juste
+                // au-dessus de la semaine la plus longue).
+                gap: ".1rem",
               }}
             >
               <button
@@ -3207,7 +3209,21 @@ export function UserAgendaGrid({
               >
                 ◀
               </button>
-              <span className="ex-nav-label">
+              <span
+                className="ex-nav-label"
+                // Largeur FIGÉE (dimensionnée sur la semaine la plus longue, texte
+                // centré) : les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre.
+                // Police proportionnelle étroite (Arial Narrow, repli Bahnschrift
+                // condensée) pour empiéter le moins possible sur la ligne de titre.
+                style={{
+                  fontFamily: '"Arial Narrow", Bahnschrift, "Segoe UI", sans-serif',
+                  fontStretch: "condensed",
+                  fontSize: ".74rem",
+                  fontWeight: 600,
+                  width: "6.4rem",
+                  textAlign: "center",
+                }}
+              >
                 {mondayStr
                   ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
                   : "…"}
@@ -3290,6 +3306,72 @@ export function UserAgendaGrid({
             </div>
           )}
         </div>
+        {/* Options (case « sans créneau » + impression) : sur la ligne de TITRE,
+            alignées à droite (le bloc précédent porte marginRight:auto). Masquées
+            sur mobile. */}
+        <div
+          style={{
+            display: isMobile ? "none" : "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: ".5rem",
+            // Plafond = la moitié DROITE de la ligne, moins la demi-nav de semaine
+            // (centrée en absolu, donc invisible pour le flux) : le libellé tient sur
+            // UNE ligne quand la place le permet, et se replie automatiquement sinon
+            // au lieu de passer sous la nav.
+            maxWidth: "calc(50% - 80px)",
+          }}
+        >
+          <div
+            className="planning-options-row"
+            style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
+          >
+            <label className="planning-option" style={{ whiteSpace: "normal", textAlign: "right" }}>
+              Masquer les horaires sans créneau
+              <input
+                type="checkbox"
+                checked={hideNoSlotPref}
+                onChange={(e) => setHideNoSlotPref(e.target.checked)}
+              />
+            </label>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            <button
+              type="button"
+              onClick={printMyBookings}
+              data-tip="Imprimer la liste de mes réservations"
+              aria-label="Imprimer la liste de mes réservations"
+              style={{
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--rad-sm)",
+                padding: ".28rem .38rem",
+                cursor: "pointer",
+                color: "var(--muted)",
+                display: "flex",
+                alignItems: "center",
+                lineHeight: 1,
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                <rect x="6" y="14" width="12" height="8" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div
@@ -3336,65 +3418,7 @@ export function UserAgendaGrid({
             </span>
           )}
         </div>
-        {/* Options (case « sans créneau » + impression) : masquées sur mobile. */}
-        <div
-          style={{
-            display: isMobile ? "none" : "flex",
-            alignItems: "center",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <div
-            className="planning-options-row"
-            style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
-          >
-            <label className="planning-option">
-              Masquer les horaires sans créneau
-              <input
-                type="checkbox"
-                checked={hideNoSlotPref}
-                onChange={(e) => setHideNoSlotPref(e.target.checked)}
-              />
-            </label>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            <button
-              type="button"
-              onClick={printMyBookings}
-              data-tip="Imprimer la liste de mes réservations"
-              aria-label="Imprimer la liste de mes réservations"
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--muted)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
-            </button>
-          </div>
-        </div>
+        {/* (Options « sans créneau » + impression : remontées sur la ligne de titre.) */}
       </div>
 
       {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour.
@@ -3785,28 +3809,60 @@ export function UserAgendaGrid({
               whiteSpace: "nowrap",
             }}
           >
-            {pendingCount > 0
-              ? [
-                  pendingAdds.length > 0
-                    ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
-                    : "",
-                  pendingRemovals.length > 0
-                    ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
-                    : "",
-                  Object.keys(pendingUpdates).length > 0
-                    ? `${Object.keys(pendingUpdates).length} élément${
-                        Object.keys(pendingUpdates).length > 1 ? "s" : ""
-                      } à modifier`
-                    : "",
-                  Object.keys(pendingMoves).length > 0
-                    ? `${Object.keys(pendingMoves).length} élément${
-                        Object.keys(pendingMoves).length > 1 ? "s" : ""
-                      } à déplacer`
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
-              : "Aucune modification en attente"}
+            {(() => {
+              // Ajout RÉCURRENT en attente → avertissement --danger à la place du
+              // compteur : nombre de dates réellement réservées (miroirs à venir du
+              // créneau parent — la parité A/B est déjà portée par les miroirs) sur
+              // la période citée. Le verrou « une seule action » garantit qu'il n'y
+              // a rien d'autre à afficher en même temps.
+              const rec = pendingAdds.find((a) => !a.ponctuel);
+              if (rec) {
+                const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+                const n = uniqueSlots.filter(
+                  (u) => u.parentSlotId === rec.slotId && u.slotDate >= today,
+                ).length;
+                const periodLabel =
+                  periods.find((p) => p.id === rec.periodId)?.label ?? "la période";
+                return (
+                  // whiteSpace normal : le <p> conteneur est en nowrap — ce message,
+                  // plus long que les compteurs, se replie sur 2 lignes quand la
+                  // place vient à manquer au lieu de déborder.
+                  <span
+                    style={{
+                      color: "var(--danger)",
+                      fontWeight: "bold",
+                      whiteSpace: "normal",
+                      display: "inline-block",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    Ceci réservera {n} date{n > 1 ? "s" : ""} sur {periodLabel}
+                  </span>
+                );
+              }
+              return pendingCount > 0
+                ? [
+                    pendingAdds.length > 0
+                      ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
+                      : "",
+                    pendingRemovals.length > 0
+                      ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
+                      : "",
+                    Object.keys(pendingUpdates).length > 0
+                      ? `${Object.keys(pendingUpdates).length} élément${
+                          Object.keys(pendingUpdates).length > 1 ? "s" : ""
+                        } à modifier`
+                      : "",
+                    Object.keys(pendingMoves).length > 0
+                      ? `${Object.keys(pendingMoves).length} élément${
+                          Object.keys(pendingMoves).length > 1 ? "s" : ""
+                        } à déplacer`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "Aucune modification en attente";
+            })()}
           </p>
         </div>
       </div>

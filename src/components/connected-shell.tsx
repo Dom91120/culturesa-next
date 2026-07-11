@@ -54,15 +54,32 @@ export function ConnectedShell({
       if (localStorage.getItem("sidebar-collapsed") === "1") setCollapsed(true);
     } catch {}
   }, []);
+  // Fenêtre ÉTROITE (≤ 1000px) : sidebar réduite D'OFFICE, indépendamment de la
+  // préférence (le script <head> de layout.tsx couvre le pré-paint).
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1000px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  // État EFFECTIF : préférence utilisateur OU fenêtre étroite.
+  const effCollapsed = collapsed || narrow;
+  // La classe html `sb-collapsed` (alias CSS pré-hydratation, cf. layout.tsx) suit
+  // l'état effectif — les règles CSS `.collapsed` matchent aussi `html.sb-collapsed`.
+  useEffect(() => {
+    try {
+      document.documentElement.classList.toggle("sb-collapsed", effCollapsed);
+    } catch {}
+  }, [effCollapsed]);
   function toggleSidebar() {
     const next = !collapsed;
     setCollapsed(next);
     try {
       localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
-      // La classe html (posée par le script <head> avant le premier paint) doit
-      // suivre : les règles CSS `.collapsed` matchent aussi `html.sb-collapsed`.
-      document.documentElement.classList.toggle("sb-collapsed", next);
     } catch {}
+    // (Classe html synchronisée par l'effet sur l'état effectif ci-dessus.)
   }
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -202,7 +219,7 @@ export function ConnectedShell({
         <div className="app-layout">
           <div
             id="service-sidebar-wrap"
-            className={collapsed ? "collapsed" : ""}
+            className={effCollapsed ? "collapsed" : ""}
             style={{
               width: "16%",
               minWidth: "fit-content",
@@ -211,14 +228,17 @@ export function ConnectedShell({
               position: "relative",
             }}
           >
-            <button
-              type="button"
-              id="sidebar-toggle"
-              onClick={toggleSidebar}
-              title="Réduire / agrandir"
-            >
-              ☰
-            </button>
+            {/* Bascule masquée en fenêtre étroite : la réduction y est forcée. */}
+            {!narrow && (
+              <button
+                type="button"
+                id="sidebar-toggle"
+                onClick={toggleSidebar}
+                title="Réduire / agrandir"
+              >
+                ☰
+              </button>
+            )}
             <div className="sidebar-header">
               <div
                 className="sidebar-title"
@@ -239,7 +259,7 @@ export function ConnectedShell({
                   key={s.id}
                   type="button"
                   className={activeServiceId === s.id ? "active" : ""}
-                  title={collapsed ? s.label : undefined}
+                  title={effCollapsed ? s.label : undefined}
                   onClick={() => goToService(s.id)}
                 >
                   <span className="sb-icon">{s.icon || "📄"}</span>
@@ -253,7 +273,7 @@ export function ConnectedShell({
                   id="sidebar-admin-btn"
                   className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
                   style={{ marginTop: "1rem" }}
-                  title={collapsed ? "Administration" : undefined}
+                  title={effCollapsed ? "Administration" : undefined}
                   onClick={goToAdmin}
                 >
                   <span className="sb-icon">⚙️</span>
@@ -265,7 +285,7 @@ export function ConnectedShell({
                 type="button"
                 className={`sidebar-compte-btn${pathname === "/mon-compte" ? " active" : ""}`}
                 style={{ marginTop: "1rem" }}
-                title={collapsed ? "Mon compte" : undefined}
+                title={effCollapsed ? "Mon compte" : undefined}
                 onClick={() => router.push("/mon-compte")}
               >
                 <span className="sb-icon">👤</span>

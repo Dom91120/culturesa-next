@@ -27,12 +27,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             (anti-FOUC) : sans ce script, un utilisateur en mode sombre voyait un flash
             clair, et une sidebar repliée mémorisée apparaissait dépliée le temps de
             l'hydratation. `sb-collapsed` (jamais en mobile : la sidebar y est une barre
-            horizontale) est relayée par l'état React des shells après hydratation. */}
+            horizontale) est relayée par l'état React des shells après hydratation.
+            Sous 1000px la sidebar est réduite D'OFFICE (même sans préférence). */}
         <script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: script inline statique, sans donnée externe.
           dangerouslySetInnerHTML={{
             __html:
-              "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.remove('light');if(!matchMedia('(max-width: 640px)').matches&&localStorage.getItem('sidebar-collapsed')==='1')document.documentElement.classList.add('sb-collapsed');}catch(e){}",
+              "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.remove('light');if(!matchMedia('(max-width: 640px)').matches&&(localStorage.getItem('sidebar-collapsed')==='1'||matchMedia('(max-width: 1000px)').matches))document.documentElement.classList.add('sb-collapsed');}catch(e){}",
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

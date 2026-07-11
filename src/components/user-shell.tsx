@@ -37,10 +37,9 @@ export function UserShell({
     setCollapsed(next);
     try {
       localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
-      // La classe html (posée par le script <head> avant le premier paint) doit
-      // suivre : les règles CSS `.collapsed` matchent aussi `html.sb-collapsed`.
-      document.documentElement.classList.toggle("sb-collapsed", next);
     } catch {}
+    // La classe html est synchronisée par l'effet sur l'état EFFECTIF (préférence
+    // OU fenêtre étroite), plus bas.
   }
   // Menu « sandwich » des services en mode smartphone (replié par défaut).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -48,6 +47,9 @@ export function UserShell({
   // est une barre horizontale pleine largeur → l'état « collapsed » (toggle desktop) ne doit
   // JAMAIS s'y appliquer, même s'il a été activé avant de réduire la fenêtre.
   const [isMobile, setIsMobile] = useState(false);
+  // Fenêtre ÉTROITE (≤ 1000px, hors mobile) : sidebar réduite D'OFFICE, indépendamment
+  // de la préférence (le script <head> de layout.tsx couvre le pré-paint).
+  const [narrow, setNarrow] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,14 +60,24 @@ export function UserShell({
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // La classe html `sb-collapsed` (alias CSS pré-hydratation, cf. layout.tsx) ne doit
-  // JAMAIS s'appliquer en mobile : on la retire en passant mobile, on la restaure en
-  // revenant desktop si la préférence « repliée » est active.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1000px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // État EFFECTIF : préférence utilisateur OU fenêtre étroite — jamais en mobile.
+  const effCollapsed = (collapsed || narrow) && !isMobile;
+
+  // La classe html `sb-collapsed` (alias CSS pré-hydratation, cf. layout.tsx) suit
+  // l'état effectif : retirée en mobile, posée en fenêtre étroite ou préférence repliée.
   useEffect(() => {
     try {
-      document.documentElement.classList.toggle("sb-collapsed", collapsed && !isMobile);
+      document.documentElement.classList.toggle("sb-collapsed", effCollapsed);
     } catch {}
-  }, [collapsed, isMobile]);
+  }, [effCollapsed]);
 
   const match = pathname.match(/^\/reservations\/([^/]+)/);
   const activeServiceId = match ? match[1] : null;
@@ -158,7 +170,7 @@ export function UserShell({
         <div className="app-layout">
           <div
             id="service-sidebar-wrap"
-            className={`${collapsed && !isMobile ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
+            className={`${effCollapsed ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
             style={{
               width: "16%",
               minWidth: "fit-content",
@@ -167,14 +179,17 @@ export function UserShell({
               position: "relative",
             }}
           >
-            <button
-              type="button"
-              id="sidebar-toggle"
-              onClick={toggleSidebar}
-              title="Réduire / agrandir"
-            >
-              ☰
-            </button>
+            {/* Bascule masquée en fenêtre étroite : la réduction y est forcée. */}
+            {!narrow && (
+              <button
+                type="button"
+                id="sidebar-toggle"
+                onClick={toggleSidebar}
+                title="Réduire / agrandir"
+              >
+                ☰
+              </button>
+            )}
             {/* Bouton « sandwich » visible uniquement en mode smartphone (CSS) :
                 déplie/replie la liste des services affichée sur plusieurs lignes. */}
             <button
@@ -218,7 +233,7 @@ export function UserShell({
                   key={s.id}
                   type="button"
                   className={activeServiceId === s.id ? "active" : ""}
-                  title={collapsed && !isMobile ? s.label : undefined}
+                  title={effCollapsed ? s.label : undefined}
                   onClick={() => router.push(`/reservations/${s.id}`)}
                 >
                   <span className="sb-icon">{s.icon || "📄"}</span>
@@ -236,7 +251,7 @@ export function UserShell({
                 type="button"
                 className={`sidebar-compte-btn${pathname === "/mon-compte" ? " active" : ""}`}
                 style={{ marginTop: ".6rem" }}
-                title={collapsed && !isMobile ? "Mon compte" : undefined}
+                title={effCollapsed ? "Mon compte" : undefined}
                 onClick={() => router.push("/mon-compte")}
               >
                 <span className="sb-icon">👤</span>
