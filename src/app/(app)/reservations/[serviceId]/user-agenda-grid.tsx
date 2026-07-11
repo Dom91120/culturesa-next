@@ -1032,10 +1032,13 @@ export function UserAgendaGrid({
     exercices.length ? exercices[exercices.length - 1].id : null,
   );
   const [periodIdx, setPeriodIdx] = useState(0);
-  // Vue verrouillée sur le type du demandeur de l'usager : récurrent → « Modèle de
-  // période » ; non-récurrent (ponctuel) → « Semaine réelle » (dates). Figée à
-  // l'initialisation (pas de bascule côté usager).
-  const [mode] = useState<"model" | "realweek">(modes.recurringMode ? "model" : "realweek");
+  // Agenda usager UNIFIÉ (décision 2026-07-11) : TOUJOURS en « Semaine réelle »,
+  // quel que soit le type du demandeur — récurrents en jaune, ponctuels en bleu-gris,
+  // côte à côte. Cliquer un récurrent réserve TOUTE la récurrence (période couvrante,
+  // parité de la semaine affichée) ; cliquer un ponctuel réserve l'occurrence.
+  // L'ancien mode « Modèle de période » reste dans le code (mode figé) — nettoyage
+  // du code mort dans un chantier dédié.
+  const [mode] = useState<"model" | "realweek">("realweek");
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
   // Mode "Semaine réelle" : période active verrouillée. Sans ce verrou, on
   // re-dérive la période depuis la semaine à chaque ◀/▶ — et quand une semaine
@@ -2073,9 +2076,16 @@ export function UserAgendaGrid({
     setPendingAdds((prev) => {
       if (prev.some((a) => a.key === key)) return prev.filter((a) => a.key !== key);
       const time = slotTime(slotId, ponctuel);
+      // Récurrent (agenda unifié : réservé depuis la Semaine réelle) → le libellé
+      // explicite la RÉCURRENCE : cadence (chaque semaine / 1 sem. sur 2) + période.
+      const periodLabel = !ponctuel
+        ? (periods.find((p) => p.id === effectivePeriodId)?.label ?? "")
+        : "";
+      const cadence =
+        abMode && effectiveWeek ? `1 semaine sur 2 (sem. ${effectiveWeek})` : "chaque semaine";
       const label = ponctuel
         ? `${ponctuelDateLabel(slotId)} · ${time}`
-        : `${DAY_NAMES[dayKey] ?? dayKey} · ${time}`;
+        : `${DAY_NAMES[dayKey] ?? dayKey} · ${time} · ${cadence}${periodLabel ? ` — ${periodLabel}` : ""}`;
       return [
         ...prev,
         {
