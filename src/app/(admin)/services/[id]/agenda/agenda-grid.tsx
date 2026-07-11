@@ -3455,13 +3455,26 @@ export function AgendaGrid({
               gaugeTotal > 0 ? Math.min(100, Math.round((gaugeSum / gaugeTotal) * 100)) : 0;
             const gaugeFill = gaugeColor(gaugePct);
             const showGauge = stackBlock.jauge;
+            // Créneau « JOURNÉE ENTIÈRE » (sans horaires) : pas de mini-grille horaire
+            // (les repères seraient calculés sur les replis 00:00 → 01:00) ni d'horaire
+            // dans le sous-titre — libellé « Journée entière » à la place.
+            const allday = stackBlock.isAllDay;
             const sMin = stackSlot ? toMinutes(stackSlot.startTime, 0) : 0;
             const eMin = stackSlot ? toMinutes(stackSlot.endTime, sMin + 60) : sMin + 60;
-            const hasRange = eMin > sMin;
+            const hasRange = !allday && eMin > sMin;
             const pxPerMinModal = 24 / 15; // 24 px par quart d'heure (legacy)
             const blockMinH = hasRange ? Math.max(56, (eMin - sMin) * pxPerMinModal) : 56;
             const marks: number[] = [];
             if (hasRange) for (let m = sMin; m <= eMin; m += 15) marks.push(m);
+            const timeLabel = (s: NonNullable<typeof stackSlot>) =>
+              allday ? "Journée entière" : `${s.startTime} – ${s.endTime}`;
+            // Clic sur le FOND du créneau → modale de création, aux MÊMES conditions
+            // que la grille (cellCreatable) : pas complet, pas un récurrent en semaine
+            // réelle (consultation), période active pour un récurrent.
+            const stackCreatable =
+              !stackReadOnly &&
+              stackBlock.used < stackBlock.capacity &&
+              (isPonctuel || (effectivePeriodId != null && effectivePeriodId > 0));
             return (
               <>
                 <button
@@ -3508,9 +3521,9 @@ export function AgendaGrid({
                     <span className="panel-subtitle" style={{ margin: 0 }}>
                       {isPonctuel
                         ? stackSlot
-                          ? `${stackSlot.startTime} – ${stackSlot.endTime}`
+                          ? timeLabel(stackSlot)
                           : ""
-                        : `${dayLabel}${stackSlot ? ` · ${stackSlot.startTime} – ${stackSlot.endTime}` : ""}`}
+                        : `${dayLabel}${stackSlot ? ` · ${timeLabel(stackSlot)}` : ""}`}
                     </span>
                   </div>
                   {/* Droite : bascules. « Mode validation » est toujours affiché ;
@@ -3563,17 +3576,21 @@ export function AgendaGrid({
                   </div>
                 </div>
                 <div className="csm-grid-wrap">
-                  <div className="csm-time-col" style={{ height: blockMinH }}>
-                    {marks.map((m) => (
-                      <div
-                        key={m}
-                        className="csm-time-mark"
-                        style={{ top: (m - sMin) * pxPerMinModal }}
-                      >
-                        {`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`}
-                      </div>
-                    ))}
-                  </div>
+                  {/* Colonne horaire masquée pour un créneau « journée entière ». */}
+                  {!allday && (
+                    <div className="csm-time-col" style={{ height: blockMinH }}>
+                      {marks.map((m) => (
+                        <div
+                          key={m}
+                          className="csm-time-mark"
+                          style={{ top: (m - sMin) * pxPerMinModal }}
+                        >
+                          {`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: fond du créneau (clic = créer une réservation) */}
                   <div
                     className={`csm-slot-block${isPonctuel ? " is-uniq" : ""}`}
                     // Info-bulle au survol du créneau, identique à celle de la grille :
@@ -3584,11 +3601,27 @@ export function AgendaGrid({
                     data-slot-tip=""
                     data-slotid={stackKey.slotId}
                     data-daykey={stackKey.dayKey}
+                    onClick={(e) => {
+                      // Clic sur le FOND uniquement : un clic sur un badge (édition,
+                      // validation, pointage, ✕…) garde son comportement propre.
+                      if (!stackCreatable) return;
+                      if (
+                        (e.target as HTMLElement).closest(
+                          ".planning-name-tag, button, input, select, label",
+                        )
+                      )
+                        return;
+                      clearTip();
+                      // La pile reste ouverte derrière : fermer la création y ramène
+                      // (même patron que la modale détail, cf. plus bas).
+                      openCreate(stackKey.dayKey, stackKey.slotId, isPonctuel, uSlot?.slotDate);
+                    }}
                     style={
                       {
                         minHeight: blockMinH,
                         "--quarter-h": "24px",
                         "--hour-h": "96px",
+                        cursor: stackCreatable ? "pointer" : undefined,
                       } as React.CSSProperties
                     }
                   >
@@ -3884,7 +3917,14 @@ export function AgendaGrid({
                   })
                 : "créneau ponctuel"
               : (DAY_NAMES[createCtx.dayKey] ?? createCtx.dayKey)) +
-            (createSlot ? ` · ${createSlot.startTime}–${createSlot.endTime}` : "");
+            // Créneau « journée entière » (horaires vides) : libellé dédié au lieu de « – ».
+            (createSlot
+              ? ` · ${
+                  !createSlot.startTime || !createSlot.endTime
+                    ? "Journée entière"
+                    : `${createSlot.startTime}–${createSlot.endTime}`
+                }`
+              : "");
           return (
             <ModalOverlay onClose={() => setCreateCtx(null)}>
               <button
