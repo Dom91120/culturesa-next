@@ -3211,18 +3211,10 @@ export function UserAgendaGrid({
               </button>
               <span
                 className="ex-nav-label"
-                // Largeur FIGÉE (dimensionnée sur la semaine la plus longue, texte
-                // centré) : les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre.
-                // Police proportionnelle étroite (Arial Narrow, repli Bahnschrift
-                // condensée) pour empiéter le moins possible sur la ligne de titre.
-                style={{
-                  fontFamily: '"Arial Narrow", Bahnschrift, "Segoe UI", sans-serif',
-                  fontStretch: "condensed",
-                  fontSize: ".74rem",
-                  fontWeight: 600,
-                  width: "6.4rem",
-                  textAlign: "center",
-                }}
+                // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
+                // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police et
+                // gabarit HARMONISÉS sur la nav de l'agenda admin (8rem, police de l'app).
+                style={{ width: "8rem", textAlign: "center" }}
               >
                 {mondayStr
                   ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`

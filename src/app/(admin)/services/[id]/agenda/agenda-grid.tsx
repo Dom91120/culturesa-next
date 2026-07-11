@@ -2632,7 +2632,8 @@ export function AgendaGrid({
         {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
             titre et le sélecteur. */}
         {mode === "realweek" && (
-          <div className="periode-nav" style={{ margin: "0 auto" }}>
+          // gap resserré : flèches ◀ ▶ au plus près du libellé (largeur figée).
+          <div className="periode-nav" style={{ margin: "0 auto", gap: ".1rem" }}>
             <button
               type="button"
               className="ex-arrow"
@@ -2641,7 +2642,12 @@ export function AgendaGrid({
             >
               ◀
             </button>
-            <span className="ex-nav-label">
+            <span
+              className="ex-nav-label"
+              // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
+              // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police inchangée.
+              style={{ width: "8rem", textAlign: "center" }}
+            >
               {mondayStr
                 ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
                 : "…"}
