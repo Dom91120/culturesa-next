@@ -19,12 +19,12 @@ function isBothWeeks(weeks: string | null): boolean {
 async function main() {
   const apply = process.argv.includes("--apply");
 
-  const abRows = await prisma.serviceDemandeurSettings.findMany({
-    where: { semaineAb: true },
-    select: { serviceId: true },
-    distinct: ["serviceId"],
+  // Mode A/B = réglage GLOBAL du service (Service.recurrentMode ∧ semaineAb).
+  const abRows = await prisma.service.findMany({
+    where: { recurrentMode: true, semaineAb: true },
+    select: { id: true },
   });
-  const abServiceIds = abRows.map((r) => r.serviceId);
+  const abServiceIds = abRows.map((r) => r.id);
   if (abServiceIds.length === 0) {
     console.log("Aucun service en mode A/B — rien à faire.");
     return;

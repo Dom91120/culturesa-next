@@ -43,11 +43,13 @@ function activeDayKeys(csv: string): DayKey[] {
     .filter((d): d is DayKey => DAYS.includes(d as DayKey));
 }
 
-/** Un service est-il en mode semaine A/B ? (au moins un demandeur avec semaineAb). */
+/** Un service est-il en mode semaine A/B ? (réglage GLOBAL du service, ssi récurrent actif). */
 async function serviceHasAbMode(serviceId: string): Promise<boolean> {
-  return (
-    (await prisma.serviceDemandeurSettings.count({ where: { serviceId, semaineAb: true } })) > 0
-  );
+  const svc = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { recurrentMode: true, semaineAb: true },
+  });
+  return !!svc && svc.recurrentMode && svc.semaineAb;
 }
 
 /**

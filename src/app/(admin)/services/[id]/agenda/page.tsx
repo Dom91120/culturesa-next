@@ -17,6 +17,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       id: true,
       label: true,
       capacity: true,
+      recurrentMode: true,
       semaineAb: true,
       themesMode: true,
       showPreviousExercices: true,
@@ -25,11 +26,11 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   });
   if (!service) notFound();
 
-  // Les modes d'affichage (A/B, thème, jauge…) sont DÉRIVÉS de la matrice
-  // service × demandeur, pas des colonnes du service (qui ne la reflètent pas).
+  // Modes : récurrent et A/B sont GLOBAUX au service (Service.recurrentMode/semaineAb) ;
+  // validation/thèmes sont dérivés de la matrice service × demandeur.
   // Les lignes (avec libellé) servent aussi au bandeau debug admin.
   const demRows = await getServiceDemandeurSettingsLabeled(id);
-  const modes = deriveServiceModes(demRows);
+  const modes = deriveServiceModes(service, demRows);
 
   // Fallback legacy : si le service a ses propres périodes actives, n'afficher QUE
   // celles-là ; sinon retomber sur les périodes globales (serviceId null). Sans ce

@@ -5,8 +5,6 @@ import { Fragment, useEffect, useState } from "react";
 export type DemInfoRow = {
   demandeurId: number;
   label: string;
-  recurrent: boolean;
-  semaineAb: boolean;
   validation: boolean;
   themes: boolean;
   openOnHolidays: boolean;
@@ -14,11 +12,12 @@ export type DemInfoRow = {
 };
 
 // Bandeau debug admin (port du legacy `dem-info-*`) : liste des demandeurs du
-// service avec leurs modes (Récurrent, Sem. A/B, Validation, Thèmes — la jauge est
-// désormais portée par chaque créneau, cf. slots.jauge) et les
-// deux flags d'ouverture (jours fériés / vacances scolaires), comme le bandeau debug
-// de la page réservations. Affiché uniquement quand le mode debug est actif
-// (localStorage `rc_debug` / classe `body.debug-mode`), activable depuis Configuration.
+// service avec leurs modes (Validation, Thèmes — la jauge est portée par chaque
+// créneau [slots.jauge] ; récurrent et A/B sont GLOBAUX au service
+// [Service.recurrentMode/semaineAb]) et les deux flags d'ouverture (jours fériés /
+// vacances scolaires), comme le bandeau debug de la page réservations. Affiché
+// uniquement quand le mode debug est actif (localStorage `rc_debug` / classe
+// `body.debug-mode`), activable depuis Configuration.
 export function AdminDemInfo({ rows }: { rows: DemInfoRow[] }) {
   // Lecture côté client uniquement (comme le legacy) → initial false, donc pas de
   // décalage d'hydratation (le serveur ne rend rien).
@@ -63,8 +62,6 @@ export function AdminDemInfo({ rows }: { rows: DemInfoRow[] }) {
           <div style={{ color: "var(--text)", fontWeight: 600, textAlign: "right" }}>{r.label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
             <span style={{ color: "var(--border)" }}>|</span>
-            <Flag on={r.recurrent} label="Récurrent" />
-            <Flag on={r.semaineAb} label="Sem. A/B" />
             <Flag on={r.validation} label="Validation" />
             <Flag on={r.themes} label="Thèmes" />
             <Flag on={r.openOnHolidays} label="Ouvert les jours fériés" />

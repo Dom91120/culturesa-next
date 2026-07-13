@@ -439,8 +439,12 @@ async function main() {
       },
     });
   }
-  // Active le mode semaines A/B sur svc_001 (démo).
-  await prisma.service.update({ where: { id: "svc_001" }, data: { semaineAb: true } });
+  // Active le récurrent + le mode semaines A/B sur svc_001 (démo). Réglages
+  // GLOBAUX du service (Service.recurrentMode/semaineAb, cf. Configuration).
+  await prisma.service.update({
+    where: { id: "svc_001" },
+    data: { recurrentMode: true, semaineAb: true },
+  });
   console.log(`✓ Démo agenda : ${demoBookings.length} réservations récurrentes (svc_001 en A/B).`);
 
   // ── Échantillon d'utilisateurs FICTIFS pour les tests (connexion mot de passe) ──

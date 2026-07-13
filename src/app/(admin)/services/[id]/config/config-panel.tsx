@@ -1,75 +1,24 @@
 "use client";
 
 // Onglet « Configuration » : réglages globaux + matrice demandeurs (AUTOSAVE) et
-// thèmes (barre de sauvegarde dédiée). Branché aux actions des onglets Demandeurs
-// et Thèmes. La refonte « globaux + par-demandeur » se reprojette sur la matrice
-// service × demandeur en respectant les règles de synchro (semaineAb uniforme entre
-// récurrents, jauge uniforme par mode).
+// thèmes (barre de sauvegarde dédiée). Les globaux « Créneaux récurrents » et
+// « Alternance A/B » vivent sur le SERVICE (recurrentMode/semaineAb, persistance
+// immédiate) ; la matrice service × demandeur ne porte plus que validation/thèmes.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Switch } from "@/components/switch";
 import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
-import { setGaugeAccompagnantsAction } from "./actions";
-
-function Segmented<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string }[];
-}) {
-  return (
-    <div
-      style={{
-        display: "inline-flex",
-        border: "1px solid var(--border)",
-        borderRadius: 99,
-        background: "var(--surface2)",
-        padding: 1,
-        gap: 2,
-      }}
-    >
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            style={{
-              border: "none",
-              borderRadius: 99,
-              padding: ".18rem .65rem",
-              fontSize: ".7rem",
-              lineHeight: 1,
-              fontWeight: active ? 600 : 500,
-              cursor: "pointer",
-              background: active ? "var(--accent)" : "transparent",
-              color: active ? "#0f1117" : "var(--muted)",
-              transition: "background .15s, color .15s",
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+import { setGaugeAccompagnantsAction, setRecurrentModeAction, setSemaineAbAction } from "./actions";
 
 // ── Types & helpers ──────────────────────────────────────────────────────────
 
-type Mode = "recurrent" | "ponctuel";
 type ThemeMode = "libre" | "liste";
 type DemandeurOption = { id: number; label: string };
 type DemRow = {
   key: string;
   demandeurId: number;
-  mode: Mode;
   validation: boolean;
   themes: boolean;
 };
@@ -82,23 +31,20 @@ type Props = {
   initialThemeMode: ThemeMode;
   initialThemes: string[];
   initialGaugeAccompagnants: boolean;
+  initialRecurrentMode: boolean;
+  initialSemaineAb: boolean;
 };
 
-/** Reprojette l'état (globaux + par-demandeur) vers la matrice service × demandeur.
- *  (La jauge n'en fait plus partie : elle est portée par chaque créneau — slots.jauge.) */
-function buildMatrix(rows: DemRow[], semaineAb: boolean): DemandeurSettingRow[] {
+/** Reprojette l'état par-demandeur vers la matrice service × demandeur.
+ *  (Jauge → par créneau ; récurrent/A/B → globaux du service.) */
+function buildMatrix(rows: DemRow[]): DemandeurSettingRow[] {
   return rows
     .filter((r) => r.demandeurId > 0)
-    .map((r) => {
-      const recurrent = r.mode === "recurrent";
-      return {
-        demandeurId: r.demandeurId,
-        recurrent,
-        semaineAb: recurrent && semaineAb,
-        validation: r.validation,
-        themes: r.themes,
-      };
-    });
+    .map((r) => ({
+      demandeurId: r.demandeurId,
+      validation: r.validation,
+      themes: r.themes,
+    }));
 }
 
 /** Signature stable (triée) d'une matrice, pour détecter un vrai changement. */
@@ -139,11 +85,13 @@ export function ConfigPanel({
   initialThemeMode,
   initialThemes,
   initialGaugeAccompagnants,
+  initialRecurrentMode,
+  initialSemaineAb,
 }: Props) {
   const counter = useRef(0);
 
-  // Réglage service-global « prise en compte des accompagnants dans la jauge ».
-  // Persistance immédiate (dédiée, indépendante de la matrice demandeurs).
+  // Réglages service-globaux (Service.*) : persistance immédiate, dédiée,
+  // indépendante de la matrice demandeurs.
   const [gaugeAccompagnants, setGaugeAccompagnants] = useState(initialGaugeAccompagnants);
   const [, startGaugeAcc] = useTransition();
   function toggleGaugeAccompagnants(v: boolean) {
@@ -152,16 +100,27 @@ export function ConfigPanel({
       await setGaugeAccompagnantsAction(serviceId, v);
     });
   }
+  const [recurrentMode, setRecurrentMode] = useState(initialRecurrentMode);
+  const [, startRecurrent] = useTransition();
+  function toggleRecurrentMode(v: boolean) {
+    setRecurrentMode(v);
+    startRecurrent(async () => {
+      await setRecurrentModeAction(serviceId, v);
+    });
+  }
+  const [semaineAb, setSemaineAb] = useState(initialSemaineAb);
+  const [, startSemaineAb] = useTransition();
+  function toggleSemaineAb(v: boolean) {
+    setSemaineAb(v);
+    startSemaineAb(async () => {
+      await setSemaineAbAction(serviceId, v);
+    });
+  }
 
-  // Réglages globaux dérivés de la matrice initiale (cohérence inter-lignes).
-  const [semaineAb, setSemaineAb] = useState(() =>
-    initialRows.some((r) => r.recurrent && r.semaineAb),
-  );
   const [rows, setRows] = useState<DemRow[]>(() =>
     initialRows.map((r, i) => ({
       key: `db-${i}`,
       demandeurId: r.demandeurId,
-      mode: r.recurrent ? "recurrent" : "ponctuel",
       validation: r.validation,
       themes: r.themes,
     })),
@@ -172,7 +131,7 @@ export function ConfigPanel({
   // rendu (l'argument de useRef est évalué à chaque rendu même s'il n'est utilisé qu'une fois).
   const lastSavedSig = useRef<string | null>(null);
   if (lastSavedSig.current === null) {
-    lastSavedSig.current = matrixSig(buildMatrix(rows, semaineAb));
+    lastSavedSig.current = matrixSig(buildMatrix(rows));
   }
   const [savedFlash, setSavedFlash] = useState(false);
   const flashTimer = useRef<number | null>(null);
@@ -185,7 +144,7 @@ export function ConfigPanel({
       firstRender.current = false;
       return;
     }
-    const payload = buildMatrix(rows, semaineAb);
+    const payload = buildMatrix(rows);
     const sig = matrixSig(payload);
     if (sig === lastSavedSig.current) return; // rien de neuf à persister
     const handle = window.setTimeout(() => {
@@ -203,7 +162,7 @@ export function ConfigPanel({
       });
     }, 450);
     return () => window.clearTimeout(handle);
-  }, [rows, semaineAb, serviceId]);
+  }, [rows, serviceId]);
 
   // Thèmes : barre de sauvegarde explicite (base « enregistrée » mutable).
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode);
@@ -251,10 +210,6 @@ export function ConfigPanel({
     () => allDemandeurs.filter((d) => !usedIds.has(d.id)),
     [allDemandeurs, usedIds],
   );
-  const hasRecurrent = useMemo(
-    () => rows.some((r) => r.demandeurId > 0 && r.mode === "recurrent"),
-    [rows],
-  );
   const labelFor = useCallback(
     (id: number) => allDemandeurs.find((d) => d.id === id)?.label ?? "",
     [allDemandeurs],
@@ -272,7 +227,6 @@ export function ConfigPanel({
       {
         key: `new-${counter.current++}`,
         demandeurId: 0,
-        mode: "ponctuel",
         validation: false,
         themes: false,
       },
@@ -310,18 +264,24 @@ export function ConfigPanel({
             Paramètres globaux du service
           </div>
           <p style={{ fontSize: ".75rem", color: "var(--muted)", margin: "0 0 1rem" }}>
-            S'appliquent à tous les demandeurs du même mode. Enregistrement automatique.
+            S'appliquent à tout le service. Enregistrement automatique.
           </p>
 
           <GlobalRow
+            label="Créneaux récurrents (Modèle de période)"
+            desc="Le service propose des créneaux récurrents, définis semaine type par période (vue « Modèle de période » de l'agenda)."
+          >
+            <Switch on={recurrentMode} onChange={toggleRecurrentMode} />
+          </GlobalRow>
+          <GlobalRow
             label="Alternance Semaine A / B"
             desc={
-              hasRecurrent
+              recurrentMode
                 ? "Les créneaux récurrents alternent une semaine A et une semaine B."
-                : "Sans effet : aucun demandeur récurrent pour l'instant."
+                : "Sans effet : les créneaux récurrents sont désactivés."
             }
           >
-            <Switch on={semaineAb} disabled={!hasRecurrent} onChange={setSemaineAb} />
+            <Switch on={semaineAb} disabled={!recurrentMode} onChange={toggleSemaineAb} />
           </GlobalRow>
           {/* La jauge s'active désormais PAR CRÉNEAU (icône capsule du mode création
               de l'agenda, colonne slots.jauge) — plus de bascule globale ici. */}
@@ -356,7 +316,7 @@ export function ConfigPanel({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) 180px 84px 84px 32px",
+                gridTemplateColumns: "minmax(0, 1fr) 84px 84px 32px",
                 gap: ".75rem",
                 alignItems: "center",
                 padding: "0 .75rem .5rem",
@@ -368,7 +328,6 @@ export function ConfigPanel({
               }}
             >
               <span>Demandeur</span>
-              <span style={{ textAlign: "center" }}>Mode</span>
               <span style={{ textAlign: "center" }}>Validation</span>
               <span style={{ textAlign: "center" }}>Thèmes</span>
               <span />
@@ -380,7 +339,7 @@ export function ConfigPanel({
                 className="mockup-row"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) 180px 84px 84px 32px",
+                  gridTemplateColumns: "minmax(0, 1fr) 84px 84px 32px",
                   gap: ".75rem",
                   alignItems: "center",
                   padding: ".55rem .75rem",
@@ -416,16 +375,6 @@ export function ConfigPanel({
                     ))}
                   </select>
                 )}
-                <span style={{ display: "flex", justifyContent: "center" }}>
-                  <Segmented
-                    value={r.mode}
-                    onChange={(v) => patch(r.key, { mode: v })}
-                    options={[
-                      { value: "recurrent", label: "Récurrent" },
-                      { value: "ponctuel", label: "Ponctuel" },
-                    ]}
-                  />
-                </span>
                 <span style={{ display: "flex", justifyContent: "center" }}>
                   <Switch on={r.validation} onChange={(v) => patch(r.key, { validation: v })} />
                 </span>

@@ -1461,7 +1461,7 @@ export function UserAgendaGrid({
     return isHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
   };
 
-  // ── Semaines A/B ── (dérivé de la matrice demandeurs, pas de la colonne service)
+  // ── Semaines A/B ── (réglage GLOBAL du service : Service.recurrentMode ∧ semaineAb)
   const abMode = modes.abMode;
   const realWeekParity: "A" | "B" | null = mondayStr ? slotWeekTag(mondayStr) : null;
   // Semaine effective filtrée : en modèle = choix A/B ; en réel = parité de la date.

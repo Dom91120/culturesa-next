@@ -186,6 +186,13 @@ model Service {
   icon                  String?
   bookingDelay          Int        @default(0)
   showPreviousExercices Boolean    @default(false)
+  // Le service propose des créneaux RÉCURRENTS (vue « Modèle de période » de
+  // l'agenda admin). Réglage GLOBAL du service — l'ex-colonne « Mode »
+  // (recurrent/ponctuel) de la matrice demandeurs a été supprimée : le type d'une
+  // réservation découle du TYPE DU CRÉNEAU, plus du demandeur.
+  recurrentMode         Boolean    @default(true)
+  // Alternance Semaine A / B des créneaux récurrents. GLOBAL au service (ex-colonne
+  // semaineAb de la matrice) ; sans effet si recurrentMode est désactivé.
   semaineAb             Boolean    @default(false)
   themesMode            ThemesMode @default(libre)
   // Jauge : compter (ou non) les accompagnants dans les places consommées.
@@ -435,11 +442,10 @@ model ServiceTheme {
 model ServiceDemandeurSettings {
   serviceId   String
   demandeurId Int
-  recurrent   Boolean @default(false)
-  semaineAb   Boolean @default(false)
   validation  Boolean @default(false)
   themes      Boolean @default(false)
-  // (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge — plus par la matrice.)
+  // (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge. Le mode récurrent et
+  // l'alternance A/B sont GLOBAUX au service — Service.recurrentMode/semaineAb.)
 
   service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   demandeur Demandeur @relation(fields: [demandeurId], references: [id], onDelete: Cascade)

@@ -3,18 +3,14 @@ import { openingForDate } from "@/server/services/opening";
 
 /**
  * Une ligne de la matrice service × demandeur : le demandeur (référentiel
- * global) activé pour ce service, avec ses 4 modes booléens.
- *   - `recurrent`   : le demandeur réserve en mode récurrent.
- *   - `semaineAb`   : alternance Semaine A / Semaine B (n'a de sens que pour
- *                     les récurrents ; uniforme parmi tous les récurrents).
+ * global) activé pour ce service, avec ses 2 modes booléens.
  *   - `validation`  : les réservations passent par une validation.
  *   - `themes`      : la saisie d'un thème est demandée.
- * (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge — plus par la matrice.)
+ * (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge. Le mode récurrent et
+ * l'alternance A/B sont GLOBAUX au service — Service.recurrentMode/semaineAb.)
  */
 export type DemandeurSettingRow = {
   demandeurId: number;
-  recurrent: boolean;
-  semaineAb: boolean;
   validation: boolean;
   themes: boolean;
 };
@@ -28,8 +24,6 @@ export async function getServiceDemandeurSettings(
     orderBy: { demandeurId: "asc" },
     select: {
       demandeurId: true,
-      recurrent: true,
-      semaineAb: true,
       validation: true,
       themes: true,
     },
@@ -67,8 +61,6 @@ export async function getServiceDemandeurSettingsLabeled(
       where: { serviceId },
       select: {
         demandeurId: true,
-        recurrent: true,
-        semaineAb: true,
         validation: true,
         themes: true,
         demandeur: { select: { label: true, openOnSchoolHolidays: true } },
@@ -80,8 +72,6 @@ export async function getServiceDemandeurSettingsLabeled(
     .map((r) => ({
       demandeurId: r.demandeurId,
       label: r.demandeur?.label ?? "",
-      recurrent: r.recurrent,
-      semaineAb: r.semaineAb,
       validation: r.validation,
       themes: r.themes,
       openOnHolidays,
@@ -116,8 +106,6 @@ export async function saveServiceDemandeurSettings(
         data: valid.map((r) => ({
           serviceId,
           demandeurId: r.demandeurId,
-          recurrent: r.recurrent,
-          semaineAb: r.semaineAb,
           validation: r.validation,
           themes: r.themes,
         })),

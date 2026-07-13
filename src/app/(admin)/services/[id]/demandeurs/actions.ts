@@ -11,8 +11,6 @@ import {
 
 const rowSchema = z.object({
   demandeurId: z.number().int(),
-  recurrent: z.boolean(),
-  semaineAb: z.boolean(),
   validation: z.boolean(),
   themes: z.boolean(),
 });
