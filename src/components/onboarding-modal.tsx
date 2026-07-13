@@ -442,8 +442,9 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
             Depuis l'agenda d'un service, activez le <strong>« Mode création »</strong> <EditIcon />{" "}
             :
             <br />
-            Dessinez un créneau sur le planning, ajustez-le en glissant ses bords, ou supprimez-le
-            avec la croix. Vous{" "}
+            <strong>Commencez par</strong> définir la capacité, la jauge et les demandeurs. Puis
+            dessinez un créneau sur le planning, ajustez sa durée en glissant ses bords, ou
+            supprimez-le avec la croix. Vous{" "}
             <strong>définissez ainsi l'offre réservable de chaque période</strong>.
           </p>
         </>
