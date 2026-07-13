@@ -1960,15 +1960,114 @@ export function UserAgendaGrid({
     );
   }
 
+  // Ancre PAR DÉFAUT (aucune vue mémorisée) — décision produit :
+  //   1. semaine du prochain créneau encore RÉSERVABLE (délai, dispo de période,
+  //      jour ouvert, place restante) ;
+  //   2. sinon prochaine semaine PORTANT un créneau (semaine courante incluse) ;
+  //   3. sinon dernière semaine portant un créneau (semaine courante incluse) ;
+  //   à défaut de tout créneau, lundi courant.
+  // Appelée au montage uniquement (effet ci-dessous) : les helpers de rendu
+  // (earliestFor, dispoByPeriod, openingForYmd…) sont alors tous initialisés.
+  // Règles 2/3 = occurrences AFFICHÉES par la grille : les créneaux RÉCURRENTS se
+  // rendent sur TOUTES les semaines de leur période (miroir ou non, même « Clôturé »)
+  // → on itère les dates de leur jour sur la période ; s'y ajoutent les ponctuels
+  // autonomes datés. Règle 1 = occurrences RÉSERVABLES : miroirs (comme
+  // isSlotClosed, réserver un récurrent ne matérialise que ses miroirs) + ponctuels.
+  // Filtres communs « jour ouvert » : jours actifs, fériés, vacances scolaires,
+  // parité A/B, capacité configurée (le rendu grise ces dates via isDayDisabled).
+  function defaultAnchorMonday(): string {
+    const todayMonday = ymd(mondayOf(new Date()));
+    const dayOpen = (d: string, dk: string): boolean => {
+      const o = openingForYmd(d);
+      if (
+        !o.activeDays
+          .split(",")
+          .map((s) => s.trim())
+          .includes(dk)
+      )
+        return false;
+      if (!o.openOnHolidays && isFrenchHoliday(d)) return false;
+      return o.openOnSchoolHolidays || !isSchoolVacance(d);
+    };
+    let nextVisible: string | null = null; // règle 2 : prochaine affichée (≥ lundi courant)
+    let lastVisible: string | null = null; // règle 3 : dernière affichée (< lundi courant)
+    const noteVisible = (d: string) => {
+      if (d >= todayMonday) {
+        if (!nextVisible || d < nextVisible) nextVisible = d;
+      } else if (!lastVisible || d > lastVisible) {
+        lastVisible = d;
+      }
+    };
+    // Récurrents : chaque date de leur jour dans leur période.
+    const periodById = new Map(periods.map((p) => [p.id, p]));
+    for (const s of slots) {
+      const p = s.periodId != null ? periodById.get(s.periodId) : null;
+      if (!p?.dateStart || !p.dateEnd) continue;
+      if ((s.capacity ?? service.capacity) <= 0) continue;
+      const off = s.slotDay != null ? DAY_OFFSET[s.slotDay] : undefined;
+      if (off == null) continue;
+      let d = ymd(addDays(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))), off));
+      if (d < p.dateStart) d = ymd(addDays(d, 7));
+      for (; d <= p.dateEnd; d = ymd(addDays(d, 7))) {
+        if (abMode && !parseWeeks(s.weeks).includes(slotWeekTag(d))) continue;
+        if (dayOpen(d, s.slotDay as string)) noteVisible(d);
+      }
+    }
+    // Règle 1 sur les occurrences datées (+ règles 2/3 pour les ponctuels autonomes).
+    const bookedBySlot = new Map<string, Booking[]>();
+    for (const b of bookings) {
+      const arr = bookedBySlot.get(b.slotId);
+      if (arr) arr.push(b);
+      else bookedBySlot.set(b.slotId, [b]);
+    }
+    // Places occupées d'un créneau daté, selon sa jauge (même règle que les blocs).
+    const usedOn = (slotId: string, jauge: boolean): number => {
+      const list = bookedBySlot.get(slotId) ?? [];
+      return jauge
+        ? list.reduce(
+            (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
+            0,
+          )
+        : list.length;
+    };
+    let nextBookable: string | null = null; // règle 1 : prochaine occurrence réservable
+    for (const u of uniqueSlots) {
+      const d = u.slotDate;
+      if (!d) continue;
+      const parent = u.parentSlotId ? recurSlotById.get(u.parentSlotId) : null;
+      if (u.parentSlotId && !parent) continue; // miroir orphelin
+      if (!dayOpen(d, dayKeyFromYmd(d))) continue;
+      if (parent && abMode && !parseWeeks(parent.weeks).includes(slotWeekTag(d))) continue;
+      const capacity = (parent ? parent.capacity : u.capacity) ?? service.capacity;
+      if (capacity <= 0) continue;
+      // Règles 2/3 : les ponctuels autonomes ne sont couverts que par leur date.
+      if (!parent) noteVisible(d);
+      // Règle 1 : réservable = délai respecté, période ouverte (Dispo), place restante.
+      if (d < earliestFor(d)) continue;
+      if (nextBookable && d >= nextBookable) continue; // déjà une occurrence plus proche
+      const pid = parent ? parent.periodId : u.periodId;
+      const dispo = pid != null ? dispoByPeriod.get(pid) : null;
+      if (dispo && todayIso < dispo) continue;
+      if (usedOn(u.id, parent ? parent.jauge : u.jauge) >= capacity) continue;
+      nextBookable = d;
+    }
+    const target = nextBookable ?? nextVisible ?? lastVisible;
+    return target ? ymd(mondayOf(new Date(`${target}T00:00:00`))) : todayMonday;
+  }
+
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
   // pour revenir sur la sélection précédente quand on rouvre la page. À défaut, ancre
-  // la semaine réelle sur le lundi courant. (Client uniquement → pas de mismatch SSR.)
+  // la semaine réelle via defaultAnchorMonday (prochain créneau réservable, sinon
+  // semaine avec créneau la plus proche). (Client uniquement → pas de mismatch SSR.)
+  // Clé PAR UTILISATEUR : sessionStorage est partagé par l'onglet — sans l'e-mail
+  // dans la clé, un compte héritait de la vue mémorisée du compte précédent.
+  const viewStorageKey = `agenda-view:${service.id}:${userInfo.email}`;
   const persistSkip = useRef(true);
   // biome-ignore lint/correctness/useExhaustiveDependencies: restauration au montage uniquement
   useEffect(() => {
     let anchored = false;
     try {
-      const raw = sessionStorage.getItem(`agenda-view:${service.id}`);
+      const raw = sessionStorage.getItem(viewStorageKey);
       if (raw) {
         const v = JSON.parse(raw) as Partial<{
           exerciceId: number | null;
@@ -1990,7 +2089,7 @@ export function UserAgendaGrid({
         }
       }
     } catch {}
-    if (!anchored) setAnchorMonday(ymd(mondayOf(new Date())));
+    if (!anchored) setAnchorMonday(defaultAnchorMonday());
   }, []);
 
   // Persiste la vue à chaque changement. On saute le tout 1er run (montage, AVANT que
@@ -2003,11 +2102,11 @@ export function UserAgendaGrid({
     }
     try {
       sessionStorage.setItem(
-        `agenda-view:${service.id}`,
+        viewStorageKey,
         JSON.stringify({ exerciceId: currentExerciceId, periodIdx, anchorMonday, weekAB }),
       );
     } catch {}
-  }, [service.id, currentExerciceId, periodIdx, anchorMonday, weekAB]);
+  }, [viewStorageKey, currentExerciceId, periodIdx, anchorMonday, weekAB]);
 
   // Verrouille la période active en semaine réelle : dès qu'une période est
   // dérivée pour la semaine courante, on la fige dans rwPeriodId. La nav ◀/▶
@@ -3579,11 +3678,11 @@ export function UserAgendaGrid({
               // assertReservationLimits). Masqué quand la période = l'année (doublon « par an »).
               const showPeriod =
                 (modes.recurringMode || periods.length > 0) && periodNoun !== "année";
-              // Libellé unifié « séance(s) » quel que soit le mode (récurrent ou ponctuel).
-              const noun = (n: number) => `séance${n > 1 ? "s" : ""}`;
+              // Libellé unifié « réservation(s) » quel que soit le mode (récurrent ou ponctuel).
+              const noun = (n: number) => `réservation${n > 1 ? "s" : ""}`;
               return (
                 <>
-                  Vous pouvez réserver{" "}
+                  Vous pouvez au maximum demander{" "}
                   {showPeriod && (
                     <>
                       <strong>
