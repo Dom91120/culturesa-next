@@ -1920,7 +1920,7 @@ export function UserAgendaGrid({
           .map((u) => u.slotDate as string)
           .filter((d) => inPeriod(d))
           .filter((d) => (b.week === "A" || b.week === "B" ? slotWeekTag(d) === b.week : true))
-          .filter((d) => openingForYmd(d).openOnSchoolHolidays || !isSchoolVacance(d))
+          .filter((d) => openingForYmd(d).openOnSchoolHolidays || !isSchoolHoliday(d))
           .sort();
         for (const d of occ) {
           const child = childByDate.get(d);
@@ -1987,7 +1987,7 @@ export function UserAgendaGrid({
       )
         return false;
       if (!o.openOnHolidays && isFrenchHoliday(d)) return false;
-      return o.openOnSchoolHolidays || !isSchoolVacance(d);
+      return o.openOnSchoolHolidays || !isSchoolHoliday(d);
     };
     let nextVisible: string | null = null; // règle 2 : prochaine affichée (≥ lundi courant)
     let lastVisible: string | null = null; // règle 3 : dernière affichée (< lundi courant)
@@ -2623,7 +2623,7 @@ export function UserAgendaGrid({
   // Une date (YYYY-MM-DD) tombe-t-elle en vacances scolaires ? Convention data.gouv.fr :
   // dateStart = soir du dernier jour d'école → 1er jour de vacances = dateStart + 1
   // (borne stricte à gauche, inclusive à droite). Port legacy _isSchoolVacance.
-  const isSchoolVacance = (date: string): boolean =>
+  const isSchoolHoliday = (date: string): boolean =>
     inSchoolHolidayRange(date, schoolHolidays ?? []);
 
   // Dates concrètes couvertes par un créneau récurrent un jour donné : ses miroirs

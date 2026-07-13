@@ -2474,7 +2474,7 @@ export function AgendaGrid({
                 );
               })}
           </div>
-          {/* Jauge DE CE CRÉNEAU (ponctuel → gaugePonct, récurrent → gaugeRec) ON → barre
+          {/* Jauge DE CE CRÉNEAU (slots.jauge, source unique) ON → barre
           + used/cap ; OFF → simple compteur réservations/total (format 1/15). */}
           {b.bookings.length > 0 &&
             (gaugeForCell ? (
