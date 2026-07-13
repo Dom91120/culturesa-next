@@ -7,7 +7,6 @@ import {
   AgendaDayBackground,
   AgendaTimeColumn,
   AgendaWeekHeader,
-  ModalOverlay,
   PointagePill,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
@@ -62,11 +61,12 @@ import {
   setServiceDefaultCapacityAction,
 } from "./actions";
 import { CopyWeekConfirmModal, SlotDeleteModal } from "./agenda-confirm-modals";
-import { plural } from "./agenda-format";
+import { badgeTitle } from "./agenda-format";
+import { BookingCreateModal, type UserOpt } from "./booking-create-modal";
 import { BookingDeleteModal } from "./booking-delete-modal";
 import { BookingDetailModal } from "./booking-detail-modal";
+import { BookingStackModal } from "./booking-stack-modal";
 import { DefaultDemandeursModal } from "./default-demandeurs-modal";
-import { OccurrencesField } from "./occurrences-field";
 import { SlotConfigModal } from "./slot-config-modal";
 
 // (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — sont portés
@@ -116,30 +116,11 @@ export type Booking = {
   demandeur: string;
   structure: string;
 };
-type UserOpt = {
-  id: string;
-  label: string;
-  demandeur?: string;
-  structure?: string;
-  openOnSchoolHolidays?: boolean;
-};
+// UserOpt (usager de la modale de création) : type déménagé dans
+// booking-create-modal.tsx, réimporté ici pour le chargement à la demande.
 
-// Info-bulle d'une réservation au survol — format du legacy _badgeTitle :
-//   Tel : <tel>      (si renseigné)
-//   <email>
-//   <N enfants M adulte(s)>
-function badgeTitle(bk: Booking): string {
-  const lines: string[] = [];
-  if (bk.tel.trim()) lines.push(`Tel : ${bk.tel.trim()}`);
-  lines.push(bk.email);
-  lines.push(
-    `${bk.enfants} enfant${bk.enfants > 1 ? "s" : ""} ${bk.accompagnants} adulte${
-      bk.accompagnants > 1 ? "s" : ""
-    }`,
-  );
-  return lines.join("\n");
-}
-
+// badgeTitle (info-bulle de réservation) : déménagé dans agenda-format.ts,
+// partagé avec la modale pile extraite (booking-stack-modal).
 // badgeStyle : partagé via lib/agenda-core (harmonisé entre grilles admin/usager).
 
 // Bloc = UN créneau un jour donné (modèle partagé, cf. lib/agenda-core).
@@ -366,14 +347,8 @@ export function AgendaGrid({
     usersLoadedRef.current = true;
     void listAgendaUsersAction(service.id).then(setUsers);
   }, [createCtx, service.id]);
-  const [cUser, setCUser] = useState("");
-  // Filtres « Type de demandeur » et « Structure » (modale legacy) : restreignent la liste des usagers.
-  const [cDemType, setCDemType] = useState("");
-  const [cStructure, setCStructure] = useState("");
-  const [cEnfants, setCEnfants] = useState("0");
-  const [cAccompagnants, setCAccompagnants] = useState("0");
-  const [cTheme, setCTheme] = useState("");
-  const [cError, setCError] = useState<string | null>(null);
+  // (État du formulaire de création : rapatrié dans BookingCreateModal, montée à
+  // la demande — l'état repart vierge à chaque ouverture.)
   // Modale « configuration de créneau » (mode création) : capacité + demandeurs autorisés.
   const [capModal, setCapModal] = useState<{ slotId: string } | null>(null);
   // Confirmation de copie des créneaux A↔B (modale dédiée au lieu de window.confirm).
@@ -1934,68 +1909,53 @@ export function AgendaGrid({
   }, [mode, coveringPeriod, rwPeriodId]);
 
   function openCreate(dayKey: string, slotId: string, ponctuel = false, slotDate?: string) {
-    setCUser("");
-    setCDemType("");
-    setCStructure("");
-    setCEnfants("0");
-    setCAccompagnants("0");
-    setCTheme("");
-    setCError(null);
     setCreateCtx({ dayKey, slotId, ponctuel, slotDate });
   }
 
-  function submitCreate() {
-    if (!createCtx) return;
-    if (!cUser) {
-      setCError("Choisissez un usager.");
-      return;
-    }
+  // Envoi du formulaire de création (BookingCreateModal) : l'action serveur reste
+  // ici (période/semaine effectives, refresh) ; la modale affiche l'erreur renvoyée.
+  async function submitCreate(form: {
+    userId: string;
+    enfants: number;
+    accompagnants: number;
+    theme: string;
+  }): Promise<{ ok: boolean; error?: string | null }> {
+    if (!createCtx) return { ok: false, error: "Contexte de création perdu." };
     // Créneau ponctuel : réservation ponctuelle (pas de période ni de jour).
     if (createCtx.ponctuel) {
-      const slotId = createCtx.slotId;
-      startTransition(async () => {
-        const res = await createUniqueBookingAction({
-          serviceId: service.id,
-          slotId,
-          userId: cUser,
-          enfants: Number(cEnfants) || 0,
-          accompagnants: Number(cAccompagnants) || 0,
-          theme: cTheme,
-        });
-        if (!res.ok) {
-          setCError(res.error ?? "Échec.");
-          return;
-        }
-        setCreateCtx(null);
-        router.refresh();
+      const res = await createUniqueBookingAction({
+        serviceId: service.id,
+        slotId: createCtx.slotId,
+        userId: form.userId,
+        enfants: form.enfants,
+        accompagnants: form.accompagnants,
+        theme: form.theme,
       });
-      return;
+      if (!res.ok) return { ok: false, error: res.error };
+      setCreateCtx(null);
+      router.refresh();
+      return { ok: true };
     }
     const createPeriodId =
       effectivePeriodId != null && effectivePeriodId > 0 ? effectivePeriodId : null;
     if (createPeriodId == null) {
-      setCError("Aucune période active pour créer une réservation.");
-      return;
+      return { ok: false, error: "Aucune période active pour créer une réservation." };
     }
-    startTransition(async () => {
-      const res = await createRecurringBookingAction({
-        serviceId: service.id,
-        slotId: createCtx.slotId,
-        periodId: createPeriodId,
-        dayKey: createCtx.dayKey,
-        userId: cUser,
-        enfants: Number(cEnfants) || 0,
-        accompagnants: Number(cAccompagnants) || 0,
-        theme: cTheme,
-        week: effectiveWeek ?? "",
-      });
-      if (!res.ok) {
-        setCError(res.error ?? "Échec.");
-        return;
-      }
-      setCreateCtx(null);
-      router.refresh();
+    const res = await createRecurringBookingAction({
+      serviceId: service.id,
+      slotId: createCtx.slotId,
+      periodId: createPeriodId,
+      dayKey: createCtx.dayKey,
+      userId: form.userId,
+      enfants: form.enfants,
+      accompagnants: form.accompagnants,
+      theme: form.theme,
+      week: effectiveWeek ?? "",
     });
+    if (!res.ok) return { ok: false, error: res.error };
+    setCreateCtx(null);
+    router.refresh();
+    return { ok: true };
   }
 
   const createSlot = createCtx
@@ -3421,378 +3381,60 @@ export function AgendaGrid({
       </div>
 
       {stackKey && stackBlock && (
-        <ModalOverlay onClose={() => setStackKey(null)}>
-          {(() => {
-            // Modale "pile" stylée comme le legacy (cell-stack-modal) : pastille
-            // date/jour, sous-titre horaire, bascules validation/pointage, mini-grille
-            // horaire (csm-time-col + bloc créneau coloré csm-slot-block) contenant la
-            // liste des badges (cell-stack-list), puis bandeau capacité.
-            const isPonctuel = uniqueIdSet.has(stackKey.slotId);
-            // Récurrent en semaine réelle → consultation seule (pas d'édition rapide,
-            // ni suppression ; clic = modale détail en lecture seule).
-            const stackReadOnly = mode === "realweek" && !isPonctuel;
-            const uSlot = uniqueSlots.find((s) => s.id === stackKey.slotId);
-            const ponctDate =
-              isPonctuel && uSlot?.slotDate
-                ? new Date(`${uSlot.slotDate}T00:00:00`).toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })
-                : "";
-            const period = periods.find((p) => p.id === effectivePeriodId);
-            // Pastille : libellé de période (récurrent) ou date (ponctuel), cf. legacy.
-            const pillLabel = isPonctuel ? ponctDate : (period?.label ?? "");
-            const dayLabel = DAY_NAMES[stackKey.dayKey] ?? stackKey.dayKey;
-            // Jauge = somme enfants (+ accompagnants si comptés) / capacité.
-            const gaugeSum = stackBlock.bookings.reduce(
-              (s, bk) => s + gaugeUnits(bk.enfants, bk.accompagnants, service.gaugeAccompagnants),
-              0,
+        <BookingStackModal
+          stackKey={stackKey}
+          block={stackBlock}
+          slot={stackSlot}
+          isPonctuel={uniqueIdSet.has(stackKey.slotId)}
+          ponctuelDate={uniqueSlots.find((s) => s.id === stackKey.slotId)?.slotDate}
+          periodLabel={periods.find((p) => p.id === effectivePeriodId)?.label ?? ""}
+          mode={mode}
+          validation={validation}
+          pointageMode={pointageMode}
+          creationMode={creationMode}
+          // Créables : pas complet, pas un récurrent en semaine réelle (consultation),
+          // période active pour un récurrent (mêmes conditions que cellCreatable).
+          creatable={
+            !(mode === "realweek" && !uniqueIdSet.has(stackKey.slotId)) &&
+            stackBlock.used < stackBlock.capacity &&
+            (uniqueIdSet.has(stackKey.slotId) ||
+              (effectivePeriodId != null && effectivePeriodId > 0))
+          }
+          themeMode={modes.themeMode}
+          gaugeAccompagnants={service.gaugeAccompagnants}
+          draggingId={draggingId}
+          copiedBooking={copiedBooking}
+          lockedByPointage={lockedByPointage}
+          onToggleValidation={toggleValidation}
+          onTogglePointage={togglePointageMode}
+          onCreateClick={() => {
+            clearTip();
+            // La pile reste ouverte derrière : fermer la création y ramène
+            // (même patron que la modale détail).
+            openCreate(
+              stackKey.dayKey,
+              stackKey.slotId,
+              uniqueIdSet.has(stackKey.slotId),
+              uniqueSlots.find((s) => s.id === stackKey.slotId)?.slotDate,
             );
-            const gaugeTotal = stackBlock.capacity;
-            const gaugePct =
-              gaugeTotal > 0 ? Math.min(100, Math.round((gaugeSum / gaugeTotal) * 100)) : 0;
-            const gaugeFill = gaugeColor(gaugePct);
-            const showGauge = stackBlock.jauge;
-            // Créneau « JOURNÉE ENTIÈRE » (sans horaires) : pas de mini-grille horaire
-            // (les repères seraient calculés sur les replis 00:00 → 01:00) ni d'horaire
-            // dans le sous-titre — libellé « Journée entière » à la place.
-            const allday = stackBlock.isAllDay;
-            const sMin = stackSlot ? toMinutes(stackSlot.startTime, 0) : 0;
-            const eMin = stackSlot ? toMinutes(stackSlot.endTime, sMin + 60) : sMin + 60;
-            const hasRange = !allday && eMin > sMin;
-            const pxPerMinModal = 24 / 15; // 24 px par quart d'heure (legacy)
-            const blockMinH = hasRange ? Math.max(56, (eMin - sMin) * pxPerMinModal) : 56;
-            const marks: number[] = [];
-            if (hasRange) for (let m = sMin; m <= eMin; m += 15) marks.push(m);
-            const timeLabel = (s: NonNullable<typeof stackSlot>) =>
-              allday ? "Journée entière" : `${s.startTime} – ${s.endTime}`;
-            // Clic sur le FOND du créneau → modale de création, aux MÊMES conditions
-            // que la grille (cellCreatable) : pas complet, pas un récurrent en semaine
-            // réelle (consultation), période active pour un récurrent.
-            const stackCreatable =
-              !stackReadOnly &&
-              stackBlock.used < stackBlock.capacity &&
-              (isPonctuel || (effectivePeriodId != null && effectivePeriodId > 0));
-            return (
-              <>
-                <button
-                  type="button"
-                  className="modal-close"
-                  onClick={() => setStackKey(null)}
-                  aria-label="Fermer"
-                >
-                  ×
-                </button>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    flexWrap: "wrap",
-                    marginBottom: ".6rem",
-                    paddingRight: "1.5rem",
-                  }}
-                >
-                  {/* Gauche : pastille période/date + horaire (jour) sur la même ligne. */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: ".6rem",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span
-                      className={`period-btn active${isPonctuel ? " is-uniq" : ""}`}
-                      style={{
-                        cursor: "default",
-                        padding: ".12rem .5rem",
-                        fontSize: ".64rem",
-                        gap: ".3rem",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      <span className="period-badge" />
-                      {pillLabel}
-                    </span>
-                    <span className="panel-subtitle" style={{ margin: 0 }}>
-                      {isPonctuel
-                        ? stackSlot
-                          ? timeLabel(stackSlot)
-                          : ""
-                        : `${dayLabel}${stackSlot ? ` · ${timeLabel(stackSlot)}` : ""}`}
-                    </span>
-                  </div>
-                  {/* Droite : bascules. « Mode validation » est toujours affiché ;
-                      « Mode pointage » seulement en « Semaine réelle » (le pointage n'a
-                      de sens que sur une semaine datée — cf. legacy). La croix de
-                      fermeture est positionnée en haut à droite de la modale (modal-close). */}
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}
-                  >
-                    {stackReadOnly ? (
-                      <>
-                        {/* Récurrent en semaine réelle : pointage par séance autorisé sur
-                            les réservations-enfants ; validation/édition en vue Modèle. */}
-                        <label className="planning-option" style={{ margin: 0 }}>
-                          Mode pointage{" "}
-                          <input
-                            type="checkbox"
-                            checked={pointageMode}
-                            onChange={(e) => togglePointageMode(e.target.checked)}
-                          />
-                        </label>
-                        <span
-                          style={{ fontSize: ".7rem", color: "var(--muted)", fontStyle: "italic" }}
-                        >
-                          Validation/édition en vue « Modèle de période »
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <label className="planning-option" style={{ margin: 0 }}>
-                          Mode validation{" "}
-                          <input
-                            type="checkbox"
-                            checked={validation}
-                            onChange={(e) => toggleValidation(e.target.checked)}
-                          />
-                        </label>
-                        {mode === "realweek" && (
-                          <label className="planning-option" style={{ margin: 0 }}>
-                            Mode pointage{" "}
-                            <input
-                              type="checkbox"
-                              checked={pointageMode}
-                              onChange={(e) => togglePointageMode(e.target.checked)}
-                            />
-                          </label>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="csm-grid-wrap">
-                  {/* Colonne horaire masquée pour un créneau « journée entière ». */}
-                  {!allday && (
-                    <div className="csm-time-col" style={{ height: blockMinH }}>
-                      {marks.map((m) => (
-                        <div
-                          key={m}
-                          className="csm-time-mark"
-                          style={{ top: (m - sMin) * pxPerMinModal }}
-                        >
-                          {`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: fond du créneau (clic = créer une réservation) */}
-                  <div
-                    className={`csm-slot-block${isPonctuel ? " is-uniq" : ""}`}
-                    // Info-bulle au survol du créneau, identique à celle de la grille :
-                    // récurrent → période + jour/heures + demandeurs + capacité ;
-                    // ponctuel → demandeurs + capacité. Le handler délégué onAgendaTip
-                    // (sur #tab-content-agenda, qui englobe la modale) lit ces attributs
-                    // et réutilise recMetaForBlock/concernedDatesForBlock, comme la grille.
-                    data-slot-tip=""
-                    data-slotid={stackKey.slotId}
-                    data-daykey={stackKey.dayKey}
-                    onClick={(e) => {
-                      // Clic sur le FOND uniquement : un clic sur un badge (édition,
-                      // validation, pointage, ✕…) garde son comportement propre.
-                      if (!stackCreatable) return;
-                      if (
-                        (e.target as HTMLElement).closest(
-                          ".planning-name-tag, button, input, select, label",
-                        )
-                      )
-                        return;
-                      clearTip();
-                      // La pile reste ouverte derrière : fermer la création y ramène
-                      // (même patron que la modale détail, cf. plus bas).
-                      openCreate(stackKey.dayKey, stackKey.slotId, isPonctuel, uSlot?.slotDate);
-                    }}
-                    style={
-                      {
-                        minHeight: blockMinH,
-                        "--quarter-h": "24px",
-                        "--hour-h": "96px",
-                        cursor: stackCreatable ? "pointer" : undefined,
-                      } as React.CSSProperties
-                    }
-                  >
-                    <div className="cell-stack-list">
-                      {[...stackBlock.bookings]
-                        // Tri des badges par demandeur (puis structure, puis nom) pour
-                        // regrouper visuellement les réservations d'un même demandeur.
-                        .sort(
-                          (a, b) =>
-                            a.demandeur.localeCompare(b.demandeur, "fr", {
-                              sensitivity: "base",
-                            }) ||
-                            a.structure.localeCompare(b.structure, "fr", {
-                              sensitivity: "base",
-                            }) ||
-                            a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
-                        )
-                        .map((bk) => (
-                          // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
-                          <div
-                            key={bk.id}
-                            className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
-                            // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée
-                            // ou parent à miroir pointé) ou en consultation (récurrent semaine réelle).
-                            draggable={!lockedByPointage(bk) && !stackReadOnly}
-                            style={{
-                              ...badgeStyle(bk.validated),
-                              cursor:
-                                !lockedByPointage(bk) && !stackReadOnly
-                                  ? "grab"
-                                  : stackReadOnly && pointageMode
-                                    ? "pointer"
-                                    : "default",
-                              position: "relative",
-                              opacity:
-                                draggingId === bk.id ||
-                                (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
-                                  ? 0.4
-                                  : 1,
-                            }}
-                            data-tip={badgeTitle(bk)}
-                            onDragStart={
-                              lockedByPointage(bk) || stackReadOnly
-                                ? undefined
-                                : (e) => {
-                                    // On amorce le drag, PUIS on ferme la pile au tick suivant
-                                    // pour libérer la grille comme cible de dépôt (port legacy
-                                    // _onDragStartFromStackModal).
-                                    e.stopPropagation();
-                                    setDraggingId(bk.id);
-                                    setTimeout(() => setStackKey(null), 0);
-                                  }
-                            }
-                            onDragEnd={
-                              lockedByPointage(bk) || stackReadOnly
-                                ? undefined
-                                : () => setDraggingId(null)
-                            }
-                            onClick={() => {
-                              // Récurrent en semaine réelle : pas d'action rapide → la modale
-                              // détail s'ouvre en consultation (lecture seule).
-                              // Mode validation : un récurrent ne se valide pas ici.
-                              if (stackReadOnly && validation) {
-                                warnRecurringValidation();
-                                return;
-                              }
-                              // Pointage autorisé sur les réservations-enfants (récurrent
-                              // en semaine réelle) même si la pile est en lecture seule.
-                              if (stackReadOnly && pointageMode && onBlockQuickAction(bk)) return;
-                              if (!stackReadOnly && onBlockQuickAction(bk)) return;
-                              // On garde la pile ouverte : la modale détail s'empile
-                              // par-dessus, et sa fermeture y ramène.
-                              setDetail({ booking: bk });
-                            }}
-                            // Clic droit → menu « Copier » (pas en création/consultation, ni
-                            // sur une réservation verrouillée par un pointage).
-                            onContextMenu={(e) => {
-                              if (creationMode || stackReadOnly || lockedByPointage(bk)) return;
-                              e.preventDefault();
-                              e.stopPropagation();
-                              clearTip();
-                              setCtxMenu({
-                                x: e.clientX,
-                                y: e.clientY,
-                                kind: "booking",
-                                booking: bk,
-                              });
-                            }}
-                          >
-                            <PointagePill pointage={bk.pointage} />
-                            {/* Croix masquée si verrouillée (pointée / parent à miroir pointé)
-                              ou en consultation (récurrent en semaine réelle). */}
-                            {!lockedByPointage(bk) && !stackReadOnly && (
-                              <button
-                                type="button"
-                                className="planning-name-tag-close"
-                                data-tip="Supprimer"
-                                style={{ border: "none", padding: 0 }}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteTarget(bk);
-                                }}
-                              >
-                                ×
-                              </button>
-                            )}
-                            {(bk.structure || bk.demandeur) && (
-                              <span style={{ fontWeight: 700 }}>
-                                {bk.structure || bk.demandeur}
-                              </span>
-                            )}
-                            <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>
-                              {bk.name}
-                            </span>
-                            {modes.themeMode && bk.theme && (
-                              <span
-                                style={{
-                                  fontSize: ".62rem",
-                                  fontWeight: 600,
-                                  color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
-                                }}
-                              >
-                                {bk.theme}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-                <div id="csm-cap-info">
-                  {showGauge ? (
-                    <span className="csm-gauge-info">
-                      <span>Jauge</span>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: 80,
-                          height: 6,
-                          borderRadius: 3,
-                          background: "rgba(0,0,0,.18)",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            height: "100%",
-                            width: `${gaugePct}%`,
-                            background: gaugeFill,
-                          }}
-                        />
-                      </span>
-                      <span>
-                        {gaugeSum}/{gaugeTotal}
-                      </span>
-                    </span>
-                  ) : (
-                    <span>
-                      {stackBlock.used}/{stackBlock.capacity}
-                    </span>
-                  )}
-                </div>
-              </>
-            );
-          })()}
-        </ModalOverlay>
+          }}
+          onQuickAction={onBlockQuickAction}
+          warnRecurringValidation={warnRecurringValidation}
+          onOpenDetail={(bk) => setDetail({ booking: bk })}
+          onDelete={(bk) => setDeleteTarget(bk)}
+          onContextMenu={(bk, x, y) => {
+            clearTip();
+            setCtxMenu({ x, y, kind: "booking", booking: bk });
+          }}
+          onDragStartBooking={(bk) => {
+            // On amorce le drag, PUIS on ferme la pile au tick suivant pour libérer
+            // la grille comme cible de dépôt (port legacy _onDragStartFromStackModal).
+            setDraggingId(bk.id);
+            setTimeout(() => setStackKey(null), 0);
+          }}
+          onDragEndBooking={() => setDraggingId(null)}
+          onClose={() => setStackKey(null)}
+        />
       )}
 
       {/* Modale détail : rendue APRÈS la pile pour s'empiler par-dessus.
@@ -3881,19 +3523,8 @@ export function AgendaGrid({
 
       {createCtx &&
         (() => {
-          // Liste des usagers filtrée par « Type de demandeur » puis « Structure »
-          // (cascade, port legacy onPcmDemandeurChange / onPcmStructureChange).
-          const usersByType = cDemType ? users.filter((u) => u.demandeur === cDemType) : users;
-          const structureOptions = [
-            ...new Set(usersByType.map((u) => u.structure).filter(Boolean)),
-          ].sort() as string[];
-          const createUsers = cStructure
-            ? usersByType.filter((u) => u.structure === cStructure)
-            : usersByType;
-          const nCEnf = Number(cEnfants) || 0;
-          const nCAcc = Number(cAccompagnants) || 0;
           // Période du créneau : récurrent → periodId du slot ; ponctuel → période
-          // couvrant la date. Affichée (étiquette · libellé) dans le titre, avant le jour.
+          // couvrant la date (affichée en pastille dans le titre de la modale).
           const recurSlot = slots.find((s) => s.id === createCtx.slotId);
           const sd = createCtx.slotDate;
           const createPeriod =
@@ -3904,246 +3535,40 @@ export function AgendaGrid({
                     (p) => p.dateStart && p.dateEnd && p.dateStart <= sd && p.dateEnd >= sd,
                   )
                 : undefined) ?? null;
-          const periodTag = createPeriod
-            ? [createPeriod.etiquette, createPeriod.label].filter(Boolean).join(" · ")
-            : "";
-          const dayHour =
-            (createCtx.ponctuel
-              ? sd
-                ? new Date(`${sd}T00:00:00`).toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })
-                : "créneau ponctuel"
-              : (DAY_NAMES[createCtx.dayKey] ?? createCtx.dayKey)) +
-            // Créneau « journée entière » (horaires vides) : libellé dédié au lieu de « – ».
-            (createSlot
-              ? ` · ${
-                  !createSlot.startTime || !createSlot.endTime
-                    ? "Journée entière"
-                    : `${createSlot.startTime}–${createSlot.endTime}`
-                }`
-              : "");
           return (
-            <ModalOverlay onClose={() => setCreateCtx(null)}>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setCreateCtx(null)}
-                aria-label="Fermer"
-              >
-                ×
-              </button>
-              <div
-                className="modal-title"
-                style={{ display: "flex", alignItems: "center", gap: ".5rem", flexWrap: "wrap" }}
-              >
-                <span>➕ Nouvelle réservation :</span>
-                {createPeriod && periodTag && (
-                  <span
-                    className="period-btn active"
-                    style={{
-                      cursor: "default",
-                      padding: ".12rem .5rem",
-                      fontSize: ".64rem",
-                      gap: ".3rem",
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    <span
-                      className="period-badge"
-                      style={{ display: "block", background: createPeriod.color }}
-                    />
-                    {periodTag}
-                  </span>
-                )}
-                <span
-                  style={{
-                    fontSize: ".8rem",
-                    fontWeight: 500,
-                    color: "var(--muted)",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {dayHour}
-                </span>
-              </div>
-              <div className="form-grid">
-                {serviceDemandeurs.length > 0 && (
-                  <div className="field full">
-                    <label htmlFor="pcm-demandeur-select">Type de demandeur</label>
-                    <select
-                      id="pcm-demandeur-select"
-                      value={cDemType}
-                      onChange={(e) => {
-                        setCDemType(e.target.value);
-                        setCStructure("");
-                        setCUser("");
-                      }}
-                    >
-                      <option value="">Tous les demandeurs</option>
-                      {serviceDemandeurs.map((d) => (
-                        <option key={d.id} value={d.label}>
-                          {d.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {structureOptions.length > 0 && (
-                  <div className="field full">
-                    <label htmlFor="pcm-structure-select">Structure</label>
-                    <select
-                      id="pcm-structure-select"
-                      value={cStructure}
-                      onChange={(e) => {
-                        setCStructure(e.target.value);
-                        setCUser("");
-                      }}
-                    >
-                      <option value="">Toutes les structures</option>
-                      {structureOptions.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div className="field full">
-                  <label htmlFor="pcm-user-select">Demandeur</label>
-                  <select
-                    id="pcm-user-select"
-                    value={cUser}
-                    onChange={(e) => setCUser(e.target.value)}
-                  >
-                    <option value="">— choisir —</option>
-                    {createUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field full">
-                  <span
-                    style={{
-                      fontSize: ".65rem",
-                      fontWeight: 600,
-                      letterSpacing: ".1em",
-                      textTransform: "uppercase",
-                      color: "var(--muted)",
-                    }}
-                  >
-                    Participants
-                  </span>
-                  <div className="pcm-counters">
-                    <label className="pcm-counter" htmlFor="pcm-enfants">
-                      <span className="pcm-counter-icon" aria-hidden="true">
-                        👶
-                      </span>
-                      <input
-                        id="pcm-enfants"
-                        type="number"
-                        min={0}
-                        max={99}
-                        value={cEnfants}
-                        onChange={(e) => setCEnfants(e.target.value)}
-                      />
-                      <span className="pcm-counter-name">{plural(nCEnf, "Enfant", "Enfants")}</span>
-                    </label>
-                    <label className="pcm-counter" htmlFor="pcm-accompagnants">
-                      <span className="pcm-counter-icon" aria-hidden="true">
-                        🧑‍🦰
-                      </span>
-                      <input
-                        id="pcm-accompagnants"
-                        type="number"
-                        min={0}
-                        max={99}
-                        value={cAccompagnants}
-                        onChange={(e) => setCAccompagnants(e.target.value)}
-                      />
-                      <span className="pcm-counter-name">{plural(nCAcc, "Adulte", "Adultes")}</span>
-                    </label>
-                  </div>
-                </div>
-                {modes.themeMode && (
-                  <div className="field full">
-                    <label htmlFor="pcm-theme">
-                      Thème{" "}
-                      <span style={{ color: "var(--muted)", fontSize: ".7rem", fontWeight: 400 }}>
-                        (optionnel)
-                      </span>
-                    </label>
-                    {service.themesMode === "liste" ? (
-                      <select
-                        id="pcm-theme"
-                        value={cTheme}
-                        onChange={(e) => setCTheme(e.target.value)}
-                      >
-                        <option value="">— aucun —</option>
-                        {themes.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        id="pcm-theme"
-                        value={cTheme}
-                        onChange={(e) => setCTheme(e.target.value)}
-                        placeholder="Thème de la visite…"
-                      />
-                    )}
-                  </div>
-                )}
-                {!createCtx.ponctuel && createSlot && (
-                  <OccurrencesField
-                    // « Créneaux concernés » = occurrences qui seront EFFECTIVEMENT créées :
-                    // miroirs du slot ≥ aujourd'hui (le gestionnaire ne crée pas le passé),
-                    // de la semaine A/B effective (en mode A/B), et hors vacances scolaires
-                    // si l'EXERCICE de la date ferme les vacances ou si le demandeur
-                    // sélectionné est fermé.
-                    dates={(() => {
-                      const todayISO = ymd(new Date());
-                      const selUser = users.find((u) => u.id === cUser);
-                      return uniqueSlots
-                        .filter((u) => u.parentSlotId === createCtx.slotId && u.slotDate)
-                        .map((u) => u.slotDate as string)
-                        .filter((d) => {
-                          if (d < todayISO) return false;
-                          const closedOnSchool =
-                            !openingForYmd(d).openOnSchoolHolidays ||
-                            selUser?.openOnSchoolHolidays === false;
-                          if (closedOnSchool && inSchoolHolidayRange(d, schoolHolidays))
-                            return false;
-                          if (!abMode || effectiveWeek == null) return true;
-                          return slotWeekTag(d) === effectiveWeek;
-                        })
-                        .sort();
-                    })()}
-                    startTime={createSlot.startTime}
-                    endTime={createSlot.endTime}
-                  />
-                )}
-              </div>
-              {cError && (
-                <p className="field-error" style={{ display: "block" }}>
-                  {cError}
-                </p>
-              )}
-              <div className="btn-row">
-                <button type="button" className="btn btn-ghost" onClick={() => setCreateCtx(null)}>
-                  Annuler
-                </button>
-                <button type="button" className="btn btn-primary" onClick={submitCreate}>
-                  Réserver
-                </button>
-              </div>
-            </ModalOverlay>
+            <BookingCreateModal
+              ctx={{ ...createCtx, ponctuel: createCtx.ponctuel ?? false }}
+              createSlot={createSlot}
+              period={createPeriod}
+              users={users}
+              serviceDemandeurs={serviceDemandeurs}
+              themeMode={modes.themeMode}
+              themesListMode={service.themesMode === "liste"}
+              themes={themes}
+              // « Créneaux concernés » = occurrences qui seront EFFECTIVEMENT créées :
+              // miroirs du slot ≥ aujourd'hui (le gestionnaire ne crée pas le passé),
+              // de la semaine A/B effective (en mode A/B), et hors vacances scolaires
+              // si l'EXERCICE de la date ferme les vacances ou si le demandeur
+              // sélectionné est fermé.
+              occurrenceDatesFor={(selUser) => {
+                const todayISO = ymd(new Date());
+                return uniqueSlots
+                  .filter((u) => u.parentSlotId === createCtx.slotId && u.slotDate)
+                  .map((u) => u.slotDate as string)
+                  .filter((d) => {
+                    if (d < todayISO) return false;
+                    const closedOnSchool =
+                      !openingForYmd(d).openOnSchoolHolidays ||
+                      selUser?.openOnSchoolHolidays === false;
+                    if (closedOnSchool && inSchoolHolidayRange(d, schoolHolidays)) return false;
+                    if (!abMode || effectiveWeek == null) return true;
+                    return slotWeekTag(d) === effectiveWeek;
+                  })
+                  .sort();
+              }}
+              onSubmit={submitCreate}
+              onClose={() => setCreateCtx(null)}
+            />
           );
         })()}
 

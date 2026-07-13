@@ -1,5 +1,26 @@
 // Helpers de formatage français des modales d'agenda (extraits de agenda-grid).
 
+// Info-bulle d'une réservation au survol — format du legacy _badgeTitle :
+//   Tel : <tel>      (si renseigné)
+//   <email>
+//   <N enfants M adulte(s)>
+export function badgeTitle(bk: {
+  tel: string;
+  email: string;
+  enfants: number;
+  accompagnants: number;
+}): string {
+  const lines: string[] = [];
+  if (bk.tel.trim()) lines.push(`Tel : ${bk.tel.trim()}`);
+  lines.push(bk.email);
+  lines.push(
+    `${bk.enfants} enfant${bk.enfants > 1 ? "s" : ""} ${bk.accompagnants} adulte${
+      bk.accompagnants > 1 ? "s" : ""
+    }`,
+  );
+  return lines.join("\n");
+}
+
 /** Accord pluriel des libellés de compteurs (cf. legacy _bdetUpdateLabels). */
 export function plural(n: number, singular: string, plural: string): string {
   return n > 1 ? plural : singular;
