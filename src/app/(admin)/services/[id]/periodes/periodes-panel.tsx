@@ -1243,7 +1243,15 @@ export function PeriodesPanel({
             </div>
             {/* Une ligne par compteur (− n + libellé), interligne calé sur celui des
                 jours d'ouverture (.45rem). */}
-            <div style={{ display: "flex", flexDirection: "column", gap: ".45rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                columnGap: "1rem",
+                rowGap: ".45rem",
+              }}
+            >
               <MaxStepper
                 label="par période"
                 value={maxReservationsPeriod}
