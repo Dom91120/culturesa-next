@@ -2050,6 +2050,17 @@ export function AgendaGrid({
   const blockApiRef = useRef(blockApi);
   blockApiRef.current = blockApi;
 
+  // Créneau SOURCE d'un déplacement / redimensionnement en cours (estompé 0.35).
+  // Dérivé STABLE des états de drag : il ne change qu'au début et à la fin du
+  // geste (le slotId est constant pendant le drag), PAS à chaque mousemove —
+  // c'est lui qui est mis dans les déps de renderBlock (et non moveDrag/resizeDrag
+  // entiers, dont curMin/curDay changent à chaque pas) → renderBlock et
+  // dayBlockEls gardent la même référence pendant tout le geste et React ne
+  // réconcilie AUCUN des ~100 blocs au mousemove (le fantôme de prévisualisation
+  // est rendu à part, hors des blocs mémoïsés). Couvre move + resize-V, les cas
+  // laissés ouverts par la passe 051f820.
+  const dragSourceSlotId = moveDrag?.slotId ?? resizeDrag?.slotId ?? null;
+
   const renderBlock = useCallback(
     (b: Block, allday: boolean) => {
       const {
@@ -2141,9 +2152,7 @@ export function AgendaGrid({
               : cellCreatable
                 ? { cursor: "pointer" }
                 : {}),
-            ...(moveDrag?.slotId === b.slotId || resizeDrag?.slotId === b.slotId
-              ? { opacity: 0.35 }
-              : {}),
+            ...(dragSourceSlotId === b.slotId ? { opacity: 0.35 } : {}),
           }}
           onMouseDown={(e) => onMoveSlotMouseDown(e, b)}
           // Clic droit sur la zone vide d'un créneau → menu « Coller » (si presse-papier actif).
@@ -2510,8 +2519,7 @@ export function AgendaGrid({
       mapMinToY,
       gridStartMin,
       gridEndMin,
-      moveDrag,
-      resizeDrag,
+      dragSourceSlotId,
       copiedBooking,
       draggingId,
       bookings,
