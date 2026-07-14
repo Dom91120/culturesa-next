@@ -3,6 +3,11 @@ import { mirrorDates } from "@/lib/mirror-dates";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import { openingForExercice } from "@/server/services/opening";
+import { syncChildrenForRecurringSlot } from "@/server/services/recurring-children";
+
+/** Refus d'une mutation de créneau (ex. régénération de miroirs bloquée par une
+ *  réservation existante). Message destiné à l'admin. */
+export class SlotMutationError extends Error {}
 
 // Helpers de l'agenda admin (mode « Création de créneau ») : ajout/copie/déplacement/
 // suppression de créneaux + génération de leurs miroirs. L'API « upsert en masse »
@@ -119,6 +124,117 @@ function computeWantedMirrors(args: {
     wanted.set(date, { date, cap: capacity });
   }
   return wanted;
+}
+
+/**
+ * Régénère les miroirs des créneaux récurrents d'une période après un changement de
+ * dates (période) ou de config d'ouverture (exercice : jours actifs / fériés), DANS le
+ * `tx` fourni. Pour chaque créneau récurrent actif de la période :
+ *   - recalcule les miroirs attendus (nouvelles bornes / jours actifs / fériés) ;
+ *   - REFUSE (SlotMutationError) si un miroir devenu invalide porte une réservation —
+ *     l'admin doit d'abord l'annuler (cohérent avec moveRecurringSlot ; sinon perte en
+ *     cascade via Booking.slot onDelete: Cascade) ;
+ *   - sinon purge les miroirs invalides SANS réservation, crée les manquants, et
+ *     resynchronise les enfants des réservations récurrentes (occurrences ajoutées si la
+ *     période s'est étendue).
+ * À exécuter dans une transaction SÉRIALISABLE (la vérif « réservé » + les mutations
+ * doivent être atomiques, comme moveUniqueSlot).
+ */
+export async function regenerateRecurringMirrorsForPeriodInTx(
+  tx: Prisma.TransactionClient,
+  serviceId: string,
+  periodId: number,
+): Promise<void> {
+  const period = await tx.period.findUnique({
+    where: { id: periodId },
+    select: { dateStart: true, dateEnd: true, exerciceId: true },
+  });
+  // Période sans dates → aucun miroir attendu (cohérent avec opening.ts « fermé »).
+  if (!period?.dateStart || !period?.dateEnd) return;
+  const service = await tx.service.findUnique({
+    where: { id: serviceId },
+    select: { capacity: true },
+  });
+  const serviceCapacity = service?.capacity ?? 1;
+  const opening =
+    period.exerciceId != null ? await openingForExercice(tx, period.exerciceId) : null;
+  const activeDays = opening ? activeDayKeys(opening.activeDays) : [];
+  const holidays = await tx.periodHoliday.findMany({
+    where: { periodId },
+    select: { date: true },
+  });
+  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
+  const startDate = toISO(period.dateStart);
+  const endDate = toISO(period.dateEnd);
+
+  const recurringSlots = await tx.slot.findMany({
+    where: { serviceId, slotType: "recurring", periodId, state: "actif" },
+    select: {
+      id: true,
+      slotDay: true,
+      weeks: true,
+      capacity: true,
+      jauge: true,
+      startTime: true,
+      endTime: true,
+    },
+  });
+
+  for (const slot of recurringSlots) {
+    if (!slot.slotDay) continue;
+    const capVal = slot.capacity ?? serviceCapacity;
+    const wanted = computeWantedMirrors({
+      startDate,
+      endDate,
+      activeDays,
+      holidaySet,
+      openOnHolidays: opening?.openOnHolidays ?? false,
+      weeks: parseWeeks(normalizeWeeks(slot.weeks)),
+      slotDay: slot.slotDay as DayKey,
+      capacity: capVal,
+    });
+    const wantedIds = new Set([...wanted.keys()].map((d) => mirrorId(slot.id, d)));
+    const existing = await tx.slot.findMany({
+      where: { parentSlotId: slot.id },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((m) => m.id));
+    const toDelete = existing.filter((m) => !wantedIds.has(m.id)).map((m) => m.id);
+    if (toDelete.length > 0) {
+      // Refus si un miroir devenu invalide porte une réservation (enfant d'une récurrente
+      // OU ponctuelle) : on ne supprime pas une date réservée en silence.
+      const booked = await tx.booking.count({ where: { slotId: { in: toDelete } } });
+      if (booked > 0) {
+        throw new SlotMutationError(
+          "Des réservations existent sur des dates désormais hors période — annulez-les d'abord.",
+        );
+      }
+      await tx.slot.deleteMany({ where: { id: { in: toDelete } } });
+    }
+    const toCreate = [...wanted.values()].filter(
+      (mv) => !existingIds.has(mirrorId(slot.id, mv.date)),
+    );
+    if (toCreate.length > 0) {
+      await tx.slot.createMany({
+        data: toCreate.map((mv) => ({
+          id: mirrorId(slot.id, mv.date),
+          serviceId,
+          slotType: "unique" as const,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          slotDate: fromISO(mv.date),
+          capacity: mv.cap,
+          periodId,
+          parentSlotId: slot.id,
+          state: "actif" as const,
+          jauge: slot.jauge,
+        })),
+      });
+    }
+    // Resynchronise les enfants des réservations récurrentes de ce créneau (crée les
+    // occurrences des nouvelles dates si la période s'est étendue).
+    await syncChildrenForRecurringSlot(tx, slot.id);
+  }
 }
 
 // ─── Ajout d'UN créneau depuis l'agenda (mode « Création de créneau ») ──────────

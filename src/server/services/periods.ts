@@ -1,7 +1,12 @@
-import type { EntityState, ExerciceType, Prisma } from "@/generated/prisma/client";
+import type { EntityState, ExerciceType } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { holidaysInRange } from "@/lib/french-holidays";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import {
+  regenerateRecurringMirrorsForPeriodInTx,
+  SlotMutationError,
+} from "@/server/services/slots";
 
 /** Format UTC 'YYYY-MM-DD' (cohérent avec toISO/fromISO de slots.ts). */
 function ymdUtc(d: Date): string {
@@ -384,10 +389,28 @@ export async function updateServicePeriod(
     data.dateEnd = nextEnd;
   }
 
-  const period = await prisma.period.update({ where: { id }, data, select: PERIOD_SELECT });
-  // Les dates ont pu changer → on resynchronise les fériés de la période.
-  if (datesChange) await refreshPeriodHolidays(id);
-  return period;
+  // Changement SANS dates (libellé, couleur, dispo, état…) : simple update.
+  if (!datesChange) {
+    return prisma.period.update({ where: { id }, data, select: PERIOD_SELECT });
+  }
+  // Dates changées : update + refresh des fériés + régénération des miroirs des créneaux
+  // récurrents (et resync des enfants), le tout DANS une transaction sérialisable.
+  // Atomique : un refus (réservation sur une date désormais hors période) annule aussi
+  // le changement de dates.
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        const period = await tx.period.update({ where: { id }, data, select: PERIOD_SELECT });
+        await refreshPeriodHolidays(id, tx);
+        await regenerateRecurringMirrorsForPeriodInTx(tx, serviceId, id);
+        return period;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof SlotMutationError) throw new PeriodError(e.message);
+    throw e;
+  }
 }
 
 /** Anti-IDOR : la période doit appartenir au service couvert par le guard appelant. */
@@ -444,18 +467,39 @@ export async function saveExerciceOpeningConfig(
   });
   if (!ex || ex.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
   const activeDays = DAYS.filter((d) => config.activeDays.includes(d)).join(",");
-  await prisma.exercice.update({
-    where: { id: exerciceId },
-    data: {
-      activeDays,
-      openOnHolidays: config.openOnHolidays,
-      openOnSchoolHolidays: config.openOnSchoolHolidays,
-      morningStart: config.morningStart,
-      morningEnd: config.morningEnd,
-      afternoonStart: config.afternoonStart,
-      afternoonEnd: config.afternoonEnd,
-    },
-  });
+  // Update de la config + régénération des miroirs de TOUTES les périodes actives de
+  // l'exercice (les jours actifs / fériés ont pu changer), DANS une transaction
+  // sérialisable. Atomique : un refus (réservation sur un jour désormais fermé) annule
+  // aussi le changement de config.
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.exercice.update({
+          where: { id: exerciceId },
+          data: {
+            activeDays,
+            openOnHolidays: config.openOnHolidays,
+            openOnSchoolHolidays: config.openOnSchoolHolidays,
+            morningStart: config.morningStart,
+            morningEnd: config.morningEnd,
+            afternoonStart: config.afternoonStart,
+            afternoonEnd: config.afternoonEnd,
+          },
+        });
+        const periods = await tx.period.findMany({
+          where: { exerciceId, serviceId, state: "actif" },
+          select: { id: true },
+        });
+        for (const p of periods) {
+          await regenerateRecurringMirrorsForPeriodInTx(tx, serviceId, p.id);
+        }
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof SlotMutationError) throw new PeriodError(e.message);
+    throw e;
+  }
 }
 
 /**
