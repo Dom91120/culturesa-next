@@ -717,12 +717,20 @@ export default async function StatsPage({
           color="#6dceaa"
           hint="Occupation moyenne (jauge) des créneaux réservés"
         />
+        {stats.tauxAbsence != null && (
+          <MetricCard
+            value={`${stats.tauxAbsence}%`}
+            label="Taux d'absence"
+            color={C_ABSENT}
+            hint="Absents / (présents + absents), séances passées pointées"
+          />
+        )}
         {stats.pending > 0 && (
           <MetricCard value={stats.pending} label="Demandes en attente" color="var(--warn)" />
         )}
       </div>
 
-      {/* Grille unique : anneaux (4, ou 3 sans présence) PUIS panneaux — tout s'enchaîne
+      {/* Grille unique : anneaux (5, ou 4 sans présence) PUIS panneaux — tout s'enchaîne
           sur 4 colonnes, sans colonne vide entre les deux sections. */}
       <div
         style={{
@@ -769,6 +777,14 @@ export default async function StatsPage({
           centerValue={String(stats.distinctUsers)}
           centerLabel="usagers"
         />
+
+        <DonutPanel
+          title="Répartition par thème"
+          data={forDonut(stats.topThemes, 6)}
+          centerValue={String(stats.themedCount)}
+          centerLabel="séances"
+        />
+
         <Panel
           title="Évolution mensuelle"
           hint="Nombre de séances par mois"

@@ -46,6 +46,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     "Taux de présence (%)",
     stats.tauxPresence != null ? String(stats.tauxPresence) : "",
   ]);
+  lines.push(["Taux d'absence (%)", stats.tauxAbsence != null ? String(stats.tauxAbsence) : ""]);
   lines.push([
     "Taux de réalisation (%)",
     stats.tauxRealisation != null ? String(stats.tauxRealisation) : "",
@@ -60,6 +61,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   section("Par mois", "Réservations", stats.byMonth);
   section("Top structures", "Réservations", stats.topStructures);
   section("Top niveaux", "Réservations", stats.topNiveaux);
+  section("Par thème", "Réservations", stats.topThemes);
   section("Remplissage moyen par mois (%)", "%", stats.fillByMonth);
   section("Remplissage moyen par structure (%)", "%", stats.fillByStructure);
   section("Effectifs par exercice", "Enfants", stats.effectifsByExercice);

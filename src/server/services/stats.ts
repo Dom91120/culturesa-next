@@ -41,6 +41,7 @@ export type ServiceStats = {
   absents: number;
   nonPointes: number;
   tauxPresence: number | null; // présents / (présents + absents)
+  tauxAbsence: number | null; // absents / (présents + absents)
   tauxRealisation: number | null; // présents / prévu
   // Graphes
   byDay: LabeledCount[];
@@ -50,6 +51,12 @@ export type ServiceStats = {
   fillByMonth: LabeledCount[];
   topStructures: LabeledCount[];
   topNiveaux: LabeledCount[];
+  // Répartition par thème (texte saisi/choisi par l'usager) — occurrences ayant un thème
+  // non vide. topThemes = top 10 (comme topStructures/topNiveaux, pas de normalisation de
+  // casse en mode « libre ») ; themedCount = total RÉEL (toutes occurrences avec thème, pas
+  // seulement le top 10) pour un centre d'anneau exact.
+  topThemes: LabeledCount[];
+  themedCount: number;
   // Taux de remplissage moyen (%, unités de jauge) des créneaux réservés, par structure.
   fillByStructure: LabeledCount[];
   // Effectifs (enfants) par exercice — TOUS exercices (ignore la plage de dates), pour
@@ -146,6 +153,7 @@ export async function getServiceStats(
       pointage: true,
       enfants: true,
       accompagnants: true,
+      themeLabel: true,
       userId: true,
       parentBookingId: true,
       slot: {
@@ -194,6 +202,7 @@ export async function getServiceStats(
   const dayMap = new Map<string, number>();
   const structMap = new Map<string, number>();
   const niveauMap = new Map<string, number>();
+  const themeMap = new Map<string, number>();
   const monthCount = new Map<string, number>();
   const sessionAgg = new Map<string, { occ: number; cap: number; month: string }>();
   for (const b of occ) {
@@ -204,6 +213,10 @@ export async function getServiceStats(
     structMap.set(structOf(b), (structMap.get(structOf(b)) ?? 0) + 1);
     const niv = b.user.niveau?.trim() || "(aucun)";
     niveauMap.set(niv, (niveauMap.get(niv) ?? 0) + 1);
+    // Thème : seules les occurrences ayant EFFECTIVEMENT un thème saisi comptent (pas de
+    // catégorie "(sans thème)" — sur un service sans thèmes, ça noierait le panneau).
+    const theme = b.themeLabel?.trim();
+    if (theme) themeMap.set(theme, (themeMap.get(theme) ?? 0) + 1);
     const bucket = dateStr.slice(0, 7);
     monthCount.set(bucket, (monthCount.get(bucket) ?? 0) + 1);
     const key = sessionKeyOf(b, dateStr);
@@ -304,7 +317,15 @@ export async function getServiceStats(
   const nonPointes = prevu - presents - absents;
   const tauxPresence =
     presents + absents > 0 ? Math.round((100 * presents) / (presents + absents)) : null;
+  // Calculé indépendamment de tauxPresence (pas en 100 - tauxPresence) : évite un
+  // arrondi couplé qui pourrait faire dévier légèrement les deux valeurs affichées.
+  const tauxAbsence =
+    presents + absents > 0 ? Math.round((100 * absents) / (presents + absents)) : null;
   const tauxRealisation = prevu > 0 ? Math.round((100 * presents) / prevu) : null;
+
+  // Total RÉEL des occurrences avec thème (avant réduction au top 10) : sert de centre
+  // d'anneau exact, comme distinctUsers pour le ring « Top structures ».
+  const themedCount = [...themeMap.values()].reduce((s, v) => s + v, 0);
 
   return {
     total,
@@ -320,12 +341,15 @@ export async function getServiceStats(
     absents,
     nonPointes,
     tauxPresence,
+    tauxAbsence,
     tauxRealisation,
     byDay,
     byMonth,
     fillByMonth,
     topStructures: topN(structMap, 10).map((r) => ({ ...r, label: shortStructureLabel(r.label) })),
     topNiveaux: topN(niveauMap, 10),
+    topThemes: topN(themeMap, 10),
+    themedCount,
     fillByStructure,
     effectifsByExercice,
   };
