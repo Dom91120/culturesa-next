@@ -510,13 +510,17 @@ export async function deleteBookingAdminAction(
   return { ok: true };
 }
 
-const detailSchema = z.object({
-  bookingId: z.coerce.number().int().positive(),
-  serviceId: z.string().min(1),
-  enfants: z.coerce.number().int().min(0).max(99),
-  accompagnants: z.coerce.number().int().min(0).max(99),
-  theme: z.string().trim().max(255),
-});
+const detailSchema = z
+  .object({
+    bookingId: z.coerce.number().int().positive(),
+    serviceId: z.string().min(1),
+    enfants: z.coerce.number().int().min(0).max(99),
+    accompagnants: z.coerce.number().int().min(0).max(99),
+    theme: z.string().trim().max(255),
+  })
+  // Au moins 1 enfant ET 1 accompagnant — même invariant qu'à la création, jusqu'ici
+  // absent de l'édition (un gestionnaire pouvait ramener une résa à 0/0).
+  .refine(hasBothParticipants, hasBothParticipantsMsg);
 
 /**
  * Met à jour les détails d'une réservation depuis la modale « 📋 Réservation » :

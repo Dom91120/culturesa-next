@@ -114,6 +114,32 @@ export async function userCanAccessService(
 }
 
 /**
+ * Le demandeur EFFECTIF de l'usager (le sien, sinon celui de sa structure) est-il en
+ * mode « validation » pour ce service ? `true` ⇒ la réservation doit rester EN ATTENTE
+ * (et la validation bloquante s'applique). `false` (auto-validée) sans demandeur
+ * effectif (ex. admin) ou si le réglage est absent/désactivé.
+ *
+ * SOURCE UNIQUE du mode validation côté serveur (création, déplacement, verrou) —
+ * dérivée du demandeur EFFECTIF comme l'affichage de l'agenda usager
+ * (deriveServiceModes). Auparavant réimplémentée inline sur `user.demandeurId` DIRECT,
+ * ce qui auto-validait et déverrouillait à tort les usagers rattachés à un demandeur
+ * via leur seule structure (demandeurId personnel null).
+ */
+export async function isValidationMode(
+  db: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+): Promise<boolean> {
+  const demId = await effectiveDemandeurId(db, userId);
+  if (demId == null) return false;
+  const setting = await db.serviceDemandeurSettings.findFirst({
+    where: { serviceId, demandeurId: demId },
+    select: { validation: true },
+  });
+  return setting?.validation ?? false;
+}
+
+/**
  * Services réservables PAR L'USAGER courant (avec un aperçu du nombre de créneaux à
  * venir). Un usager ne voit que les services configurés pour SON type de demandeur
  * (présence d'une ligne ServiceDemandeurSettings). Un compte sans demandeur (ex.
@@ -554,16 +580,7 @@ export async function assertBookingUnlocked(
     select: { validationBloquante: true },
   });
   if (!service?.validationBloquante) return;
-  const u = await db.user.findUnique({
-    where: { id: userId },
-    select: { demandeurId: true },
-  });
-  if (u?.demandeurId == null) return; // sans demandeur (admin) → pas de mode validation
-  const setting = await db.serviceDemandeurSettings.findFirst({
-    where: { serviceId: booking.serviceId, demandeurId: u.demandeurId },
-    select: { validation: true },
-  });
-  if (setting?.validation) {
+  if (await isValidationMode(db, userId, booking.serviceId)) {
     throw new BookingError("Réservation validée — modification impossible.");
   }
 }

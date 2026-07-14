@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { bookingCreateSchema } from "@/schemas/booking";
+import {
+  bookingCreateSchema,
+  hasBothParticipants,
+  hasBothParticipantsMsg,
+} from "@/schemas/booking";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import {
@@ -22,6 +26,7 @@ import {
   cancelUserBookingInTx,
   createUniqueBookingInTx,
   effectiveDemandeurId,
+  isValidationMode,
   userCanAccessService,
 } from "@/server/services/bookings";
 import { openingForDate } from "@/server/services/opening";
@@ -108,7 +113,7 @@ async function reserveRecurringInTx(
   await assertPeriodOpenForUser(tx, periodId);
   const user = await tx.user.findUnique({
     where: { id: userId },
-    select: { enfants: true, demandeurId: true },
+    select: { enfants: true },
   });
   // Compteurs : valeurs saisies (jauge) si fournies, sinon profil.
   const myEnfants = enfants > 0 ? enfants : (user?.enfants ?? 0);
@@ -147,14 +152,8 @@ async function reserveRecurringInTx(
     bookingType: "recurring",
     periodId,
   });
-  // Validation : validée d'emblée sauf si le demandeur est en mode « validation ».
-  const setting = user?.demandeurId
-    ? await tx.serviceDemandeurSettings.findFirst({
-        where: { serviceId, demandeurId: user.demandeurId },
-        select: { validation: true },
-      })
-    : null;
-  const validated = !(setting?.validation ?? false);
+  // Validation : validée d'emblée sauf si le demandeur EFFECTIF est en mode validation.
+  const validated = !(await isValidationMode(tx, userId, serviceId));
   const created = await tx.booking.create({
     data: {
       bookingType: "recurring",
@@ -265,15 +264,9 @@ async function reservePonctuelInTx(
   }
   const user = await tx.user.findUnique({
     where: { id: userId },
-    select: { enfants: true, demandeurId: true },
+    select: { enfants: true },
   });
-  const setting = user?.demandeurId
-    ? await tx.serviceDemandeurSettings.findFirst({
-        where: { serviceId, demandeurId: user.demandeurId },
-        select: { validation: true },
-      })
-    : null;
-  const validated = !(setting?.validation ?? false);
+  const validated = !(await isValidationMode(tx, userId, serviceId));
   const myEnfants = args.enfants > 0 ? args.enfants : (user?.enfants ?? 0);
   const myAcc = args.accompagnants > 0 ? args.accompagnants : 0;
   const parsed = bookingCreateSchema.safeParse({
@@ -437,10 +430,6 @@ async function moveInTx(
   if (!target.ponctuel && slot.periodId !== target.periodId) {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
-  const user = await tx.user.findUnique({
-    where: { id: userId },
-    select: { demandeurId: true },
-  });
   // Demandeurs autorisés (SlotDemandeur) : restriction du créneau, sinon celle de son
   // PARENT pour un miroir (cohérent avec createUniqueBookingInTx — un miroir ne porte
   // pas ses propres lignes SlotDemandeur). Évalué sur le demandeur EFFECTIF (le sien,
@@ -486,13 +475,7 @@ async function moveInTx(
     periodId: target.ponctuel ? (slot.periodId ?? 0) : (target.periodId ?? 0),
     excludeBookingId: bookingId,
   });
-  const setting = user?.demandeurId
-    ? await tx.serviceDemandeurSettings.findFirst({
-        where: { serviceId, demandeurId: user.demandeurId },
-        select: { validation: true },
-      })
-    : null;
-  const validated = !(setting?.validation ?? false);
+  const validated = !(await isValidationMode(tx, userId, serviceId));
   await tx.booking.update({
     where: { id: bookingId },
     data: {
@@ -561,6 +544,11 @@ async function updateInTx(
   const acc = Math.floor(rawAccompagnants);
   if (!Number.isInteger(enf) || enf < 0 || enf > 99) throw new BookingError("Données invalides.");
   if (!Number.isInteger(acc) || acc < 0 || acc > 99) throw new BookingError("Données invalides.");
+  // Au moins 1 enfant ET 1 accompagnant — même invariant qu'à la création (règle
+  // partagée), jusqu'ici absent de l'édition : on pouvait ramener une résa à 0/0.
+  if (!hasBothParticipants({ enfants: enf, accompagnants: acc })) {
+    throw new BookingError(hasBothParticipantsMsg.message);
+  }
   const themeLabel = (rawTheme ?? "").trim().slice(0, 255);
   const b = await tx.booking.findFirst({
     where: { id: bookingId, userId, serviceId },
