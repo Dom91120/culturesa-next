@@ -179,9 +179,6 @@ export function BookingStackModal({
                   onChange={(e) => onTogglePointage(e.target.checked)}
                 />
               </label>
-              <span style={{ fontSize: ".7rem", color: "var(--muted)", fontStyle: "italic" }}>
-                Validation/édition en vue « Modèle de période »
-              </span>
             </>
           ) : (
             <>
