@@ -164,6 +164,23 @@ export const auth = betterAuth({
         }
       }
 
+      // Verrou sur /update-user : Better Auth expose cet endpoint authentifié qui
+      // écrit dans la table `user` tout champ additionnel dépourvu de `input:false`.
+      // Or `input:false` ne peut pas être posé sur demandeurId/structureId/enfants/
+      // accompagnants — ils DOIVENT rester saisissables à l'inscription (body du
+      // /sign-up/email). On interdit donc leur ré-écriture ICI : ce sont des champs
+      // métier/sécurité (le demandeur effectif pilote le cloisonnement usager, la
+      // jauge dépend de enfants/accompagnants) et l'app ne modifie le profil que via
+      // ses propres server actions (mon-compte/updateProfileAction, users admin), pas
+      // via /update-user. `role` est déjà couvert par input:false (defense in depth).
+      if (ctx.path === "/update-user") {
+        const b = (ctx.body ?? {}) as Record<string, unknown>;
+        const locked = ["demandeurId", "structureId", "enfants", "accompagnants", "role", "rgpdOk"];
+        if (locked.some((k) => k in b)) {
+          throw new APIError("BAD_REQUEST", { message: "Champ non modifiable." });
+        }
+      }
+
       // Enforcement serveur de la politique de mot de passe (complexité), en plus du
       // minPasswordLength. Rejette tout mot de passe non conforme, y compris une
       // requête qui contournerait la validation côté formulaire.
