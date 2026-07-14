@@ -433,17 +433,6 @@ export async function moveRecurringSlot(
   if (!period?.dateStart || !period?.dateEnd) {
     return { ok: false, error: "Période introuvable ou sans dates" };
   }
-  const existingMirrors = await prisma.slot.findMany({
-    where: { parentSlotId: slotId },
-    select: { id: true },
-  });
-  const bookingCount = await prisma.booking.count({
-    where: { slotId: { in: [slotId, ...existingMirrors.map((m) => m.id)] } },
-  });
-  if (bookingCount > 0) {
-    return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
-  }
-
   const capVal = slot.capacity ?? service.capacity;
   const weeks = normalizeWeeks(slot.weeks);
   // Jours actifs / fériés de l'EXERCICE de la période (période sans exercice =
@@ -457,44 +446,70 @@ export async function moveRecurringSlot(
   const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
   const startDate = toISO(period.dateStart);
   const endDate = toISO(period.dateEnd);
+  // Vérif « réservé » + suppression des miroirs + régénération dans UNE transaction
+  // sérialisable : une réservation créée sur le créneau ou un miroir ENTRE le count et
+  // le delete ne peut plus être supprimée en cascade sans être vue (Booking.slot est
+  // onDelete: Cascade). Cohérent avec moveUniqueSlot — le count hors transaction
+  // laissait sinon une fenêtre de perte silencieuse de réservation.
+  let blocked = false;
   try {
-    await prisma.$transaction(async (tx) => {
-      if (existingMirrors.length) {
-        await tx.slot.deleteMany({ where: { id: { in: existingMirrors.map((m) => m.id) } } });
-      }
-      await tx.slot.update({
-        where: { id: slotId },
-        data: { startTime, endTime, weeks, state: "actif", slotDay: toDayKey, capacity: capVal },
-      });
-      const wanted = computeWantedMirrors({
-        startDate,
-        endDate,
-        activeDays,
-        holidaySet,
-        openOnHolidays: opening?.openOnHolidays ?? false,
-        weeks: parseWeeks(weeks),
-        slotDay: toDayKey,
-        capacity: capVal,
-      });
-      // Un seul createMany (cf. addRecurringSlot : anti-timeout).
-      const mirrorRows = [...wanted.values()].map((mv) => ({
-        id: mirrorId(slotId, mv.date),
-        serviceId,
-        slotType: "unique" as const,
-        startTime,
-        endTime,
-        slotDate: fromISO(mv.date),
-        capacity: mv.cap,
-        periodId: period.id,
-        parentSlotId: slotId,
-        state: "actif" as const,
-        // Miroirs régénérés : jauge du récurrent déplacé.
-        jauge: slot.jauge,
-      }));
-      if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        const existingMirrors = await tx.slot.findMany({
+          where: { parentSlotId: slotId },
+          select: { id: true },
+        });
+        const bookingCount = await tx.booking.count({
+          where: { slotId: { in: [slotId, ...existingMirrors.map((m) => m.id)] } },
+        });
+        if (bookingCount > 0) {
+          blocked = true;
+          return;
+        }
+        if (existingMirrors.length) {
+          await tx.slot.deleteMany({ where: { id: { in: existingMirrors.map((m) => m.id) } } });
+        }
+        await tx.slot.update({
+          where: { id: slotId },
+          data: { startTime, endTime, weeks, state: "actif", slotDay: toDayKey, capacity: capVal },
+        });
+        const wanted = computeWantedMirrors({
+          startDate,
+          endDate,
+          activeDays,
+          holidaySet,
+          openOnHolidays: opening?.openOnHolidays ?? false,
+          weeks: parseWeeks(weeks),
+          slotDay: toDayKey,
+          capacity: capVal,
+        });
+        // Un seul createMany (cf. addRecurringSlot : anti-timeout).
+        const mirrorRows = [...wanted.values()].map((mv) => ({
+          id: mirrorId(slotId, mv.date),
+          serviceId,
+          slotType: "unique" as const,
+          startTime,
+          endTime,
+          slotDate: fromISO(mv.date),
+          capacity: mv.cap,
+          periodId: period.id,
+          parentSlotId: slotId,
+          state: "actif" as const,
+          // Miroirs régénérés : jauge du récurrent déplacé.
+          jauge: slot.jauge,
+        }));
+        if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
+    }
     return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
+  if (blocked) {
+    return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
   }
   return { ok: true };
 }
