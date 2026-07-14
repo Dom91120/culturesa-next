@@ -93,6 +93,13 @@ async function reserveRecurringInTx(
   ) {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
+  // Anti-injection : le periodId DOIT être celui du créneau récurrent. Un periodId
+  // forgé (même d'un autre service, du moment qu'il est « dispo ») contournerait
+  // sinon la jauge — cloisonnée par {slotId, periodId} (assertSlotCapacity) — et
+  // l'unicité uq_recurring, et matérialiserait les enfants sur la mauvaise plage.
+  if (slot.periodId !== periodId) {
+    throw new BookingError("Ce créneau n'est pas disponible.");
+  }
   // Accès service : le demandeur effectif de l'usager doit accepter ce service.
   if (!(await userCanAccessService(tx, userId, serviceId))) {
     throw new BookingError("Vous n'avez pas accès à ce service.");
@@ -245,6 +252,17 @@ async function reservePonctuelInTx(
   serviceId: string,
   args: { slotId: string; theme: string; enfants: number; accompagnants: number },
 ): Promise<BookingConfirmationParams | null> {
+  // Anti-IDOR / cohérence de la validation : le créneau doit appartenir au service
+  // annoncé. Sinon `validated` (dérivé de `serviceId`) porterait sur un service
+  // autre que celui où la réservation est réellement créée (createUniqueBookingInTx
+  // crée sur slot.serviceId) → contournement du mode validation.
+  const targetSlot = await tx.slot.findUnique({
+    where: { id: args.slotId },
+    select: { serviceId: true },
+  });
+  if (!targetSlot || targetSlot.serviceId !== serviceId) {
+    throw new BookingError("Ce créneau n'est pas disponible.");
+  }
   const user = await tx.user.findUnique({
     where: { id: userId },
     select: { enfants: true, demandeurId: true },
@@ -395,7 +413,11 @@ async function moveInTx(
   await assertBookingUnlocked(tx, userId, booking);
   const slot = await tx.slot.findUnique({
     where: { id: target.slotId },
-    include: { service: true, demandeurs: { select: { demandeurId: true } } },
+    include: {
+      service: true,
+      demandeurs: { select: { demandeurId: true } },
+      parent: { select: { demandeurs: { select: { demandeurId: true } } } },
+    },
   });
   const wantType = target.ponctuel ? "unique" : "recurring";
   if (
@@ -410,16 +432,23 @@ async function moveInTx(
   if (!target.ponctuel && !(target.periodId != null && target.periodId > 0)) {
     throw new BookingError("Période requise pour une réservation récurrente.");
   }
+  // Anti-injection : vers un récurrent, la période cible DOIT être celle du créneau
+  // (même raison qu'à la création : jauge/unicité cloisonnées par periodId).
+  if (!target.ponctuel && slot.periodId !== target.periodId) {
+    throw new BookingError("Ce créneau n'est pas disponible.");
+  }
   const user = await tx.user.findUnique({
     where: { id: userId },
     select: { demandeurId: true },
   });
-  // Demandeurs autorisés (SlotDemandeur) : évalués sur le demandeur EFFECTIF (le
-  // sien, sinon celui de sa structure) — cohérent avec l'affichage de l'agenda
-  // usager. Compte sans demandeur effectif (ex. admin) : autorisé.
-  if (slot.demandeurs.length > 0) {
+  // Demandeurs autorisés (SlotDemandeur) : restriction du créneau, sinon celle de son
+  // PARENT pour un miroir (cohérent avec createUniqueBookingInTx — un miroir ne porte
+  // pas ses propres lignes SlotDemandeur). Évalué sur le demandeur EFFECTIF (le sien,
+  // sinon celui de sa structure). Compte sans demandeur effectif (ex. admin) : autorisé.
+  const restriction = slot.demandeurs.length ? slot.demandeurs : (slot.parent?.demandeurs ?? []);
+  if (restriction.length > 0) {
     const demId = await effectiveDemandeurId(tx, userId);
-    if (demId != null && !slot.demandeurs.some((d) => d.demandeurId === demId)) {
+    if (demId != null && !restriction.some((d) => d.demandeurId === demId)) {
       throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
     }
   }
@@ -444,6 +473,17 @@ async function moveInTx(
     periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
     enfants: booking.enfants,
     accompagnants: booking.accompagnants,
+    excludeBookingId: bookingId,
+  });
+  // Limites de réservation de l'usager sur la période CIBLE (max par période + max
+  // sur l'exercice) — omises jusqu'ici : un déplacement permettait de dépasser les
+  // maxima en créant dans des périodes distinctes puis en regroupant sur une seule.
+  // La résa déplacée est exclue du décompte (sinon faux rejet en move intra-exercice).
+  await assertReservationLimits(tx, {
+    serviceId,
+    userId,
+    bookingType: target.ponctuel ? "unique" : "recurring",
+    periodId: target.ponctuel ? (slot.periodId ?? 0) : (target.periodId ?? 0),
     excludeBookingId: bookingId,
   });
   const setting = user?.demandeurId

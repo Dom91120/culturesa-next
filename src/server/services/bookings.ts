@@ -261,10 +261,14 @@ export async function assertReservationLimits(
     bookingType: "recurring" | "unique";
     // Récurrent : periodId de la réservation ; ponctuel : periodId du SLOT (0 = aucun).
     periodId: number;
+    // Réservation à EXCLURE du décompte (déplacement : la résa déplacée ne doit pas
+    // se compter elle-même, sinon faux rejet à la limite pour un move intra-exercice).
+    excludeBookingId?: number;
   },
 ) {
-  const { serviceId, userId, bookingType, periodId } = params;
+  const { serviceId, userId, bookingType, periodId, excludeBookingId } = params;
   if (!(periodId > 0)) return;
+  const notSelf = excludeBookingId != null ? { id: { not: excludeBookingId } } : {};
   const period = await db.period.findUnique({
     where: { id: periodId },
     select: {
@@ -288,7 +292,7 @@ export async function assertReservationLimits(
   if (bookingType === "recurring") {
     // Par période.
     const perPeriod = await db.booking.count({
-      where: { serviceId, userId, periodId, bookingType: "recurring" },
+      where: { serviceId, userId, periodId, bookingType: "recurring", ...notSelf },
     });
     if (perPeriod >= maxReservationsPeriod) throw tooManyPeriod;
 
@@ -299,6 +303,7 @@ export async function assertReservationLimits(
         userId,
         bookingType: "recurring",
         periodId: { in: exoPeriodIds },
+        ...notSelf,
       },
     });
     if (perYear >= maxReservations) throw tooManyYear;
@@ -314,6 +319,7 @@ export async function assertReservationLimits(
         bookingType: "unique",
         parentBookingId: null,
         slot: { periodId },
+        ...notSelf,
       },
     });
     if (perPeriod >= maxReservationsPeriod) throw tooManyPeriod;
@@ -327,6 +333,7 @@ export async function assertReservationLimits(
         bookingType: "unique",
         parentBookingId: null,
         slot: { periodId: { in: exoPeriodIds } },
+        ...notSelf,
       },
     });
     if (perYear >= maxReservations) throw tooManyYear;
