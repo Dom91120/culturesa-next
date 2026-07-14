@@ -908,7 +908,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         // Thème réel seulement pour MES réservations (les autres restent anonymes).
         theme: b.userId === userId ? (b.themeLabel ?? "") : "",
         validated: b.validated,
-        pointage: b.pointage,
+        // Pointage (présence/absence) : donnée personnelle → exposé seulement pour MES
+        // réservations. La grille ne lit le pointage que sur `mine` (cf. impression).
+        pointage: b.userId === userId ? b.pointage : null,
         name: "",
         demandeur: "",
         structure: "",
