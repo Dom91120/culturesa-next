@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { todayParisISO } from "@/lib/booking-delay";
+import { hasBothParticipants, hasBothParticipantsMsg } from "@/schemas/booking";
 import { DAYS } from "@/schemas/config";
 import { recurringSlotCreateSchema, uniqueSlotCreateSchema } from "@/schemas/slot";
 import { prisma } from "@/server/db";
@@ -259,6 +260,8 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
     demandeur: string;
     structure: string;
     openOnSchoolHolidays: boolean;
+    enfants: number;
+    accompagnants: number;
   }[]
 > {
   await requireServiceManager(serviceId);
@@ -269,6 +272,8 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
       id: true,
       nom: true,
       prenom: true,
+      enfants: true,
+      accompagnants: true,
       demandeur: { select: { label: true, openOnSchoolHolidays: true } },
       structure: {
         select: { label: true, demandeur: { select: { openOnSchoolHolidays: true } } },
@@ -283,6 +288,9 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
     // Politique vacances scolaires du demandeur EFFECTIF (direct, sinon structure ; false =
     // fermé → occurrences exclues).
     openOnSchoolHolidays: effectiveOpenOnSchoolHolidays(u),
+    // Profil (préremplit Enfant/Adulte dans la modale de création à la sélection).
+    enfants: u.enfants,
+    accompagnants: u.accompagnants,
   }));
 }
 
@@ -668,17 +676,19 @@ export async function moveBookingAction(
   return { ok: true };
 }
 
-const createSchema = z.object({
-  serviceId: z.string().min(1),
-  slotId: z.string().min(1),
-  periodId: z.coerce.number().int().positive(),
-  dayKey: z.string().min(1),
-  userId: z.string().min(1),
-  enfants: z.coerce.number().int().min(0).max(999).default(0),
-  accompagnants: z.coerce.number().int().min(0).max(999).default(0),
-  theme: z.string().trim().max(255).default(""),
-  week: z.enum(["", "A", "B"]).default(""),
-});
+const createSchema = z
+  .object({
+    serviceId: z.string().min(1),
+    slotId: z.string().min(1),
+    periodId: z.coerce.number().int().positive(),
+    dayKey: z.string().min(1),
+    userId: z.string().min(1),
+    enfants: z.coerce.number().int().min(0).max(999).default(0),
+    accompagnants: z.coerce.number().int().min(0).max(999).default(0),
+    theme: z.string().trim().max(255).default(""),
+    week: z.enum(["", "A", "B"]).default(""),
+  })
+  .refine(hasBothParticipants, hasBothParticipantsMsg);
 
 /** Crée une réservation récurrente (clic sur un créneau vide de l'agenda). */
 export async function createRecurringBookingAction(input: {
@@ -694,7 +704,9 @@ export async function createRecurringBookingAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   const parsed = createSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Données invalides." };
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+  }
   const d = parsed.data;
   try {
     await prisma.$transaction(
@@ -797,14 +809,16 @@ export async function createRecurringBookingAction(input: {
   return { ok: true };
 }
 
-const createUniqueSchema = z.object({
-  serviceId: z.string().min(1),
-  slotId: z.string().min(1),
-  userId: z.string().min(1),
-  enfants: z.coerce.number().int().min(0).max(999).default(0),
-  accompagnants: z.coerce.number().int().min(0).max(999).default(0),
-  theme: z.string().trim().max(255).default(""),
-});
+const createUniqueSchema = z
+  .object({
+    serviceId: z.string().min(1),
+    slotId: z.string().min(1),
+    userId: z.string().min(1),
+    enfants: z.coerce.number().int().min(0).max(999).default(0),
+    accompagnants: z.coerce.number().int().min(0).max(999).default(0),
+    theme: z.string().trim().max(255).default(""),
+  })
+  .refine(hasBothParticipants, hasBothParticipantsMsg);
 
 /**
  * Crée une réservation PONCTUELLE (clic sur un créneau ponctuel de l'agenda).
@@ -822,7 +836,9 @@ export async function createUniqueBookingAction(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   const parsed = createUniqueSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Données invalides." };
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+  }
   const d = parsed.data;
   const slot = await prisma.slot.findUnique({
     where: { id: d.slotId },

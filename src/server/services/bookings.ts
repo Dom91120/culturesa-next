@@ -478,7 +478,9 @@ export async function createUniqueBooking(
   // Validation runtime (bornes compteurs, thème ≤ 255) : le type seul ne protège
   // pas une server action des entrées hors bornes (audit architecture).
   const parsedInput = bookingCreateSchema.safeParse(rawInput);
-  if (!parsedInput.success) throw new BookingError("Données invalides.");
+  if (!parsedInput.success) {
+    throw new BookingError(parsedInput.error.issues[0]?.message ?? "Données invalides.");
+  }
   const input = parsedInput.data;
   try {
     return await prisma.$transaction(

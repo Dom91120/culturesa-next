@@ -8,12 +8,16 @@ import { OccurrencesField } from "./occurrences-field";
 
 // Usager proposé dans la modale (chargé à la demande par le parent via
 // listAgendaUsersAction) ; openOnSchoolHolidays sert au calcul des occurrences.
+// enfants/accompagnants (profil) préremplissent les compteurs Enfant/Adulte quand
+// l'usager est choisi (ex. Isabelle ADJANI : 9 enfants + 1 accompagnant).
 export type UserOpt = {
   id: string;
   label: string;
   demandeur?: string;
   structure?: string;
   openOnSchoolHolidays?: boolean;
+  enfants?: number;
+  accompagnants?: number;
 };
 
 // Cible de la création (créneau + jour cliqués) — variante NON nulle du CreateCtx
@@ -70,20 +74,44 @@ export function BookingCreateModal({
   // Filtres « Type de demandeur » et « Structure » (modale legacy) : restreignent la liste des usagers.
   const [cDemType, setCDemType] = useState("");
   const [cStructure, setCStructure] = useState("");
-  const [cEnfants, setCEnfants] = useState("0");
-  const [cAccompagnants, setCAccompagnants] = useState("0");
+  // Défaut à 1 (pas 0) : chaque compteur est désormais requis individuellement
+  // (cf. schemas/booking.ts hasBothParticipants) — démarrer à 1 évite de déclencher
+  // l'erreur dès l'ouverture pour le cas le plus courant (1 enfant, 1 accompagnant).
+  const [cEnfants, setCEnfants] = useState("1");
+  const [cAccompagnants, setCAccompagnants] = useState("1");
   const [cTheme, setCTheme] = useState("");
   const [cError, setCError] = useState<string | null>(null);
+
+  // Sélection d'un usager (Demandeur) : préremplit Enfant/Adulte avec SON PROFIL
+  // (ex. Isabelle ADJANI : 9 enfants + 1 accompagnant), au lieu du défaut 1/1 —
+  // l'admin ajuste ensuite si cette réservation précise diffère. Plancher à 1 si le
+  // profil porte 0 (cohérent avec hasBothParticipants : chaque compteur ≥ 1). Aucun
+  // usager choisi → retour au défaut 1/1.
+  function selectUser(userId: string) {
+    setCUser(userId);
+    const u = users.find((x) => x.id === userId);
+    setCEnfants(String(Math.max(1, u?.enfants ?? 0)));
+    setCAccompagnants(String(Math.max(1, u?.accompagnants ?? 0)));
+  }
 
   function submit() {
     if (!cUser) {
       setCError("Choisissez un usager.");
       return;
     }
+    const nEnfants = Number(cEnfants) || 0;
+    const nAccompagnants = Number(cAccompagnants) || 0;
+    // Une réservation doit compter au moins 1 enfant ET 1 accompagnant — le serveur
+    // le vérifie aussi (schemas/booking.ts hasBothParticipants), ce garde-fou client
+    // évite juste l'aller-retour pour l'erreur la plus fréquente.
+    if (nEnfants < 1 || nAccompagnants < 1) {
+      setCError("Au moins 1 enfant et 1 accompagnant sont requis.");
+      return;
+    }
     void onSubmit({
       userId: cUser,
-      enfants: Number(cEnfants) || 0,
-      accompagnants: Number(cAccompagnants) || 0,
+      enfants: nEnfants,
+      accompagnants: nAccompagnants,
       theme: cTheme,
     }).then((res) => {
       if (!res.ok) setCError(res.error ?? "Échec.");
@@ -168,7 +196,7 @@ export function BookingCreateModal({
               onChange={(e) => {
                 setCDemType(e.target.value);
                 setCStructure("");
-                setCUser("");
+                selectUser("");
               }}
             >
               <option value="">Tous les demandeurs</option>
@@ -188,7 +216,7 @@ export function BookingCreateModal({
               value={cStructure}
               onChange={(e) => {
                 setCStructure(e.target.value);
-                setCUser("");
+                selectUser("");
               }}
             >
               <option value="">Toutes les structures</option>
@@ -202,7 +230,7 @@ export function BookingCreateModal({
         )}
         <div className="field full">
           <label htmlFor="pcm-user-select">Demandeur</label>
-          <select id="pcm-user-select" value={cUser} onChange={(e) => setCUser(e.target.value)}>
+          <select id="pcm-user-select" value={cUser} onChange={(e) => selectUser(e.target.value)}>
             <option value="">— choisir —</option>
             {createUsers.map((u) => (
               <option key={u.id} value={u.id}>
@@ -231,7 +259,7 @@ export function BookingCreateModal({
               <input
                 id="pcm-enfants"
                 type="number"
-                min={0}
+                min={1}
                 max={99}
                 value={cEnfants}
                 onChange={(e) => setCEnfants(e.target.value)}
@@ -245,7 +273,7 @@ export function BookingCreateModal({
               <input
                 id="pcm-accompagnants"
                 type="number"
-                min={0}
+                min={1}
                 max={99}
                 value={cAccompagnants}
                 onChange={(e) => setCAccompagnants(e.target.value)}

@@ -106,6 +106,13 @@ async function reserveRecurringInTx(
   // Compteurs : valeurs saisies (jauge) si fournies, sinon profil.
   const myEnfants = enfants > 0 ? enfants : (user?.enfants ?? 0);
   const myAcc = accompagnants > 0 ? accompagnants : 0;
+  // Une réservation doit compter au moins 1 enfant ET 1 accompagnant (cf.
+  // schemas/booking.ts hasBothParticipants) — vérifié ICI sur les valeurs FINALES
+  // (après repli sur le profil), le schéma d'entrée reserveRecurringSchema ne voit
+  // que les valeurs brutes saisies.
+  if (myEnfants < 1 || myAcc < 1) {
+    throw new BookingError("Au moins 1 enfant et 1 accompagnant sont requis.");
+  }
   // Demandeurs autorisés (SlotDemandeur) : évalués sur le demandeur EFFECTIF (le
   // sien, sinon celui de sa structure) — cohérent avec l'affichage de l'agenda
   // usager. Compte sans demandeur effectif (ex. admin) : autorisé.
@@ -257,7 +264,9 @@ async function reservePonctuelInTx(
     accompagnants: myAcc,
     themeLabel: args.theme,
   });
-  if (!parsed.success) throw new BookingError("Données invalides.");
+  if (!parsed.success) {
+    throw new BookingError(parsed.error.issues[0]?.message ?? "Données invalides.");
+  }
   await createUniqueBookingInTx(tx, userId, parsed.data, validated);
   // Slot pour l'e-mail de confirmation (lu dans la même transaction).
   const slot = await tx.slot.findUnique({
