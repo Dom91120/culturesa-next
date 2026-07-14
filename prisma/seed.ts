@@ -609,7 +609,58 @@ async function main() {
   await resyncSequences();
   console.log("✓ Séquences d'auto-increment resynchronisées.");
 
+  await checkDbInvariants();
+  console.log("✓ Invariants SQL bruts vérifiés (NULLS NOT DISTINCT, index partiels, CHECKs).");
+
   console.log("✓ Seed terminé.");
+}
+
+/**
+ * Garde-fou contre le footgun des migrations Prisma : certains invariants sont
+ * maintenus en SQL BRUT car inexprimables dans schema.prisma (NULLS NOT DISTINCT,
+ * index partiels, contraintes CHECK). Une future migration générée par Prisma
+ * pourrait les recréer SANS ces clauses (ou les supprimer) silencieusement — ce
+ * contrôle fait échouer le seed tant qu'ils ne sont pas rétablis.
+ */
+async function checkDbInvariants() {
+  const missing: string[] = [];
+
+  // uq_recurring : l'index unique de bookings DOIT être NULLS NOT DISTINCT
+  // (sinon les réservations à periodId NULL ne sont plus dédupliquées).
+  const uq = await prisma.$queryRaw<{ indexdef: string }[]>`
+    SELECT indexdef FROM pg_indexes
+    WHERE tablename = 'bookings'
+      AND indexname = 'bookings_userId_serviceId_slotId_periodId_week_key'`;
+  if (!uq[0]) missing.push("index unique uq_recurring (bookings) INTROUVABLE");
+  else if (!uq[0].indexdef.toUpperCase().includes("NULLS NOT DISTINCT"))
+    missing.push("uq_recurring (bookings) a PERDU sa clause NULLS NOT DISTINCT");
+
+  // Index partiels uniques (migration 20260714090000_durcissement_bdd).
+  const partials = await prisma.$queryRaw<{ indexname: string }[]>`
+    SELECT indexname FROM pg_indexes
+    WHERE indexname IN ('uq_exercice_visible_par_service', 'uq_slot_miroir_parent_date')`;
+  const partialNames = new Set(partials.map((p) => p.indexname));
+  for (const name of ["uq_exercice_visible_par_service", "uq_slot_miroir_parent_date"]) {
+    if (!partialNames.has(name)) missing.push(`index partiel unique ${name} INTROUVABLE`);
+  }
+
+  // Contraintes CHECK (même migration).
+  const checks = await prisma.$queryRaw<{ conname: string }[]>`
+    SELECT conname FROM pg_constraint
+    WHERE contype = 'c'
+      AND conname IN ('ck_bookings_week', 'ck_slots_weeks', 'ck_slots_horaires')`;
+  const checkNames = new Set(checks.map((c) => c.conname));
+  for (const name of ["ck_bookings_week", "ck_slots_weeks", "ck_slots_horaires"]) {
+    if (!checkNames.has(name)) missing.push(`contrainte CHECK ${name} INTROUVABLE`);
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Invariants SQL bruts manquants en base (probable migration Prisma générée qui les a écrasés) :\n  - ${missing.join(
+        "\n  - ",
+      )}\nRétablir via une migration brute (cf. 20260714090000_durcissement_bdd et le commentaire uq_recurring du schéma).`,
+    );
+  }
 }
 
 /**

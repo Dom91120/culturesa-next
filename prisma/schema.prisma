@@ -56,6 +56,14 @@ enum Pointage {
   absent
 }
 
+// Mode de notification des gestionnaires (digest des auto-validations).
+enum MgrNoticeMode {
+  none
+  hours
+  daily
+  weekly
+}
+
 // Jour de la semaine d'un créneau récurrent (modèle « un slot = un jour »).
 enum DayOfWeek {
   lun
@@ -205,12 +213,12 @@ model Service {
   autoValidationDelay   Int        @default(0)
 
   // Notification des gestionnaires sur les auto-validations (digest par service).
-  //   mode : none | hours | daily | weekly ; cf. services/manager-notice.ts.
-  mgrNoticeMode          String    @default("none")
-  mgrNoticeIntervalHours Int       @default(4)
-  mgrNoticeHour          Int       @default(8)
-  mgrNoticeWeekday       String    @default("lun")
-  mgrNoticeLastSentAt    DateTime? @db.Timestamptz
+  //   cf. services/manager-notice.ts.
+  mgrNoticeMode          MgrNoticeMode @default(none)
+  mgrNoticeIntervalHours Int           @default(4)
+  mgrNoticeHour          Int           @default(8)
+  mgrNoticeWeekday       DayOfWeek     @default(lun)
+  mgrNoticeLastSentAt    DateTime?     @db.Timestamptz
 
   slots             Slot[]
   periods           Period[]
@@ -326,7 +334,8 @@ model Period {
   dateEnd    DateTime?   @db.Date
   // Disponibilité : date à partir de laquelle les USAGERS peuvent réserver sur
   // cette période. Vide = réservable sans restriction de date.
-  disponibilite DateTime? @db.Date @map("Disponibilite")
+  // (Colonne renommée « Disponibilite » → « disponibilite » — plus de casse mixte.)
+  disponibilite DateTime? @db.Date
   color      String      @default("#6dceaa")
   position   Int         @default(0)
   state      EntityState @default(actif)
