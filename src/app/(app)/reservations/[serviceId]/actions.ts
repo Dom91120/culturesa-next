@@ -38,17 +38,6 @@ function revalidate(serviceId: string) {
 
 type Result = { ok: boolean; error?: string };
 
-// Validation runtime des entrées de réservation récurrente (bornes compteurs,
-// thème ≤ 255) : ces server actions sont appelables avec des valeurs arbitraires,
-// le type TypeScript seul ne protège pas (audit architecture).
-const reserveRecurringSchema = z.object({
-  slotId: z.string().trim().min(1),
-  periodId: z.coerce.number().int().positive(),
-  theme: z.string().trim().max(255).default(""),
-  enfants: z.coerce.number().int().min(0).max(999).default(0),
-  accompagnants: z.coerce.number().int().min(0).max(999).default(0),
-});
-
 /** Mappe une erreur d'opération de réservation vers un `Result` (BookingError +
  * collisions Prisma P2002/P2034). Réutilisé par les actions mono-op et commitDraft. */
 function mapBookingError(e: unknown): Result {
@@ -201,50 +190,6 @@ async function reserveRecurringInTx(
   };
 }
 
-/** Réserve un créneau RÉCURRENT pour l'usager (jauge anti-surbooking, sérialisable). */
-export async function reserveRecurringAction(
-  serviceId: string,
-  rawSlotId: string,
-  rawPeriodId: number,
-  week = "",
-  rawTheme = "",
-  rawEnfants = 0,
-  rawAccompagnants = 0,
-): Promise<Result> {
-  const parsed = reserveRecurringSchema.safeParse({
-    slotId: rawSlotId,
-    periodId: rawPeriodId,
-    theme: rawTheme,
-    enfants: rawEnfants,
-    accompagnants: rawAccompagnants,
-  });
-  if (!parsed.success) return { ok: false, error: "Données invalides." };
-  const { slotId, periodId, theme, enfants, accompagnants } = parsed.data;
-  const session = await requireUser();
-  const wk = week === "A" || week === "B" ? week : "";
-  let mailParams: BookingConfirmationParams | null = null;
-  try {
-    await prisma.$transaction(
-      async (tx) => {
-        mailParams = await reserveRecurringInTx(tx, session.user.id, serviceId, {
-          slotId,
-          periodId,
-          theme,
-          enfants,
-          accompagnants,
-          wk,
-        });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
-  } catch (e) {
-    return mapBookingError(e);
-  }
-  if (mailParams) await sendBookingConfirmationMail(mailParams);
-  revalidate(serviceId);
-  return { ok: true };
-}
-
 async function reservePonctuelInTx(
   tx: Prisma.TransactionClient,
   userId: string,
@@ -309,36 +254,6 @@ async function reservePonctuelInTx(
   };
 }
 
-/** Réserve un créneau PONCTUEL (daté) pour l'usager. */
-export async function reservePonctuelAction(
-  serviceId: string,
-  slotId: string,
-  theme = "",
-  enfants = 0,
-  accompagnants = 0,
-): Promise<Result> {
-  const session = await requireUser();
-  let mailParams: BookingConfirmationParams | null = null;
-  try {
-    await prisma.$transaction(
-      async (tx) => {
-        mailParams = await reservePonctuelInTx(tx, session.user.id, serviceId, {
-          slotId,
-          theme,
-          enfants,
-          accompagnants,
-        });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
-  } catch (e) {
-    return mapBookingError(e);
-  }
-  if (mailParams) await sendBookingConfirmationMail(mailParams);
-  revalidate(serviceId);
-  return { ok: true };
-}
-
 /**
  * Annule une réservation appartenant à l'usager. Renvoie les paramètres de l'e-mail
  * « Réservation annulée » à envoyer APRÈS le commit (best-effort) UNIQUEMENT si la
@@ -367,22 +282,6 @@ async function cancelInTx(
     periodId: booking.periodId,
     motif: "Supprimée par l'utilisateur",
   };
-}
-
-export async function cancelMyBookingAction(serviceId: string, bookingId: number): Promise<Result> {
-  const session = await requireUser();
-  let cancelMail: BookingCancellationParams | null = null;
-  try {
-    await prisma.$transaction(async (tx) => {
-      cancelMail = await cancelInTx(tx, session.user.id, serviceId, bookingId);
-    });
-  } catch (e) {
-    return mapBookingError(e);
-  }
-  // « Réservation annulée » (best-effort, après commit).
-  if (cancelMail) await sendBookingCancellationMail(cancelMail);
-  revalidate(serviceId);
-  return { ok: true };
 }
 
 /**
@@ -507,23 +406,6 @@ async function moveInTx(
   }
 }
 
-export async function moveMyBookingAction(
-  serviceId: string,
-  bookingId: number,
-  target: { slotId: string; ponctuel: boolean; periodId?: number; week?: string },
-): Promise<Result> {
-  const session = await requireUser();
-  try {
-    await prisma.$transaction((tx) => moveInTx(tx, session.user.id, serviceId, bookingId, target), {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
-  } catch (e) {
-    return mapBookingError(e);
-  }
-  revalidate(serviceId);
-  return { ok: true };
-}
-
 /**
  * Met à jour les compteurs / le thème d'une réservation appartenant à l'usager.
  * Mêmes garde-fous que l'équivalent admin (`updateBookingDetailAction`) : bornes
@@ -609,26 +491,6 @@ async function updateInTx(
       validated: b.validated,
     });
   }
-}
-
-export async function updateMyBookingAction(
-  serviceId: string,
-  bookingId: number,
-  enfants: number,
-  accompagnants: number,
-  theme = "",
-): Promise<Result> {
-  const session = await requireUser();
-  try {
-    await prisma.$transaction(
-      (tx) => updateInTx(tx, session.user.id, serviceId, bookingId, enfants, accompagnants, theme),
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
-  } catch (e) {
-    return mapBookingError(e);
-  }
-  revalidate(serviceId);
-  return { ok: true };
 }
 
 // ── Panier ATOMIQUE : valide tout le brouillon en UNE transaction (tout ou rien) ──

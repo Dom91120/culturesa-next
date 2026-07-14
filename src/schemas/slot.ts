@@ -65,6 +65,3 @@ export const uniqueSlotCreateSchema = z
     jauge,
   })
   .refine(hoursOrdered, hoursOrderedMsg);
-
-export type RecurringSlotCreateInput = z.infer<typeof recurringSlotCreateSchema>;
-export type UniqueSlotCreateInput = z.infer<typeof uniqueSlotCreateSchema>;

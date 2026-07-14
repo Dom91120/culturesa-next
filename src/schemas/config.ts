@@ -2,7 +2,6 @@ import { z } from "zod";
 
 /** Schémas de validation — config métier (services, périodes, créneaux). */
 
-const _TIME = /^\d{2}:\d{2}$/;
 export const DAYS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"] as const;
 
 // ── Services ──

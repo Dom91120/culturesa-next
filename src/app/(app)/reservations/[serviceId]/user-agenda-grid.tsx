@@ -952,7 +952,7 @@ type PendingAdd = {
 };
 type PendingRemoval = { bookingId: number; label: string };
 // Déplacement en attente d'une réservation existante vers un autre créneau (même type),
-// committé via moveMyBookingAction. Clé = id de la réservation déplacée.
+// committé via le panier atomique (commitDraft). Clé = id de la réservation déplacée.
 type PendingMove = {
   slotId: string;
   dayKey: string;
