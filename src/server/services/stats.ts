@@ -10,7 +10,7 @@ import { prisma } from "@/server/db";
 // (« séances ») : ponctuels autonomes + miroirs des récurrentes — un récurrent hebdo
 // compte donc une fois PAR occurrence. `occAll` = tout l'historique daté du service ;
 // `occ` = filtré au type et à la plage de dates. Le pointage (prévu/réalisé) vit sur ces
-// mêmes occurrences (séances passées validées).
+// mêmes occurrences (séances passées, plus toute séance pointée — validée ou non).
 // =====================================================================================
 
 export type StatsType = "all" | "rec" | "uniq";
@@ -307,9 +307,13 @@ export async function getServiceStats(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([label, value]) => ({ label, value }));
 
-  // ── Prévu / réalisé : séances PASSÉES validées de la population occ (pointage possible) ──
+  // ── Prévu / réalisé : les stats comptent ce qui a été SAISI, sans blocage (validée ou
+  // non — le verrou, c'est l'acte de pointage qui le porte). Population = séances passées
+  // (date ≤ aujourd'hui) + séances pointées quelle que soit leur date (un pointage saisi
+  // vaut constat que la séance a eu lieu).
   const pastOcc = occ.filter(
-    (b) => b.validated && b.slot.slotDate != null && ymd(b.slot.slotDate) <= today,
+    (b) =>
+      b.slot.slotDate != null && (b.pointage != null || ymd(b.slot.slotDate) <= today),
   );
   const prevu = pastOcc.length;
   const presents = pastOcc.filter((b) => b.pointage === "present").length;

@@ -722,7 +722,7 @@ export default async function StatsPage({
             value={`${stats.tauxAbsence}%`}
             label="Taux d'absence"
             color={C_ABSENT}
-            hint="Absents / (présents + absents), séances passées pointées"
+            hint="Absents / (présents + absents), séances pointées"
           />
         )}
         {stats.pending > 0 && (
@@ -741,7 +741,7 @@ export default async function StatsPage({
       >
         {stats.prevu > 0 && (
           <DonutPanel
-            title="Présence — séances passées"
+            title="Présence — séances passées ou pointées"
             data={[
               { label: "Présents", value: stats.presents, color: C_PRESENT },
               { label: "Absents", value: stats.absents, color: C_ABSENT },
