@@ -3540,84 +3540,109 @@ export function UserAgendaGrid({
       )}
 
       <div className="planning-wrap">
-        <div
-          className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
-          style={{ gridTemplateColumns: `44px repeat(${displayDays.length}, minmax(0, 1fr))` }}
-        >
-          <AgendaWeekHeader
-            days={displayDays}
-            abMode={abMode}
-            effectiveWeek={effectiveWeek}
-            realweek={mode === "realweek"}
-            weekDateByDay={weekDateByDay}
-            outOfPeriodCls={outOfPeriodCls}
-          />
+        {/* Aucune colonne de jour (semaine hors période en Semaine réelle, ou exercice
+            sans jour actif en Modèle) : le squelette de grille n'a aucun sens (colonne
+            horaire orpheline) — on affiche un état vide explicite à la place (même
+            traitement que l'agenda admin). */}
+        {displayDays.length === 0 ? (
+          <div
+            style={{
+              padding: "2.5rem 1rem",
+              textAlign: "center",
+              fontSize: ".8rem",
+              color: "var(--muted)",
+              background: "var(--surface1)",
+              border: "1px dashed var(--border)",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            {mode === "realweek"
+              ? "Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de période pour rejoindre une semaine couverte."
+              : "Aucun jour d'ouverture n'est configuré pour cet exercice."}
+          </div>
+        ) : (
+          <div
+            className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
+            style={{ gridTemplateColumns: `44px repeat(${displayDays.length}, minmax(0, 1fr))` }}
+          >
+            <AgendaWeekHeader
+              days={displayDays}
+              abMode={abMode}
+              effectiveWeek={effectiveWeek}
+              realweek={mode === "realweek"}
+              weekDateByDay={weekDateByDay}
+              outOfPeriodCls={outOfPeriodCls}
+            />
 
-          {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
+            {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
               grille horaire (port du legacy alldayRow). Masquée s'il n'y a aucun
               bloc all-day. Côté usager, on affiche TOUS les créneaux (réservés ou
               vides réservables) : le compactage « sans créneau » ne masque que des
               heures vides, pas les créneaux. */}
-          {displayDays.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
-            <>
-              <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
-                Journée entière
-              </div>
-              {displayDays.map((d) => (
-                <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
-                  {dayBlockEls.allday.get(d)}
+            {displayDays.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
+              <>
+                <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
+                  Journée entière
                 </div>
-              ))}
-            </>
-          )}
+                {displayDays.map((d) => (
+                  <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
+                    {dayBlockEls.allday.get(d)}
+                  </div>
+                ))}
+              </>
+            )}
 
-          <AgendaTimeColumn
-            quarters={quarters}
-            qIdx={qIdx}
-            gridStartMin={gridStartMin}
-            gridEndMin={gridEndMin}
-            totalH={totalH}
-            hasLunch={hasLunch}
-            lunchSkipFrom={lunchSkipFrom}
-            lunchEnd={lunchEnd}
-            mapMinToY={mapMinToY}
-          />
+            <AgendaTimeColumn
+              quarters={quarters}
+              qIdx={qIdx}
+              gridStartMin={gridStartMin}
+              gridEndMin={gridEndMin}
+              totalH={totalH}
+              hasLunch={hasLunch}
+              lunchSkipFrom={lunchSkipFrom}
+              lunchEnd={lunchEnd}
+              mapMinToY={mapMinToY}
+            />
 
-          {displayDays.map((d) => (
-            // biome-ignore lint/a11y/useKeyWithClickEvents: grille agenda (clic = créer)
-            <div
-              key={d}
-              className={`agenda-day-col${outOfPeriodCls(d)}`}
-              // Jour fermé : on neutralise toute interaction (clic créer, drag/drop)
-              // sur la colonne ET tout son contenu (blocs/badges) via pointer-events.
-              style={{
-                height: totalH,
-                cursor: isDayDisabled(d) ? "not-allowed" : "cell",
-                pointerEvents: isDayDisabled(d) ? "none" : undefined,
-              }}
-              onClick={(e) => {
-                if (isDayDisabled(d)) return;
-                const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
-                if (slot && effectivePeriodId != null && effectivePeriodId > 0)
-                  togglePendingAdd(slot.id, d, uniqueIdSet.has(slot.id));
-              }}
-            >
-              <AgendaDayBackground
-                quarters={quarters}
-                hasLunch={hasLunch}
-                lunchStart={lunchStart}
-                lunchEnd={lunchEnd}
-                mapMinToY={mapMinToY}
-              />
-              {/* Grille horaire : uniquement les créneaux horaires (les « journée
+            {displayDays.map((d) => (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: grille agenda (clic = créer)
+              <div
+                key={d}
+                className={`agenda-day-col${outOfPeriodCls(d)}`}
+                // Jour fermé : on neutralise toute interaction (clic créer, drag/drop)
+                // sur la colonne ET tout son contenu (blocs/badges) via pointer-events.
+                style={{
+                  height: totalH,
+                  cursor: isDayDisabled(d) ? "not-allowed" : "cell",
+                  pointerEvents: isDayDisabled(d) ? "none" : undefined,
+                }}
+                onClick={(e) => {
+                  if (isDayDisabled(d)) return;
+                  const slot = slotAtClientY(
+                    e.currentTarget.getBoundingClientRect().top,
+                    e.clientY,
+                  );
+                  if (slot && effectivePeriodId != null && effectivePeriodId > 0)
+                    togglePendingAdd(slot.id, d, uniqueIdSet.has(slot.id));
+                }}
+              >
+                <AgendaDayBackground
+                  quarters={quarters}
+                  hasLunch={hasLunch}
+                  lunchStart={lunchStart}
+                  lunchEnd={lunchEnd}
+                  mapMinToY={mapMinToY}
+                />
+                {/* Grille horaire : uniquement les créneaux horaires (les « journée
                   entière » sont rendus dans la bande dédiée en haut). On affiche TOUS
                   les créneaux (réservés ou vides réservables) ; « Masquer les horaires
                   sans créneau » ne compacte que des heures, pas des créneaux. Blocs
                   mémoïsés via dayBlockEls (perf). */}
-              {dayBlockEls.timed.get(d)}
-            </div>
-          ))}
-        </div>
+                {dayBlockEls.timed.get(d)}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Légende des états (sous le tableau) : mini-badge (icône d'état seule) + libellé. */}

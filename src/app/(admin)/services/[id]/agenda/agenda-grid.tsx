@@ -3040,171 +3040,86 @@ export function AgendaGrid({
       </div>
 
       <div className="planning-wrap">
-        <div
-          className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
-          style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}
-        >
-          <AgendaWeekHeader
-            days={days}
-            abMode={abMode}
-            effectiveWeek={effectiveWeek}
-            realweek={mode === "realweek"}
-            weekDateByDay={weekDateByDay}
-            outOfPeriodCls={outOfPeriodCls}
-          />
+        {/* Aucune colonne de jour (semaine hors période en Semaine réelle, ou exercice
+            sans jour actif en Modèle) : le squelette de grille n'a aucun sens (colonne
+            horaire orpheline) — on affiche un état vide explicite à la place. */}
+        {days.length === 0 ? (
+          <div
+            style={{
+              padding: "2.5rem 1rem",
+              textAlign: "center",
+              fontSize: ".8rem",
+              color: "var(--muted)",
+              background: "var(--surface1)",
+              border: "1px dashed var(--border)",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            {mode === "realweek"
+              ? "Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de période pour rejoindre une semaine couverte."
+              : "Aucun jour d'ouverture n'est configuré pour cet exercice."}
+          </div>
+        ) : (
+          <div
+            className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
+            style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}
+          >
+            <AgendaWeekHeader
+              days={days}
+              abMode={abMode}
+              effectiveWeek={effectiveWeek}
+              realweek={mode === "realweek"}
+              weekDateByDay={weekDateByDay}
+              outOfPeriodCls={outOfPeriodCls}
+            />
 
-          {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
+            {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
               grille horaire (port du legacy alldayRow). Masquée s'il n'y a aucun
               bloc all-day — en hideEmpty, on ne compte que ceux qui ont une résa.
               En mode création, la ligne reste toujours affichée (même vide) pour
               rester visible/gérable. */}
-          {(creationMode ||
-            days.some((d) =>
-              dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
-            )) && (
-            <>
-              <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
-                Journée entière
-              </div>
-              {days.map((d) => {
-                // Jours couverts par le glisser-créer « journée entière » (clic =
-                // 1 jour ; glisser horizontal = plusieurs) → aperçu du créneau à créer.
-                const inAllDayDrag =
-                  allDayDrag != null &&
-                  daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
-                // Couleur de l'aperçu : jaune = récurrent (Modèle), vert = ponctuel (Semaine réelle).
-                const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
-                return (
-                  <div
-                    key={`ad-${d}`}
-                    // data-allday-daykey : repère la cellule sous le curseur pendant le
-                    // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
-                    data-allday-daykey={d}
-                    className={`agenda-allday-cell${outOfPeriodCls(d)}`}
-                    style={{
-                      cursor: isDayDisabled(d)
-                        ? "not-allowed"
-                        : creationMode
-                          ? "pointer"
-                          : "default",
-                    }}
-                    // Mode création : amorce le glisser-créer « journée entière » (horizontal).
-                    onMouseDown={(e) => onAllDayCreateMouseDown(e, d)}
-                  >
-                    {dayBlockEls.allday.get(d)}
-                    {/* Aperçu du créneau « journée entière » qui va être créé (clic ou
-                        glisser horizontal), à la façon de l'aperçu de création horaire. */}
-                    {inAllDayDrag && (
-                      <div
-                        className="agenda-create-preview"
-                        style={{
-                          position: "absolute",
-                          inset: 2,
-                          background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
-                          border: `1px dashed ${drawColor}`,
-                          borderRadius: 6,
-                          pointerEvents: "none",
-                          zIndex: 3,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: ".62rem",
-                          fontWeight: 700,
-                          color: drawColor,
-                        }}
-                      >
-                        Journée entière
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          )}
-
-          <AgendaTimeColumn
-            quarters={quarters}
-            qIdx={qIdx}
-            gridStartMin={gridStartMin}
-            gridEndMin={gridEndMin}
-            totalH={totalH}
-            hasLunch={hasLunch}
-            lunchSkipFrom={lunchSkipFrom}
-            lunchEnd={lunchEnd}
-            mapMinToY={mapMinToY}
-          />
-
-          {days.map((d) => (
-            <div
-              key={d}
-              data-daykey={d}
-              className={`agenda-day-col${outOfPeriodCls(d)}`}
-              // Jour fermé : on neutralise toute interaction (clic créer, drag/drop)
-              // sur la colonne ET tout son contenu (blocs/badges) via pointer-events.
-              style={{
-                height: totalH,
-                cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "default",
-                pointerEvents: isDayDisabled(d) ? "none" : undefined,
-              }}
-              // Mode création : on amorce le glisser-créer (les écouteurs window gèrent
-              // la suite + le relâché). Hors mode création, la création se fait UNIQUEMENT
-              // en cliquant sur un créneau (le bloc) — pas dans le vide de la colonne.
-              onMouseDown={(e) => onCreateMouseDown(e, d)}
-              onDragOver={(e) => {
-                if (isDayDisabled(d)) return;
-                if (draggingId != null) e.preventDefault();
-              }}
-              onDrop={(e) => {
-                if (isDayDisabled(d)) return;
-                e.preventDefault();
-                if (draggingId == null) return;
-                const slot = slotAtClientY(e.currentTarget.getBoundingClientRect().top, e.clientY);
-                const id = draggingId;
-                setDraggingId(null);
-                // Cible récurrente en semaine réelle (consultation) → déplacement refusé.
-                if (slot && !isRealweekRecurringSlot(slot.id))
-                  runResult(moveBookingAction(id, service.id, d, slot.id));
-              }}
-            >
-              <AgendaDayBackground
-                quarters={quarters}
-                hasLunch={hasLunch}
-                lunchStart={lunchStart}
-                lunchEnd={lunchEnd}
-                mapMinToY={mapMinToY}
-              />
-              {/* Grille horaire : créneaux datés mémoïsés (les « journée entière » sont
-                  dans la bande dédiée). Réf. stable d'un rendu à l'autre → pas de
-                  reconciliation des blocs pendant les interactions (cf. dayBlockEls). */}
-              {dayBlockEls.timed.get(d)}
-              {/* Aperçu du/des créneau(x) en cours de création (glisser-créer). La pause
-                  méridienne découpe l'aperçu en 1 ou 2 blocs hors pause. */}
-              {createDrag &&
-                draggedDays(createDrag).includes(d) &&
-                (() => {
-                  const s = Math.min(createDrag.startMin, createDrag.curMin);
-                  const e2 = Math.min(
-                    gridEndMin,
-                    Math.max(createDrag.startMin, createDrag.curMin) + 15,
-                  );
-                  // Couleur du mode dessiné : jaune = récurrent (Modèle de période),
-                  // vert = ponctuel (Semaine réelle).
+            {(creationMode ||
+              days.some((d) =>
+                dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
+              )) && (
+              <>
+                <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
+                  Journée entière
+                </div>
+                {days.map((d) => {
+                  // Jours couverts par le glisser-créer « journée entière » (clic =
+                  // 1 jour ; glisser horizontal = plusieurs) → aperçu du créneau à créer.
+                  const inAllDayDrag =
+                    allDayDrag != null &&
+                    daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
+                  // Couleur de l'aperçu : jaune = récurrent (Modèle), vert = ponctuel (Semaine réelle).
                   const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
-                  return lunchSplitSegments(s, e2)
-                    .filter(([a, b]) => b > a)
-                    .map(([segS, segE]) => {
-                      const top = mapMinToY(segS);
-                      const h = mapMinToY(segE) - top;
-                      return (
+                  return (
+                    <div
+                      key={`ad-${d}`}
+                      // data-allday-daykey : repère la cellule sous le curseur pendant le
+                      // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
+                      data-allday-daykey={d}
+                      className={`agenda-allday-cell${outOfPeriodCls(d)}`}
+                      style={{
+                        cursor: isDayDisabled(d)
+                          ? "not-allowed"
+                          : creationMode
+                            ? "pointer"
+                            : "default",
+                      }}
+                      // Mode création : amorce le glisser-créer « journée entière » (horizontal).
+                      onMouseDown={(e) => onAllDayCreateMouseDown(e, d)}
+                    >
+                      {dayBlockEls.allday.get(d)}
+                      {/* Aperçu du créneau « journée entière » qui va être créé (clic ou
+                        glisser horizontal), à la façon de l'aperçu de création horaire. */}
+                      {inAllDayDrag && (
                         <div
-                          key={segS}
                           className="agenda-create-preview"
                           style={{
                             position: "absolute",
-                            left: 2,
-                            right: 2,
-                            top,
-                            height: Math.max(2, h),
+                            inset: 2,
                             background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
                             border: `1px dashed ${drawColor}`,
                             borderRadius: 6,
@@ -3218,175 +3133,287 @@ export function AgendaGrid({
                             color: drawColor,
                           }}
                         >
-                          {minToHHMM(segS)}–{minToHHMM(segE)}
+                          Journée entière
                         </div>
-                      );
-                    });
-                })()}
-              {/* Aperçu du créneau en cours de déplacement (glisser-déplacer). */}
-              {moveDrag &&
-                moveDrag.curDay === d &&
-                (() => {
-                  const s = moveDrag.curMin;
-                  const e2 = Math.min(gridEndMin, s + moveDrag.durationMin);
-                  const top = mapMinToY(s);
-                  const h = mapMinToY(e2) - top;
-                  const moveColor = moveDrag.isUnique ? "var(--accent)" : "var(--warn)";
-                  return (
-                    <div
-                      className="agenda-move-preview"
-                      style={{
-                        position: "absolute",
-                        left: 2,
-                        right: 2,
-                        top,
-                        height: Math.max(2, h),
-                        background: `color-mix(in srgb, ${moveColor} 28%, transparent)`,
-                        border: `2px solid ${moveColor}`,
-                        borderRadius: 6,
-                        pointerEvents: "none",
-                        zIndex: 4,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: ".62rem",
-                        fontWeight: 700,
-                        color: moveColor,
-                      }}
-                    >
-                      {minToHHMM(s)}–{minToHHMM(e2)}
+                      )}
                     </div>
                   );
-                })()}
-              {/* Aperçu du créneau en cours de redimensionnement (glisser-étirer). */}
-              {resizeDrag &&
-                resizeDrag.dayKey === d &&
-                (() => {
-                  const top = mapMinToY(resizeDrag.curStart);
-                  const h = mapMinToY(resizeDrag.curEnd) - top;
-                  const rColor = resizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
-                  return (
-                    <div
-                      className="agenda-resize-preview"
-                      style={{
-                        position: "absolute",
-                        left: 2,
-                        right: 2,
-                        top,
-                        height: Math.max(2, h),
-                        background: `color-mix(in srgb, ${rColor} 28%, transparent)`,
-                        border: `2px solid ${rColor}`,
-                        borderRadius: 6,
-                        pointerEvents: "none",
-                        zIndex: 4,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: ".62rem",
-                        fontWeight: 700,
-                        color: rColor,
-                      }}
-                    >
-                      {minToHHMM(resizeDrag.curStart)}–{minToHHMM(resizeDrag.curEnd)}
-                    </div>
+                })}
+              </>
+            )}
+
+            <AgendaTimeColumn
+              quarters={quarters}
+              qIdx={qIdx}
+              gridStartMin={gridStartMin}
+              gridEndMin={gridEndMin}
+              totalH={totalH}
+              hasLunch={hasLunch}
+              lunchSkipFrom={lunchSkipFrom}
+              lunchEnd={lunchEnd}
+              mapMinToY={mapMinToY}
+            />
+
+            {days.map((d) => (
+              <div
+                key={d}
+                data-daykey={d}
+                className={`agenda-day-col${outOfPeriodCls(d)}`}
+                // Jour fermé : on neutralise toute interaction (clic créer, drag/drop)
+                // sur la colonne ET tout son contenu (blocs/badges) via pointer-events.
+                style={{
+                  height: totalH,
+                  cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "default",
+                  pointerEvents: isDayDisabled(d) ? "none" : undefined,
+                }}
+                // Mode création : on amorce le glisser-créer (les écouteurs window gèrent
+                // la suite + le relâché). Hors mode création, la création se fait UNIQUEMENT
+                // en cliquant sur un créneau (le bloc) — pas dans le vide de la colonne.
+                onMouseDown={(e) => onCreateMouseDown(e, d)}
+                onDragOver={(e) => {
+                  if (isDayDisabled(d)) return;
+                  if (draggingId != null) e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (isDayDisabled(d)) return;
+                  e.preventDefault();
+                  if (draggingId == null) return;
+                  const slot = slotAtClientY(
+                    e.currentTarget.getBoundingClientRect().top,
+                    e.clientY,
                   );
-                })()}
-              {/* Aperçu des créneaux générés en étendant latéralement (un par colonne
+                  const id = draggingId;
+                  setDraggingId(null);
+                  // Cible récurrente en semaine réelle (consultation) → déplacement refusé.
+                  if (slot && !isRealweekRecurringSlot(slot.id))
+                    runResult(moveBookingAction(id, service.id, d, slot.id));
+                }}
+              >
+                <AgendaDayBackground
+                  quarters={quarters}
+                  hasLunch={hasLunch}
+                  lunchStart={lunchStart}
+                  lunchEnd={lunchEnd}
+                  mapMinToY={mapMinToY}
+                />
+                {/* Grille horaire : créneaux datés mémoïsés (les « journée entière » sont
+                  dans la bande dédiée). Réf. stable d'un rendu à l'autre → pas de
+                  reconciliation des blocs pendant les interactions (cf. dayBlockEls). */}
+                {dayBlockEls.timed.get(d)}
+                {/* Aperçu du/des créneau(x) en cours de création (glisser-créer). La pause
+                  méridienne découpe l'aperçu en 1 ou 2 blocs hors pause. */}
+                {createDrag &&
+                  draggedDays(createDrag).includes(d) &&
+                  (() => {
+                    const s = Math.min(createDrag.startMin, createDrag.curMin);
+                    const e2 = Math.min(
+                      gridEndMin,
+                      Math.max(createDrag.startMin, createDrag.curMin) + 15,
+                    );
+                    // Couleur du mode dessiné : jaune = récurrent (Modèle de période),
+                    // vert = ponctuel (Semaine réelle).
+                    const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
+                    return lunchSplitSegments(s, e2)
+                      .filter(([a, b]) => b > a)
+                      .map(([segS, segE]) => {
+                        const top = mapMinToY(segS);
+                        const h = mapMinToY(segE) - top;
+                        return (
+                          <div
+                            key={segS}
+                            className="agenda-create-preview"
+                            style={{
+                              position: "absolute",
+                              left: 2,
+                              right: 2,
+                              top,
+                              height: Math.max(2, h),
+                              background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
+                              border: `1px dashed ${drawColor}`,
+                              borderRadius: 6,
+                              pointerEvents: "none",
+                              zIndex: 3,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: ".62rem",
+                              fontWeight: 700,
+                              color: drawColor,
+                            }}
+                          >
+                            {minToHHMM(segS)}–{minToHHMM(segE)}
+                          </div>
+                        );
+                      });
+                  })()}
+                {/* Aperçu du créneau en cours de déplacement (glisser-déplacer). */}
+                {moveDrag &&
+                  moveDrag.curDay === d &&
+                  (() => {
+                    const s = moveDrag.curMin;
+                    const e2 = Math.min(gridEndMin, s + moveDrag.durationMin);
+                    const top = mapMinToY(s);
+                    const h = mapMinToY(e2) - top;
+                    const moveColor = moveDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                    return (
+                      <div
+                        className="agenda-move-preview"
+                        style={{
+                          position: "absolute",
+                          left: 2,
+                          right: 2,
+                          top,
+                          height: Math.max(2, h),
+                          background: `color-mix(in srgb, ${moveColor} 28%, transparent)`,
+                          border: `2px solid ${moveColor}`,
+                          borderRadius: 6,
+                          pointerEvents: "none",
+                          zIndex: 4,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: ".62rem",
+                          fontWeight: 700,
+                          color: moveColor,
+                        }}
+                      >
+                        {minToHHMM(s)}–{minToHHMM(e2)}
+                      </div>
+                    );
+                  })()}
+                {/* Aperçu du créneau en cours de redimensionnement (glisser-étirer). */}
+                {resizeDrag &&
+                  resizeDrag.dayKey === d &&
+                  (() => {
+                    const top = mapMinToY(resizeDrag.curStart);
+                    const h = mapMinToY(resizeDrag.curEnd) - top;
+                    const rColor = resizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                    return (
+                      <div
+                        className="agenda-resize-preview"
+                        style={{
+                          position: "absolute",
+                          left: 2,
+                          right: 2,
+                          top,
+                          height: Math.max(2, h),
+                          background: `color-mix(in srgb, ${rColor} 28%, transparent)`,
+                          border: `2px solid ${rColor}`,
+                          borderRadius: 6,
+                          pointerEvents: "none",
+                          zIndex: 4,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: ".62rem",
+                          fontWeight: 700,
+                          color: rColor,
+                        }}
+                      >
+                        {minToHHMM(resizeDrag.curStart)}–{minToHHMM(resizeDrag.curEnd)}
+                      </div>
+                    );
+                  })()}
+                {/* Aperçu des créneaux générés en étendant latéralement (un par colonne
                   couverte, hormis la source). Pointillé = à créer, comme le glisser-créer. */}
-              {hResizeDrag &&
-                hResizeDrag.fromDay !== d &&
-                daysSpan(hResizeDrag.fromDay, hResizeDrag.curDay).includes(d) &&
-                (() => {
-                  const top = mapMinToY(hResizeDrag.startMin);
-                  const h = mapMinToY(hResizeDrag.endMin) - top;
-                  const rColor = hResizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
-                  return (
-                    <div
-                      className="agenda-hresize-preview"
-                      style={{
-                        position: "absolute",
-                        left: 2,
-                        right: 2,
-                        top,
-                        height: Math.max(2, h),
-                        background: `color-mix(in srgb, ${rColor} 22%, transparent)`,
-                        border: `1px dashed ${rColor}`,
-                        borderRadius: 6,
-                        pointerEvents: "none",
-                        zIndex: 3,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: ".62rem",
-                        fontWeight: 700,
-                        color: rColor,
-                      }}
-                    >
-                      {minToHHMM(hResizeDrag.startMin)}–{minToHHMM(hResizeDrag.endMin)}
-                    </div>
-                  );
-                })()}
-            </div>
-          ))}
-        </div>
+                {hResizeDrag &&
+                  hResizeDrag.fromDay !== d &&
+                  daysSpan(hResizeDrag.fromDay, hResizeDrag.curDay).includes(d) &&
+                  (() => {
+                    const top = mapMinToY(hResizeDrag.startMin);
+                    const h = mapMinToY(hResizeDrag.endMin) - top;
+                    const rColor = hResizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                    return (
+                      <div
+                        className="agenda-hresize-preview"
+                        style={{
+                          position: "absolute",
+                          left: 2,
+                          right: 2,
+                          top,
+                          height: Math.max(2, h),
+                          background: `color-mix(in srgb, ${rColor} 22%, transparent)`,
+                          border: `1px dashed ${rColor}`,
+                          borderRadius: 6,
+                          pointerEvents: "none",
+                          zIndex: 3,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: ".62rem",
+                          fontWeight: 700,
+                          color: rColor,
+                        }}
+                      >
+                        {minToHHMM(hResizeDrag.startMin)}–{minToHHMM(hResizeDrag.endMin)}
+                      </div>
+                    );
+                  })()}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Sous le tableau : astuce à gauche, légende complète à droite (reprise du
           legacy #agenda-legend-realweek). La légende n'a de sens qu'en « Semaine
-          réelle » (pointage P/A + créneaux ponctuels datés). */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        {/* flex:1 + minWidth:0 → l'astuce absorbe le rétrécissement en passant à la
-            ligne au lieu de déborder ; la légende garde sa place (flexShrink:0). */}
-        <p
+          réelle » (pointage P/A + créneaux ponctuels datés) — et rien de tout ça
+          n'a d'objet quand la grille est vide (état vide ci-dessus). */}
+      {days.length > 0 && (
+        <div
           style={{
-            fontSize: ".7rem",
-            color: "var(--muted)",
-            margin: 0,
-            flex: "1 1 0%",
-            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            flexWrap: "wrap",
           }}
         >
-          {/* « Astuce » en couleur de texte principale (noir en thème clair), « : » et
+          {/* flex:1 + minWidth:0 → l'astuce absorbe le rétrécissement en passant à la
+            ligne au lieu de déborder ; la légende garde sa place (flexShrink:0). */}
+          <p
+            style={{
+              fontSize: ".7rem",
+              color: "var(--muted)",
+              margin: 0,
+              flex: "1 1 0%",
+              minWidth: 0,
+            }}
+          >
+            {/* « Astuce » en couleur de texte principale (noir en thème clair), « : » et
               la suite gardent la couleur courante. Le conseil dépend du mode création. */}
-          <span style={{ color: "var(--text)" }}>Astuce</span>
-          {" : "}
-          {creationMode
-            ? "saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
-            : "cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un autre créneau pour le déplacer."}
-        </p>
-        {mode === "realweek" && (
-          <div className="agenda-legend" style={{ flexShrink: 0 }}>
-            {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
+            <span style={{ color: "var(--text)" }}>Astuce</span>
+            {" : "}
+            {creationMode
+              ? "saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
+              : "cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un autre créneau pour le déplacer."}
+          </p>
+          {mode === "realweek" && (
+            <div className="agenda-legend" style={{ flexShrink: 0 }}>
+              {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
                 cet item de légende. */}
-            {modes.recurringMode && (
+              {modes.recurringMode && (
+                <span className="agenda-legend-item">
+                  <span className="agenda-legend-swatch is-rec" />
+                  Récurrent
+                </span>
+              )}
               <span className="agenda-legend-item">
-                <span className="agenda-legend-swatch is-rec" />
-                Récurrent
+                <span className="agenda-legend-swatch is-uniq" />
+                Ponctuel
               </span>
-            )}
-            <span className="agenda-legend-item">
-              <span className="agenda-legend-swatch is-uniq" />
-              Ponctuel
-            </span>
-            <span className="agenda-legend-item">
-              <span className="indic_p">P</span>
-              Présent
-            </span>
-            <span className="agenda-legend-item">
-              <span className="indic_a">A</span>
-              Absent
-            </span>
-          </div>
-        )}
-      </div>
+              <span className="agenda-legend-item">
+                <span className="indic_p">P</span>
+                Présent
+              </span>
+              <span className="agenda-legend-item">
+                <span className="indic_a">A</span>
+                Absent
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {stackKey && stackBlock && (
         <BookingStackModal
