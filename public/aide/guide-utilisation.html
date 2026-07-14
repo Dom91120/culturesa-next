@@ -212,11 +212,38 @@ période et par an, délai de réservation, verrouillage de validation, validati
 notifications aux gestionnaires.</p>
 <p><img src="img/09-parametres-periodes.png" alt="Paramètres : périodes et réservations"></p>
 <p><em>Figure 9 — Paramètres : périodes et réservations</em></p>
+<h4 id="exercices-et-bascule-affiché-aux-utilisateurs">Exercices et bascule « Affiché aux utilisateurs »</h4>
+<p>Un <strong>exercice</strong> représente une saison / année scolaire ; il regroupe ses propres périodes, jours
+d&#39;ouverture, plages horaires et règles de réservation. Un service peut détenir <strong>plusieurs
+exercices en parallèle</strong>, mais <strong>un seul est montré aux utilisateurs à la fois</strong> : celui dont la
+case <strong>« Affiché aux utilisateurs »</strong> est cochée (en haut du panneau, à côté de la navigation entre
+exercices). Cocher un exercice <strong>décoche automatiquement</strong> le précédent ; si aucun n&#39;est coché, le
+service n&#39;affiche <strong>aucune réservation</strong> côté usager.</p>
+<p>Cela permet de <strong>préparer le prochain exercice longtemps à l&#39;avance</strong> :</p>
+<ol>
+<li>Le gestionnaire <strong>crée le nouvel exercice</strong> (via « Changement d&#39;exercice », ou en l&#39;ajoutant
+manuellement) et le <strong>paramètre tranquillement</strong> — périodes, créneaux, ouvertures, maximums.
+Tant que sa case n&#39;est pas cochée, ce nouvel exercice reste <strong>invisible</strong> pour les usagers.</li>
+<li><strong>Pendant toute cette préparation</strong>, les utilisateurs continuent de <strong>consulter et réserver sur
+l&#39;exercice précédent</strong>, qui garde sa case cochée. Les deux exercices peuvent coexister, même si
+leurs dates se chevauchent.</li>
+<li><strong>Quand le gestionnaire est prêt</strong> — le plus souvent une fois l&#39;exercice précédent achevé et le
+nouveau entièrement paramétré — il <strong>bascule</strong> en cochant « Affiché aux utilisateurs » sur le
+nouvel exercice, dans <strong>Paramètres → Périodes et réservations</strong>. À cet instant, et à cet instant
+seulement, les usagers voient le nouvel exercice.</li>
+</ol>
+<blockquote>
+<p>La bascule n&#39;impose aucune condition : elle peut se faire à tout moment (rien n&#39;oblige à attendre
+la fin de l&#39;exercice précédent). L&#39;assistant <strong>« Changement d&#39;exercice »</strong> automatise la création
+du nouvel exercice (reconduction des périodes et créneaux avec dates décalées) et lui transfère
+ce drapeau ; la case reste modifiable à la main ensuite.</p>
+</blockquote>
 <h3 id="paramètres-configuration-accès-et-thèmes">Paramètres — Configuration (accès et thèmes)</h3>
-<p>La configuration définit les <strong>paramètres globaux</strong> du service (alternance Semaine A/B, prise en
-compte des accompagnants dans la jauge) et, <strong>pour chaque demandeur</strong>, le mode de réservation
-autorisé (récurrent / ponctuel), la validation et les thèmes. Le mode des thèmes peut être
-<strong>« libre »</strong> (texte saisi par l&#39;usager) ou <strong>« liste »</strong> (choix imposé).</p>
+<p>La configuration définit les <strong>paramètres globaux</strong> du service — <strong>créneaux récurrents</strong> (active la
+vue « Modèle de période » de l&#39;agenda), <strong>alternance Semaine A/B</strong> (sans effet si les créneaux
+récurrents sont désactivés) et <strong>prise en compte des accompagnants</strong> dans la jauge — puis, <strong>pour
+chaque demandeur</strong>, la <strong>validation</strong> et les <strong>thèmes</strong>. Le mode des thèmes peut être <strong>« libre »</strong>
+(texte saisi par l&#39;usager) ou <strong>« liste »</strong> (choix imposé).</p>
 <p><img src="img/10-parametres-configuration.png" alt="Paramètres : configuration des accès par demandeur"></p>
 <p><em>Figure 10 — Paramètres : configuration des accès par demandeur</em></p>
 <h3 id="paramètres-échanges-e-mails-du-service">Paramètres — Échanges (e-mails du service)</h3>

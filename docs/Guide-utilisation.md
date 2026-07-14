@@ -198,12 +198,40 @@ notifications aux gestionnaires.
 
 *Figure 9 — Paramètres : périodes et réservations*
 
+#### Exercices et bascule « Affiché aux utilisateurs »
+
+Un **exercice** représente une saison / année scolaire ; il regroupe ses propres périodes, jours
+d'ouverture, plages horaires et règles de réservation. Un service peut détenir **plusieurs
+exercices en parallèle**, mais **un seul est montré aux utilisateurs à la fois** : celui dont la
+case **« Affiché aux utilisateurs »** est cochée (en haut du panneau, à côté de la navigation entre
+exercices). Cocher un exercice **décoche automatiquement** le précédent ; si aucun n'est coché, le
+service n'affiche **aucune réservation** côté usager.
+
+Cela permet de **préparer le prochain exercice longtemps à l'avance** :
+
+1. Le gestionnaire **crée le nouvel exercice** (via « Changement d'exercice », ou en l'ajoutant
+   manuellement) et le **paramètre tranquillement** — périodes, créneaux, ouvertures, maximums.
+   Tant que sa case n'est pas cochée, ce nouvel exercice reste **invisible** pour les usagers.
+2. **Pendant toute cette préparation**, les utilisateurs continuent de **consulter et réserver sur
+   l'exercice précédent**, qui garde sa case cochée. Les deux exercices peuvent coexister, même si
+   leurs dates se chevauchent.
+3. **Quand le gestionnaire est prêt** — le plus souvent une fois l'exercice précédent achevé et le
+   nouveau entièrement paramétré — il **bascule** en cochant « Affiché aux utilisateurs » sur le
+   nouvel exercice, dans **Paramètres → Périodes et réservations**. À cet instant, et à cet instant
+   seulement, les usagers voient le nouvel exercice.
+
+> La bascule n'impose aucune condition : elle peut se faire à tout moment (rien n'oblige à attendre
+> la fin de l'exercice précédent). L'assistant **« Changement d'exercice »** automatise la création
+> du nouvel exercice (reconduction des périodes et créneaux avec dates décalées) et lui transfère
+> ce drapeau ; la case reste modifiable à la main ensuite.
+
 ### Paramètres — Configuration (accès et thèmes)
 
-La configuration définit les **paramètres globaux** du service (alternance Semaine A/B, prise en
-compte des accompagnants dans la jauge) et, **pour chaque demandeur**, le mode de réservation
-autorisé (récurrent / ponctuel), la validation et les thèmes. Le mode des thèmes peut être
-**« libre »** (texte saisi par l'usager) ou **« liste »** (choix imposé).
+La configuration définit les **paramètres globaux** du service — **créneaux récurrents** (active la
+vue « Modèle de période » de l'agenda), **alternance Semaine A/B** (sans effet si les créneaux
+récurrents sont désactivés) et **prise en compte des accompagnants** dans la jauge — puis, **pour
+chaque demandeur**, la **validation** et les **thèmes**. Le mode des thèmes peut être **« libre »**
+(texte saisi par l'usager) ou **« liste »** (choix imposé).
 
 ![Paramètres : configuration des accès par demandeur](img/10-parametres-configuration.png)
 
