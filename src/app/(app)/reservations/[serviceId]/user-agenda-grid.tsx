@@ -1031,21 +1031,17 @@ export function UserAgendaGrid({
   const [currentExerciceId, setCurrentExerciceId] = useState<number | null>(
     exercices.length ? exercices[exercices.length - 1].id : null,
   );
-  const [periodIdx, setPeriodIdx] = useState(0);
-  // Agenda usager UNIFIÉ (décision 2026-07-11) : TOUJOURS en « Semaine réelle »,
-  // quel que soit le type du demandeur — récurrents en jaune, ponctuels en bleu-gris,
-  // côte à côte. Cliquer un récurrent réserve TOUTE la récurrence (période couvrante,
-  // parité de la semaine affichée) ; cliquer un ponctuel réserve l'occurrence.
-  // L'ancien mode « Modèle de période » reste dans le code (mode figé) — nettoyage
-  // du code mort dans un chantier dédié.
-  const [mode] = useState<"model" | "realweek">("realweek");
+  // Agenda usager UNIFIÉ (décision 2026-07-11) : TOUJOURS en « Semaine réelle », quel
+  // que soit le type du demandeur — récurrents en jaune, ponctuels en bleu-gris, côte à
+  // côte. Cliquer un récurrent réserve TOUTE la récurrence (période couvrante, parité de
+  // la semaine affichée) ; cliquer un ponctuel réserve l'occurrence. L'ancien mode
+  // « Modèle de période » a été retiré (code mort purgé 2026-07-14).
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
   // Mode "Semaine réelle" : période active verrouillée. Sans ce verrou, on
   // re-dérive la période depuis la semaine à chaque ◀/▶ — et quand une semaine
   // chevauche la frontière de deux périodes contiguës, elle bascule sur la
   // voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
   const [rwPeriodId, setRwPeriodId] = useState<number | null>(null);
-  const [weekAB, setWeekAB] = useState<"A" | "B">("A");
   // « Masquer les horaires sans créneau » : compacte les heures qui ne portent AUCUN
   // créneau. Préférence utilisateur (coché par défaut). Sur mobile, toujours forcée à
   // true (case masquée) — voir la valeur effective `hideNoSlot` dérivée plus bas.
@@ -1139,13 +1135,9 @@ export function UserAgendaGrid({
   );
 
   // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
-  // Modèle de période → l'exercice affiché ; Semaine réelle → chaque jour de la
-  // semaine (dédupliqué) — une semaine à cheval sur deux exercices agrège les deux.
+  // chaque jour de la semaine affichée (dédupliqué) — une semaine à cheval sur deux
+  // exercices agrège les deux.
   const contextOpenings = useMemo(() => {
-    if (mode === "model") {
-      const ex = exercices.find((e) => e.id === currentExerciceId);
-      return [ex ? openingForYmd(ex.dateStart || "") : CLOSED_OPENING];
-    }
     if (!anchorMonday) return [CLOSED_OPENING];
     const uniq = new Map<string, ExerciceOpening>();
     for (let i = 0; i < 7; i++) {
@@ -1156,7 +1148,7 @@ export function UserAgendaGrid({
       );
     }
     return [...uniq.values()];
-  }, [mode, exercices, currentExerciceId, anchorMonday, openingForYmd]);
+  }, [anchorMonday, openingForYmd]);
 
   // Colonnes de la grille : jours actifs du contexte. En Modèle = ceux de l'exercice
   // affiché ; en Semaine réelle = UNION des exercices de la semaine (le grisage par
@@ -1218,7 +1210,6 @@ export function UserAgendaGrid({
   // Périodes visibles = celles de l'exercice courant (toutes si aucun exercice).
   const visiblePeriods =
     currentExerciceId == null ? periods : periods.filter((p) => p.exerciceId === currentExerciceId);
-  const selectedPeriodId = visiblePeriods[periodIdx]?.id ?? null;
 
   // « Aujourd'hui » n'a de sens que si la date du jour tombe dans une période de l'exercice
   // affiché (sinon le bouton renverrait hors de la plage visible) → on masque le bouton sinon.
@@ -1255,8 +1246,8 @@ export function UserAgendaGrid({
         periodCoveringDate(mondayStr) ??
         periodCoveringDate(ymd(addDays(mondayStr, 3))))
       : null;
-  // En semaine réelle sans période couvrante, -1 ne matche rien → aucun bloc.
-  const effectivePeriodId = mode === "realweek" ? (coveringPeriod?.id ?? -1) : selectedPeriodId;
+  // Sans période couvrant la semaine, -1 ne matche rien → aucun bloc.
+  const effectivePeriodId = coveringPeriod?.id ?? -1;
 
   // Dates (YYYY-MM-DD) des créneaux ponctuels AUTONOMES (datés) réservables — sert au
   // mode « Masquer les horaires sans créneau » pour sauter aux semaines portant au moins
@@ -1377,10 +1368,6 @@ export function UserAgendaGrid({
   function mobileDayTarget(dir: 1 | -1): { monday: string | null; idx: number } | null {
     if (!days.length) return null;
     const idx = Math.min(mobileDayIdx, days.length - 1);
-    if (mode === "model") {
-      if (days.length <= 1) return null;
-      return { monday: anchorMonday, idx: (idx + dir + days.length) % days.length };
-    }
     if (!mondayStr) return null;
     let tIdx = idx + dir;
     let tMon = mondayStr;
@@ -1399,7 +1386,7 @@ export function UserAgendaGrid({
   function mobileGoDay(dir: 1 | -1) {
     const t = mobileDayTarget(dir);
     if (!t) return;
-    if (mode === "realweek" && t.monday && t.monday !== mondayStr) setAnchorMonday(t.monday);
+    if (t.monday && t.monday !== mondayStr) setAnchorMonday(t.monday);
     setMobileDayIdx(t.idx);
   }
 
@@ -1421,7 +1408,7 @@ export function UserAgendaGrid({
   // du tableau `periods` via find), les helpers (ymd/isFrenchHoliday/…) sont module-level.
   const isDayDisabled = useCallback(
     (dayKey: string): boolean => {
-      if (mode !== "realweek" || !mondayStr) return false;
+      if (!mondayStr) return false;
       const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
       // Réglages de l'exercice couvrant CE jour (les colonnes étant l'union des
       // jours actifs, un jour inactif pour cet exercice est fermé ici).
@@ -1445,11 +1432,11 @@ export function UserAgendaGrid({
       // Vacances scolaires : fermé si l'exercice (∧ demandeur) ferme pendant les vacances.
       return !o.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
     },
-    [mode, mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
+    [mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
-  // Jour férié français (exercice fermé les fériés), en semaine réelle.
+  // Jour férié français (exercice fermé les fériés).
   const isHolidayDay = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr) return false;
+    if (!mondayStr) return false;
     const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
     if (openingForYmd(dayYmd).openOnHolidays) return false;
     return isFrenchHoliday(dayYmd);
@@ -1464,12 +1451,8 @@ export function UserAgendaGrid({
   // ── Semaines A/B ── (réglage GLOBAL du service : Service.recurrentMode ∧ semaineAb)
   const abMode = modes.abMode;
   const realWeekParity: "A" | "B" | null = mondayStr ? slotWeekTag(mondayStr) : null;
-  // Semaine effective filtrée : en modèle = choix A/B ; en réel = parité de la date.
-  const effectiveWeek: "A" | "B" | null = abMode
-    ? mode === "model"
-      ? weekAB
-      : realWeekParity
-    : null;
+  // Semaine effective filtrée = parité de la date affichée (mode A/B seulement).
+  const effectiveWeek: "A" | "B" | null = abMode ? realWeekParity : null;
 
   // La plage horaire affichée reste fixe (matin → après-midi). « Masquer les
   // horaires sans créneau » ne resserre pas la plage : il COMPACTE les quarts
@@ -1550,8 +1533,8 @@ export function UserAgendaGrid({
       if ((s.capacity ?? service.capacity) <= 0) continue;
       addHours(toMinutes(s.startTime, gridStartMin), toMinutes(s.endTime, gridStartMin + 60));
     }
-    // Créneaux PONCTUELS autonomes datés dans la semaine affichée (Semaine réelle).
-    if (mode === "realweek" && mondayStr) {
+    // Créneaux PONCTUELS autonomes datés dans la semaine affichée.
+    if (mondayStr) {
       const sunday = sundayStr ?? mondayStr;
       for (const u of uniqueSlots) {
         if (u.parentSlotId) continue;
@@ -1578,7 +1561,6 @@ export function UserAgendaGrid({
     displayDays,
     isDayDisabled,
     service.capacity,
-    mode,
     mondayStr,
     sundayStr,
     uniqueSlots,
@@ -1619,12 +1601,12 @@ export function UserAgendaGrid({
   }
 
   const blocksByDay = useMemo(() => {
-    // Créneaux ponctuels (datés) → en « Semaine réelle », on les projette sur le
-    // jour de la semaine affichée correspondant à leur date, sous forme de slots
-    // virtuels mono-jour : toute la logique de blocs/layout/rendu les traite alors
-    // comme des créneaux normaux (legacy renderAgendaWeekly, branche realweek).
+    // Créneaux ponctuels (datés) → projetés sur le jour de la semaine affichée
+    // correspondant à leur date, sous forme de slots virtuels mono-jour : toute la
+    // logique de blocs/layout/rendu les traite alors comme des créneaux normaux
+    // (legacy renderAgendaWeekly, branche realweek).
     const ponctuelSlots: Slot[] = [];
-    if (mode === "realweek" && mondayStr) {
+    if (mondayStr) {
       const sunday = sundayStr ?? mondayStr;
       for (const u of uniqueSlots) {
         // Les miroirs (matérialisations de récurrents) sont déjà couverts par les
@@ -1674,7 +1656,7 @@ export function UserAgendaGrid({
       const mv = pendingMoves[b.id];
       if (mv) {
         if (mv.ponctuel) {
-          if (mode !== "realweek" || !mondayStr) continue;
+          if (!mondayStr) continue;
         } else {
           if (effectivePeriodId != null && mv.periodId !== effectivePeriodId) continue;
           if (effectiveWeek != null && mv.week !== effectiveWeek && mv.week !== "") continue;
@@ -1683,11 +1665,10 @@ export function UserAgendaGrid({
         continue;
       }
       // Réservation-ENFANT (matérialisation d'une récurrente, sur un slot miroir daté) :
-      // en « Semaine réelle », rattachée à la cellule du SLOT PARENT du jour affiché.
-      // En mode « Modèle », c'est la parente qui s'affiche → enfant non projeté.
+      // rattachée à la cellule du SLOT PARENT du jour affiché.
       const mir = mirrorMap.get(b.slotId);
       if (mir) {
-        if (mode !== "realweek" || !mondayStr) continue;
+        if (!mondayStr) continue;
         if (!mir.slotDate || mir.slotDate < mondayStr || (uniqSunday && mir.slotDate > uniqSunday))
           continue;
         const dk = dayKeyFromYmd(mir.slotDate);
@@ -1698,22 +1679,16 @@ export function UserAgendaGrid({
       // Réservation PONCTUELLE autonome : rattachée à son bloc ponctuel projeté (clé jour =
       // jour de la date du créneau), en ignorant période/semaine.
       if (uniqueIdSet.has(b.slotId)) {
-        if (mode !== "realweek" || !mondayStr) continue;
+        if (!mondayStr) continue;
         const u = uniqById.get(b.slotId);
         if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
           continue;
         const dk = dayKeyFromYmd(u.slotDate);
         if (!days.includes(dk)) continue;
         pushGroup(`${dk}|${b.slotId}`, b);
-        continue;
       }
-      // Réservation RÉCURRENTE parente : en semaine réelle, ses enfants datés s'affichent
-      // (ci-dessus) → on ne projette pas la parente. En mode Modèle, projection normale.
-      if (mode === "realweek") continue;
-      if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
-      // A/B : une résa sans semaine ("") vaut pour les deux semaines.
-      if (effectiveWeek != null && b.week !== effectiveWeek && b.week !== "") continue;
-      pushGroup(`${b.dayKey}|${b.slotId}`, b);
+      // Réservation RÉCURRENTE parente : ses enfants datés s'affichent (ci-dessus) → on
+      // ne projette pas la parente elle-même (elle est simplement ignorée ici).
     }
 
     // Occurrences de MES récurrentes NON matérialisées pour la date affichée (semaine
@@ -1722,7 +1697,7 @@ export function UserAgendaGrid({
     // apparaître librement réservable (le serveur refuserait de toute façon une 2ᵉ
     // réservation du même créneau). Les jours fermés (hors période / férié / vacances)
     // sont écartés au rendu par dayBlocks → isDayDisabled, comme les cellules vides.
-    if (mode === "realweek" && mondayStr) {
+    if (mondayStr) {
       for (const p of bookings) {
         if (!p.mine || p.bookingType !== "recurring" || p.parentBookingId !== null) continue;
         if (effectivePeriodId != null && p.periodId !== effectivePeriodId) continue;
@@ -1831,7 +1806,6 @@ export function UserAgendaGrid({
     uniqueSlots,
     uniqueIdSet,
     mirrorMap,
-    mode,
     mondayStr,
     sundayStr,
     days,
@@ -1862,7 +1836,7 @@ export function UserAgendaGrid({
   // thème, statut et pointage. Fenêtre dédiée (print déclenché par l'ouvreur, pas de script inline).
   function printMyBookings() {
     if (typeof window === "undefined") return;
-    const period = mode === "model" ? (visiblePeriods[periodIdx] ?? null) : coveringPeriod;
+    const period = coveringPeriod;
     const inPeriod = (d: string) =>
       !period ||
       ((!period.dateStart || d >= period.dateStart) && (!period.dateEnd || d <= period.dateEnd));
@@ -2071,9 +2045,7 @@ export function UserAgendaGrid({
       if (raw) {
         const v = JSON.parse(raw) as Partial<{
           exerciceId: number | null;
-          periodIdx: number;
           anchorMonday: string;
-          weekAB: "A" | "B";
         }>;
         // Ne restaure l'exercice que s'il existe encore ; un `null` mémorisé (vue
         // enregistrée quand le service n'avait pas d'exercice) est ignoré, sinon il
@@ -2081,8 +2053,6 @@ export function UserAgendaGrid({
         if (v.exerciceId != null && exercices.some((e) => e.id === v.exerciceId)) {
           setCurrentExerciceId(v.exerciceId);
         }
-        if (typeof v.periodIdx === "number" && v.periodIdx >= 0) setPeriodIdx(v.periodIdx);
-        if (v.weekAB === "A" || v.weekAB === "B") setWeekAB(v.weekAB);
         if (typeof v.anchorMonday === "string") {
           setAnchorMonday(v.anchorMonday);
           anchored = true;
@@ -2103,10 +2073,10 @@ export function UserAgendaGrid({
     try {
       sessionStorage.setItem(
         viewStorageKey,
-        JSON.stringify({ exerciceId: currentExerciceId, periodIdx, anchorMonday, weekAB }),
+        JSON.stringify({ exerciceId: currentExerciceId, anchorMonday }),
       );
     } catch {}
-  }, [viewStorageKey, currentExerciceId, periodIdx, anchorMonday, weekAB]);
+  }, [viewStorageKey, currentExerciceId, anchorMonday]);
 
   // Verrouille la période active en semaine réelle : dès qu'une période est
   // dérivée pour la semaine courante, on la fige dans rwPeriodId. La nav ◀/▶
@@ -2114,10 +2084,9 @@ export function UserAgendaGrid({
   // basculerait sur la voisine aux frontières). Re-verrouille si l'ancien verrou
   // ne couvre plus la semaine (ex. après « Aujourd'hui »). Cf. legacy l.6481-6490.
   useEffect(() => {
-    if (mode !== "realweek") return;
     if (coveringPeriod && coveringPeriod.id !== rwPeriodId) setRwPeriodId(coveringPeriod.id);
     else if (!coveringPeriod && rwPeriodId !== null) setRwPeriodId(null);
-  }, [mode, coveringPeriod, rwPeriodId]);
+  }, [coveringPeriod, rwPeriodId]);
 
   // ── Brouillon (legacy pendingSelection / pendingCancellations) ──────────
   // ── « Un seul badge à la fois » ──────────────────────────────────────────────────
@@ -3145,7 +3114,6 @@ export function UserAgendaGrid({
       // donc exclus). Énumérées à la main + vérifiées : une omission ⇒ badge figé.
     },
     [
-      mode,
       uniqueIdSet,
       uniqSlotById,
       recurSlotById,
@@ -3273,130 +3241,96 @@ export function UserAgendaGrid({
         </div>
         {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
             titre et le sélecteur. */}
-        {mode === "realweek" && (
-          <div
-            className="periode-nav"
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              // Neutralise la marge asymétrique de .periode-nav qui décalerait le
-              // centrage vertical (sinon la nav n'est pas au même niveau que le titre).
-              margin: 0,
-            }}
-          >
-            {/* Groupe ◀ label ▶ : shrink-wrappé et positionné (relative) → « Aujourd'hui »
+        <div
+          className="periode-nav"
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            // Neutralise la marge asymétrique de .periode-nav qui décalerait le
+            // centrage vertical (sinon la nav n'est pas au même niveau que le titre).
+            margin: 0,
+          }}
+        >
+          {/* Groupe ◀ label ▶ : shrink-wrappé et positionné (relative) → « Aujourd'hui »
                 s'ancre en left:100% de CE groupe (juste après ▶), sans compter dans le
                 centrage. Vrai sur desktop comme sur mobile, quelle que soit la largeur. */}
-            <span
-              className="pn-main"
-              style={{
-                position: "relative",
-                display: "inline-flex",
-                alignItems: "center",
-                // Flèches rapprochées du libellé (largeur du libellé figée juste
-                // au-dessus de la semaine la plus longue).
-                gap: ".1rem",
-              }}
+          <span
+            className="pn-main"
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              alignItems: "center",
+              // Flèches rapprochées du libellé (largeur du libellé figée juste
+              // au-dessus de la semaine la plus longue).
+              gap: ".1rem",
+            }}
+          >
+            <button
+              type="button"
+              className="ex-arrow"
+              disabled={!canWeekPrev}
+              onClick={() => canWeekPrev && shiftWeek(-1)}
             >
-              <button
-                type="button"
-                className="ex-arrow"
-                disabled={!canWeekPrev}
-                onClick={() => canWeekPrev && shiftWeek(-1)}
-              >
-                ◀
-              </button>
-              <span
-                className="ex-nav-label"
-                // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
-                // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police et
-                // gabarit HARMONISÉS sur la nav de l'agenda admin (8rem, police de l'app).
-                style={{ width: "8rem", textAlign: "center" }}
-              >
-                {mondayStr
-                  ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
-                  : "…"}
-              </span>
-              <button
-                type="button"
-                className="ex-arrow"
-                disabled={!canWeekNext}
-                onClick={() => canWeekNext && shiftWeek(1)}
-              >
-                ▶
-              </button>
-              {todayInVisiblePeriods && (
-                <button
-                  type="button"
-                  className="btn btn-ghost pn-today"
-                  // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
-                  // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
-                  style={{
-                    padding: ".05rem .45rem",
-                    fontSize: ".64rem",
-                    position: "absolute",
-                    left: "100%",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    marginLeft: ".4rem",
-                    whiteSpace: "nowrap",
-                  }}
-                  onClick={() => {
-                    // Retour à la semaine courante : on verrouille sur la période
-                    // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
-                    // qui diffère quand la semaine chevauche deux périodes — sinon
-                    // on afficherait la période du mois précédent).
-                    setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
-                    setAnchorMonday(ymd(mondayOf(new Date())));
-                  }}
-                >
-                  Aujourd&apos;hui
-                </button>
-              )}
+              ◀
+            </button>
+            <span
+              className="ex-nav-label"
+              // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
+              // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police et
+              // gabarit HARMONISÉS sur la nav de l'agenda admin (8rem, police de l'app).
+              style={{ width: "8rem", textAlign: "center" }}
+            >
+              {mondayStr
+                ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
+                : "…"}
             </span>
-          </div>
-        )}
-        {/* Sélecteurs empilés (cf. legacy .agenda-mode-toggles-wrap, colonne,
-            alignés à droite) : Modèle/Semaine réelle, puis EN DESSOUS le toggle
-            Semaine A/B en mode modèle, ou l'indicateur de semaine en semaine réelle. */}
-        {/* Agenda usager : la vue (Modèle / Semaine réelle) est verrouillée sur le
-            type du demandeur, donc pas de bascule manuelle — on ne garde que le
-            sélecteur Semaine A/B (mode modèle) / l'indicateur de semaine. */}
-        {/* Desktop : aligné à gauche (marginRight auto). Mobile : aligné à droite
-            (marginLeft auto) et boutons un peu plus gros. */}
+            <button
+              type="button"
+              className="ex-arrow"
+              disabled={!canWeekNext}
+              onClick={() => canWeekNext && shiftWeek(1)}
+            >
+              ▶
+            </button>
+            {todayInVisiblePeriods && (
+              <button
+                type="button"
+                className="btn btn-ghost pn-today"
+                // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
+                // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
+                style={{
+                  padding: ".05rem .45rem",
+                  fontSize: ".64rem",
+                  position: "absolute",
+                  left: "100%",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  marginLeft: ".4rem",
+                  whiteSpace: "nowrap",
+                }}
+                onClick={() => {
+                  // Retour à la semaine courante : on verrouille sur la période
+                  // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
+                  // qui diffère quand la semaine chevauche deux périodes — sinon
+                  // on afficherait la période du mois précédent).
+                  setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
+                  setAnchorMonday(ymd(mondayOf(new Date())));
+                }}
+              >
+                Aujourd&apos;hui
+              </button>
+            )}
+          </span>
+        </div>
+        {/* Espaceur flexible (marginRight/Left auto) : pousse les options vers le bord.
+            L'agenda usager est verrouillé en « Semaine réelle » → plus de sélecteur A/B
+            (la semaine est dérivée de la parité de la date affichée). */}
         <div
           className="agenda-mode-toggles-wrap"
           style={isMobile ? { marginLeft: "auto" } : { marginRight: "auto" }}
-        >
-          {abMode && mode === "model" && (
-            <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
-              <button
-                type="button"
-                className={`agenda-mode-btn${weekAB === "A" ? " active" : ""}`}
-                style={{
-                  fontSize: isMobile ? ".7rem" : ".71rem",
-                  padding: isMobile ? ".26rem .55rem" : ".21rem .65rem",
-                }}
-                onClick={() => setWeekAB("A")}
-              >
-                Semaine A
-              </button>
-              <button
-                type="button"
-                className={`agenda-mode-btn${weekAB === "B" ? " active" : ""}`}
-                style={{
-                  fontSize: isMobile ? ".7rem" : ".71rem",
-                  padding: isMobile ? ".26rem .55rem" : ".21rem .65rem",
-                }}
-                onClick={() => setWeekAB("B")}
-              >
-                Semaine B
-              </button>
-            </div>
-          )}
-        </div>
+        />
         {/* Options (case « sans créneau » + impression) : sur la ligne de TITRE,
             alignées à droite (le bloc précédent porte marginRight:auto). Masquées
             sur mobile. */}
@@ -3477,8 +3411,8 @@ export function UserAgendaGrid({
         }}
       >
         <div className="period-tabs" id="agenda-period-tabs">
-          {visiblePeriods.map((p, i) => {
-            const active = mode === "realweek" ? p.id === coveringPeriod?.id : i === periodIdx;
+          {visiblePeriods.map((p) => {
+            const active = p.id === coveringPeriod?.id;
             return (
               <button
                 key={p.id}
@@ -3486,15 +3420,11 @@ export function UserAgendaGrid({
                 className={`period-btn ${active ? "active" : ""}`}
                 style={{ "--period-color": p.color } as React.CSSProperties}
                 onClick={() => {
-                  if (mode === "realweek") {
-                    // Onglet choisi = source de vérité : on fige la période ET on
-                    // ancre la semaine sur son début (cf. legacy _pickedP).
-                    if (p.dateStart) {
-                      setRwPeriodId(p.id);
-                      setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
-                    }
-                  } else {
-                    setPeriodIdx(i);
+                  // Onglet choisi = source de vérité : on fige la période ET on ancre
+                  // la semaine sur son début (cf. legacy _pickedP).
+                  if (p.dateStart) {
+                    setRwPeriodId(p.id);
+                    setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
                   }
                 }}
               >
@@ -3512,8 +3442,8 @@ export function UserAgendaGrid({
         {/* (Options « sans créneau » + impression : remontées sur la ligne de titre.) */}
       </div>
 
-      {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour.
-          Cyclique en Modèle de période ; à travers toute la période en Semaine réelle. */}
+      {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour,
+          on navigue à travers toute la période. */}
       {isMobile && mobileDay && (
         <div className="mobile-day-nav">
           <button
@@ -3526,7 +3456,7 @@ export function UserAgendaGrid({
           </button>
           <span className="mobile-day-label">
             {DAY_NAMES[mobileDay] ?? mobileDay}
-            {mode === "realweek" && weekDateByDay[mobileDay] ? ` ${weekDateByDay[mobileDay]}` : ""}
+            {weekDateByDay[mobileDay] ? ` ${weekDateByDay[mobileDay]}` : ""}
           </span>
           <button
             type="button"
@@ -3540,10 +3470,9 @@ export function UserAgendaGrid({
       )}
 
       <div className="planning-wrap">
-        {/* Aucune colonne de jour (semaine hors période en Semaine réelle, ou exercice
-            sans jour actif en Modèle) : le squelette de grille n'a aucun sens (colonne
-            horaire orpheline) — on affiche un état vide explicite à la place (même
-            traitement que l'agenda admin). */}
+        {/* Aucune colonne de jour (semaine hors période) : le squelette de grille n'a
+            aucun sens (colonne horaire orpheline) — on affiche un état vide explicite à
+            la place (même traitement que l'agenda admin). */}
         {displayDays.length === 0 ? (
           <div
             style={{
@@ -3556,20 +3485,19 @@ export function UserAgendaGrid({
               borderRadius: "var(--radius)",
             }}
           >
-            {mode === "realweek"
-              ? "Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de période pour rejoindre une semaine couverte."
-              : "Aucun jour d'ouverture n'est configuré pour cet exercice."}
+            Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de
+            période pour rejoindre une semaine couverte.
           </div>
         ) : (
           <div
-            className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
+            className="agenda-grid is-realweek"
             style={{ gridTemplateColumns: `44px repeat(${displayDays.length}, minmax(0, 1fr))` }}
           >
             <AgendaWeekHeader
               days={displayDays}
               abMode={abMode}
               effectiveWeek={effectiveWeek}
-              realweek={mode === "realweek"}
+              realweek={true}
               weekDateByDay={weekDateByDay}
               outOfPeriodCls={outOfPeriodCls}
             />
