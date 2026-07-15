@@ -77,7 +77,6 @@ async function main() {
   const mirrors = await prisma.slot.findMany({
     where: {
       slotType: "unique",
-      state: "actif",
       parentSlotId: { not: null },
     },
     select: {

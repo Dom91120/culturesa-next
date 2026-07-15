@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
-import { holidaysInRange } from "@/lib/french-holidays";
 import { ISO_DAY_KEYS } from "@/lib/agenda-core";
+import { holidaysInRange } from "@/lib/french-holidays";
 import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
 import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";

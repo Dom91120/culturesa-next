@@ -304,7 +304,6 @@ async function main() {
       capacity: sl.capacity,
       periodId: sl.periodId,
       parentSlotId: sl.id,
-      state: "actif" as const,
     }));
     if (rows.length > 0) await prisma.slot.createMany({ data: rows, skipDuplicates: true });
   }
