@@ -1,4 +1,3 @@
-import { escapeHtml } from "@/lib/email-theme";
 import { isConfigValueUsed } from "@/server/config";
 import { prisma } from "@/server/db";
 
@@ -371,35 +370,9 @@ export async function deleteCustomMailType(
   else await prisma.mailType.deleteMany({ where: { serviceId, key } });
 }
 
-/** Résout les blocs conditionnels {{#if nom}}…{{/if}} (gardés si la variable est non vide). */
-function applyConditionals(tpl: string, vars: Record<string, string>): string {
-  return tpl.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_m, key, inner) =>
-    (vars[key] ?? "").trim() ? inner : "",
-  );
-}
-
-/**
- * Rend le corps HTML : conditionnels puis variables. Les `vars` sont échappées
- * (valeurs de confiance limitée), les `rawVars` sont injectées telles quelles
- * (HTML de confiance généré par l'app, ex. le bouton d'action `{{bouton}}`).
- */
-export function renderHtmlTemplate(
-  tpl: string,
-  vars: Record<string, string>,
-  rawVars: Record<string, string> = {},
-): string {
-  return applyConditionals(tpl, { ...vars, ...rawVars }).replace(/\{\{(\w+)\}\}/g, (_m, key) =>
-    key in rawVars ? rawVars[key] : escapeHtml(vars[key] ?? "").replace(/\n/g, "<br>"),
-  );
-}
-
-/** Rend le sujet : conditionnels puis variables brutes, sur une seule ligne. */
-export function renderSubjectTemplate(tpl: string, vars: Record<string, string>): string {
-  return applyConditionals(tpl, vars)
-    .replace(/\{\{(\w+)\}\}/g, (_m, key) => vars[key] ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// Moteur de rendu = SOURCE UNIQUE isomorphe (lib/mail-render), partagée avec l'aperçu
+// client de l'éditeur d'e-mails. Réexporté ici pour les appelants serveur historiques.
+export { renderHtmlTemplate, renderSubjectTemplate } from "@/lib/mail-render";
 
 /** Version texte brut dérivée du HTML rendu (deliverabilité + clients sans HTML). */
 export function htmlToText(html: string): string {

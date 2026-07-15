@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
+import { renderHtmlTemplate } from "@/lib/mail-render";
 import {
   createMailTypeAction,
   deleteMailTypeAction,
@@ -54,30 +55,6 @@ const SAMPLE_RAW: Record<string, string> = {
   liste:
     '<ul style="padding-left:1.2em"><li style="margin:.2rem 0">Marie Martin — lundi 09:00 – 10:30 · Vacances de printemps</li><li style="margin:.2rem 0">Paul Durand — mardi 14:00 – 15:30</li></ul>',
 };
-
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// Rendu d'aperçu : miroir du moteur serveur (conditionnels + variables échappées + brutes).
-function renderPreview(
-  html: string,
-  vars: Record<string, string>,
-  rawVars: Record<string, string>,
-): string {
-  const all = { ...vars, ...rawVars };
-  return html
-    .replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_m, k, inner) =>
-      (all[k] ?? "").trim() ? inner : "",
-    )
-    .replace(/\{\{(\w+)\}\}/g, (_m, k) =>
-      k in rawVars ? rawVars[k] : esc(vars[k] ?? "").replace(/\n/g, "<br>"),
-    );
-}
 
 export function EchangesConfig({
   rows,
@@ -669,7 +646,10 @@ function Editor({
   onReset: () => void;
   onSave: () => void;
 }) {
-  const previewHtml = useMemo(() => renderPreview(draft.html, SAMPLE, SAMPLE_RAW), [draft.html]);
+  const previewHtml = useMemo(
+    () => renderHtmlTemplate(draft.html, SAMPLE, SAMPLE_RAW),
+    [draft.html],
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
       <div className="field" style={{ margin: 0 }}>
