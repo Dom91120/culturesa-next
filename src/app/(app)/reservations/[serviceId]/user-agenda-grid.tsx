@@ -3319,19 +3319,13 @@ export function UserAgendaGrid({
             )}
           </span>
         </div>
-        {/* Espaceur flexible (marginRight/Left auto) : pousse les options vers le bord.
-            L'agenda usager est verrouillé en « Semaine réelle » → plus de sélecteur A/B
-            (la semaine est dérivée de la parité de la date affichée). */}
-        <div
-          className="agenda-mode-toggles-wrap"
-          style={isMobile ? { marginLeft: "auto" } : { marginRight: "auto" }}
-        />
         {/* Options (case « sans créneau » + impression) : sur la ligne de TITRE,
-            alignées à droite (le bloc précédent porte marginRight:auto). Masquées
-            sur mobile. */}
+            poussées au bord droit par marginLeft:auto (l'agenda usager est verrouillé
+            en « Semaine réelle », il n'y a plus de sélecteur A/B ici). Masquées sur mobile. */}
         <div
           style={{
             display: isMobile ? "none" : "flex",
+            marginLeft: "auto",
             alignItems: "center",
             justifyContent: "flex-end",
             gap: ".5rem",

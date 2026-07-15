@@ -57,9 +57,14 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     orderBy: periodOrder,
     select: periodSelect,
   });
-  // Aucune période configurée pour ce service → l'agenda n'a rien à afficher : on
-  // invite le gestionnaire à en créer (au lieu d'une grille vide et muette).
+  // Aucune période à afficher → l'agenda n'a rien à montrer : on invite le gestionnaire
+  // à agir (au lieu d'une grille vide et muette). On distingue « le service n'a AUCUNE
+  // période » de « l'exercice courant est vide » (des périodes existent sous un autre
+  // exercice, masquées car « Afficher les exercices précédents » est désactivé) pour ne
+  // pas afficher un message faux après une bascule d'exercice.
   if (periods.length === 0) {
+    const totalPeriods = await prisma.period.count({ where: { serviceId: id } });
+    const noneAtAll = totalPeriods === 0;
     return (
       <div className="panel" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
         <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".75rem" }}>
@@ -67,8 +72,9 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
           Agenda — {service.label}
         </div>
         <p style={{ color: "var(--muted)", margin: "0 0 1.25rem", fontSize: ".85rem" }}>
-          Aucune période n'est configurée pour ce service. Créez au moins une période pour pouvoir
-          gérer l'agenda et les créneaux.
+          {noneAtAll
+            ? "Aucune période n'est configurée pour ce service. Créez au moins une période pour pouvoir gérer l'agenda et les créneaux."
+            : "Aucune période dans l'exercice courant. Créez-en une, ou activez « Afficher les exercices précédents » dans les paramètres du service pour retrouver les périodes des exercices passés."}
         </p>
         <Link className="btn btn-primary" href={`/services/${id}/periodes`}>
           Créer une période

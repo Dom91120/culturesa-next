@@ -1,12 +1,8 @@
 import { wrapEmailHtml } from "@/lib/email-theme";
+import { renderHtmlTemplate, renderSubjectTemplate } from "@/lib/mail-render";
 import { getAppUrl } from "@/server/config";
 import { sendMail, sendMailOrQueue } from "@/server/mailer";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { getMailTemplate, htmlToText } from "@/server/services/mail-templates";
 
 /**
  * Cœur de rendu d'un e-mail templaté (SOURCE UNIQUE) : template + variables → sujet +

@@ -370,10 +370,6 @@ export async function deleteCustomMailType(
   else await prisma.mailType.deleteMany({ where: { serviceId, key } });
 }
 
-// Moteur de rendu = SOURCE UNIQUE isomorphe (lib/mail-render), partagée avec l'aperçu
-// client de l'éditeur d'e-mails. Réexporté ici pour les appelants serveur historiques.
-export { renderHtmlTemplate, renderSubjectTemplate } from "@/lib/mail-render";
-
 /** Version texte brut dérivée du HTML rendu (deliverabilité + clients sans HTML). */
 export function htmlToText(html: string): string {
   return html
