@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useSidebarCollapse } from "@/components/use-sidebar-collapse";
 import { signOut } from "@/lib/auth-client";
 import { initialsOf } from "@/lib/format";
 
@@ -43,44 +44,8 @@ export function ConnectedShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  // Préférence sidebar repliée/étendue (clé PARTAGÉE avec le shell usager, persistée à
-  // chaque bascule). État initial = déplié, comme le rendu serveur (pas de mismatch
-  // d'hydratation) ; la restauration post-montage écrit .collapsed et les `title` dans
-  // le DOM. Le visuel replié AVANT ce point est assuré par `html.sb-collapsed`, posée
-  // par le script <head> de layout.tsx dès avant le premier paint (aucun « flash »).
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("sidebar-collapsed") === "1") setCollapsed(true);
-    } catch {}
-  }, []);
-  // Fenêtre ÉTROITE (≤ 1000px) : sidebar réduite D'OFFICE, indépendamment de la
-  // préférence (le script <head> de layout.tsx couvre le pré-paint).
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1000px)");
-    const update = () => setNarrow(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-  // État EFFECTIF : préférence utilisateur OU fenêtre étroite.
-  const effCollapsed = collapsed || narrow;
-  // La classe html `sb-collapsed` (alias CSS pré-hydratation, cf. layout.tsx) suit
-  // l'état effectif — les règles CSS `.collapsed` matchent aussi `html.sb-collapsed`.
-  useEffect(() => {
-    try {
-      document.documentElement.classList.toggle("sb-collapsed", effCollapsed);
-    } catch {}
-  }, [effCollapsed]);
-  function toggleSidebar() {
-    const next = !collapsed;
-    setCollapsed(next);
-    try {
-      localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
-    } catch {}
-    // (Classe html synchronisée par l'effet sur l'état effectif ci-dessus.)
-  }
+  // Repli sidebar (préférence persistée + fenêtre étroite), cf. useSidebarCollapse.
+  const { effCollapsed, narrow, toggleSidebar } = useSidebarCollapse();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -172,7 +137,13 @@ export function ConnectedShell({
     <>
       <div className="user-bar" id="user-bar">
         <div className="user-pill-wrap" ref={menuRef}>
-          <button type="button" className="user-pill" onClick={() => setMenuOpen((o) => !o)}>
+          <button
+            type="button"
+            className="user-pill"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
             <div className="avatar">{initialsOf(user.name, user.email)}</div>
             <span id="user-display-name" style={{ fontSize: ".78rem", color: "var(--text)" }}>
               {user.name || user.email}

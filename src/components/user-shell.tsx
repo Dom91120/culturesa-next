@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useSidebarCollapse } from "@/components/use-sidebar-collapse";
 import { signOut } from "@/lib/auth-client";
 import { initialsOf } from "@/lib/format";
 
@@ -21,63 +22,12 @@ export function UserShell({
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  // Préférence sidebar repliée/étendue (clé PARTAGÉE avec le shell admin, persistée à
-  // chaque bascule). État initial = déplié, comme le rendu serveur (pas de mismatch
-  // d'hydratation) ; la restauration post-montage écrit .collapsed et les `title` dans
-  // le DOM. Le visuel replié AVANT ce point est assuré par `html.sb-collapsed`, posée
-  // par le script <head> de layout.tsx dès avant le premier paint (aucun « flash »).
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("sidebar-collapsed") === "1") setCollapsed(true);
-    } catch {}
-  }, []);
-  function toggleSidebar() {
-    const next = !collapsed;
-    setCollapsed(next);
-    try {
-      localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
-    } catch {}
-    // La classe html est synchronisée par l'effet sur l'état EFFECTIF (préférence
-    // OU fenêtre étroite), plus bas.
-  }
+  // Repli sidebar (préférence + fenêtre étroite), avec bascule mobile 640px : en mobile la
+  // sidebar est une barre horizontale pleine largeur → l'état replié ne s'y applique jamais.
+  const { effCollapsed, narrow, toggleSidebar } = useSidebarCollapse({ mobileBreakpoint: 640 });
   // Menu « sandwich » des services en mode smartphone (replié par défaut).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  // Mode smartphone (même breakpoint que la media query CSS, 640px) : en mobile la sidebar
-  // est une barre horizontale pleine largeur → l'état « collapsed » (toggle desktop) ne doit
-  // JAMAIS s'y appliquer, même s'il a été activé avant de réduire la fenêtre.
-  const [isMobile, setIsMobile] = useState(false);
-  // Fenêtre ÉTROITE (≤ 1000px, hors mobile) : sidebar réduite D'OFFICE, indépendamment
-  // de la préférence (le script <head> de layout.tsx couvre le pré-paint).
-  const [narrow, setNarrow] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1000px)");
-    const update = () => setNarrow(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  // État EFFECTIF : préférence utilisateur OU fenêtre étroite — jamais en mobile.
-  const effCollapsed = (collapsed || narrow) && !isMobile;
-
-  // La classe html `sb-collapsed` (alias CSS pré-hydratation, cf. layout.tsx) suit
-  // l'état effectif : retirée en mobile, posée en fenêtre étroite ou préférence repliée.
-  useEffect(() => {
-    try {
-      document.documentElement.classList.toggle("sb-collapsed", effCollapsed);
-    } catch {}
-  }, [effCollapsed]);
 
   const match = pathname.match(/^\/reservations\/([^/]+)/);
   const activeServiceId = match ? match[1] : null;
