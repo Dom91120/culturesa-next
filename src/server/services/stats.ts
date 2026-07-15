@@ -312,8 +312,7 @@ export async function getServiceStats(
   // (date ≤ aujourd'hui) + séances pointées quelle que soit leur date (un pointage saisi
   // vaut constat que la séance a eu lieu).
   const pastOcc = occ.filter(
-    (b) =>
-      b.slot.slotDate != null && (b.pointage != null || ymd(b.slot.slotDate) <= today),
+    (b) => b.slot.slotDate != null && (b.pointage != null || ymd(b.slot.slotDate) <= today),
   );
   const prevu = pastOcc.length;
   const presents = pastOcc.filter((b) => b.pointage === "present").length;
