@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { DAYS } from "@/schemas/config";
+import { TIME_RE } from "@/schemas/slot";
 import { requireServiceManager } from "@/server/guards";
 import {
   createExercice,
@@ -108,13 +110,13 @@ const openingSchema = z.object({
   serviceId: z.string().trim().min(1),
   // Exercice cible : unique porteur des réglages d'ouverture (le service n'en a plus).
   exerciceId: z.number().int().positive(),
-  activeDays: z.array(z.enum(["lun", "mar", "mer", "jeu", "ven", "sam", "dim"])).max(7),
+  activeDays: z.array(z.enum(DAYS)).max(7),
   openOnHolidays: z.boolean(),
   openOnSchoolHolidays: z.boolean(),
-  morningStart: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide."),
-  morningEnd: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide."),
-  afternoonStart: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide."),
-  afternoonEnd: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide."),
+  morningStart: z.string().regex(TIME_RE, "Heure invalide."),
+  morningEnd: z.string().regex(TIME_RE, "Heure invalide."),
+  afternoonStart: z.string().regex(TIME_RE, "Heure invalide."),
+  afternoonEnd: z.string().regex(TIME_RE, "Heure invalide."),
 });
 
 export type CreatePeriodInput = z.input<typeof createSchema>;

@@ -6,7 +6,12 @@ import { Prisma } from "@/generated/prisma/client";
 import { todayParisISO } from "@/lib/booking-delay";
 import { hasBothParticipants, hasBothParticipantsMsg } from "@/schemas/booking";
 import { DAYS } from "@/schemas/config";
-import { recurringSlotCreateSchema, uniqueSlotCreateSchema } from "@/schemas/slot";
+import {
+  MAX_CAPACITY,
+  MIN_CAPACITY,
+  recurringSlotCreateSchema,
+  uniqueSlotCreateSchema,
+} from "@/schemas/slot";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import {
@@ -186,9 +191,9 @@ export async function saveSlotConfigAction(input: {
   await requireServiceManager(input.serviceId);
   const { serviceId, slotId, capacity, demandeurIds } = input;
   const jauge = input.jauge === true;
-  // Capacité alignée sur la création (schemas/slot.ts) : entier 1..9999. Un créneau à 0
+  // Capacité : bornes partagées avec la création (schemas/slot.ts). Un créneau à 0
   // place le rendrait silencieusement irréservable.
-  if (!Number.isInteger(capacity) || capacity < 1 || capacity > 9999) {
+  if (!Number.isInteger(capacity) || capacity < MIN_CAPACITY || capacity > MAX_CAPACITY) {
     return { ok: false, error: "Capacité invalide." };
   }
   const ids = [...new Set(demandeurIds.filter((d) => Number.isInteger(d) && d > 0))];
@@ -245,7 +250,9 @@ export async function setServiceDefaultCapacityAction(input: {
   value: number;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
-  const value = Math.max(1, Math.floor(input.value));
+  // Bornée [MIN, MAX] comme la création/reconfig (le défaut service n'avait pas de
+  // plafond → un défaut > 9999 faisait ensuite échouer la validation à la création).
+  const value = Math.min(MAX_CAPACITY, Math.max(MIN_CAPACITY, Math.floor(input.value)));
   if (!Number.isFinite(value)) return { ok: false, error: "Capacité invalide." };
   await prisma.service.update({
     where: { id: input.serviceId },

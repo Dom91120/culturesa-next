@@ -9,18 +9,24 @@ import { DAYS } from "./config";
  */
 
 // Heure « HH:MM » 24 h, zéro-paddée → la comparaison lexicographique start < end est sûre.
-// Le VIDE ("") est accepté : un créneau « journée entière » est stocké sans horaires
+// Regex STRICTE (00–23 h, 00–59 min), source unique partagée avec la validation des
+// plages d'ouverture d'exercice (periodes/actions.ts) — évite qu'une heure hors 24 h
+// (« 27:61 ») soit acceptée d'un côté et rejetée de l'autre.
+export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Le VIDE ("") est accepté ICI : un créneau « journée entière » est stocké sans horaires
 // (startTime/endTime vides), représentation lue par la grille (allday = !start || !end).
-const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const time = (label: string) =>
-  z.string().refine((v) => v === "" || TIME.test(v), `${label} invalide (format HH:MM).`);
+  z.string().refine((v) => v === "" || TIME_RE.test(v), `${label} invalide (format HH:MM).`);
 
-// Capacité d'un créneau : entier ≥ 1 (un créneau à 0 place n'a pas de sens à la création).
+// Capacité (source unique) : entier borné, partagé par la création de créneau, la
+// reconfiguration et la capacité par défaut du service (evite un plafond oublie).
+export const MIN_CAPACITY = 1;
+export const MAX_CAPACITY = 9999;
 const capacity = z.coerce
   .number()
   .int("Capacité invalide.")
-  .min(1, "La capacité doit être au moins de 1.")
-  .max(9999, "Capacité trop élevée.");
+  .min(MIN_CAPACITY, "La capacité doit être au moins de 1.")
+  .max(MAX_CAPACITY, "Capacité trop élevée.");
 
 // Demandeurs autorisés : entiers > 0 (vide/absent = ouvert à tous). normalizeDemandeurIds
 // dédoublonne ensuite côté service.
