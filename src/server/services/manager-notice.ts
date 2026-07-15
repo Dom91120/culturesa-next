@@ -1,16 +1,12 @@
-import { escapeHtml, wrapEmailHtml } from "@/lib/email-theme";
+import { escapeHtml } from "@/lib/email-theme";
 import { parisParts } from "@/lib/paris-time";
 import { DAYS } from "@/schemas/config";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { buildTemplatedMail } from "@/server/services/mail-send";
+import { getMailTemplate } from "@/server/services/mail-templates";
 
 // ════════════════════════════════════════════════════════════
 //  Digest de notification des gestionnaires sur les AUTO-VALIDATIONS.
@@ -149,12 +145,9 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
       });
       const liste = `<ul style="padding-left:1.2em">${items.join("")}</ul>`;
       const vars = { service: svc.label, nombre: String(bookings.length) };
-      const subject = renderSubjectTemplate(digestTpl.subject, vars);
-      const inner = renderHtmlTemplate(digestTpl.html, vars, { liste });
-      const html = wrapEmailHtml(inner, { preheader: subject, appUrl });
-      const text = htmlToText(inner);
+      const built = buildTemplatedMail(digestTpl, vars, appUrl, { liste });
       for (const to of managers) {
-        await sendMailOrQueue({ to, subject, html, text });
+        await sendMailOrQueue({ to, ...built });
         emails += 1;
       }
       notified += 1;

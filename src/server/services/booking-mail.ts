@@ -1,5 +1,4 @@
 import { DAY_NAMES } from "@/lib/agenda-core";
-import { wrapEmailHtml } from "@/lib/email-theme";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
@@ -11,13 +10,8 @@ import {
   resolveTriggerKind,
   resolveTriggerRecipients,
 } from "@/server/services/mail-prefs";
-import { sendTemplatedMail } from "@/server/services/mail-send";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { buildTemplatedMail, sendTemplatedMail } from "@/server/services/mail-send";
+import { getMailTemplate } from "@/server/services/mail-templates";
 
 // Notification e-mail envoyée à l'usager lors de la création d'une réservation.
 // Best-effort : ne lève jamais (les échecs d'envoi partent en file via sendMailOrQueue).
@@ -299,14 +293,7 @@ export async function sendBookingConfirmationMailsBatch(
           salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
           prenom,
         };
-        const inner = renderHtmlTemplate(tpl.html, vars);
-        const subject = renderSubjectTemplate(tpl.subject, vars);
-        await sendMailOrQueue({
-          to: r.email,
-          subject,
-          html: wrapEmailHtml(inner, { preheader: subject, appUrl }),
-          text: htmlToText(inner),
-        });
+        await sendMailOrQueue({ to: r.email, ...buildTemplatedMail(tpl, vars, appUrl) });
       }
     }
   } catch (e) {

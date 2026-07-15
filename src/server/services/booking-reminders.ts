@@ -1,4 +1,3 @@
-import { wrapEmailHtml } from "@/lib/email-theme";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
@@ -10,12 +9,8 @@ import {
   resolveTriggerKind,
   resolveTriggerRecipients,
 } from "@/server/services/mail-prefs";
-import {
-  getMailTemplate,
-  htmlToText,
-  renderHtmlTemplate,
-  renderSubjectTemplate,
-} from "@/server/services/mail-templates";
+import { buildTemplatedMail } from "@/server/services/mail-send";
+import { getMailTemplate } from "@/server/services/mail-templates";
 
 // Rappels de réservation envoyés J-7 (« week ») puis J-1 (« day ») avant chaque
 // occurrence d'une réservation CONFIRMÉE. Idempotent : chaque envoi est journalisé
@@ -179,14 +174,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
             salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
             prenom,
           };
-          const inner = renderHtmlTemplate(tpl.html, vars);
-          const subject = renderSubjectTemplate(tpl.subject, vars);
-          await sendMailOrQueue({
-            to: r.email,
-            subject,
-            html: wrapEmailHtml(inner, { preheader: subject, appUrl }),
-            text: htmlToText(inner),
-          });
+          await sendMailOrQueue({ to: r.email, ...buildTemplatedMail(tpl, vars, appUrl) });
         }
         // Journalise l'envoi (best-effort déjà géré par la file). La contrainte
         // unique protège des doublons en cas de concurrence.

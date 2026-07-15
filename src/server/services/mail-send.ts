@@ -8,13 +8,31 @@ import {
   renderSubjectTemplate,
 } from "@/server/services/mail-templates";
 
-// Pipeline d'envoi d'e-mail TEMPLATÉ, mutualisé (audit duplication « pipeline ×8 ») :
-//   getMailTemplate → renderHtmlTemplate → renderSubjectTemplate → wrapEmailHtml
-//   (+ appUrl) → htmlToText → send
-// était recopié à l'identique sur 6 sites single-shot (auth, suppression de compte,
-// agenda, confirmation de résa, RGPD, e-mail de test). NE PAS utiliser dans une
-// boucle (booking-reminders/manager-notice chargent le template/appUrl UNE fois hors
-// boucle pour éviter un N+1) : ces cas gardent leur pipeline déroulé.
+/**
+ * Cœur de rendu d'un e-mail templaté (SOURCE UNIQUE) : template + variables → sujet +
+ * HTML habillé (wrapEmailHtml) + version texte. Ne charge NI template NI appUrl (fournis
+ * par l'appelant) → utilisable en BOUCLE batch (template/appUrl chargés une seule fois
+ * hors boucle, anti-N+1) comme en single-shot. L'appelant ajoute `to` et choisit l'envoi.
+ */
+export function buildTemplatedMail(
+  tpl: { subject: string; html: string },
+  vars: Record<string, string>,
+  appUrl: string,
+  rawVars?: Record<string, string>,
+): { subject: string; html: string; text: string } {
+  const inner = renderHtmlTemplate(tpl.html, vars, rawVars);
+  const subject = renderSubjectTemplate(tpl.subject, vars);
+  return {
+    subject,
+    html: wrapEmailHtml(inner, { preheader: subject, appUrl }),
+    text: htmlToText(inner),
+  };
+}
+
+// Pipeline d'envoi d'e-mail TEMPLATÉ single-shot, mutualisé : charge template + appUrl,
+// délègue le rendu à buildTemplatedMail, puis envoie (direct ou file). Recopié à
+// l'identique sur 6 sites (auth, suppression de compte, agenda, confirmation de résa,
+// RGPD, e-mail de test).
 export async function sendTemplatedMail(opts: {
   to: string;
   // TemplateKind intégré OU clé de type personnalisé (« custom_… »).
@@ -32,15 +50,8 @@ export async function sendTemplatedMail(opts: {
   serviceId?: string;
 }): Promise<void> {
   const tpl = await getMailTemplate(opts.kind, opts.serviceId);
-  const vars = opts.vars ?? {};
-  const inner = renderHtmlTemplate(tpl.html, vars, opts.rawVars);
-  const subject = renderSubjectTemplate(tpl.subject, vars);
-  const payload = {
-    to: opts.to,
-    subject,
-    html: wrapEmailHtml(inner, { preheader: subject, appUrl: await getAppUrl() }),
-    text: htmlToText(inner),
-  };
+  const built = buildTemplatedMail(tpl, opts.vars ?? {}, await getAppUrl(), opts.rawVars);
+  const payload = { to: opts.to, ...built };
   if (opts.mode === "direct") await sendMail(payload);
   else await sendMailOrQueue(payload);
 }

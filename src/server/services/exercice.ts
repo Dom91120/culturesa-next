@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
 import { holidaysInRange } from "@/lib/french-holidays";
+import { ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
 import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";
@@ -133,17 +134,6 @@ type SlotSnapshot = {
   jauge: boolean;
 };
 
-// Jour de la semaine (clé) pour un jour ISO 1..7.
-const ISO_KEY: Record<number, string> = {
-  1: "lun",
-  2: "mar",
-  3: "mer",
-  4: "jeu",
-  5: "ven",
-  6: "sam",
-  7: "dim",
-};
-
 /**
  * Génère les miroirs uniques (« u_<slotId>_<date> ») d'un créneau récurrent cloné sur
  * [rangeStart, rangeEnd] : dates de `src.slotDay` (jour actif), hors fériés si
@@ -191,7 +181,8 @@ async function generateMirrorSlots(
     startDate: rangeStart,
     endDate: rangeEnd,
     slotDay: src.slotDay as DayKey,
-    activeDays: activeDays.map((n) => ISO_KEY[n] as DayKey),
+    // Jour ISO 1..7 → clé : ISO_DAY_KEYS est indexé getDay (0=dim), donc n % 7 (7→dim=0).
+    activeDays: activeDays.map((n) => ISO_DAY_KEYS[n % 7] as DayKey),
     allowedWeeks: src.weeks === "A" || src.weeks === "B" ? [src.weeks] : ["A", "B"],
     holidaySet,
     openOnHolidays,
