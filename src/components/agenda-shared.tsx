@@ -201,24 +201,36 @@ export function ModalOverlay({
   // Surcharge de style de la boîte (ex. caler max-width sur un contenu plus étroit que les
   // 620px par défaut de .modal-box, pour que la boîte épouse le contenu).
   boxStyle,
+  // `false` pour les modales de FORMULAIRE qui ne doivent PAS se fermer au clic sur le fond
+  // ni à Échap (protège une saisie non enregistrée) ; elles gardent leur propre bouton fermer.
+  dismissOnBackdrop = true,
+  // id du titre de la boîte, exposé en `aria-labelledby` sur le <dialog>.
+  labelledBy,
 }: {
   onClose: () => void;
   children: React.ReactNode;
   boxStyle?: React.CSSProperties;
+  dismissOnBackdrop?: boolean;
+  labelledBy?: string;
 }) {
   return (
     <div
       className="modal-overlay open"
       role="presentation"
-      onClick={onClose}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
+      onClick={dismissOnBackdrop ? onClose : undefined}
+      onKeyDown={
+        dismissOnBackdrop
+          ? (e) => {
+              if (e.key === "Escape") onClose();
+            }
+          : undefined
+      }
     >
       <dialog
         open
         className="modal-box"
         aria-modal="true"
+        aria-labelledby={labelledBy}
         style={boxStyle}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}

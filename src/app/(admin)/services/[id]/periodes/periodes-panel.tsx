@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 import { TimeStepper } from "@/components/time-stepper";
 import { setShowPreviousExercicesAction } from "../exercice/actions";
 import {
@@ -1235,338 +1236,326 @@ export function PeriodesPanel({
 
       {/* ── Modale exercice (création / édition) ───────────────────────────── */}
       {exoModalOpen && (
-        <div className="modal-overlay open">
-          <div className="modal-box" aria-labelledby="exo-modal-title">
-            <div className="modal-title" id="exo-modal-title">
-              <span>{exoForm.id == null ? "➕ Nouvel exercice" : "✏️ Modifier l'exercice"}</span>
-              <button type="button" className="modal-close" onClick={() => setExoModalOpen(false)}>
-                ✕
-              </button>
-            </div>
+        <ModalOverlay
+          onClose={() => setExoModalOpen(false)}
+          dismissOnBackdrop={false}
+          labelledBy="exo-modal-title"
+        >
+          <div className="modal-title" id="exo-modal-title">
+            <span>{exoForm.id == null ? "➕ Nouvel exercice" : "✏️ Modifier l'exercice"}</span>
+            <button type="button" className="modal-close" onClick={() => setExoModalOpen(false)}>
+              ✕
+            </button>
+          </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: ".3rem" }}>
-                <div style={{ display: "flex", gap: "1rem", opacity: exoFieldsLocked ? 0.5 : 1 }}>
-                  {(["scolaire", "civile"] as ExerciceType[]).map((t) => (
-                    <label
-                      key={t}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: ".35rem",
-                        cursor: exoFieldsLocked ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="exo-type"
-                        checked={exoForm.type === t}
-                        onChange={() => changeExoType(t)}
-                        disabled={exoFieldsLocked}
-                      />
-                      <span style={{ fontSize: ".75rem" }}>
-                        {t === "scolaire" ? "Année scolaire" : "Année civile"}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: ".3rem" }}>
+              <div style={{ display: "flex", gap: "1rem", opacity: exoFieldsLocked ? 0.5 : 1 }}>
+                {(["scolaire", "civile"] as ExerciceType[]).map((t) => (
+                  <label
+                    key={t}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: ".35rem",
+                      cursor: exoFieldsLocked ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="exo-type"
+                      checked={exoForm.type === t}
+                      onChange={() => changeExoType(t)}
+                      disabled={exoFieldsLocked}
+                    />
+                    <span style={{ fontSize: ".75rem" }}>
+                      {t === "scolaire" ? "Année scolaire" : "Année civile"}
+                    </span>
+                  </label>
+                ))}
               </div>
-              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
-                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Libellé *</span>
+            </div>
+            <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+              <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Libellé *</span>
+              <input
+                type="text"
+                value={exoForm.label}
+                onChange={(e) => setExoForm((f) => ({ ...f, label: e.target.value }))}
+                placeholder="Ex. 2025-2026"
+              />
+            </label>
+            {exoFieldsLocked && (
+              <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: 0 }}>
+                Cet exercice a des périodes : seul le libellé est modifiable.
+              </p>
+            )}
+            <div style={{ display: "flex", gap: ".75rem", opacity: exoFieldsLocked ? 0.5 : 1 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Début</span>
                 <input
-                  type="text"
-                  value={exoForm.label}
-                  onChange={(e) => setExoForm((f) => ({ ...f, label: e.target.value }))}
-                  placeholder="Ex. 2025-2026"
+                  type="date"
+                  value={exoForm.dateStart}
+                  onChange={(e) => setExoForm((f) => ({ ...f, dateStart: e.target.value }))}
+                  disabled={exoFieldsLocked}
                 />
               </label>
-              {exoFieldsLocked && (
-                <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: 0 }}>
-                  Cet exercice a des périodes : seul le libellé est modifiable.
-                </p>
-              )}
-              <div style={{ display: "flex", gap: ".75rem", opacity: exoFieldsLocked ? 0.5 : 1 }}>
-                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
-                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Début</span>
-                  <input
-                    type="date"
-                    value={exoForm.dateStart}
-                    onChange={(e) => setExoForm((f) => ({ ...f, dateStart: e.target.value }))}
-                    disabled={exoFieldsLocked}
-                  />
-                </label>
-                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
-                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Fin</span>
-                  <input
-                    type="date"
-                    value={exoForm.dateEnd}
-                    onChange={(e) => setExoForm((f) => ({ ...f, dateEnd: e.target.value }))}
-                    disabled={exoFieldsLocked}
-                  />
-                </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Fin</span>
+                <input
+                  type="date"
+                  value={exoForm.dateEnd}
+                  onChange={(e) => setExoForm((f) => ({ ...f, dateEnd: e.target.value }))}
+                  disabled={exoFieldsLocked}
+                />
+              </label>
+            </div>
+
+            {exoError && (
+              <div className="field-error" style={{ display: "block" }}>
+                {exoError}
               </div>
+            )}
 
-              {exoError && (
-                <div className="field-error" style={{ display: "block" }}>
-                  {exoError}
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: ".5rem",
-                  marginTop: ".5rem",
-                }}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: ".5rem",
+                marginTop: ".5rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setExoModalOpen(false)}
               >
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setExoModalOpen(false)}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={saveExercice}
-                  disabled={pending}
-                  style={{ background: "var(--warn)", color: "#0f1117" }}
-                >
-                  {pending ? "Enregistrement…" : "Enregistrer"}
-                </button>
-              </div>
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={saveExercice}
+                disabled={pending}
+                style={{ background: "var(--warn)", color: "#0f1117" }}
+              >
+                {pending ? "Enregistrement…" : "Enregistrer"}
+              </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* ── Modale de confirmation de suppression d'un exercice (--danger) ───── */}
       {confirmDeleteExo && currentExercice && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
-        <div
-          className="modal-overlay open"
-          style={{ display: "flex" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setConfirmDeleteExo(false);
-          }}
+        <ModalOverlay
+          onClose={() => setConfirmDeleteExo(false)}
+          boxStyle={{ maxWidth: 460, width: "95vw" }}
         >
-          <div className="modal-box" style={{ maxWidth: 460, width: "95vw" }}>
-            <div className="modal-title" style={{ color: "var(--danger)" }}>
-              🗑️ Supprimer l&apos;exercice
-            </div>
-            <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
-              Vous êtes sur le point de supprimer l&apos;exercice{" "}
-              <strong>« {currentExercice.label} »</strong>.
-            </p>
-            <p
-              style={{
-                fontSize: ".78rem",
-                color: "var(--danger)",
-                fontWeight: 600,
-                margin: "0 0 1rem",
-              }}
-            >
-              ⚠️ Possible uniquement s&apos;il n&apos;a aucune période. Action irréversible.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setConfirmDeleteExo(false)}
-                style={{ fontSize: ".78rem" }}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={runDeleteExercice}
-                disabled={pending}
-                style={{
-                  fontSize: ".78rem",
-                  background: "var(--danger)",
-                  border: "none",
-                  color: "var(--text)",
-                }}
-              >
-                🗑️ Supprimer
-              </button>
-            </div>
+          <div className="modal-title" style={{ color: "var(--danger)" }}>
+            🗑️ Supprimer l&apos;exercice
+          </div>
+          <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+            Vous êtes sur le point de supprimer l&apos;exercice{" "}
+            <strong>« {currentExercice.label} »</strong>.
+          </p>
+          <p
+            style={{
+              fontSize: ".78rem",
+              color: "var(--danger)",
+              fontWeight: 600,
+              margin: "0 0 1rem",
+            }}
+          >
+            ⚠️ Possible uniquement s&apos;il n&apos;a aucune période. Action irréversible.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
             <button
               type="button"
-              className="modal-close"
+              className="btn btn-ghost"
               onClick={() => setConfirmDeleteExo(false)}
+              style={{ fontSize: ".78rem" }}
             >
-              ×
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={runDeleteExercice}
+              disabled={pending}
+              style={{
+                fontSize: ".78rem",
+                background: "var(--danger)",
+                border: "none",
+                color: "var(--text)",
+              }}
+            >
+              🗑️ Supprimer
             </button>
           </div>
-        </div>
+          <button type="button" className="modal-close" onClick={() => setConfirmDeleteExo(false)}>
+            ×
+          </button>
+        </ModalOverlay>
       )}
 
       {/* ── Modale de confirmation de suppression de période(s) (--danger) ───── */}
       {confirmDeletePeriods && selectedCount > 0 && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
-        <div
-          className="modal-overlay open"
-          style={{ display: "flex" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setConfirmDeletePeriods(false);
-          }}
+        <ModalOverlay
+          onClose={() => setConfirmDeletePeriods(false)}
+          boxStyle={{ maxWidth: 460, width: "95vw" }}
         >
-          <div className="modal-box" style={{ maxWidth: 460, width: "95vw" }}>
-            <div className="modal-title" style={{ color: "var(--danger)" }}>
-              🗑️ Supprimer {selectedCount > 1 ? `${selectedCount} périodes` : "la période"}
-            </div>
-            <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
-              Vous êtes sur le point de supprimer{" "}
-              <strong>{selectedCount > 1 ? `${selectedCount} périodes` : "1 période"}</strong>.
-            </p>
-            <p
+          <div className="modal-title" style={{ color: "var(--danger)" }}>
+            🗑️ Supprimer {selectedCount > 1 ? `${selectedCount} périodes` : "la période"}
+          </div>
+          <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+            Vous êtes sur le point de supprimer{" "}
+            <strong>{selectedCount > 1 ? `${selectedCount} périodes` : "1 période"}</strong>.
+          </p>
+          <p
+            style={{
+              fontSize: ".78rem",
+              color: "var(--danger)",
+              fontWeight: 600,
+              margin: "0 0 1rem",
+            }}
+          >
+            ⚠️ Les réservations liées seront aussi supprimées. Action irréversible.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setConfirmDeletePeriods(false)}
+              style={{ fontSize: ".78rem" }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={runDeleteSelected}
+              disabled={pending}
               style={{
                 fontSize: ".78rem",
-                color: "var(--danger)",
-                fontWeight: 600,
-                margin: "0 0 1rem",
+                background: "var(--danger)",
+                border: "none",
+                color: "var(--text)",
               }}
             >
-              ⚠️ Les réservations liées seront aussi supprimées. Action irréversible.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setConfirmDeletePeriods(false)}
-                style={{ fontSize: ".78rem" }}
-              >
+              🗑️ Supprimer
+            </button>
+          </div>
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() => setConfirmDeletePeriods(false)}
+          >
+            ×
+          </button>
+        </ModalOverlay>
+      )}
+
+      {/* ── Modale création / édition ──────────────────────────────────────── */}
+      {modalOpen && (
+        <ModalOverlay
+          onClose={closeModal}
+          dismissOnBackdrop={false}
+          labelledBy="period-modal-title"
+        >
+          <div className="modal-title" id="period-modal-title">
+            <span>{form.id == null ? "➕ Nouvelle période" : "✏️ Modifier la période"}</span>
+            <button type="button" className="modal-close" onClick={closeModal}>
+              ✕
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+              <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Libellé *</span>
+              <input
+                type="text"
+                value={form.label}
+                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                placeholder="Ex. Période 1"
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+              <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Étiquette</span>
+              <input
+                type="text"
+                value={form.etiquette}
+                onChange={(e) => setForm((f) => ({ ...f, etiquette: e.target.value }))}
+                placeholder="Optionnel"
+              />
+            </label>
+            <div style={{ display: "flex", gap: ".75rem" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Début</span>
+                <input
+                  type="date"
+                  value={form.dateStart}
+                  onChange={(e) => setForm((f) => ({ ...f, dateStart: e.target.value }))}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
+                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Fin</span>
+                <input
+                  type="date"
+                  value={form.dateEnd}
+                  onChange={(e) => setForm((f) => ({ ...f, dateEnd: e.target.value }))}
+                />
+              </label>
+            </div>
+            <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
+              <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>
+                Disponibilité — ouverture des réservations côté usager (vide : réservable sans
+                restriction)
+              </span>
+              <input
+                type="date"
+                value={form.disponibilite}
+                onChange={(e) => setForm((f) => ({ ...f, disponibilite: e.target.value }))}
+              />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+              <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Couleur</span>
+              <input
+                type="color"
+                className="period-color-input"
+                value={form.color}
+                onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+              />
+            </label>
+
+            {modalError && (
+              <div className="field-error" style={{ display: "block" }}>
+                {modalError}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: ".5rem",
+                marginTop: ".5rem",
+              }}
+            >
+              <button type="button" className="btn btn-ghost" onClick={closeModal}>
                 Annuler
               </button>
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={runDeleteSelected}
+                onClick={saveModal}
                 disabled={pending}
-                style={{
-                  fontSize: ".78rem",
-                  background: "var(--danger)",
-                  border: "none",
-                  color: "var(--text)",
-                }}
+                style={{ background: "var(--warn)", color: "#0f1117" }}
               >
-                🗑️ Supprimer
+                {pending ? "Enregistrement…" : "Enregistrer"}
               </button>
             </div>
-            <button
-              type="button"
-              className="modal-close"
-              onClick={() => setConfirmDeletePeriods(false)}
-            >
-              ×
-            </button>
           </div>
-        </div>
-      )}
-
-      {/* ── Modale création / édition ──────────────────────────────────────── */}
-      {modalOpen && (
-        <div className="modal-overlay open">
-          <div className="modal-box" aria-labelledby="period-modal-title">
-            <div className="modal-title" id="period-modal-title">
-              <span>{form.id == null ? "➕ Nouvelle période" : "✏️ Modifier la période"}</span>
-              <button type="button" className="modal-close" onClick={closeModal}>
-                ✕
-              </button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
-                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Libellé *</span>
-                <input
-                  type="text"
-                  value={form.label}
-                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-                  placeholder="Ex. Période 1"
-                />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
-                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Étiquette</span>
-                <input
-                  type="text"
-                  value={form.etiquette}
-                  onChange={(e) => setForm((f) => ({ ...f, etiquette: e.target.value }))}
-                  placeholder="Optionnel"
-                />
-              </label>
-              <div style={{ display: "flex", gap: ".75rem" }}>
-                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
-                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Début</span>
-                  <input
-                    type="date"
-                    value={form.dateStart}
-                    onChange={(e) => setForm((f) => ({ ...f, dateStart: e.target.value }))}
-                  />
-                </label>
-                <label style={{ display: "flex", flexDirection: "column", gap: ".25rem", flex: 1 }}>
-                  <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Fin</span>
-                  <input
-                    type="date"
-                    value={form.dateEnd}
-                    onChange={(e) => setForm((f) => ({ ...f, dateEnd: e.target.value }))}
-                  />
-                </label>
-              </div>
-              <label style={{ display: "flex", flexDirection: "column", gap: ".25rem" }}>
-                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>
-                  Disponibilité — ouverture des réservations côté usager (vide : réservable sans
-                  restriction)
-                </span>
-                <input
-                  type="date"
-                  value={form.disponibilite}
-                  onChange={(e) => setForm((f) => ({ ...f, disponibilite: e.target.value }))}
-                />
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-                <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>Couleur</span>
-                <input
-                  type="color"
-                  className="period-color-input"
-                  value={form.color}
-                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                />
-              </label>
-
-              {modalError && (
-                <div className="field-error" style={{ display: "block" }}>
-                  {modalError}
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: ".5rem",
-                  marginTop: ".5rem",
-                }}
-              >
-                <button type="button" className="btn btn-ghost" onClick={closeModal}>
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={saveModal}
-                  disabled={pending}
-                  style={{ background: "var(--warn)", color: "#0f1117" }}
-                >
-                  {pending ? "Enregistrement…" : "Enregistrer"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

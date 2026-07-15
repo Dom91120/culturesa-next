@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 
 /**
  * Entrée du panneau Référentiels (page Configuration) : un bouton (titre + sous-titre)
@@ -26,16 +27,6 @@ export function ReferentielEntry({
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
-  // Fermeture par Échap (uniquement quand la modale est ouverte).
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
   return (
     <>
       <button
@@ -57,28 +48,18 @@ export function ReferentielEntry({
       </button>
 
       {open && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture clavier gérée globalement (Échap)
-        <div
-          className="modal-overlay open"
-          style={{ display: "flex" }}
-          // Clic sur le fond (hors de la boîte) → ferme la modale.
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
+        <ModalOverlay
+          onClose={close}
+          boxStyle={{ maxWidth, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
         >
-          <div
-            className="modal-box"
-            style={{ maxWidth, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
-          >
-            <div className="modal-title" style={{ marginBottom: "0.75rem" }}>
-              {title}
-            </div>
-            {children(close)}
-            <button type="button" className="modal-close" onClick={close}>
-              ×
-            </button>
+          <div className="modal-title" style={{ marginBottom: "0.75rem" }}>
+            {title}
           </div>
-        </div>
+          {children(close)}
+          <button type="button" className="modal-close" onClick={close}>
+            ×
+          </button>
+        </ModalOverlay>
       )}
     </>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { memo, useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { memo, useCallback, useMemo, useState, useTransition } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import { renderHtmlTemplate } from "@/lib/mail-render";
 import {
@@ -221,16 +222,6 @@ export function EchangesConfig({
     });
   }
 
-  // Fermeture de la modale d'édition par la touche Échap.
-  useEffect(() => {
-    if (!editing) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setEditing(null);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [editing]);
-
   function isDirty(kind: string): boolean {
     return draft[kind].subject !== saved[kind].subject || draft[kind].html !== saved[kind].html;
   }
@@ -312,135 +303,62 @@ export function EchangesConfig({
 
       {/* Modale d'édition d'un modèle d'e-mail (objet + corps + aperçu). */}
       {editingRow && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture clavier gérée globalement (Échap)
-        <div
-          className="modal-overlay open"
-          style={{ display: "flex" }}
-          // Clic sur le fond (hors de la boîte) → ferme la modale.
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditing(null);
-          }}
+        <ModalOverlay
+          onClose={() => setEditing(null)}
+          boxStyle={{ maxWidth: 1000, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
         >
-          <div
-            className="modal-box"
-            style={{ maxWidth: 1000, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
-          >
-            <div className="modal-title">✏️ {editingRow.label}</div>
-            <Editor
-              draft={draft[editingRow.kind]}
-              variables={editingRow.variables}
-              label={editingRow.label}
-              dirty={isDirty(editingRow.kind)}
-              pending={pending}
-              editorKey={`${editingRow.kind}-${editorNonce}`}
-              onField={(f, v) => setField(editingRow.kind, f, v)}
-              onReset={() => resetToDefault(editingRow)}
-              onSave={() => saveTemplate(editingRow.kind)}
-            />
-            <button type="button" className="modal-close" onClick={() => setEditing(null)}>
-              ×
-            </button>
-          </div>
-        </div>
+          <div className="modal-title">✏️ {editingRow.label}</div>
+          <Editor
+            draft={draft[editingRow.kind]}
+            variables={editingRow.variables}
+            label={editingRow.label}
+            dirty={isDirty(editingRow.kind)}
+            pending={pending}
+            editorKey={`${editingRow.kind}-${editorNonce}`}
+            onField={(f, v) => setField(editingRow.kind, f, v)}
+            onReset={() => resetToDefault(editingRow)}
+            onSave={() => saveTemplate(editingRow.kind)}
+          />
+          <button type="button" className="modal-close" onClick={() => setEditing(null)}>
+            ×
+          </button>
+        </ModalOverlay>
       )}
 
       {/* Modale création / édition d'un type personnalisé (nom / description / destinataire). */}
       {metaEdit && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
-        <div
-          className="modal-overlay open"
-          style={{ display: "flex" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setMetaEdit(null);
-          }}
-        >
-          <div className="modal-box" style={{ maxWidth: 480, width: "95vw" }}>
-            <div className="modal-title">
-              {isCreating ? "Créer un type d'e-mail" : "Modifier le type d'e-mail"}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: ".7rem" }}>
-              <label style={{ fontSize: ".78rem", fontWeight: 600 }}>
-                Nom
-                <input
-                  type="text"
-                  value={metaEdit.label}
-                  maxLength={100}
-                  onChange={(e) => setMetaEdit({ ...metaEdit, label: e.target.value })}
-                  style={{ width: "100%", boxSizing: "border-box", marginTop: ".2rem" }}
-                />
-              </label>
-              <label style={{ fontSize: ".78rem", fontWeight: 600 }}>
-                Description
-                <input
-                  type="text"
-                  value={metaEdit.description}
-                  maxLength={300}
-                  onChange={(e) => setMetaEdit({ ...metaEdit, description: e.target.value })}
-                  style={{ width: "100%", boxSizing: "border-box", marginTop: ".2rem" }}
-                />
-              </label>
-              {/* Le destinataire ne dépend plus du modèle mais de l'ACTION : il se règle
-                  dans « Échanges par mail » (colonne Destinataire). */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setMetaEdit(null)}
-                  style={{ fontSize: ".78rem" }}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={saveMeta}
-                  disabled={pending || !metaEdit.label.trim()}
-                  style={{ fontSize: ".78rem" }}
-                >
-                  {isCreating ? "＋ Créer" : "💾 Enregistrer"}
-                </button>
-              </div>
-            </div>
-            <button type="button" className="modal-close" onClick={() => setMetaEdit(null)}>
-              ×
-            </button>
+        <ModalOverlay onClose={() => setMetaEdit(null)} boxStyle={{ maxWidth: 480, width: "95vw" }}>
+          <div className="modal-title">
+            {isCreating ? "Créer un type d'e-mail" : "Modifier le type d'e-mail"}
           </div>
-        </div>
-      )}
-
-      {/* Modale de confirmation de suppression d'un type personnalisé (--danger). */}
-      {confirmDelete && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture par le bouton × / Annuler
-        <div
-          className="modal-overlay open"
-          style={{ display: "flex" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setConfirmDelete(null);
-          }}
-        >
-          <div className="modal-box" style={{ maxWidth: 460, width: "95vw" }}>
-            <div className="modal-title" style={{ color: "var(--danger)" }}>
-              🗑️ Supprimer le type d&apos;e-mail
-            </div>
-            <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
-              Vous êtes sur le point de supprimer le type{" "}
-              <strong>« {rows.find((r) => r.kind === confirmDelete)?.label ?? ""} »</strong>.
-            </p>
-            <p
-              style={{
-                fontSize: ".78rem",
-                color: "var(--danger)",
-                fontWeight: 600,
-                margin: "0 0 1rem",
-              }}
-            >
-              ⚠️ Cette action est irréversible.
-            </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: ".7rem" }}>
+            <label style={{ fontSize: ".78rem", fontWeight: 600 }}>
+              Nom
+              <input
+                type="text"
+                value={metaEdit.label}
+                maxLength={100}
+                onChange={(e) => setMetaEdit({ ...metaEdit, label: e.target.value })}
+                style={{ width: "100%", boxSizing: "border-box", marginTop: ".2rem" }}
+              />
+            </label>
+            <label style={{ fontSize: ".78rem", fontWeight: 600 }}>
+              Description
+              <input
+                type="text"
+                value={metaEdit.description}
+                maxLength={300}
+                onChange={(e) => setMetaEdit({ ...metaEdit, description: e.target.value })}
+                style={{ width: "100%", boxSizing: "border-box", marginTop: ".2rem" }}
+              />
+            </label>
+            {/* Le destinataire ne dépend plus du modèle mais de l'ACTION : il se règle
+                  dans « Échanges par mail » (colonne Destinataire). */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => setConfirmDelete(null)}
+                onClick={() => setMetaEdit(null)}
                 style={{ fontSize: ".78rem" }}
               >
                 Annuler
@@ -448,23 +366,71 @@ export function EchangesConfig({
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => deleteType(confirmDelete)}
-                disabled={pending}
-                style={{
-                  fontSize: ".78rem",
-                  background: "var(--danger)",
-                  border: "none",
-                  color: "var(--text)",
-                }}
+                onClick={saveMeta}
+                disabled={pending || !metaEdit.label.trim()}
+                style={{ fontSize: ".78rem" }}
               >
-                🗑️ Supprimer
+                {isCreating ? "＋ Créer" : "💾 Enregistrer"}
               </button>
             </div>
-            <button type="button" className="modal-close" onClick={() => setConfirmDelete(null)}>
-              ×
+          </div>
+          <button type="button" className="modal-close" onClick={() => setMetaEdit(null)}>
+            ×
+          </button>
+        </ModalOverlay>
+      )}
+
+      {/* Modale de confirmation de suppression d'un type personnalisé (--danger). */}
+      {confirmDelete && (
+        <ModalOverlay
+          onClose={() => setConfirmDelete(null)}
+          boxStyle={{ maxWidth: 460, width: "95vw" }}
+        >
+          <div className="modal-title" style={{ color: "var(--danger)" }}>
+            🗑️ Supprimer le type d&apos;e-mail
+          </div>
+          <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+            Vous êtes sur le point de supprimer le type{" "}
+            <strong>« {rows.find((r) => r.kind === confirmDelete)?.label ?? ""} »</strong>.
+          </p>
+          <p
+            style={{
+              fontSize: ".78rem",
+              color: "var(--danger)",
+              fontWeight: 600,
+              margin: "0 0 1rem",
+            }}
+          >
+            ⚠️ Cette action est irréversible.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: ".5rem" }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setConfirmDelete(null)}
+              style={{ fontSize: ".78rem" }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => deleteType(confirmDelete)}
+              disabled={pending}
+              style={{
+                fontSize: ".78rem",
+                background: "var(--danger)",
+                border: "none",
+                color: "var(--text)",
+              }}
+            >
+              🗑️ Supprimer
             </button>
           </div>
-        </div>
+          <button type="button" className="modal-close" onClick={() => setConfirmDelete(null)}>
+            ×
+          </button>
+        </ModalOverlay>
       )}
     </div>
   );
