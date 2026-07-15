@@ -9,7 +9,6 @@ import {
   createPeriodAction,
   deleteExerciceAction,
   deletePeriodAction,
-  reactivatePeriodsAction,
   saveExerciceMaximaAction,
   saveOpeningConfigAction,
   setExerciceVisibleAction,
@@ -18,8 +17,6 @@ import {
 } from "./actions";
 
 type ExerciceType = "civile" | "scolaire";
-
-type PeriodState = "actif" | "desactive" | "archive";
 
 export type UiPeriod = {
   id: number;
@@ -30,7 +27,6 @@ export type UiPeriod = {
   // Ouverture des réservations usager ("YYYY-MM-DD" ou "" = toujours ouvert).
   disponibilite: string;
   color: string;
-  state: PeriodState;
   exerciceId: number | null;
 };
 
@@ -235,10 +231,6 @@ export function PeriodesPanel({
   const selectedCount = selected.size;
   const allChecked = visiblePeriods.length > 0 && selectedCount === visiblePeriods.length;
   const someChecked = selectedCount > 0 && !allChecked;
-  const anyInactiveSelected = [...selected].some((id) => {
-    const p = visiblePeriods.find((x) => x.id === id);
-    return p && p.state !== "actif";
-  });
 
   // ── Modale création / édition. ──────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false);
@@ -472,24 +464,6 @@ export function PeriodesPanel({
         }
       }
       setConfirmDeletePeriods(false);
-      setSelected(new Set());
-      router.refresh();
-    });
-  }
-
-  function reactivateSelected() {
-    const ids = [...selected].filter((id) => {
-      const p = visiblePeriods.find((x) => x.id === id);
-      return p && p.state !== "actif";
-    });
-    if (ids.length === 0) return;
-    setListError(null);
-    startTransition(async () => {
-      const res = await reactivatePeriodsAction({ serviceId, ids });
-      if (res && !res.ok) {
-        setListError(res.error ?? "Échec de la réactivation.");
-        return;
-      }
       setSelected(new Set());
       router.refresh();
     });
@@ -902,7 +876,7 @@ export function PeriodesPanel({
                 </thead>
                 <tbody>
                   {visiblePeriods.map((p) => (
-                    <tr key={p.id} style={p.state === "actif" ? undefined : { opacity: 0.55 }}>
+                    <tr key={p.id}>
                       <td>
                         <input
                           type="checkbox"
@@ -957,22 +931,6 @@ export function PeriodesPanel({
                     }}
                   >
                     ✏️ Modifier
-                  </button>
-                )}
-                {anyInactiveSelected && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={reactivateSelected}
-                    disabled={pending}
-                    style={{
-                      borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                      color: "var(--accent)",
-                      padding: ".25rem .65rem",
-                      fontSize: ".68rem",
-                    }}
-                  >
-                    ✓ Réactiver
                   </button>
                 )}
                 <button

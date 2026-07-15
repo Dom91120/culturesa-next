@@ -33,12 +33,6 @@ enum SlotType {
   unique
 }
 
-enum EntityState {
-  actif
-  desactive
-  archive
-}
-
 enum BookingType {
   recurring
   unique
@@ -263,7 +257,6 @@ model Slot {
   // « A une jauge » : posé À LA CRÉATION selon le mode jauge de l'agenda admin
   // (icône capsule) ; les miroirs héritent du récurrent parent.
   jauge        Boolean     @default(false)
-  state        EntityState @default(actif)
 
   service     Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   period      Period?         @relation(fields: [periodId], references: [id], onDelete: Cascade)
@@ -278,9 +271,9 @@ model Slot {
   @@index([serviceId])
   @@index([parentSlotId])
   @@index([periodId])
-  // Cron de rappels (filtre slotDate + state, quotidien sur tous les slots) et
-  // plage de dates des éditions ; préfixe slotDate sert les deux.
-  @@index([slotDate, state])
+  // Cron de rappels (filtre slotDate, quotidien sur tous les slots) et plage de
+  // dates des éditions.
+  @@index([slotDate])
   @@map("slots")
 }
 
@@ -338,7 +331,6 @@ model Period {
   disponibilite DateTime? @db.Date
   color      String      @default("#6dceaa")
   position   Int         @default(0)
-  state      EntityState @default(actif)
 
   service  Service?        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   exercice Exercice?       @relation(fields: [exerciceId], references: [id], onDelete: SetNull)

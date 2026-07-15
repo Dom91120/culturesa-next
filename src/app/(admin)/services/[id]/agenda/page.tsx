@@ -62,7 +62,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   // GLOBALES (serviceId null). Stats/éditions n'ont pas ce repli (périmètre par service).
   if (periods.length === 0) {
     periods = await prisma.period.findMany({
-      where: { serviceId: null, state: "actif" },
+      where: { serviceId: null },
       orderBy: periodOrder,
       select: periodSelect,
     });
@@ -76,7 +76,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
 
   const [slots, uniqueSlots, bookings] = await Promise.all([
     prisma.slot.findMany({
-      where: { serviceId: id, slotType: "recurring", state: "actif", periodId: { in: periodIds } },
+      where: { serviceId: id, slotType: "recurring", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -91,7 +91,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     // Créneaux ponctuels (datés) : affichés dans l'agenda en mode « Semaine réelle »
     // sur le jour de leur date (cf. legacy renderAgendaWeekly, branche realweek).
     prisma.slot.findMany({
-      where: { serviceId: id, slotType: "unique", state: "actif", periodId: { in: periodIds } },
+      where: { serviceId: id, slotType: "unique", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -109,7 +109,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       where: {
         serviceId: id,
         bookingType: { in: ["recurring", "unique"] },
-        slot: { state: "actif", periodId: { in: periodIds } },
+        slot: { periodId: { in: periodIds } },
       },
       select: {
         id: true,

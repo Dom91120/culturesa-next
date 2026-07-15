@@ -36,14 +36,9 @@ export type ExercicePaneData = {
 };
 
 type CycleEventData = {
-  archivedPeriodIds: number[];
   newPeriodIds: number[];
   newRecurringSlotIds: string[];
   newMirrorSlotIds: string[];
-  // Historique (événements antérieurs à la simplification des états) : périodes
-  // passées en desactive par la bascule — l'annulation les repasse en actif.
-  // Les bascules récentes laissent les périodes reconduites en actif ([] ici).
-  oldDeactivatedPeriodIds: number[];
   // Exercice créé par la bascule (par service) → supprimé tel quel à l'annulation.
   newExerciceId: number | null;
   // Exercice qui portait « Affiché aux utilisateurs » avant la bascule (le flag est
@@ -220,7 +215,6 @@ async function generateMirrorSlots(
       periodId,
       parentSlotId: slotId,
       weeks: null,
-      state: "actif",
       // Miroirs : jauge du récurrent cloné.
       jauge: src.jauge,
     });
@@ -266,9 +260,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       // Périodes à reconduire : celles (actives) de l'exercice courant — repli legacy
       // sans exercice : toutes les périodes actives du service.
       const actives = await tx.period.findMany({
-        where: currentExoRow
-          ? { serviceId, state: "actif", exerciceId: currentExoRow.id }
-          : { serviceId, state: "actif" },
+        where: currentExoRow ? { serviceId, exerciceId: currentExoRow.id } : { serviceId },
         orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
       });
       if (actives.length === 0) {
@@ -279,7 +271,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       const slotsByPeriod = new Map<number, SlotSnapshot[]>();
       for (const p of actives) {
         const slots = await tx.slot.findMany({
-          where: { serviceId, periodId: p.id, slotType: "recurring", state: "actif" },
+          where: { serviceId, periodId: p.id, slotType: "recurring" },
         });
         slotsByPeriod.set(
           p.id,
@@ -294,26 +286,9 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         );
       }
 
-      // 3./4. archivage des exercices PLUS ANCIENS que l'exercice courant : leurs
-      // périodes encore actives passent en archive (équivalent de l'ancien
-      // « desactive → archive », identifié par le lignage d'exercice et non par l'état).
-      const toArchive = currentExoRow
-        ? await tx.period.findMany({
-            where: {
-              serviceId,
-              state: "actif",
-              exerciceId: { not: null, notIn: [currentExoRow.id] },
-            },
-            select: { id: true },
-          })
-        : [];
-      const archivedPeriodIds = toArchive.map((r) => r.id);
-      if (archivedPeriodIds.length > 0) {
-        await tx.period.updateMany({
-          where: { id: { in: archivedPeriodIds } },
-          data: { state: "archive" },
-        });
-      }
+      // (Les exercices antérieurs ne sont plus archivés : la notion d'état a été
+      // supprimée. Le périmètre des vues se fait par exercice, pas par état — les
+      // exercices passés restent consultables via le sélecteur d'exercice.)
 
       // 5. Nouvel exercice PAR SERVICE : on reconduit l'exercice courant en copiant son
       // type et en décalant ses dates d'un an (repli sur les dates des périodes décalées).
@@ -402,7 +377,6 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
             dateEnd: ne ? dateFromYmd(ne) : null,
             color: p.color,
             position: p.position,
-            state: "actif",
           },
         });
         newPeriodIds.push(newPeriod.id);
@@ -435,7 +409,6 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
                 periodId: newPeriod.id,
                 parentSlotId: null,
                 weeks: s.weeks,
-                state: "actif",
                 jauge: s.jauge,
               },
             });
@@ -476,11 +449,9 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
 
       // 8. journaliser le cycle
       const payload: CycleEventData = {
-        archivedPeriodIds,
         newPeriodIds,
         newRecurringSlotIds,
         newMirrorSlotIds,
-        oldDeactivatedPeriodIds: [],
         newExerciceId: exId,
         visibleFromExerciceId,
       };
@@ -516,8 +487,6 @@ export async function undoCycle(serviceId: string): Promise<void> {
       const newMirrorSlotIds = data.newMirrorSlotIds ?? [];
       const newRecurringSlotIds = data.newRecurringSlotIds ?? [];
       const newPeriodIds = data.newPeriodIds ?? [];
-      const oldDeactivatedPeriodIds = data.oldDeactivatedPeriodIds ?? [];
-      const archivedPeriodIds = data.archivedPeriodIds ?? [];
 
       // 1. miroirs uniques : bookings unique puis slots
       if (newMirrorSlotIds.length > 0) {
@@ -544,24 +513,8 @@ export async function undoCycle(serviceId: string): Promise<void> {
         await tx.period.deleteMany({ where: { id: { in: newPeriodIds } } });
       }
 
-      // 4. périodes reconduites : les bascules récentes les laissent actives ([]) ;
-      // les événements antérieurs à la simplification des états les avaient passées
-      // en desactive → on les repasse en actif (l'état desactive n'existe plus).
-      if (oldDeactivatedPeriodIds.length > 0) {
-        await tx.period.updateMany({
-          where: { id: { in: oldDeactivatedPeriodIds } },
-          data: { state: "actif" },
-        });
-      }
-
-      // 5. archivées par la bascule → actif (elles l'étaient avant ; l'état
-      // intermédiaire desactive a disparu du cycle de vie des périodes).
-      if (archivedPeriodIds.length > 0) {
-        await tx.period.updateMany({
-          where: { id: { in: archivedPeriodIds } },
-          data: { state: "actif" },
-        });
-      }
+      // (Plus de restauration d'état : la notion d'archivage de période a été
+      // supprimée. Les bascules ne modifient plus l'état des exercices antérieurs.)
 
       // 5 bis. restaurer « Affiché aux utilisateurs » sur l'exercice qui le portait
       // avant la bascule (le flag avait été transféré au nouvel exercice).
@@ -668,7 +621,6 @@ export function eligiblePeriodsWhere(
 ): Prisma.PeriodWhereInput {
   return {
     serviceId,
-    state: "actif",
     ...(!showPreviousExercices && currentExoId != null ? { exerciceId: currentExoId } : {}),
   };
 }
@@ -725,9 +677,7 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
   // La bascule reconduit les périodes actives de l'exercice COURANT (les périodes
   // des exercices passés restent actives depuis la simplification des états).
   const activeCount = await prisma.period.count({
-    where: current
-      ? { serviceId, state: "actif", exerciceId: current.id }
-      : { serviceId, state: "actif" },
+    where: current ? { serviceId, exerciceId: current.id } : { serviceId },
   });
 
   const currentName = current?.label ?? "—";

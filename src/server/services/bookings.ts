@@ -164,7 +164,7 @@ export async function listBookableServices() {
       _count: {
         select: {
           slots: {
-            where: { state: "actif", slotType: "unique", slotDate: { gte: startOfToday() } },
+            where: { slotType: "unique", slotDate: { gte: startOfToday() } },
           },
         },
       },
@@ -193,7 +193,6 @@ export async function userHasAnyGauge(): Promise<boolean> {
   const withGauge = await prisma.slot.findFirst({
     where: {
       serviceId: { in: services.map((s) => s.serviceId) },
-      state: "actif",
       jauge: true,
     },
     select: { id: true },
@@ -424,7 +423,7 @@ export async function createUniqueBookingInTx(
       parent: { select: { demandeurs: { select: { demandeurId: true } } } },
     },
   });
-  if (slot?.slotType !== "unique" || slot.state !== "actif") {
+  if (slot?.slotType !== "unique") {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
   // Accès service : le demandeur effectif de l'usager doit accepter ce service.
@@ -638,20 +637,20 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   // suffit à le montrer aux usagers).
   let periods = visibleExo
     ? await prisma.period.findMany({
-        where: { serviceId, state: "actif", exerciceId: visibleExo.id },
+        where: { serviceId, exerciceId: visibleExo.id },
         orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
         select: periodSelect,
       })
     : exoCount > 0
       ? []
       : await prisma.period.findMany({
-          where: { serviceId, state: "actif" },
+          where: { serviceId },
           orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
           select: periodSelect,
         });
   if (periods.length === 0 && exoCount === 0) {
     periods = await prisma.period.findMany({
-      where: { serviceId: null, state: "actif" },
+      where: { serviceId: null },
       orderBy: [{ position: "asc" }, { id: "asc" }],
       select: periodSelect,
     });
@@ -664,7 +663,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   const [settings, recurSlots, uniqueSlots, bookings, themeRows] = await Promise.all([
     getServiceDemandeurSettings(serviceId),
     prisma.slot.findMany({
-      where: { serviceId, slotType: "recurring", state: "actif", periodId: { in: periodIds } },
+      where: { serviceId, slotType: "recurring", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -677,7 +676,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       },
     }),
     prisma.slot.findMany({
-      where: { serviceId, slotType: "unique", state: "actif", periodId: { in: periodIds } },
+      where: { serviceId, slotType: "unique", periodId: { in: periodIds } },
       select: {
         id: true,
         startTime: true,
@@ -694,7 +693,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       where: {
         serviceId,
         bookingType: { in: ["recurring", "unique"] },
-        slot: { state: "actif", periodId: { in: periodIds } },
+        slot: { periodId: { in: periodIds } },
       },
       select: {
         id: true,

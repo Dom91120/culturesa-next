@@ -1,4 +1,4 @@
-import type { EntityState, ExerciceType } from "@/generated/prisma/client";
+import type { ExerciceType } from "@/generated/prisma/client";
 import { Prisma } from "@/generated/prisma/client";
 import { holidaysInRange } from "@/lib/french-holidays";
 import { DAYS } from "@/schemas/config";
@@ -248,7 +248,6 @@ export type PeriodRow = {
   // Date d'ouverture des réservations USAGER pour la période (null = toujours ouvert).
   disponibilite: Date | null;
   color: string;
-  state: EntityState;
   exerciceId: number | null;
 };
 
@@ -260,7 +259,6 @@ const PERIOD_SELECT = {
   dateEnd: true,
   disponibilite: true,
   color: true,
-  state: true,
   exerciceId: true,
 } as const;
 
@@ -326,7 +324,6 @@ export async function createServicePeriod(
       dateEnd: input.dateEnd,
       disponibilite: input.disponibilite,
       color: input.color,
-      state: "actif",
     },
     select: PERIOD_SELECT,
   });
@@ -341,7 +338,6 @@ export type UpdateServicePeriodInput = {
   dateEnd?: Date | null;
   disponibilite?: Date | null;
   color?: string;
-  state?: EntityState;
 };
 
 /**
@@ -361,13 +357,11 @@ export async function updateServicePeriod(
     dateEnd?: Date | null;
     disponibilite?: Date | null;
     color?: string;
-    state?: EntityState;
   } = {};
   if (input.label !== undefined) data.label = input.label;
   if (input.etiquette !== undefined) data.etiquette = input.etiquette;
   if (input.disponibilite !== undefined) data.disponibilite = input.disponibilite;
   if (input.color !== undefined) data.color = input.color;
-  if (input.state !== undefined) data.state = input.state;
 
   // Période courante : service (anti-IDOR) + exercice de rattachement (inchangé ici).
   const current = await prisma.period.findUnique({
@@ -418,18 +412,6 @@ export async function deleteServicePeriod(serviceId: string, id: number) {
   const cur = await prisma.period.findUnique({ where: { id }, select: { serviceId: true } });
   if (!cur || cur.serviceId !== serviceId) throw new PeriodError("Période introuvable.");
   return prisma.period.delete({ where: { id } });
-}
-
-/** Réactive une période ARCHIVÉE (state → actif ; seuls actif/archive subsistent,
- *  la visibilité usager étant portée par l'exercice). Anti-IDOR par service. */
-export async function reactivatePeriod(serviceId: string, id: number): Promise<PeriodRow> {
-  const cur = await prisma.period.findUnique({ where: { id }, select: { serviceId: true } });
-  if (!cur || cur.serviceId !== serviceId) throw new PeriodError("Période introuvable.");
-  return prisma.period.update({
-    where: { id },
-    data: { state: "actif" },
-    select: PERIOD_SELECT,
-  });
 }
 
 export type ServiceOpeningConfig = {
@@ -487,7 +469,7 @@ export async function saveExerciceOpeningConfig(
           },
         });
         const periods = await tx.period.findMany({
-          where: { exerciceId, serviceId, state: "actif" },
+          where: { exerciceId, serviceId },
           select: { id: true },
         });
         for (const p of periods) {

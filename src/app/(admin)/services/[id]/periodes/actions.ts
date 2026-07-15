@@ -10,7 +10,6 @@ import {
   deleteExercice,
   deleteServicePeriod,
   PeriodError,
-  reactivatePeriod,
   saveExerciceMaxima,
   saveExerciceOpeningConfig,
   setExerciceVisibleToUsers,
@@ -99,11 +98,6 @@ const updateSchema = z
     color: colorString,
   })
   .refine(dateOrderOk, dateOrderError);
-
-const reactivateSchema = z.object({
-  serviceId: z.string().trim().min(1),
-  ids: z.array(z.number().int().positive()).min(1).max(200),
-});
 
 const deleteSchema = z.object({
   serviceId: z.string().trim().min(1),
@@ -196,28 +190,6 @@ export async function deletePeriodAction(input: {
   } catch (e) {
     if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la suppression." };
-  }
-  revalidatePath(`/services/${serviceId}/periodes`);
-  return { ok: true };
-}
-
-export async function reactivatePeriodsAction(input: {
-  serviceId: string;
-  ids: number[];
-}): Promise<ActionState> {
-  await requireServiceManager(input.serviceId);
-  const parsed = reactivateSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: "Valeurs invalides." };
-  }
-  const { serviceId, ids } = parsed.data;
-  try {
-    for (const id of ids) {
-      await reactivatePeriod(serviceId, id);
-    }
-  } catch (e) {
-    if (e instanceof PeriodError) return { ok: false, error: e.message };
-    return { ok: false, error: "Échec de la réactivation." };
   }
   revalidatePath(`/services/${serviceId}/periodes`);
   return { ok: true };

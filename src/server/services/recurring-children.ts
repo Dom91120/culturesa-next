@@ -126,7 +126,6 @@ export async function syncRecurringChildren(
     where: {
       parentSlotId: parent.slotId,
       slotType: "unique",
-      state: "actif",
       periodId: parent.periodId,
     },
     select: { id: true, slotDate: true },

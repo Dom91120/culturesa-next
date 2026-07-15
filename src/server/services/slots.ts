@@ -168,7 +168,7 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
   const endDate = toISO(period.dateEnd);
 
   const recurringSlots = await tx.slot.findMany({
-    where: { serviceId, slotType: "recurring", periodId, state: "actif" },
+    where: { serviceId, slotType: "recurring", periodId },
     select: {
       id: true,
       slotDay: true,
@@ -226,7 +226,6 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
           capacity: mv.cap,
           periodId,
           parentSlotId: slot.id,
-          state: "actif" as const,
           jauge: slot.jauge,
         })),
       });
@@ -291,7 +290,6 @@ export async function addRecurringSlot(
           endTime: input.endTime,
           periodId,
           weeks,
-          state: "actif",
           slotDay: input.dayKey,
           capacity: input.capacity,
           jauge: input.jauge ?? false,
@@ -326,7 +324,6 @@ export async function addRecurringSlot(
         capacity: mv.cap,
         periodId,
         parentSlotId: slId,
-        state: "actif" as const,
         // Les miroirs héritent de la jauge du récurrent parent.
         jauge: input.jauge ?? false,
       }));
@@ -371,7 +368,7 @@ export async function copyRecurringWeek(
   const endDate = toISO(period.dateEnd);
 
   const slots = await prisma.slot.findMany({
-    where: { serviceId, periodId, slotType: "recurring", state: "actif" },
+    where: { serviceId, periodId, slotType: "recurring" },
   });
   const sig = (s: (typeof slots)[number]) =>
     [s.startTime, s.endTime, s.slotDay ?? "", s.capacity ?? ""].join("|");
@@ -417,7 +414,6 @@ export async function copyRecurringWeek(
               endTime: s.endTime,
               periodId,
               weeks: toWeek,
-              state: "actif",
               slotDay: s.slotDay,
               capacity: s.capacity,
               // La copie A↔B conserve la jauge du créneau source.
@@ -445,7 +441,6 @@ export async function copyRecurringWeek(
             capacity: mv.cap,
             periodId,
             parentSlotId: newId,
-            state: "actif" as const,
             jauge: s.jauge,
           }));
           if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
@@ -485,7 +480,6 @@ export async function addUniqueSlot(
   const period = await prisma.period.findFirst({
     where: {
       serviceId,
-      state: "actif",
       dateStart: { lte: fromISO(input.slotDate) },
       dateEnd: { gte: fromISO(input.slotDate) },
     },
@@ -508,7 +502,6 @@ export async function addUniqueSlot(
           slotDate: fromISO(input.slotDate),
           capacity: input.capacity,
           periodId: period.id,
-          state: "actif",
           jauge: input.jauge ?? false,
         },
       });
@@ -587,7 +580,7 @@ export async function moveRecurringSlot(
         }
         await tx.slot.update({
           where: { id: slotId },
-          data: { startTime, endTime, weeks, state: "actif", slotDay: toDayKey, capacity: capVal },
+          data: { startTime, endTime, weeks, slotDay: toDayKey, capacity: capVal },
         });
         const wanted = computeWantedMirrors({
           startDate,
@@ -610,7 +603,6 @@ export async function moveRecurringSlot(
           capacity: mv.cap,
           periodId: period.id,
           parentSlotId: slotId,
-          state: "actif" as const,
           // Miroirs régénérés : jauge du récurrent déplacé.
           jauge: slot.jauge,
         }));
@@ -645,7 +637,6 @@ export async function moveUniqueSlot(
   const period = await prisma.period.findFirst({
     where: {
       serviceId,
-      state: "actif",
       dateStart: { lte: fromISO(slotDate) },
       dateEnd: { gte: fromISO(slotDate) },
     },

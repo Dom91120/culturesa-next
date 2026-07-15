@@ -79,12 +79,7 @@ async function reserveRecurringInTx(
     where: { id: slotId },
     include: { service: true, demandeurs: { select: { demandeurId: true } } },
   });
-  if (
-    !slot ||
-    slot.serviceId !== serviceId ||
-    slot.slotType !== "recurring" ||
-    slot.state !== "actif"
-  ) {
+  if (!slot || slot.serviceId !== serviceId || slot.slotType !== "recurring") {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
   // Anti-injection : le periodId DOIT être celui du créneau récurrent. Un periodId
@@ -312,12 +307,7 @@ async function moveInTx(
     },
   });
   const wantType = target.ponctuel ? "unique" : "recurring";
-  if (
-    !slot ||
-    slot.serviceId !== serviceId ||
-    slot.slotType !== wantType ||
-    slot.state !== "actif"
-  ) {
+  if (!slot || slot.serviceId !== serviceId || slot.slotType !== wantType) {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
   // Déplacement vers un créneau récurrent → période cible obligatoire (FK bookings.periodId).

@@ -728,9 +728,9 @@ export async function createRecurringBookingAction(input: {
         // propagerait ensuite. (assertSlotCapacity ne contrôle que le couple slot/service.)
         const target = await tx.slot.findFirst({
           where: { id: d.slotId, serviceId: d.serviceId },
-          select: { slotType: true, state: true },
+          select: { slotType: true },
         });
-        if (target?.slotType !== "recurring" || target.state !== "actif") {
+        if (target?.slotType !== "recurring") {
           throw new BookingError("Ce créneau n'est pas disponible.");
         }
         // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.

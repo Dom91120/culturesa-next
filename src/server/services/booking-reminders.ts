@@ -61,7 +61,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
 
     // Tous les slots datés ce jour-là (créneaux ponctuels autonomes ET miroirs).
     const dated = await prisma.slot.findMany({
-      where: { slotDate: targetDate, state: "actif" },
+      where: { slotDate: targetDate },
       select: { id: true, startTime: true, endTime: true },
     });
     if (dated.length === 0) continue;
