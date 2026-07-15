@@ -1,4 +1,5 @@
 import { ISO_DAY_KEYS } from "@/lib/agenda-core";
+import { parisWallToInstant, toParisWall } from "@/lib/paris-time";
 import { prisma } from "@/server/db";
 import { sendBookingConfirmationMailsBatch } from "@/server/services/booking-mail";
 import {
@@ -19,54 +20,9 @@ import {
 //  depuis `autoValidateFrom` est écoulé, sauf si la séance est déjà passée.
 // ════════════════════════════════════════════════════════════
 
-const TZ = "Europe/Paris";
-
-// Heures ouvrées exprimées en heure murale FR : on isole la conversion instant ↔
-// heure murale Paris pour ne PAS dépendre du fuseau du serveur (Node tourne en UTC).
-
-/** Minutes dont Paris est en avance sur UTC à cet instant (60 hiver / 120 été). */
-function parisOffsetMin(instant: Date): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-  const p = dtf.formatToParts(instant);
-  const get = (t: string) => Number(p.find((x) => x.type === t)?.value);
-  const asUtc = Date.UTC(
-    get("year"),
-    get("month") - 1,
-    get("day"),
-    get("hour"),
-    get("minute"),
-    get("second"),
-  );
-  return Math.round((asUtc - instant.getTime()) / 60000);
-}
-
-type Wall = { y: number; mo: number; da: number; min: number };
-
-/** Instant → heure murale Paris (min = minutes depuis minuit). */
-function toParisWall(instant: Date): Wall {
-  const w = new Date(instant.getTime() + parisOffsetMin(instant) * 60000);
-  return {
-    y: w.getUTCFullYear(),
-    mo: w.getUTCMonth() + 1,
-    da: w.getUTCDate(),
-    min: w.getUTCHours() * 60 + w.getUTCMinutes(),
-  };
-}
-
-/** Heure murale Paris (jour + minutes) → instant UTC. */
-function parisWallToInstant(y: number, mo: number, da: number, min: number): Date {
-  const guess = Date.UTC(y, mo - 1, da, 0, min);
-  return new Date(guess - parisOffsetMin(new Date(guess)) * 60000);
-}
+// Conversion instant ↔ heure murale Paris (indépendante du fuseau serveur, gestion
+// DST) : source unique dans lib/paris-time — les heures ouvrées sont exprimées en
+// heure murale FR.
 
 /** Jour de la semaine (0=dim..6=sam) d'une date murale. */
 function wallDow(y: number, mo: number, da: number): number {

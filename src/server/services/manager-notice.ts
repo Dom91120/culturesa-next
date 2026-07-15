@@ -1,4 +1,5 @@
 import { escapeHtml, wrapEmailHtml } from "@/lib/email-theme";
+import { parisParts } from "@/lib/paris-time";
 import { DAYS } from "@/schemas/config";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -47,34 +48,7 @@ export type DueConfig = {
   lastSentAt: Date | null;
 };
 
-// ── Calendrier Europe/Paris (indépendant du fuseau serveur) ─────────────────
-const PARIS = "Europe/Paris";
-function parisParts(d: Date): { dateKey: string; hour: number; weekday: Weekday } {
-  const p = new Intl.DateTimeFormat("en-GB", {
-    timeZone: PARIS,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hourCycle: "h23",
-    weekday: "short",
-  }).formatToParts(d);
-  const get = (t: string) => p.find((x) => x.type === t)?.value ?? "";
-  const wkMap: Record<string, Weekday> = {
-    Mon: "lun",
-    Tue: "mar",
-    Wed: "mer",
-    Thu: "jeu",
-    Fri: "ven",
-    Sat: "sam",
-    Sun: "dim",
-  };
-  return {
-    dateKey: `${get("year")}-${get("month")}-${get("day")}`,
-    hour: Number(get("hour")),
-    weekday: wkMap[get("weekday")] ?? "lun",
-  };
-}
+// Calendrier Europe/Paris (heure murale, DST) : source unique dans lib/paris-time.
 
 /** Le digest d'un service est-il dû à `now`, vu son mode et son dernier envoi ? */
 export function isDigestDue(cfg: DueConfig, now: Date): boolean {
