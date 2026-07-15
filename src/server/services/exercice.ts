@@ -664,8 +664,8 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
   });
   const current = sorted[0] ?? null;
 
-  // La bascule reconduit les périodes actives de l'exercice COURANT (les périodes
-  // des exercices passés restent actives depuis la simplification des états).
+  // La bascule reconduit les périodes de l'exercice COURANT (portée par exercice
+  // depuis la suppression de la notion d'état actif/archivé).
   const activeCount = await prisma.period.count({
     where: current ? { serviceId, exerciceId: current.id } : { serviceId },
   });

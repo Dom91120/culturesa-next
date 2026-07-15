@@ -3,6 +3,7 @@
 // Composants PARTAGÉS des deux grilles agenda (admin / usager), extraits à
 // l'identique des deux copies locales (audit duplication 2026-06).
 
+import { useEffect } from "react";
 import { DAY_NAMES, type Pointage } from "@/lib/agenda-core";
 
 // Coin haut-gauche + rangée d'en-têtes de jours de la grille (port legacy cornerAB).
@@ -213,19 +214,28 @@ export function ModalOverlay({
   dismissOnBackdrop?: boolean;
   labelledBy?: string;
 }) {
+  // Fermeture à Échap au niveau document (sauf modales de formulaire). Un handler sur
+  // l'overlay ne suffit PAS : le <dialog open> ne reçoit pas le focus et n'a pas de
+  // gestion Échap native, donc la touche part de document.body ou du bouton déclencheur
+  // (hors du sous-arbre de l'overlay) et n'atteindrait jamais un onKeyDown local.
+  useEffect(() => {
+    if (!dismissOnBackdrop) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [dismissOnBackdrop, onClose]);
+
   return (
     <div
       className="modal-overlay open"
       role="presentation"
       onClick={dismissOnBackdrop ? onClose : undefined}
-      onKeyDown={
-        dismissOnBackdrop
-          ? (e) => {
-              if (e.key === "Escape") onClose();
-            }
-          : undefined
-      }
     >
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: onClick isole seulement le clic
+          intérieur du fond ; PAS de onKeyDown (un stopPropagation y bloquerait l'Échap
+          capté au niveau document, cf. useEffect ci-dessus). */}
       <dialog
         open
         className="modal-box"
@@ -233,7 +243,6 @@ export function ModalOverlay({
         aria-labelledby={labelledBy}
         style={boxStyle}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
       >
         {children}
       </dialog>
