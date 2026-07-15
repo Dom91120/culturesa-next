@@ -298,7 +298,7 @@ export type CreateServicePeriodInput = {
   color: string;
 };
 
-/** Crée une période rattachée à un exercice EXPLICITE (state actif). */
+/** Crée une période rattachée à un exercice EXPLICITE. */
 export async function createServicePeriod(
   serviceId: string,
   input: CreateServicePeriodInput,

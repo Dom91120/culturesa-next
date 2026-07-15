@@ -600,10 +600,9 @@ export async function currentExerciceIdForService(serviceId: string): Promise<nu
 
 /**
  * Clause `where` des périodes ÉLIGIBLES d'un service (SOURCE UNIQUE, partagée par
- * agenda / stats / éditions) : périodes actives de l'exercice COURANT, ou de TOUS les
- * exercices non archivés si le service « affiche les exercices précédents » (les
- * périodes des exercices passés restent « actif » depuis la simplification des états).
- * Évite que ce filtre — jusqu'ici copié mot pour mot dans les 3 écrans — diverge.
+ * agenda / stats / éditions) : périodes de l'exercice COURANT, ou de TOUS les
+ * exercices si le service « affiche les exercices précédents ». Évite que ce filtre —
+ * jusqu'ici copié mot pour mot dans les 3 écrans — diverge.
  */
 export function eligiblePeriodsWhere(
   serviceId: string,
