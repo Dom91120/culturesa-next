@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer";
+import { escapeHtml } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 
@@ -15,12 +16,6 @@ const KIND_TITLES: Record<string, string> = {
   planning: "Planning",
   pointages: "Pointages",
 };
-
-const escapeHtml = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
-  );
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

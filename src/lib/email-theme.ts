@@ -15,15 +15,18 @@ const THEME = {
 };
 
 /**
- * Échappement HTML des valeurs de confiance limitée injectées dans un e-mail (corps,
- * préheader, digest). Source UNIQUE — échappe & < > et " (sûr en contenu comme en attribut).
+ * Échappement HTML des valeurs de confiance limitée injectées dans du HTML généré
+ * (e-mails, impressions, PDF). SOURCE UNIQUE — échappe & < > " et ' → sûr en contenu
+ * comme en attribut simple OU double quote. Utilisé par le moteur d'e-mails
+ * (lib/mail-render), les listes imprimables (grilles agenda) et l'export PDF.
  */
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /** Bouton d'action (CTA) thématisé pour les e-mails — injecté en variable brute `{{bouton}}`. */

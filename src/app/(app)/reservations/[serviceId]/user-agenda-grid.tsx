@@ -34,6 +34,7 @@ import {
   ymd,
 } from "@/lib/agenda-core";
 import { earliestBookableISO } from "@/lib/booking-delay";
+import { escapeHtml } from "@/lib/email-theme";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeUnits } from "@/lib/gauge";
 import { printHtmlDocument } from "@/lib/print-html";
@@ -1906,7 +1907,6 @@ export function UserAgendaGrid({
     }
     rows.sort((a, z) => a.date.localeCompare(z.date) || a.creneau.localeCompare(z.creneau));
 
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const titleStr = [service.label, period?.label].filter(Boolean).join(" — ") || "Réservations";
     const who = `${userInfo.prenom} ${userInfo.nom}`.trim();
     const head = ["Date", "Créneau", "Type", "Thème", "Statut", "Pointage"];
@@ -1914,9 +1914,9 @@ export function UserAgendaGrid({
       ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
           .map(
             (r) =>
-              `<tr><td>${esc(dateLabel(r.date))}</td><td>${esc(r.creneau)}</td><td>${esc(
+              `<tr><td>${escapeHtml(dateLabel(r.date))}</td><td>${escapeHtml(r.creneau)}</td><td>${escapeHtml(
                 r.type,
-              )}</td><td>${esc(r.theme)}</td><td>${esc(r.statut)}</td><td>${esc(
+              )}</td><td>${escapeHtml(r.theme)}</td><td>${escapeHtml(r.statut)}</td><td>${escapeHtml(
                 r.pointage,
               )}</td></tr>`,
           )
@@ -1925,7 +1925,7 @@ export function UserAgendaGrid({
     const css =
       "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:24px;font-size:12px}h1{font-size:16px;margin:0 0 4px}.meta{color:#444;margin:0 0 16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px 8px;text-align:left}th{background:#eee !important;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.empty{color:#444}";
     printHtmlDocument(
-      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titleStr)}</title><style>${css}</style></head><body><h1>${esc(titleStr)}</h1><div class="meta">${esc(who)} · ${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${body}</body></html>`,
+      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(titleStr)}</title><style>${css}</style></head><body><h1>${escapeHtml(titleStr)}</h1><div class="meta">${escapeHtml(who)} · ${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${body}</body></html>`,
     );
   }
 

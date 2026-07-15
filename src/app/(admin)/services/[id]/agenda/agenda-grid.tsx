@@ -35,6 +35,7 @@ import {
   type UniqueSlot,
   ymd,
 } from "@/lib/agenda-core";
+import { escapeHtml } from "@/lib/email-theme";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
 import { printHtmlDocument } from "@/lib/print-html";
@@ -1786,7 +1787,6 @@ export function AgendaGrid({
     } catch {
       // requireServiceManager peut rejeter un appelant non autorisé — liste vide alors.
     }
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const pointageOf = (p?: string | null) => (p === "present" ? "P" : p === "absent" ? "A" : "—");
     const rows = sessions.flatMap((sess) =>
       sess.attendees.map((a) => ({
@@ -1814,7 +1814,7 @@ export function AgendaGrid({
       ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
           .map(
             (r) =>
-              `<tr><td>${esc(r.date)}</td><td>${esc(r.creneau)}</td><td>${esc(r.identite)}</td><td>${esc(r.struct)}</td><td class="c">${r.enfants}</td><td class="c">${r.accompagnants}</td><td>${esc(r.theme)}</td><td class="c">${esc(r.pointage)}</td></tr>`,
+              `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.creneau)}</td><td>${escapeHtml(r.identite)}</td><td>${escapeHtml(r.struct)}</td><td class="c">${r.enfants}</td><td class="c">${r.accompagnants}</td><td>${escapeHtml(r.theme)}</td><td class="c">${escapeHtml(r.pointage)}</td></tr>`,
           )
           .join("")}</tbody></table>`
       : '<p class="empty">Aucune réservation pour cette période.</p>';
@@ -1824,7 +1824,7 @@ export function AgendaGrid({
     const css =
       "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:18px;font-size:10px}h1{font-size:14px;margin:0 0 3px}.meta{color:#444;margin:0 0 10px;font-size:10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:2px 6px;text-align:left;white-space:nowrap}td.c{text-align:center}th{background:#eee !important;font-size:9px;text-transform:uppercase;letter-spacing:.03em}.empty{color:#444}";
     printHtmlDocument(
-      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(titleStr)}</title><style>${css}</style></head><body><h1>${esc(titleStr)}</h1><div class="meta">${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${inner}</body></html>`,
+      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(titleStr)}</title><style>${css}</style></head><body><h1>${escapeHtml(titleStr)}</h1><div class="meta">${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${inner}</body></html>`,
     );
   }
 
