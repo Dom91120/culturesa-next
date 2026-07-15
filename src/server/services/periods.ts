@@ -274,24 +274,14 @@ function sortPeriods(periods: PeriodRow[]): PeriodRow[] {
   });
 }
 
-/**
- * Périodes d'un service + liste des exercices distincts présents. Fidèle au
- * legacy : si le service n'a aucune période propre, on retombe sur les périodes
- * globales (serviceId = null).
- */
+/** Périodes d'un service + liste des exercices distincts présents. */
 export async function listServicePeriods(
   serviceId: string,
 ): Promise<{ periods: PeriodRow[]; exercices: ExerciceRow[] }> {
-  let periods = await prisma.period.findMany({
+  const periods = await prisma.period.findMany({
     where: { serviceId },
     select: PERIOD_SELECT,
   });
-  if (periods.length === 0) {
-    periods = await prisma.period.findMany({
-      where: { serviceId: null },
-      select: PERIOD_SELECT,
-    });
-  }
   const sorted = sortPeriods(periods);
   const exercices = await listServiceExercices(serviceId);
   return { periods: sorted, exercices };

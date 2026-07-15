@@ -632,10 +632,10 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   ]);
 
   // Périodes : chargées AVANT les créneaux/réservations (borne de chargement).
-  // Exercice visible → ses périodes non archivées (les périodes des exercices passés
-  // restent « actif » depuis la simplification des états : cocher un exercice passé
-  // suffit à le montrer aux usagers).
-  let periods = visibleExo
+  // Exercice visible → ses périodes (cocher un exercice, même passé, suffit à le
+  // montrer aux usagers). Service avec exercices mais aucun visible → rien.
+  // Service sans exercice → toutes ses périodes.
+  const periods = visibleExo
     ? await prisma.period.findMany({
         where: { serviceId, exerciceId: visibleExo.id },
         orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
@@ -648,13 +648,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
           orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
           select: periodSelect,
         });
-  if (periods.length === 0 && exoCount === 0) {
-    periods = await prisma.period.findMany({
-      where: { serviceId: null },
-      orderBy: [{ position: "asc" }, { id: "asc" }],
-      select: periodSelect,
-    });
-  }
   // Borne de chargement : UNIQUEMENT les créneaux/réservations des périodes actives
   // affichées. Sans elle, l'agenda usager chargeait tous les exercices accumulés
   // — payload re-fetché par chaque tick d'auto-rafraîchissement (audit perf).

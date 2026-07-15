@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { toDateInput } from "@/lib/format";
@@ -32,9 +33,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   const demRows = await getServiceDemandeurSettingsLabeled(id);
   const modes = deriveServiceModes(service, demRows);
 
-  // Fallback legacy : si le service a ses propres périodes actives, n'afficher QUE
-  // celles-là ; sinon retomber sur les périodes globales (serviceId null). Sans ce
-  // fallback, l'agenda mélangeait les périodes globales du seed et celles du service.
+  // Champs de période chargés pour les onglets/bornes de l'agenda.
   const periodSelect = {
     id: true,
     label: true,
@@ -50,22 +49,32 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     { id: "asc" as const },
   ];
   // Périmètre par défaut = l'exercice COURANT (le plus récent) ; avec « Afficher les
-  // exercices précédents », toutes les périodes non archivées (les exercices passés
-  // restent « actif » depuis la simplification des états) pour la nav ◀ exercice.
+  // exercices précédents », TOUTES les périodes du service (tous exercices) pour la
+  // nav ◀ exercice.
   const currentExoId = await currentExerciceIdForService(id);
-  let periods = await prisma.period.findMany({
+  const periods = await prisma.period.findMany({
     where: eligiblePeriodsWhere(id, service.showPreviousExercices, currentExoId),
     orderBy: periodOrder,
     select: periodSelect,
   });
-  // Repli PROPRE à l'agenda : un service sans période propre retombe sur les périodes
-  // GLOBALES (serviceId null). Stats/éditions n'ont pas ce repli (périmètre par service).
+  // Aucune période configurée pour ce service → l'agenda n'a rien à afficher : on
+  // invite le gestionnaire à en créer (au lieu d'une grille vide et muette).
   if (periods.length === 0) {
-    periods = await prisma.period.findMany({
-      where: { serviceId: null },
-      orderBy: periodOrder,
-      select: periodSelect,
-    });
+    return (
+      <div className="panel" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
+        <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".75rem" }}>
+          <span className="dot" />
+          Agenda — {service.label}
+        </div>
+        <p style={{ color: "var(--muted)", margin: "0 0 1.25rem", fontSize: ".85rem" }}>
+          Aucune période n'est configurée pour ce service. Créez au moins une période pour pouvoir
+          gérer l'agenda et les créneaux.
+        </p>
+        <Link className="btn btn-primary" href={`/services/${id}/periodes`}>
+          Créer une période
+        </Link>
+      </div>
+    );
   }
 
   // Borne de chargement : UNIQUEMENT les créneaux/réservations des périodes

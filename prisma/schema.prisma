@@ -319,7 +319,8 @@ model Exercice {
 
 model Period {
   id         Int         @id @default(autoincrement())
-  serviceId  String?
+  // Toujours rattachée à un service (plus de « périodes globales » serviceId null).
+  serviceId  String
   exerciceId Int?
   label      String
   etiquette  String?
@@ -332,7 +333,7 @@ model Period {
   color      String      @default("#6dceaa")
   position   Int         @default(0)
 
-  service  Service?        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  service  Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   exercice Exercice?       @relation(fields: [exerciceId], references: [id], onDelete: SetNull)
   slots    Slot[]
   bookings Booking[]
