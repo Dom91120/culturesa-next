@@ -92,6 +92,21 @@ function normalizeDemandeurIds(demandeurIds: number[] | undefined): number[] {
   return [...new Set((demandeurIds ?? []).filter((d) => Number.isInteger(d) && d > 0))];
 }
 
+/** Id de la période du service couvrant une date « YYYY-MM-DD », sinon null. Source
+ *  unique du rattachement d'un créneau ponctuel (création ET déplacement) — findFirst,
+ *  sans départage si deux périodes se chevauchent (cf. audit orderBy). */
+async function periodIdCoveringDate(serviceId: string, slotDate: string): Promise<number | null> {
+  const period = await prisma.period.findFirst({
+    where: {
+      serviceId,
+      dateStart: { lte: fromISO(slotDate) },
+      dateEnd: { gte: fromISO(slotDate) },
+    },
+    select: { id: true },
+  });
+  return period?.id ?? null;
+}
+
 // ─── Mirror generation (ported from api/slots.php save_recurring) ───
 
 type WantedMirror = { date: string; cap: number };
@@ -477,16 +492,9 @@ export async function addUniqueSlot(
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) return { ok: false, error: "Service introuvable" };
-  const period = await prisma.period.findFirst({
-    where: {
-      serviceId,
-      dateStart: { lte: fromISO(input.slotDate) },
-      dateEnd: { gte: fromISO(input.slotDate) },
-    },
-    select: { id: true },
-  });
-  if (!period) {
-    return { ok: false, error: `Aucune période active ne couvre la date ${input.slotDate}` };
+  const periodId = await periodIdCoveringDate(serviceId, input.slotDate);
+  if (periodId == null) {
+    return { ok: false, error: `Aucune période ne couvre la date ${input.slotDate}` };
   }
   const id = newRecurId();
   const demandeurIds = normalizeDemandeurIds(input.demandeurIds);
@@ -501,7 +509,7 @@ export async function addUniqueSlot(
           endTime: input.endTime,
           slotDate: fromISO(input.slotDate),
           capacity: input.capacity,
-          periodId: period.id,
+          periodId,
           jauge: input.jauge ?? false,
         },
       });
@@ -634,15 +642,8 @@ export async function moveUniqueSlot(
   });
   if (!slot) return { ok: false, error: "Créneau introuvable" };
   if (slot.parentSlotId) return { ok: false, error: "Un miroir ne se déplace pas directement." };
-  const period = await prisma.period.findFirst({
-    where: {
-      serviceId,
-      dateStart: { lte: fromISO(slotDate) },
-      dateEnd: { gte: fromISO(slotDate) },
-    },
-    select: { id: true },
-  });
-  if (!period) return { ok: false, error: `Aucune période active ne couvre la date ${slotDate}` };
+  const periodId = await periodIdCoveringDate(serviceId, slotDate);
+  if (periodId == null) return { ok: false, error: `Aucune période ne couvre la date ${slotDate}` };
   // Vérif « réservé » + update dans UNE transaction sérialisable : une réservation créée
   // entre le count et l'update ne peut plus passer inaperçue (cohérent avec les autres
   // mutations de slot, toutes transactionnelles).
@@ -656,7 +657,7 @@ export async function moveUniqueSlot(
         }
         await tx.slot.update({
           where: { id: slotId },
-          data: { startTime, endTime, slotDate: fromISO(slotDate), periodId: period.id },
+          data: { startTime, endTime, slotDate: fromISO(slotDate), periodId },
         });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
