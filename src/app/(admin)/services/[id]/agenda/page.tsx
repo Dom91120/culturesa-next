@@ -4,7 +4,7 @@ import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
-import { currentExerciceIdForService } from "@/server/services/exercice";
+import { currentExerciceIdForService, eligiblePeriodsWhere } from "@/server/services/exercice";
 import { deriveServiceModes } from "@/server/services/service-modes";
 import { AgendaGrid } from "./agenda-grid";
 
@@ -54,16 +54,12 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   // restent « actif » depuis la simplification des états) pour la nav ◀ exercice.
   const currentExoId = await currentExerciceIdForService(id);
   let periods = await prisma.period.findMany({
-    where: {
-      serviceId: id,
-      state: "actif",
-      ...(!service.showPreviousExercices && currentExoId != null
-        ? { exerciceId: currentExoId }
-        : {}),
-    },
+    where: eligiblePeriodsWhere(id, service.showPreviousExercices, currentExoId),
     orderBy: periodOrder,
     select: periodSelect,
   });
+  // Repli PROPRE à l'agenda : un service sans période propre retombe sur les périodes
+  // GLOBALES (serviceId null). Stats/éditions n'ont pas ce repli (périmètre par service).
   if (periods.length === 0) {
     periods = await prisma.period.findMany({
       where: { serviceId: null, state: "actif" },

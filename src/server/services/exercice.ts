@@ -654,6 +654,44 @@ export async function currentExerciceIdForService(serviceId: string): Promise<nu
   return current?.id ?? null;
 }
 
+/**
+ * Clause `where` des périodes ÉLIGIBLES d'un service (SOURCE UNIQUE, partagée par
+ * agenda / stats / éditions) : périodes actives de l'exercice COURANT, ou de TOUS les
+ * exercices non archivés si le service « affiche les exercices précédents » (les
+ * périodes des exercices passés restent « actif » depuis la simplification des états).
+ * Évite que ce filtre — jusqu'ici copié mot pour mot dans les 3 écrans — diverge.
+ */
+export function eligiblePeriodsWhere(
+  serviceId: string,
+  showPreviousExercices: boolean,
+  currentExoId: number | null,
+): Prisma.PeriodWhereInput {
+  return {
+    serviceId,
+    state: "actif",
+    ...(!showPreviousExercices && currentExoId != null ? { exerciceId: currentExoId } : {}),
+  };
+}
+
+/**
+ * À partir de périodes portant leur `exercice`, renvoie les exercices DISTINCTS triés
+ * par libellé + l'exercice sélectionné (param d'URL `spId`, sinon le plus récent = le
+ * dernier). Générique sur la forme de l'exercice (chaque écran sélectionne ses champs).
+ * Source unique de la dédup + sélection, partagée par stats et éditions.
+ */
+export function pickEligibleExercices<E extends { id: number; label: string }>(
+  periods: { exercice: E | null }[],
+  spId: number | undefined,
+): { exercices: E[]; selected: E | null } {
+  const map = new Map<number, E>();
+  for (const p of periods)
+    if (p.exercice && !map.has(p.exercice.id)) map.set(p.exercice.id, p.exercice);
+  const exercices = [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
+  const selected =
+    (spId != null && exercices.find((e) => e.id === spId)) || exercices.at(-1) || null;
+  return { exercices, selected };
+}
+
 export async function setShowPreviousExercices(serviceId: string, value: boolean): Promise<void> {
   await prisma.service.update({
     where: { id: serviceId },

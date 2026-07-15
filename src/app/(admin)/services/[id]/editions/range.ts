@@ -1,6 +1,10 @@
 import { prisma } from "@/server/db";
 import type { DatedSession } from "@/server/services/editions";
-import { currentExerciceIdForService } from "@/server/services/exercice";
+import {
+  currentExerciceIdForService,
+  eligiblePeriodsWhere,
+  pickEligibleExercices,
+} from "@/server/services/exercice";
 
 // Plage de dates partagée par les écrans « Plannings » et « Pointages » : vue
 // Hebdomadaire / Mensuelle / par Période (> 1 mois). Tout en UTC (cf. slots /
@@ -82,38 +86,27 @@ export async function resolveEditionExercice(
   });
   const currentExoId = await currentExerciceIdForService(serviceId);
   const periods = await prisma.period.findMany({
-    where: {
-      serviceId,
-      state: "actif",
-      ...(!svc?.showPreviousExercices && currentExoId != null ? { exerciceId: currentExoId } : {}),
-    },
+    where: eligiblePeriodsWhere(serviceId, !!svc?.showPreviousExercices, currentExoId),
     select: {
       id: true,
       exercice: { select: { id: true, label: true, type: true, dateStart: true, dateEnd: true } },
     },
   });
-  const map = new Map<number, EditionExerciceOption>();
-  for (const p of periods) {
-    const ex = p.exercice;
-    if (!ex) continue;
-    let e = map.get(ex.id);
-    if (!e) {
-      e = {
-        id: ex.id,
-        label: ex.label,
-        type: ex.type,
-        dateStart: ex.dateStart,
-        dateEnd: ex.dateEnd,
-        periodIds: [],
-      };
-      map.set(ex.id, e);
-    }
-    e.periodIds.push(p.id);
-  }
-  const list = [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
-  const spId = spExercice ? Number(spExercice) : Number.NaN;
-  const selected = list.find((e) => e.id === spId) ?? list[list.length - 1] ?? null;
-  return { exercices: list.map((e) => ({ id: e.id, label: e.label })), selected };
+  const { exercices, selected } = pickEligibleExercices(
+    periods,
+    spExercice ? Number(spExercice) : undefined,
+  );
+  // Ids des périodes de l'exercice sélectionné (pour scoper les données des éditions).
+  const selectedOption: EditionExerciceOption | null = selected
+    ? {
+        ...selected,
+        periodIds: periods.filter((p) => p.exercice?.id === selected.id).map((p) => p.id),
+      }
+    : null;
+  return {
+    exercices: exercices.map((e) => ({ id: e.id, label: e.label })),
+    selected: selectedOption,
+  };
 }
 
 type Trimestre = { label: string; from: Date; to: Date };

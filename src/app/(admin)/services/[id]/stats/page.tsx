@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
-import { currentExerciceIdForService } from "@/server/services/exercice";
+import {
+  currentExerciceIdForService,
+  eligiblePeriodsWhere,
+  pickEligibleExercices,
+} from "@/server/services/exercice";
 import { getServiceStats, type LabeledCount, type StatsType } from "@/server/services/stats";
 import { StatsFilters } from "./stats-filters";
 import { StatsToolbar } from "./stats-toolbar";
@@ -600,13 +604,7 @@ export default async function StatsPage({
   // des états). Le sélecteur porte sur ces exercices.
   const currentExoId = await currentExerciceIdForService(id);
   const periodRows = await prisma.period.findMany({
-    where: {
-      serviceId: id,
-      state: "actif",
-      ...(!service.showPreviousExercices && currentExoId != null
-        ? { exerciceId: currentExoId }
-        : {}),
-    },
+    where: eligiblePeriodsWhere(id, service.showPreviousExercices, currentExoId),
     orderBy: [{ dateStart: "asc" }, { id: "asc" }],
     select: {
       id: true,
@@ -618,26 +616,17 @@ export default async function StatsPage({
     },
   });
 
-  // Exercices distincts (triés par libellé ; le plus récent en dernier = défaut).
+  // Exercices distincts + sélection (source unique, comme agenda/éditions).
   const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
-  const exoMap = new Map<
-    number,
-    { id: number; label: string; dateStart: string | null; dateEnd: string | null }
-  >();
-  for (const p of periodRows) {
-    if (p.exercice && !exoMap.has(p.exercice.id)) {
-      exoMap.set(p.exercice.id, {
-        id: p.exercice.id,
-        label: p.exercice.label,
-        dateStart: iso(p.exercice.dateStart),
-        dateEnd: iso(p.exercice.dateEnd),
-      });
-    }
-  }
-  const exercices = [...exoMap.values()].sort((a, b) => a.label.localeCompare(b.label));
-  const spExoId = sp.exercice ? Number(sp.exercice) : Number.NaN;
-  const selectedExercice =
-    exercices.find((e) => e.id === spExoId) ?? exercices[exercices.length - 1] ?? null;
+  const picked = pickEligibleExercices(periodRows, sp.exercice ? Number(sp.exercice) : undefined);
+  const exercices = picked.exercices.map((e) => ({ id: e.id, label: e.label }));
+  const selectedExercice = picked.selected
+    ? {
+        id: picked.selected.id,
+        dateStart: iso(picked.selected.dateStart),
+        dateEnd: iso(picked.selected.dateEnd),
+      }
+    : null;
 
   // « L'exercice définit la plage » : bornes = celles de l'exercice, sauf from/to manuels
   // (affinage à l'intérieur de l'exercice).
