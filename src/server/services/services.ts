@@ -2,13 +2,6 @@ import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 
-export function listServices() {
-  return prisma.service.findMany({
-    orderBy: [{ position: "asc" }, { label: "asc" }],
-    include: { _count: { select: { slots: true, periods: true, bookings: true } } },
-  });
-}
-
 /**
  * Services administrables par l'usager courant (liste + nav admin) : TOUS pour un
  * administrateur ; uniquement ceux gérés (relation ServiceManager) pour un gestionnaire

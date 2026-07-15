@@ -3,10 +3,6 @@
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
 
-// Contrat {ok,error} partagé des server actions de référentiel — réexporté pour les
-// consommateurs (demandeurs/structures-editor) qui l'importaient depuis ce module.
-export type { RefActionResult };
-
 type RowBase = { id: number | null; label: string };
 
 /**

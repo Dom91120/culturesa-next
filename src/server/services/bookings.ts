@@ -1,9 +1,9 @@
-import { Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
-import { type BookingCreateInput, bookingCreateSchema } from "@/schemas/booking";
+import type { BookingCreateInput } from "@/schemas/booking";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
@@ -408,7 +408,7 @@ export async function assertNotSchoolHolidayForUser(
  * Cœur transactionnel de la création ponctuelle (validation + anti-surbooking +
  * limites + create), exécuté dans un `tx` fourni. Permet de composer cette opération
  * avec d'autres dans UNE seule transaction (panier atomique `commitDraft`). L'input
- * doit être DÉJÀ validé (cf. `createUniqueBooking`).
+ * doit être DÉJÀ validé (bookingCreateSchema) par l'appelant.
  */
 export async function createUniqueBookingInTx(
   tx: Prisma.TransactionClient,
@@ -503,37 +503,6 @@ export async function createUniqueBookingInTx(
   });
 }
 
-export async function createUniqueBooking(
-  userId: string,
-  rawInput: BookingCreateInput,
-  validated = false,
-) {
-  // Validation runtime (bornes compteurs, thème ≤ 255) : le type seul ne protège
-  // pas une server action des entrées hors bornes (audit architecture).
-  const parsedInput = bookingCreateSchema.safeParse(rawInput);
-  if (!parsedInput.success) {
-    throw new BookingError(parsedInput.error.issues[0]?.message ?? "Données invalides.");
-  }
-  const input = parsedInput.data;
-  try {
-    return await prisma.$transaction(
-      (tx) => createUniqueBookingInTx(tx, userId, input, validated),
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
-  } catch (e) {
-    if (e instanceof BookingError) throw e;
-    // Violation de l'unicité (uq_recurring) = réservation en double.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      throw new BookingError("Vous avez déjà réservé ce créneau.");
-    }
-    // Échec de sérialisation sous forte concurrence → invite à réessayer.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      throw new BookingError("Réservation simultanée détectée, merci de réessayer.");
-    }
-    throw e;
-  }
-}
-
 /**
  * Annule une réservation de l'usager dans un `tx` fourni (composable, panier atomique).
  * Renvoie true si supprimée. Verrou pointage : une réservation pointée, ou une
@@ -556,10 +525,6 @@ export async function cancelUserBookingInTx(
   if (pointedChildren > 0) return false;
   const res = await tx.booking.deleteMany({ where: { id: bookingId, userId } });
   return res.count > 0;
-}
-
-export async function cancelUserBooking(userId: string, bookingId: number) {
-  return prisma.$transaction((tx) => cancelUserBookingInTx(tx, userId, bookingId));
 }
 
 /**
@@ -607,9 +572,6 @@ export type UserAgendaBooking = {
   theme: string;
   validated: boolean;
   pointage: "present" | "absent" | null;
-  name: string;
-  demandeur: string;
-  structure: string;
   mine: boolean;
 };
 
@@ -628,7 +590,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       nom: true,
       prenom: true,
       email: true,
-      niveau: true,
       enfants: true,
       accompagnants: true,
     },
@@ -863,7 +824,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       label: service.label,
       bookingDelay: service.bookingDelay,
       capacity: service.capacity,
-      semaineAb: service.semaineAb,
       themesMode: service.themesMode,
       // Maximums de l'exercice VISIBLE (portés par l'exercice ; le DTO garde les
       // clés historiques pour la grille). Sans exercice visible : 1/1 (rien n'est
@@ -911,9 +871,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         // Pointage (présence/absence) : donnée personnelle → exposé seulement pour MES
         // réservations. La grille ne lit le pointage que sur `mine` (cf. impression).
         pointage: b.userId === userId ? b.pointage : null,
-        name: "",
-        demandeur: "",
-        structure: "",
         mine: b.userId === userId,
       }),
     ),
@@ -933,7 +890,6 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       nom: user?.nom ?? "",
       prenom: user?.prenom ?? "",
       email: user?.email ?? "",
-      niveau: user?.niveau ?? "",
       enfants: user?.enfants ?? 0,
       accompagnants: user?.accompagnants ?? 0,
     },

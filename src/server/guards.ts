@@ -48,21 +48,3 @@ export async function requireServiceManager(serviceId: string) {
   if (!mgr) redirect("/configuration");
   return session;
 }
-
-/**
- * Variante NON bloquante de `requireServiceManager` (ne redirige pas) : renvoie `true` si
- * l'utilisateur courant peut administrer ce service (administrateur, ou gestionnaire rattaché).
- * Pour piloter l'affichage (ex. autoriser la création de types d'e-mails dans l'UI).
- */
-export async function canManageService(serviceId: string): Promise<boolean> {
-  const session = await getSession();
-  if (!session?.user) return false;
-  const role = (session.user as { role?: Role }).role ?? "utilisateur";
-  if (role === "administrateur") return true;
-  if (role !== "gestionnaire") return false;
-  const mgr = await prisma.serviceManager.findUnique({
-    where: { userId_serviceId: { userId: session.user.id, serviceId } },
-    select: { serviceId: true },
-  });
-  return !!mgr;
-}

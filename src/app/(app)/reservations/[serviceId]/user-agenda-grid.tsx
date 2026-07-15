@@ -49,7 +49,6 @@ type Service = {
   label: string;
   bookingDelay: number;
   capacity: number;
-  semaineAb: boolean;
   themesMode: "libre" | "liste";
   maxReservations: number;
   maxReservationsPeriod: number;
@@ -917,9 +916,6 @@ type Booking = {
   theme: string;
   validated: boolean;
   pointage: Pointage;
-  name: string;
-  demandeur: string;
-  structure: string;
   // Réservation de l'usager courant (agenda usager) → badge ✅/⏳ + annulation.
   mine: boolean;
   // Occurrence SYNTHÉTIQUE d'une récurrente détenue par l'usager, non matérialisée
@@ -1002,7 +998,6 @@ export function UserAgendaGrid({
     nom: string;
     prenom: string;
     email: string;
-    niveau: string;
     enfants: number;
     accompagnants: number;
   };

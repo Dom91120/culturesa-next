@@ -10,7 +10,7 @@ export const ONBOARDING_REPLAY_EVENT = "culturesa:onboarding-replay";
 // `image` (optionnel) : illustration de fin d'étape, rendue sous le texte dans un
 // conteneur extensible qui la CENTRE verticalement dans l'espace restant du corps.
 type Step = { title: string; body: ReactNode; image?: ReactNode };
-type ServiceLite = { label: string; icon: string | null };
+type ServiceLite = { label: string };
 
 /** Énumération française : « A », « A et B », « A, B et C ». */
 function listFr(items: string[]): string {

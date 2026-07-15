@@ -29,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <OnboardingModal
         variant="usager"
         open={needsOnboarding}
-        services={services.map((s) => ({ label: s.label, icon: s.icon }))}
+        services={services.map((s) => ({ label: s.label }))}
         hasGauge={hasGauge}
       />
     </UserShell>

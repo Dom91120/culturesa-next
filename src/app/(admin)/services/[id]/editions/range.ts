@@ -62,24 +62,6 @@ export type EditionExercice = {
   dateEnd: Date | null;
 };
 
-/** Exercice courant (le plus récent) d'un service — base des vues Trimestriel/Annuel. */
-export async function fetchCurrentExercice(serviceId: string): Promise<EditionExercice | null> {
-  const rows = await prisma.exercice.findMany({
-    where: { serviceId },
-    select: { label: true, type: true, dateStart: true, dateEnd: true },
-  });
-  if (rows.length === 0) return null;
-  rows.sort((a, b) => {
-    const as = a.dateStart?.getTime();
-    const bs = b.dateStart?.getTime();
-    if (as != null && bs != null) return bs - as;
-    if (as != null) return -1;
-    if (bs != null) return 1;
-    return b.label.localeCompare(a.label);
-  });
-  return rows[0];
-}
-
 /** Exercice sélectionnable dans les Éditions + ids de ses périodes (pour scoper les données). */
 export type EditionExerciceOption = EditionExercice & { id: number; periodIds: number[] };
 
