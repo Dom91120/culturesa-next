@@ -22,6 +22,7 @@ import {
   dayKeyFromYmd,
   type ExerciceOpening,
   gridGeometry,
+  isBookingLockedByPointage,
   type LayoutItem,
   layoutOverlaps,
   mondayOf,
@@ -1734,8 +1735,11 @@ export function AgendaGrid({
   // Réservation verrouillée par le pointage : elle-même pointée (ponctuelle/miroir),
   // OU parent récurrent dont un miroir est pointé. Verrouillée = ni validation, ni
   // déplacement, ni suppression, ni copie (cf. règles métier).
+  // Prédicat de verrou PARTAGÉ avec le serveur (isBookingLockedByPointage) : inclut
+  // désormais le cas MIROIR (parentBookingId non null) que le client omettait — l'UI
+  // ne propose plus valider/déplacer/supprimer sur un enfant que le serveur refuserait.
   const lockedByPointage = (bk: Booking): boolean =>
-    bk.pointage != null || (bk.bookingType === "recurring" && parentsWithPointedChild.has(bk.id));
+    isBookingLockedByPointage(bk, parentsWithPointedChild.has(bk.id));
 
   function onBlockQuickAction(bk: Booking): boolean {
     if (validation) {

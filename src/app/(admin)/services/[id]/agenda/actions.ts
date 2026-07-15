@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import { isBookingLockedByPointage } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
 import { greeting } from "@/lib/mail-render";
 import { hasBothParticipants, hasBothParticipantsMsg } from "@/schemas/booking";
@@ -79,10 +80,9 @@ async function bookingLocked(b: {
   parentBookingId: number | null;
   pointage: string | null;
 }): Promise<boolean> {
-  if (b.parentBookingId != null) return true; // miroir : immuable
-  if (b.pointage != null) return true; // réservation pointée
-  if (b.bookingType === "recurring" && (await parentLockedByPointage(b.id))) return true;
-  return false;
+  // Miroir pointé calculé en BDD ; le reste du prédicat est partagé avec le client.
+  const hasPointedChild = b.bookingType === "recurring" && (await parentLockedByPointage(b.id));
+  return isBookingLockedByPointage(b, hasPointedChild);
 }
 
 export async function setBookingValidatedAction(

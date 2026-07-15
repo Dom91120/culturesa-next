@@ -35,6 +35,23 @@ export const DAY_NAMES: Record<string, string> = {
 // l'index ISO 1=lun..7=dim utilisé par la génération de miroirs (slots.ts).
 export const ISO_DAY_KEYS = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"] as const;
 
+/**
+ * Une réservation est-elle VERROUILLÉE pour la gestion (valider / déplacer / supprimer /
+ * copier) ? Prédicat PUR partagé serveur (bookingLocked) ET client (lockedByPointage) —
+ * l'appelant fournit `hasPointedChild` (miroir pointé) car sa source diffère (requête BDD
+ * côté serveur, set précalculé côté client). Règles : un MIROIR (parentBookingId non null)
+ * est immuable ; une résa POINTÉE l'est ; un PARENT récurrent à miroir pointé l'est. Le
+ * pointage lui-même n'est PAS gouverné par ce verrou.
+ */
+export function isBookingLockedByPointage(
+  bk: { pointage: string | null; parentBookingId: number | null; bookingType: string },
+  hasPointedChild: boolean,
+): boolean {
+  if (bk.parentBookingId != null) return true;
+  if (bk.pointage != null) return true;
+  return bk.bookingType === "recurring" && hasPointedChild;
+}
+
 export function ymd(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
