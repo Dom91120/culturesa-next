@@ -1,4 +1,5 @@
 import { DAY_NAMES } from "@/lib/agenda-core";
+import { greeting } from "@/lib/mail-render";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
@@ -186,7 +187,7 @@ export async function sendBookingConfirmationMail(
       await sendTemplatedMail({
         to: r.email,
         kind,
-        vars: { ...baseVars, salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom },
+        vars: { ...baseVars, salutation: greeting(prenom), prenom },
         serviceId: params.serviceId,
       });
     }
@@ -290,7 +291,7 @@ export async function sendBookingConfirmationMailsBatch(
         const prenom = r.personal ? r.prenom : "";
         const vars = {
           ...baseVars,
-          salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
+          salutation: greeting(prenom),
           prenom,
         };
         await sendMailOrQueue({ to: r.email, ...buildTemplatedMail(tpl, vars, appUrl) });
@@ -363,7 +364,7 @@ export async function sendBookingCancellationMail(
       await sendTemplatedMail({
         to: r.email,
         kind,
-        vars: { ...baseVars, salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom },
+        vars: { ...baseVars, salutation: greeting(prenom), prenom },
         serviceId: params.serviceId,
       });
     }

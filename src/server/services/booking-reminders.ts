@@ -1,3 +1,4 @@
+import { greeting } from "@/lib/mail-render";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
@@ -171,7 +172,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
           const prenom = r.personal ? r.prenom : "";
           const vars = {
             ...baseVars,
-            salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
+            salutation: greeting(prenom),
             prenom,
           };
           await sendMailOrQueue({ to: r.email, ...buildTemplatedMail(tpl, vars, appUrl) });

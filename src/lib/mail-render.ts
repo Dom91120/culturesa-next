@@ -5,6 +5,12 @@ import { escapeHtml } from "@/lib/email-theme";
 // client pour l'aperçu de l'éditeur (échanges) — un seul moteur pour que l'aperçu ne
 // mente jamais sur l'e-mail effectivement envoyé.
 
+/** Salutation d'e-mail (SOURCE UNIQUE) : « Bonjour Prénom, » avec prénom, « Bonjour, » sans. */
+export function greeting(name?: string | null): string {
+  const n = name?.trim();
+  return n ? `Bonjour ${n},` : "Bonjour,";
+}
+
 /** Résout les blocs conditionnels {{#if nom}}…{{/if}} (gardés si la variable est non vide). */
 export function applyConditionals(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_m, key, inner) =>

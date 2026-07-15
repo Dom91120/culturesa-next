@@ -1,4 +1,5 @@
 import { emailButton } from "@/lib/email-theme";
+import { greeting } from "@/lib/mail-render";
 import { getAppUrl } from "@/server/config";
 import { hmacSign, timingSafeEqualStr } from "@/server/crypto";
 import { prisma } from "@/server/db";
@@ -63,7 +64,7 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
   const base = await getAppUrl();
   const url = `${base}/auth/supprimer-compte?token=${encodeURIComponent(makeToken(userId))}`;
   const prenom = user.prenom?.trim() ?? "";
-  const vars = { salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom, url };
+  const vars = { salutation: greeting(prenom), prenom, url };
 
   await sendTemplatedMail({
     to: email,

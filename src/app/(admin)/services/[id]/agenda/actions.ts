@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { todayParisISO } from "@/lib/booking-delay";
+import { greeting } from "@/lib/mail-render";
 import { hasBothParticipants, hasBothParticipantsMsg } from "@/schemas/booking";
 import { DAYS } from "@/schemas/config";
 import {
@@ -497,7 +498,7 @@ export async function deleteBookingAdminAction(
     });
     const prenom = booking.user?.prenom?.trim() ?? "";
     const vars: Record<string, string> = {
-      salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,",
+      salutation: greeting(prenom),
       prenom,
       service: serviceLabel,
       creneau: slotLabel,

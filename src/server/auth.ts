@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { emailButton } from "@/lib/email-theme";
+import { greeting } from "@/lib/mail-render";
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/password";
 import { verifyCaptcha } from "@/server/captcha";
 import { prisma } from "@/server/db";
@@ -27,7 +28,7 @@ async function sendAccountMail(
     (
       await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } })
     )?.prenom?.trim() ?? "";
-  const vars = { salutation: prenom ? `Bonjour ${prenom},` : "Bonjour,", prenom, url };
+  const vars = { salutation: greeting(prenom), prenom, url };
   await sendTemplatedMail({
     to: email,
     kind,

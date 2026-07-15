@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { greeting } from "@/lib/mail-render";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendTemplatedMail } from "@/server/services/mail-send";
@@ -429,7 +430,7 @@ export async function markDeletionNotice(userIds: string[]): Promise<number> {
     const name = `${u.prenom} ${u.nom}`.trim() || u.email;
     try {
       const vars = {
-        salutation: `Bonjour ${name},`,
+        salutation: greeting(name),
         prenom: u.prenom?.trim() ?? "",
         annees: `${years} an(s)`,
         delai: `${graceDays} jours`,
