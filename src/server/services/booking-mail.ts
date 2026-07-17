@@ -140,60 +140,15 @@ export type BookingConfirmationParams = {
 
 /**
  * Envoie à l'usager l'e-mail de confirmation d'une réservation (ou demande de
- * réservation selon `validated`) : détail du créneau + démarches suivantes.
- * Totalement best-effort : toute erreur est seulement journalisée.
+ * réservation selon le déclencheur) : détail du créneau + démarches suivantes.
+ * Totalement best-effort. Simple délégation à la version BATCH (audit 2026-07-17 :
+ * les deux implémentations complètes divergeaient — réglages, variables de gabarit
+ * et salutations vivent désormais en UN seul endroit, la batch).
  */
 export async function sendBookingConfirmationMail(
   params: BookingConfirmationParams,
 ): Promise<void> {
-  try {
-    // Préférence « Échanges » (globale) : cette ACTION envoie-t-elle un e-mail ?
-    if (!(await isTriggerEnabled(params.trigger))) return;
-
-    // Destinataire(s) selon le réglage de l'action (défaut = l'usager concerné).
-    const recipients = await resolveTriggerRecipients(params.trigger, params.serviceId, {
-      userId: params.userId,
-    });
-    if (recipients.length === 0) return;
-
-    // Nom de l'usager concerné (variable {{usager}}, utile quand le destinataire ≠ usager).
-    const concerned = await prisma.user.findUnique({
-      where: { id: params.userId },
-      select: { prenom: true, nom: true },
-    });
-    const usager = `${concerned?.prenom ?? ""} ${concerned?.nom ?? ""}`.trim();
-
-    const periodLabel = await resolvePeriodLabel({
-      serviceId: params.serviceId,
-      periodId: params.periodId,
-      slotDate: params.slot.slotDate,
-    });
-
-    // Variables indépendantes du destinataire (contexte de la réservation).
-    const baseVars: Record<string, string> = {
-      usager,
-      service: params.serviceLabel,
-      creneau: formatSlotLabel(params.slot),
-      periode: periodLabel,
-      participants: participantsLabel(params.enfants, params.accompagnants),
-      theme: params.theme.trim(),
-    };
-
-    // Type d'e-mail EFFECTIF (re-routage éventuel du service, cf. « Échanges par mail »).
-    const kind = await resolveTriggerKind(params.trigger);
-    for (const r of recipients) {
-      // Salutation personnalisée uniquement pour l'usager concerné.
-      const prenom = r.personal ? r.prenom : "";
-      await sendTemplatedMail({
-        to: r.email,
-        kind,
-        vars: { ...baseVars, salutation: greeting(prenom), prenom },
-        serviceId: params.serviceId,
-      });
-    }
-  } catch (e) {
-    console.error("[sendBookingConfirmationMail] erreur:", e);
-  }
+  await sendBookingConfirmationMailsBatch([params]);
 }
 
 /** Participants lisibles (« 2 enfants, 1 accompagnant »). */
