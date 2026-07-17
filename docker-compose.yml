@@ -23,12 +23,14 @@ services:
       # Better Auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${APP_URL}
-      # SMTP (Nodemailer)
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
+      # SMTP (Nodemailer) — OPTIONNEL : simple repli quand la configuration
+      # n'est pas renseignée en base (écran admin Messagerie, clés mail.*).
+      # `:-` = défaut vide si absent du .env (pas d'avertissement compose).
+      #SMTP_HOST: ${SMTP_HOST:-}
+      #SMTP_PORT: ${SMTP_PORT:-}
+      #SMTP_USER: ${SMTP_USER:-}
+      #SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      #SMTP_FROM: ${SMTP_FROM:-}
       # URL publique exposée au client (Better Auth)
       NEXT_PUBLIC_APP_URL: ${APP_URL}
       # Secret partagé avec le conteneur cron

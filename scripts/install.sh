@@ -119,8 +119,8 @@ fi
 set_env ADMIN_PASSWORD "$APASS"
 ok "Compte admin : ${AEMAIL}"
 
-if grep -qi 'change-moi\|smtp.exemple.fr' <<< "$(get_env SMTP_HOST)$(get_env SMTP_PASSWORD)"; then
-  warn "SMTP non configuré dans .env : l'envoi d'e-mails (confirmations, mot de passe oublié) ne fonctionnera pas tant que SMTP_* n'est pas renseigné."
+if [ -z "$(get_env SMTP_HOST)" ] || grep -qi 'change-moi\|smtp.exemple.fr' <<< "$(get_env SMTP_HOST)$(get_env SMTP_PASSWORD)"; then
+  warn "SMTP non configuré dans .env : pensez à le renseigner depuis l'interface d'administration (Messagerie) — sans cela, aucun e-mail (confirmations, mot de passe oublié) ne partira."
 fi
 
 # ── 2. Build + démarrage de la stack ──

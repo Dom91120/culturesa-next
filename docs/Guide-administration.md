@@ -56,7 +56,7 @@ committer le vrai `.env`** (il est déjà dans `.gitignore`).
 | `TRUSTED_ORIGINS` | Origines supplémentaires de confiance (anti-CSRF), optionnel |
 | `CRON_SECRET` | Secret partagé entre le conteneur cron et les routes `/api/cron` |
 | `CAPTCHA_DISABLED` | `true` pour désactiver le CAPTCHA d'inscription (tests) ; sinon actif |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | Envoi des e-mails (Nodemailer) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | **Optionnel** — repli d'envoi d'e-mails ; la configuration SMTP se fait normalement depuis l'admin (Messagerie), stockée en base |
 
 Génération des secrets :
 
