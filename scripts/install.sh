@@ -125,6 +125,25 @@ fi
 
 # ── 2. Build + démarrage de la stack ──
 say "2/5 · Construction et démarrage des conteneurs"
+
+# Dossier des dumps (bind-mount ./backups), créé AVANT le premier « up » : sinon Docker
+# le crée lui-même en root:root et le conteneur app — utilisateur nextjs, UID/GID 1001
+# (cf. Dockerfile) — ne peut plus y écrire : sauvegarde manuelle, téléversement et
+# suppression échouent depuis l'onglet admin « Sauvegardes ». Le cron, lui, tourne en
+# root et écrit dans tous les cas.
+BACKUPS_OWNER="1001:1001"
+mkdir -p backups
+# (chown en condition, jamais en commande nue : sous `set -e`, un échec doit mener au
+# warn ci-dessous, pas avorter l'installation.)
+if [ "$(stat -c '%u:%g' backups)" != "$BACKUPS_OWNER" ]; then
+  if { [ "$(id -u)" -eq 0 ] && chown "$BACKUPS_OWNER" backups; } ||
+     { command -v sudo >/dev/null 2>&1 && sudo chown "$BACKUPS_OWNER" backups; }; then
+    ok "./backups → propriétaire $BACKUPS_OWNER"
+  else
+    warn "./backups n'appartient pas à $BACKUPS_OWNER : les sauvegardes manuelles depuis l'admin échoueront. Corrige avec :  sudo chown $BACKUPS_OWNER backups"
+  fi
+fi
+
 $DC up -d --build app db cron
 
 # ── 3. Attente de la base ──

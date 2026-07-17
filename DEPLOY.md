@@ -50,9 +50,13 @@ En non-interactif (CI) : `APP_DOMAIN=… ADMIN_EMAIL=… ADMIN_PASSWORD=… ./sc
 
 ```bash
 cp .env.example .env
-nano .env                       # domaine, mots de passe, SMTP, ADMIN_EMAIL/ADMIN_PASSWORD
+nano .env                       # domaine, mots de passe, ADMIN_EMAIL/ADMIN_PASSWORD
 openssl rand -base64 32         # -> BETTER_AUTH_SECRET
 openssl rand -hex 24            # -> CRON_SECRET
+
+# Dossier des dumps, AVANT le premier "up" (sinon Docker le crée en root:root et
+# l'app, qui tourne en UID 1001, ne peut plus y écrire) :
+mkdir -p backups && sudo chown 1001:1001 backups
 
 docker compose up -d --build    # build + démarrage (migrations jouées à l'entrypoint)
 docker compose run --rm init    # crée le compte admin + référentiels e-mails (db:init)
@@ -61,6 +65,12 @@ docker compose logs -f app
 
 Au démarrage, `docker-entrypoint.sh` applique automatiquement les migrations
 Prisma (`prisma migrate deploy`), puis lance le serveur Node.
+
+> Le dossier `./backups` doit appartenir à **1001:1001** (utilisateur `nextjs` de
+> l'image) : c'est lui que le conteneur `app` utilise pour la sauvegarde manuelle,
+> le téléversement et la suppression de dumps (onglet admin « Sauvegardes »). Le
+> conteneur `cron` tourne en root et écrit dans tous les cas. `scripts/install.sh`
+> s'en charge automatiquement.
 
 ### Données de démonstration (optionnel, hors prod)
 
