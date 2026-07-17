@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { isBookingLockedByPointage } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
+import { slotWeekTag } from "@/lib/iso-week";
 import {
   bookingAccompagnantsSchema,
   bookingEnfantsSchema,
@@ -470,6 +471,75 @@ export async function deleteSlotAction(
   const res = await deleteSlots(serviceId, [slotId]);
   revalidatePath(`/services/${serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+/**
+ * Supprime un créneau ponctuel ET tous ses JUMEAUX de la période (« Création
+ * multiple ») : les ponctuels AUTONOMES de la même période partageant jour de
+ * semaine, horaires, capacité, jauge et demandeurs autorisés. La parité A/B du
+ * créneau de référence est respectée quand le service est en mode A/B (on ne
+ * supprime que les semaines de même parité). La correspondance est recalculée
+ * CÔTÉ SERVEUR depuis le créneau de référence (la liste client peut être périmée).
+ */
+export async function deleteSlotSeriesAction(
+  serviceId: string,
+  slotId: string,
+): Promise<{ ok: boolean; deleted?: number; error?: string }> {
+  await requireServiceManager(serviceId);
+  const ref = await prisma.slot.findFirst({
+    where: { id: slotId, serviceId, slotType: "unique", parentSlotId: null },
+    select: {
+      slotDate: true,
+      periodId: true,
+      startTime: true,
+      endTime: true,
+      capacity: true,
+      jauge: true,
+      demandeurs: { select: { demandeurId: true } },
+      service: { select: { recurrentMode: true, semaineAb: true } },
+    },
+  });
+  if (!ref?.slotDate) return { ok: false, error: "Créneau introuvable." };
+  // Sans période de rattachement, la « série » n'est pas définissable → suppression simple.
+  if (ref.periodId == null) {
+    const res = await deleteSlots(serviceId, [slotId]);
+    revalidatePath(`/services/${serviceId}/agenda`);
+    return res.ok ? { ok: true, deleted: res.deleted } : { ok: false, error: res.error };
+  }
+  const abMode = ref.service.recurrentMode && ref.service.semaineAb;
+  const refDow = ref.slotDate.getUTCDay();
+  const refParity = slotWeekTag(ref.slotDate.toISOString().slice(0, 10));
+  const demKey = (rows: { demandeurId: number }[]) =>
+    rows
+      .map((d) => d.demandeurId)
+      .sort((a, b) => a - b)
+      .join(",");
+  const refDem = demKey(ref.demandeurs);
+  const candidates = await prisma.slot.findMany({
+    where: {
+      serviceId,
+      slotType: "unique",
+      parentSlotId: null,
+      periodId: ref.periodId,
+      startTime: ref.startTime,
+      endTime: ref.endTime,
+      capacity: ref.capacity,
+      jauge: ref.jauge,
+      slotDate: { not: null },
+    },
+    select: { id: true, slotDate: true, demandeurs: { select: { demandeurId: true } } },
+  });
+  const ids = candidates
+    .filter((c) => {
+      if (!c.slotDate || c.slotDate.getUTCDay() !== refDow) return false;
+      if (abMode && slotWeekTag(c.slotDate.toISOString().slice(0, 10)) !== refParity) return false;
+      return demKey(c.demandeurs) === refDem;
+    })
+    .map((c) => c.id);
+  if (!ids.includes(slotId)) ids.push(slotId); // le créneau de référence part dans tous les cas
+  const res = await deleteSlots(serviceId, ids);
+  revalidatePath(`/services/${serviceId}/agenda`);
+  return res.ok ? { ok: true, deleted: res.deleted } : { ok: false, error: res.error };
 }
 
 /**

@@ -64,6 +64,7 @@ import {
   cutBookingAction,
   deleteBookingAdminAction,
   deleteSlotAction,
+  deleteSlotSeriesAction,
   listAgendaSessionsAction,
   listAgendaUsersAction,
   moveBookingAction,
@@ -1312,6 +1313,41 @@ export function AgendaGrid({
     if (!slotDeleteTarget) return;
     runResult(deleteSlotAction(service.id, slotDeleteTarget));
     setSlotDeleteTarget(null);
+  }
+
+  // « Création multiple » : supprime le créneau ponctuel ET tous ses jumeaux de la
+  // période (le serveur recalcule la série depuis le créneau de référence).
+  function confirmDeleteSlotSeries() {
+    if (!slotDeleteTarget) return;
+    runResult(deleteSlotSeriesAction(service.id, slotDeleteTarget));
+    setSlotDeleteTarget(null);
+  }
+
+  // Jumeaux du créneau ponctuel `target` sur sa période (affichage de la modale de
+  // suppression en « Création multiple ») : ponctuels AUTONOMES au même jour de
+  // semaine, mêmes horaires/capacité/jauge/demandeurs — même parité A/B en mode A/B.
+  // Le décompte client sert à l'AFFICHAGE ; la série effective est recalculée côté
+  // serveur (deleteSlotSeriesAction).
+  function countSlotSeries(targetId: string): number {
+    const target = uniqueSlots.find((s) => s.id === targetId && !s.parentSlotId) ?? null;
+    if (!target?.slotDate) return 0;
+    const p = periodCoveringDate(target.slotDate);
+    if (!p) return 0;
+    const dow = dayKeyFromYmd(target.slotDate);
+    const parity = slotWeekTag(target.slotDate);
+    const demKey = (id: string) => [...(slotDemandeurs[id] ?? [])].sort((a, b) => a - b).join(",");
+    const refDem = demKey(target.id);
+    return uniqueSlots.filter((s) => {
+      if (s.parentSlotId || !s.slotDate) return false;
+      if (p.dateStart && s.slotDate < p.dateStart) return false;
+      if (p.dateEnd && s.slotDate > p.dateEnd) return false;
+      if (dayKeyFromYmd(s.slotDate) !== dow) return false;
+      if (abMode && slotWeekTag(s.slotDate) !== parity) return false;
+      if (s.startTime !== target.startTime || s.endTime !== target.endTime) return false;
+      if ((s.capacity ?? null) !== (target.capacity ?? null) || s.jauge !== target.jauge)
+        return false;
+      return demKey(s.id) === refDem;
+    }).length;
   }
 
   // Le créneau `b` peut-il recevoir un collage ? (= mêmes règles que cellCreatable :
@@ -3587,7 +3623,9 @@ export function AgendaGrid({
           );
         })()}
 
-      {/* Confirmation de suppression d'un créneau (mode création). */}
+      {/* Confirmation de suppression d'un créneau (mode création). En « Création
+          multiple », un ponctuel avec des jumeaux sur la période propose aussi la
+          suppression de toute la série. */}
       {slotDeleteTarget &&
         (() => {
           const slot =
@@ -3595,11 +3633,14 @@ export function AgendaGrid({
             uniqueSlots.find((s) => s.id === slotDeleteTarget) ??
             null;
           const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
+          const seriesCount = multiCreate ? countSlotSeries(slotDeleteTarget) : 0;
           return (
             <SlotDeleteModal
               timePart={timePart}
+              seriesCount={seriesCount > 1 ? seriesCount : undefined}
               onCancel={() => setSlotDeleteTarget(null)}
               onConfirm={confirmDeleteSlot}
+              onConfirmSeries={seriesCount > 1 ? confirmDeleteSlotSeries : undefined}
             />
           );
         })()}

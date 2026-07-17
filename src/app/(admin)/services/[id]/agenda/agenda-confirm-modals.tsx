@@ -2,17 +2,30 @@
 
 import { ModalOverlay } from "@/components/agenda-shared";
 
-/** Confirmation de suppression d'un créneau vide (mode création). */
+/**
+ * Confirmation de suppression d'un créneau vide (mode création). En « Création
+ * multiple », si le créneau ponctuel a des JUMEAUX sur la période (mêmes jour,
+ * horaires, capacité, jauge et demandeurs — parité A/B respectée), la modale
+ * propose de ne supprimer que ce créneau OU toute la série (`seriesCount` +
+ * `onConfirmSeries` fournis par la grille).
+ */
 export function SlotDeleteModal({
   timePart,
+  seriesCount,
   onCancel,
   onConfirm,
+  onConfirmSeries,
 }: {
   // Plage horaire « 9:00–10:30 » du créneau, ou "" si inconnue.
   timePart: string;
+  // Nombre TOTAL de créneaux identiques sur la période (référence incluse) —
+  // fourni seulement quand l'option « toute la série » a un sens (> 1).
+  seriesCount?: number;
   onCancel: () => void;
   onConfirm: () => void;
+  onConfirmSeries?: () => void;
 }) {
+  const hasSeries = !!onConfirmSeries && (seriesCount ?? 0) > 1;
   return (
     <ModalOverlay onClose={onCancel}>
       <div className="modal-title" style={{ color: "var(--danger)" }}>
@@ -28,6 +41,13 @@ export function SlotDeleteModal({
         ) : null}
         .
       </p>
+      {hasSeries ? (
+        <p style={{ fontSize: ".8rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+          Création multiple : ce créneau existe en <strong>{seriesCount} exemplaires</strong>{" "}
+          identiques sur la période (même jour, mêmes horaires, capacité, jauge et demandeurs —
+          semaine A/B respectée). Que souhaitez-vous supprimer ?
+        </p>
+      ) : null}
       <p
         style={{ fontSize: ".78rem", color: "var(--danger)", fontWeight: 600, margin: "0 0 1rem" }}
       >
@@ -37,14 +57,35 @@ export function SlotDeleteModal({
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
           Annuler
         </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={onConfirm}
-          style={{ background: "var(--danger)", border: "none", color: "var(--text)" }}
-        >
-          🗑️ Supprimer
-        </button>
+        {hasSeries ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={onConfirm}
+              style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
+            >
+              Ce créneau uniquement
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={onConfirmSeries}
+              style={{ background: "var(--danger)", border: "none", color: "var(--text)" }}
+            >
+              🗑️ Les {seriesCount} créneaux
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={onConfirm}
+            style={{ background: "var(--danger)", border: "none", color: "var(--text)" }}
+          >
+            🗑️ Supprimer
+          </button>
+        )}
       </div>
     </ModalOverlay>
   );
