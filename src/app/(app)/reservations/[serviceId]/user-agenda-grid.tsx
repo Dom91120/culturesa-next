@@ -4,6 +4,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
+  useAgendaAutoRefresh,
+  useAgendaToast,
+  useCoveringPeriodLock,
+  usePersistedAgendaView,
+} from "@/components/agenda-hooks";
+import {
   AgendaDayBackground,
   AgendaTimeColumn,
   AgendaWeekHeader,
@@ -18,10 +24,14 @@ import {
   DAY_OFFSET,
   dayCap,
   dayKeyFromYmd,
+  deriveCoveringPeriod,
   type ExerciceOpening,
+  gridDaysAndBounds,
   gridGeometry,
   type LayoutItem,
   layoutOverlaps,
+  lunchBounds,
+  makeWeekNavigation,
   mondayOf,
   type Pointage,
   parseWeeks,
@@ -31,6 +41,7 @@ import {
   slotWeekTag,
   toMinutes,
   type UniqueSlot,
+  weekContextOpenings,
   ymd,
 } from "@/lib/agenda-core";
 import { earliestBookableISO } from "@/lib/booking-delay";
@@ -1066,17 +1077,15 @@ export function UserAgendaGrid({
   // sur .app-main, bas de page, auto-dismiss ~4 s. Sert au verrou « une seule action »
   // (rouge) et au résultat de l'enregistrement du brouillon (vert création/modif/déplacement,
   // rouge suppression ou erreur).
-  const [toast, setToast] = useState<{
-    id: number;
-    content: string;
-    variant: "success" | "danger";
-  } | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastCenterX, setToastCenterX] = useState<number | null>(null);
-  const toastIdRef = useRef(0);
+  // (Hook partagé avec la grille admin — cf. components/agenda-hooks.)
+  const {
+    toast,
+    toastVisible,
+    toastCenterX,
+    showToast: pushToast,
+  } = useAgendaToast<{ content: string; variant: "success" | "danger" }>();
   function showToast(content: string, variant: "success" | "danger") {
-    toastIdRef.current += 1;
-    setToast({ id: toastIdRef.current, content, variant });
+    pushToast({ content, variant });
   }
   // Info-bulle flottante unique (texte data-tip / « Journées concernées »), factorisée
   // dans un hook partagé. Suspendue pendant la saisie d'un thème.
@@ -1084,33 +1093,6 @@ export function UserAgendaGrid({
     getDates: (slotId, dayKey) => concernedDatesForBlock(slotId, dayKey),
     suppressed: () => isThemeBeingEdited(),
   });
-
-  // Affichage/dissipation du toast : mesure le centre de .app-main (et non du viewport),
-  // anime l'apparition, puis masque à ~4 s et retire à ~4,3 s. Relancé à chaque nouveau
-  // toast via son id (cf. grille admin).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: relancé à chaque nouveau toast via son id
-  useEffect(() => {
-    if (!toast) return;
-    const measure = () => {
-      const main = document.querySelector(".app-main");
-      if (main) {
-        const r = main.getBoundingClientRect();
-        setToastCenterX(r.left + r.width / 2);
-      }
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    setToastVisible(false);
-    const raf = requestAnimationFrame(() => setToastVisible(true));
-    const hide = window.setTimeout(() => setToastVisible(false), 4000);
-    const clear = window.setTimeout(() => setToast(null), 4300);
-    return () => {
-      window.removeEventListener("resize", measure);
-      cancelAnimationFrame(raf);
-      window.clearTimeout(hide);
-      window.clearTimeout(clear);
-    };
-  }, [toast?.id]);
 
   // ── Réglages d'ouverture PAR EXERCICE ──────────────────────────────────────
   // Une date hors de tout exercice est FERMÉE (CLOSED_OPENING — le service ne
@@ -1134,30 +1116,17 @@ export function UserAgendaGrid({
   // exercices agrège les deux.
   const contextOpenings = useMemo(() => {
     if (!anchorMonday) return [CLOSED_OPENING];
-    const uniq = new Map<string, ExerciceOpening>();
-    for (let i = 0; i < 7; i++) {
-      const o = openingForYmd(ymd(addDays(anchorMonday, i)));
-      uniq.set(
-        `${o.activeDays}|${o.morningStart}|${o.morningEnd}|${o.afternoonStart}|${o.afternoonEnd}`,
-        o,
-      );
-    }
-    return [...uniq.values()];
+    return weekContextOpenings(anchorMonday, openingForYmd);
   }, [anchorMonday, openingForYmd]);
 
-  // Colonnes de la grille : jours actifs du contexte. En Modèle = ceux de l'exercice
-  // affiché ; en Semaine réelle = UNION des exercices de la semaine (le grisage par
-  // date via isDayDisabled ferme les dates des exercices où un jour est inactif).
-  const days = useMemo(() => {
-    const set = new Set<string>();
-    for (const o of contextOpenings) {
-      for (const d of o.activeDays.split(",")) {
-        const t = d.trim();
-        if (t) set.add(t);
-      }
-    }
-    return ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].filter((d) => set.has(d));
-  }, [contextOpenings]);
+  // Colonnes (jours actifs, UNION des exercices de la semaine — le grisage par date
+  // via isDayDisabled ferme les jours inactifs) + bornes horaires de la grille :
+  // dérivation partagée (gridDaysAndBounds, agenda-core). Mémoïsé : `days` est une
+  // dép de blocksByDay (perf).
+  const { days, baseFirst, baseLast } = useMemo(
+    () => gridDaysAndBounds(contextOpenings),
+    [contextOpenings],
+  );
   // Offsets (depuis le lundi) du 1er et du dernier jour TRAVAILLÉ de la semaine :
   // le libellé de la nav hebdo affiche ces bornes, pas lundi/dimanche fixes.
   const firstDayOffset = days.length ? (DAY_OFFSET[days[0]] ?? 0) : 0;
@@ -1185,26 +1154,8 @@ export function UserAgendaGrid({
   // case est masquée et n'est donc pas modifiable) → on affiche toute la plage horaire.
   const hideNoSlot = isMobile ? false : hideNoSlotPref;
 
-  // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes
-  // (union sur les ouvertures de contexte). Une plage « fermée » (fin ≤ début,
-  // p.ex. 00:00–00:00) est ignorée — sinon afternoonEnd=00:00 ramenait la fin de
-  // grille à minuit et masquait toute la grille.
-  const openRanges = useMemo(() => {
-    const ranges: [number, number][] = [];
-    for (const o of contextOpenings) {
-      for (const [s, e] of [
-        [toMinutes(o.morningStart, 9 * 60), toMinutes(o.morningEnd, 12 * 60)],
-        [toMinutes(o.afternoonStart, 14 * 60), toMinutes(o.afternoonEnd, 18 * 60)],
-      ] as const) {
-        if (e > s) ranges.push([s, e]);
-      }
-    }
-    return ranges;
-  }, [contextOpenings]);
-  const startMin = openRanges.length ? Math.min(...openRanges.map((r) => r[0])) : 9 * 60;
-  const endMin = openRanges.length ? Math.max(...openRanges.map((r) => r[1])) : 18 * 60;
-  const baseFirst = Math.floor(startMin / 60);
-  const baseLast = Math.ceil(endMin / 60);
+  // (Bornes horaires de la grille : dérivées plus haut avec les colonnes, cf.
+  // gridDaysAndBounds.)
 
   // Périodes visibles = celles de l'exercice courant (toutes si aucun exercice).
   const visiblePeriods =
@@ -1218,33 +1169,14 @@ export function UserAgendaGrid({
   );
 
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
+  // (Dérivation partagée deriveCoveringPeriod, agenda-core — verrou rwPeriodId
+  // prioritaire, repli lundi puis mercredi.)
   const mondayStr = anchorMonday;
-  const sundayStr = mondayStr ? ymd(addDays(mondayStr, 6)) : null;
-  // Une période "couvre" une date si celle-ci est dans [dateStart, dateEnd].
-  const periodCoveringDate = (d: string) =>
-    periods.find((p) => p.dateStart && p.dateEnd && p.dateStart <= d && p.dateEnd >= d) ?? null;
-  // Période active : priorité à celle verrouillée (rwPeriodId) tant qu'elle
-  // intersecte la semaine — sinon on dérive depuis l'ancre (lundi puis mercredi,
-  // pour les périodes commençant en milieu de semaine). Cf. legacy l.6469-6480.
-  const lockedPeriod =
-    rwPeriodId != null
-      ? (periods.find(
-          (p) =>
-            p.id === rwPeriodId &&
-            mondayStr != null &&
-            sundayStr != null &&
-            p.dateStart != null &&
-            p.dateEnd != null &&
-            p.dateStart <= sundayStr &&
-            p.dateEnd >= mondayStr,
-        ) ?? null)
-      : null;
-  const coveringPeriod =
-    mondayStr && sundayStr
-      ? (lockedPeriod ??
-        periodCoveringDate(mondayStr) ??
-        periodCoveringDate(ymd(addDays(mondayStr, 3))))
-      : null;
+  const { sundayStr, periodCoveringDate, coveringPeriod } = deriveCoveringPeriod(
+    periods,
+    mondayStr,
+    rwPeriodId,
+  );
   // Sans période couvrant la semaine, -1 ne matche rien → aucun bloc.
   const effectivePeriodId = coveringPeriod?.id ?? -1;
 
@@ -1288,42 +1220,19 @@ export function UserAgendaGrid({
     if (!modes.abMode) return true; // pas de distinction A/B → tout récurrent compte
     return ab.has(slotWeekTag(monday));
   };
-  // Existe-t-il une semaine AVEC créneau au-delà de `monday` dans la direction donnée,
-  // sans sortir de la période active ? (pour activer/désactiver ◀/▶ en hideNoSlot)
-  const hasSlotWeekBeyond = (monday: string, dir: 1 | -1): boolean => {
-    const startB = coveringPeriod?.dateStart;
-    const endB = coveringPeriod?.dateEnd;
-    let cur = ymd(addDays(monday, dir * 7));
-    for (let i = 0; i < 260; i++) {
-      const sunday = ymd(addDays(cur, 6));
-      if (endB && cur > endB) break;
-      if (startB && sunday < startB) break;
-      if (weekHasSlot(cur)) return true;
-      cur = ymd(addDays(cur, dir * 7));
-    }
-    return false;
-  };
-
-  // Bornes de navigation hebdo : on reste dans la période sélectionnée (celle qui
-  // couvre la semaine courante) et on ne navigue pas au-delà de ses dates.
-  // En mode hideNoSlot, on désactive aussi ◀/▶ s'il n'existe plus aucune semaine
-  // AVEC créneau dans la direction (port legacy).
-  // Mémoïsé : hasSlotWeekBeyond balaie jusqu'à 260 semaines — à ne recalculer que
-  // quand les données ou la semaine changent, pas à chaque survol/drag (audit perf).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: hasSlotWeekBeyond est une closure recréée à chaque rendu ; ses entrées réelles sont listées (uniqSlotDates, recurSlotAbByPeriod, coveringPeriod, periods, modes.abMode).
-  const { canWeekPrev, canWeekNext } = useMemo(
-    () => ({
-      canWeekPrev: mondayStr
-        ? (coveringPeriod?.dateStart
-            ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
-            : true) &&
-          (!hideNoSlot || hasSlotWeekBeyond(mondayStr, -1))
-        : false,
-      canWeekNext: mondayStr
-        ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
-          (!hideNoSlot || hasSlotWeekBeyond(mondayStr, 1))
-        : false,
-    }),
+  // Navigation hebdo ◀/▶ (fabrique partagée makeWeekNavigation, agenda-core) : bornée
+  // à la période couvrante ; en hideNoSlot, saute aux semaines AYANT un créneau.
+  // Mémoïsé : le balayage va jusqu'à 260 semaines — à ne recalculer que quand les
+  // données ou la semaine changent, pas à chaque survol/drag (audit perf).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: weekHasSlot est une closure recréée à chaque rendu ; ses entrées réelles sont listées (uniqSlotDates, recurSlotAbByPeriod, coveringPeriod, periods, modes.abMode).
+  const { canWeekPrev, canWeekNext, shiftTarget } = useMemo(
+    () =>
+      makeWeekNavigation({
+        mondayStr,
+        coveringPeriod,
+        hideEmpty: hideNoSlot,
+        weekHas: weekHasSlot,
+      }),
     [
       mondayStr,
       hideNoSlot,
@@ -1334,29 +1243,9 @@ export function UserAgendaGrid({
       modes.abMode,
     ],
   );
-
-  // Navigation hebdo (◀/▶) : en mode hideNoSlot, on saute aux semaines AYANT au moins
-  // un créneau (ponctuel OU récurrent — port legacy shiftUserAgendaWeek), bornée à la
-  // période active.
   function shiftWeek(deltaWeeks: number) {
-    if (!mondayStr) return;
-    let newAnchor = ymd(addDays(mondayStr, deltaWeeks * 7));
-    if (hideNoSlot && deltaWeeks !== 0) {
-      const step = deltaWeeks > 0 ? 7 : -7;
-      const MAX_ITER = 260;
-      let iter = 0;
-      while (iter++ < MAX_ITER) {
-        if (weekHasSlot(newAnchor)) break;
-        if (!hasSlotWeekBeyond(newAnchor, deltaWeeks > 0 ? 1 : -1)) break;
-        newAnchor = ymd(addDays(newAnchor, step));
-      }
-    }
-    // Clamp à la période active : si le saut sort de la période, on annule.
-    if (coveringPeriod?.dateStart && coveringPeriod.dateEnd) {
-      const newSunday = ymd(addDays(newAnchor, 6));
-      if (newAnchor > coveringPeriod.dateEnd || newSunday < coveringPeriod.dateStart) return;
-    }
-    setAnchorMonday(newAnchor);
+    const target = shiftTarget(deltaWeeks);
+    if (target) setAnchorMonday(target);
   }
 
   // ── Navigation jour (mobile) ────────────────────────────────────────────────
@@ -1496,24 +1385,14 @@ export function UserAgendaGrid({
   // que 2 quarts visuels (30 min) — les quarts au-delà de lunchStart+30 sont sautés.
   // Le reste de la grille (lignes, heures, blocs, clics) suit un mapping par quarts
   // d'heure VISIBLES (mapMinToY), au lieu d'un mapping linéaire heure/heure.
-  // Bornes de pause du PREMIER contexte qui en définit une (un jour hors exercice —
-  // CLOSED_OPENING, ex. lundi 31 août avant un exercice démarrant le 1er septembre —
-  // ne doit pas masquer la pause du reste de la semaine).
-  const lunchOpening =
-    contextOpenings.find((o) => {
-      const s = toMinutes(o.morningEnd, Number.NaN);
-      const e = toMinutes(o.afternoonStart, Number.NaN);
-      return Number.isFinite(s) && Number.isFinite(e) && e > s;
-    }) ?? contextOpenings[0];
-  const lunchStart = toMinutes(lunchOpening?.morningEnd ?? "", Number.NaN);
-  const lunchEnd = toMinutes(lunchOpening?.afternoonStart ?? "", Number.NaN);
-  const hasLunch =
-    Number.isFinite(lunchStart) &&
-    Number.isFinite(lunchEnd) &&
-    lunchEnd > lunchStart &&
-    lunchStart >= gridStartMin &&
-    lunchEnd <= gridEndMin;
-  const lunchSkipFrom = hasLunch && lunchEnd - lunchStart > 30 ? lunchStart + 30 : null;
+  // Bornes de pause du premier contexte qui en définit une (fonction partagée
+  // lunchBounds, agenda-core) — un jour hors exercice (CLOSED_OPENING) ne masque
+  // pas la pause du reste de la semaine.
+  const { lunchStart, lunchEnd, hasLunch, lunchSkipFrom } = lunchBounds(
+    contextOpenings,
+    gridStartMin,
+    gridEndMin,
+  );
 
   // ── « Masquer les horaires sans créneau » (compactage, port legacy) ─────────
   // On ne resserre pas la plage : on construit l'ensemble des quarts d'heure portant
@@ -2038,24 +1917,17 @@ export function UserAgendaGrid({
     return target ? ymd(mondayOf(new Date(`${target}T00:00:00`))) : todayMonday;
   }
 
-  // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
-  // pour revenir sur la sélection précédente quand on rouvre la page. À défaut, ancre
-  // la semaine réelle via defaultAnchorMonday (prochain créneau réservable, sinon
-  // semaine avec créneau la plus proche). (Client uniquement → pas de mismatch SSR.)
-  // Clé PAR UTILISATEUR : sessionStorage est partagé par l'onglet — sans l'e-mail
-  // dans la clé, un compte héritait de la vue mémorisée du compte précédent.
-  const viewStorageKey = `agenda-view:${service.id}:${userInfo.email}`;
-  const persistSkip = useRef(true);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: restauration au montage uniquement
-  useEffect(() => {
-    let anchored = false;
-    try {
-      const raw = sessionStorage.getItem(viewStorageKey);
-      if (raw) {
-        const v = JSON.parse(raw) as Partial<{
-          exerciceId: number | null;
-          anchorMonday: string;
-        }>;
+  // Restaure la vue (exercice / semaine) depuis sessionStorage au montage, puis la
+  // persiste à chaque changement (hook partagé usePersistedAgendaView). À défaut,
+  // ancre la semaine via defaultAnchorMonday (prochain créneau réservable, sinon
+  // semaine avec créneau la plus proche). Clé PAR UTILISATEUR : sessionStorage est
+  // partagé par l'onglet — sans l'e-mail dans la clé, un compte héritait de la vue
+  // mémorisée du compte précédent.
+  usePersistedAgendaView<{ exerciceId: number | null; anchorMonday: string | null }>({
+    storageKey: `agenda-view:${service.id}:${userInfo.email}`,
+    restore: (v) => {
+      let anchored = false;
+      if (v) {
         // Ne restaure l'exercice que s'il existe encore ; un `null` mémorisé (vue
         // enregistrée quand le service n'avait pas d'exercice) est ignoré, sinon il
         // désactiverait le filtre d'exercice (périodes de tous les exercices mélangées).
@@ -2067,35 +1939,14 @@ export function UserAgendaGrid({
           anchored = true;
         }
       }
-    } catch {}
-    if (!anchored) setAnchorMonday(defaultAnchorMonday());
-  }, []);
+      if (!anchored) setAnchorMonday(defaultAnchorMonday());
+    },
+    snapshot: () => ({ exerciceId: currentExerciceId, anchorMonday }),
+    deps: [currentExerciceId, anchorMonday],
+  });
 
-  // Persiste la vue à chaque changement. On saute le tout 1er run (montage, AVANT que
-  // la restauration ci-dessus n'ait été appliquée) pour ne pas écraser la valeur
-  // stockée avec les valeurs par défaut.
-  useEffect(() => {
-    if (persistSkip.current) {
-      persistSkip.current = false;
-      return;
-    }
-    try {
-      sessionStorage.setItem(
-        viewStorageKey,
-        JSON.stringify({ exerciceId: currentExerciceId, anchorMonday }),
-      );
-    } catch {}
-  }, [viewStorageKey, currentExerciceId, anchorMonday]);
-
-  // Verrouille la période active en semaine réelle : dès qu'une période est
-  // dérivée pour la semaine courante, on la fige dans rwPeriodId. La nav ◀/▶
-  // s'appuie alors sur cette période figée (et non sur une re-dérivation qui
-  // basculerait sur la voisine aux frontières). Re-verrouille si l'ancien verrou
-  // ne couvre plus la semaine (ex. après « Aujourd'hui »). Cf. legacy l.6481-6490.
-  useEffect(() => {
-    if (coveringPeriod && coveringPeriod.id !== rwPeriodId) setRwPeriodId(coveringPeriod.id);
-    else if (!coveringPeriod && rwPeriodId !== null) setRwPeriodId(null);
-  }, [coveringPeriod, rwPeriodId]);
+  // Verrouille la période active en semaine réelle (hook partagé, cf. agenda-hooks).
+  useCoveringPeriodLock(true, coveringPeriod, rwPeriodId, setRwPeriodId);
 
   // ── Brouillon (legacy pendingSelection / pendingCancellations) ──────────
   // ── « Un seul badge à la fois » ──────────────────────────────────────────────────
@@ -2495,24 +2346,12 @@ export function UserAgendaGrid({
   // (visibilitychange). SUSPENDU tant qu'un brouillon est en cours (ajouts/retraits/
   // maj/déplacements) ou pendant l'enregistrement, pour ne jamais écraser les
   // sélections de l'usager. En pause quand l'onglet est masqué.
-  const canAutoRefreshRef = useRef(pendingCount === 0 && !committing);
-  useEffect(() => {
-    canAutoRefreshRef.current = pendingCount === 0 && !committing;
-  }, [pendingCount, committing]);
-  useEffect(() => {
-    if (!autoRefreshSeconds || autoRefreshSeconds <= 0) return;
-    const refreshIfIdle = () => {
-      if (document.visibilityState === "visible" && canAutoRefreshRef.current) {
-        startTransition(() => router.refresh());
-      }
-    };
-    const id = window.setInterval(refreshIfIdle, autoRefreshSeconds * 1000);
-    document.addEventListener("visibilitychange", refreshIfIdle);
-    return () => {
-      window.clearInterval(id);
-      document.removeEventListener("visibilitychange", refreshIfIdle);
-    };
-  }, [router, autoRefreshSeconds]);
+  // (Hook partagé avec la grille admin — cf. components/agenda-hooks.)
+  useAgendaAutoRefresh(
+    autoRefreshSeconds,
+    () => pendingCount === 0 && !committing,
+    () => startTransition(() => router.refresh()),
+  );
 
   // « Enregistrer → » : valide le brouillon (crée les ajouts, annule les retraits).
   // Chaque opération RÉUSSIE est retirée du brouillon au fil de l'eau : en cas

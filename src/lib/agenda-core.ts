@@ -329,3 +329,215 @@ export function gridGeometry(args: {
   };
   return { quarters, qIdx, totalH, mapMinToY, yToMin };
 }
+
+// ════════════════════════════════════════════════════════════
+//  Couche péri-grille PARTAGÉE (audit 2026-07-17) : dérivations pures communes aux
+//  grilles admin et usager — ouvertures de la semaine, jours/bornes de grille, pause
+//  méridienne, période couvrante, navigation hebdomadaire. Chaque fonction remplace
+//  deux copies quasi identiques ; les hooks React associés vivent dans
+//  components/agenda-hooks.ts.
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Ouvertures « de contexte » d'une semaine réelle : l'ouverture de l'exercice couvrant
+ * CHAQUE jour de la semaine, dédupliquée — une semaine à cheval sur deux exercices
+ * agrège les deux. (En Modèle de période, l'admin fournit directement l'ouverture de
+ * l'exercice affiché, sans passer ici.)
+ */
+export function weekContextOpenings(
+  anchorMonday: string,
+  openingForYmd: (d: string) => ExerciceOpening,
+): ExerciceOpening[] {
+  const uniq = new Map<string, ExerciceOpening>();
+  for (let i = 0; i < 7; i++) {
+    const o = openingForYmd(ymd(addDays(anchorMonday, i)));
+    uniq.set(
+      `${o.activeDays}|${o.morningStart}|${o.morningEnd}|${o.afternoonStart}|${o.afternoonEnd}`,
+      o,
+    );
+  }
+  return [...uniq.values()];
+}
+
+/**
+ * Colonnes (jours actifs, union du contexte) et bornes horaires de la grille :
+ * amplitude des plages RÉELLEMENT ouvertes — une plage « fermée » (fin ≤ début,
+ * p.ex. 00:00–00:00 pour « fermé l'après-midi ») est ignorée, sinon afternoonEnd
+ * = 00:00 ramenait la fin de grille à minuit. Repli matin/après-midi standard
+ * (9 h-18 h) si tout est fermé.
+ */
+export function gridDaysAndBounds(openings: ExerciceOpening[]): {
+  days: string[];
+  openRanges: [number, number][];
+  startMin: number;
+  endMin: number;
+  baseFirst: number;
+  baseLast: number;
+} {
+  const set = new Set<string>();
+  for (const o of openings) {
+    for (const d of o.activeDays.split(",")) {
+      const t = d.trim();
+      if (t) set.add(t);
+    }
+  }
+  const days = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].filter((d) => set.has(d));
+  const openRanges: [number, number][] = [];
+  for (const o of openings) {
+    for (const [s, e] of [
+      [toMinutes(o.morningStart, 9 * 60), toMinutes(o.morningEnd, 12 * 60)],
+      [toMinutes(o.afternoonStart, 14 * 60), toMinutes(o.afternoonEnd, 18 * 60)],
+    ] as const) {
+      if (e > s) openRanges.push([s, e]);
+    }
+  }
+  const startMin = openRanges.length ? Math.min(...openRanges.map((r) => r[0])) : 9 * 60;
+  const endMin = openRanges.length ? Math.max(...openRanges.map((r) => r[1])) : 18 * 60;
+  return {
+    days,
+    openRanges,
+    startMin,
+    endMin,
+    baseFirst: Math.floor(startMin / 60),
+    baseLast: Math.ceil(endMin / 60),
+  };
+}
+
+/**
+ * Bornes de la pause méridienne : celle du PREMIER contexte qui en définit une (un
+ * jour hors exercice — CLOSED_OPENING, ex. lundi 31 août avant un exercice démarrant
+ * le 1er septembre — ne doit pas masquer la pause du reste de la semaine). hasLunch
+ * exige la pause DANS les bornes visibles de la grille.
+ */
+export function lunchBounds(
+  openings: ExerciceOpening[],
+  gridStartMin: number,
+  gridEndMin: number,
+): { lunchStart: number; lunchEnd: number; hasLunch: boolean; lunchSkipFrom: number | null } {
+  const lunchOpening =
+    openings.find((o) => {
+      const s = toMinutes(o.morningEnd, Number.NaN);
+      const e = toMinutes(o.afternoonStart, Number.NaN);
+      return Number.isFinite(s) && Number.isFinite(e) && e > s;
+    }) ?? openings[0];
+  const lunchStart = toMinutes(lunchOpening?.morningEnd ?? "", Number.NaN);
+  const lunchEnd = toMinutes(lunchOpening?.afternoonStart ?? "", Number.NaN);
+  const hasLunch =
+    Number.isFinite(lunchStart) &&
+    Number.isFinite(lunchEnd) &&
+    lunchEnd > lunchStart &&
+    lunchStart >= gridStartMin &&
+    lunchEnd <= gridEndMin;
+  const lunchSkipFrom = hasLunch && lunchEnd - lunchStart > 30 ? lunchStart + 30 : null;
+  return { lunchStart, lunchEnd, hasLunch, lunchSkipFrom };
+}
+
+/**
+ * Période « couvrant » la semaine réelle : priorité à la période VERROUILLÉE
+ * (rwPeriodId) tant qu'elle intersecte la semaine — sinon dérivation depuis l'ancre
+ * (lundi puis mercredi, pour les périodes commençant en milieu de semaine).
+ * Cf. legacy l.6469-6480 ; le verrou lui-même est posé par useCoveringPeriodLock.
+ */
+export function deriveCoveringPeriod<
+  P extends { id: number; dateStart: string | null; dateEnd: string | null },
+>(
+  periods: P[],
+  mondayStr: string | null,
+  rwPeriodId: number | null,
+): {
+  sundayStr: string | null;
+  periodCoveringDate: (d: string) => P | null;
+  coveringPeriod: P | null;
+} {
+  const sundayStr = mondayStr ? ymd(addDays(mondayStr, 6)) : null;
+  const periodCoveringDate = (d: string) =>
+    periods.find((p) => p.dateStart && p.dateEnd && p.dateStart <= d && p.dateEnd >= d) ?? null;
+  const lockedPeriod =
+    rwPeriodId != null
+      ? (periods.find(
+          (p) =>
+            p.id === rwPeriodId &&
+            mondayStr != null &&
+            sundayStr != null &&
+            p.dateStart != null &&
+            p.dateEnd != null &&
+            p.dateStart <= sundayStr &&
+            p.dateEnd >= mondayStr,
+        ) ?? null)
+      : null;
+  const coveringPeriod =
+    mondayStr && sundayStr
+      ? (lockedPeriod ??
+        periodCoveringDate(mondayStr) ??
+        periodCoveringDate(ymd(addDays(mondayStr, 3))))
+      : null;
+  return { sundayStr, periodCoveringDate, coveringPeriod };
+}
+
+/**
+ * Navigation hebdomadaire ◀/▶ : bornée aux dates de la période couvrante ; en mode
+ * « masquer les semaines vides » (hideEmpty), désactive une direction sans semaine
+ * pleine et fait sauter shiftTarget aux semaines AYANT du contenu (port legacy
+ * shiftAgendaWeek). `weekHas` définit le contenu : réservations côté admin, créneaux
+ * côté usager. shiftTarget renvoie le nouveau lundi, ou null si le saut sort de la
+ * période (l'appelant n'ancre alors rien). Balaie jusqu'à 260 semaines : à appeler
+ * sous useMemo (cf. les deux grilles).
+ */
+export function makeWeekNavigation(args: {
+  mondayStr: string | null;
+  coveringPeriod: { dateStart?: string | null; dateEnd?: string | null } | null;
+  hideEmpty: boolean;
+  weekHas: (monday: string) => boolean;
+}): {
+  canWeekPrev: boolean;
+  canWeekNext: boolean;
+  shiftTarget: (deltaWeeks: number) => string | null;
+} {
+  const { mondayStr, coveringPeriod, hideEmpty, weekHas } = args;
+  // Existe-t-il une semaine pleine au-delà de `monday` dans la direction donnée,
+  // sans sortir de la période active ?
+  const hasWeekBeyond = (monday: string, dir: 1 | -1): boolean => {
+    const startB = coveringPeriod?.dateStart;
+    const endB = coveringPeriod?.dateEnd;
+    let cur = ymd(addDays(monday, dir * 7));
+    for (let i = 0; i < 260; i++) {
+      const sunday = ymd(addDays(cur, 6));
+      if (endB && cur > endB) break;
+      if (startB && sunday < startB) break;
+      if (weekHas(cur)) return true;
+      cur = ymd(addDays(cur, dir * 7));
+    }
+    return false;
+  };
+  const canWeekPrev = mondayStr
+    ? (coveringPeriod?.dateStart
+        ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
+        : true) &&
+      (!hideEmpty || hasWeekBeyond(mondayStr, -1))
+    : false;
+  const canWeekNext = mondayStr
+    ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
+      (!hideEmpty || hasWeekBeyond(mondayStr, 1))
+    : false;
+  const shiftTarget = (deltaWeeks: number): string | null => {
+    if (!mondayStr) return null;
+    let newAnchor = ymd(addDays(mondayStr, deltaWeeks * 7));
+    if (hideEmpty && deltaWeeks !== 0) {
+      const step = deltaWeeks > 0 ? 7 : -7;
+      const MAX_ITER = 260;
+      let iter = 0;
+      while (iter++ < MAX_ITER) {
+        if (weekHas(newAnchor)) break;
+        if (!hasWeekBeyond(newAnchor, deltaWeeks > 0 ? 1 : -1)) break;
+        newAnchor = ymd(addDays(newAnchor, step));
+      }
+    }
+    // Clamp à la période active : si le saut sort de la période, on annule.
+    if (coveringPeriod?.dateStart && coveringPeriod.dateEnd) {
+      const newSunday = ymd(addDays(newAnchor, 6));
+      if (newAnchor > coveringPeriod.dateEnd || newSunday < coveringPeriod.dateStart) return null;
+    }
+    return newAnchor;
+  };
+  return { canWeekPrev, canWeekNext, shiftTarget };
+}
