@@ -7,6 +7,11 @@ import { PrivacyPolicyModal } from "@/components/privacy-policy-modal";
 import { signUp } from "@/lib/auth-client";
 import { PWD_RULES } from "@/lib/password";
 import { useFormSubmit } from "@/lib/use-form-submit";
+import {
+  PROFILE_MIN_ACCOMPAGNANTS_MSG,
+  PROFILE_MIN_ENFANTS_MSG,
+  profileCountOk,
+} from "@/schemas/user";
 import { type CaptchaHandle, CaptchaImage } from "../captcha-image";
 
 type Structure = { id: number; label: string };
@@ -79,9 +84,8 @@ export function RegisterForm({
     if (!demandeurId) return "Choisissez une catégorie.";
     if (structures.length > 0 && !structureId)
       return "Choisissez une structure pour cette catégorie.";
-    if (!Number.isInteger(enfants) || enfants < 1) return "Indiquez au moins 1 enfant.";
-    if (!Number.isInteger(accompagnants) || accompagnants < 1)
-      return "Indiquez au moins 1 accompagnant.";
+    if (!profileCountOk(enfants)) return PROFILE_MIN_ENFANTS_MSG;
+    if (!profileCountOk(accompagnants)) return PROFILE_MIN_ACCOMPAGNANTS_MSG;
     if (!pwdValid) return "Le mot de passe ne respecte pas toutes les règles.";
     if (pwd !== password2) return "Les mots de passe ne correspondent pas.";
     if (form.get("rgpd") !== "on")

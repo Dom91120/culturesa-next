@@ -5,7 +5,13 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { isBookingLockedByPointage } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
-import { hasBothParticipants, hasBothParticipantsMsg } from "@/schemas/booking";
+import {
+  bookingAccompagnantsSchema,
+  bookingEnfantsSchema,
+  bookingThemeSchema,
+  hasBothParticipants,
+  hasBothParticipantsMsg,
+} from "@/schemas/booking";
 import { DAYS } from "@/schemas/config";
 import {
   MAX_CAPACITY,
@@ -544,9 +550,11 @@ const detailSchema = z
   .object({
     bookingId: z.coerce.number().int().positive(),
     serviceId: z.string().min(1),
-    enfants: z.coerce.number().int().min(0).max(99),
-    accompagnants: z.coerce.number().int().min(0).max(99),
-    theme: z.string().trim().max(255),
+    // Bornes UNIQUES 0-999 (schemas/booking) — l'édition plafonnait à 99 là où la
+    // création acceptait 999 (audit 2026-07-17).
+    enfants: bookingEnfantsSchema,
+    accompagnants: bookingAccompagnantsSchema,
+    theme: bookingThemeSchema,
   })
   // Au moins 1 enfant ET 1 accompagnant — même invariant qu'à la création, jusqu'ici
   // absent de l'édition (un gestionnaire pouvait ramener une résa à 0/0).
@@ -746,9 +754,9 @@ const createSchema = z
     periodId: z.coerce.number().int().positive(),
     dayKey: z.string().min(1),
     userId: z.string().min(1),
-    enfants: z.coerce.number().int().min(0).max(999).default(0),
-    accompagnants: z.coerce.number().int().min(0).max(999).default(0),
-    theme: z.string().trim().max(255).default(""),
+    enfants: bookingEnfantsSchema.default(0),
+    accompagnants: bookingAccompagnantsSchema.default(0),
+    theme: bookingThemeSchema.default(""),
     week: z.enum(["", "A", "B"]).default(""),
   })
   .refine(hasBothParticipants, hasBothParticipantsMsg);
@@ -884,9 +892,9 @@ const createUniqueSchema = z
     serviceId: z.string().min(1),
     slotId: z.string().min(1),
     userId: z.string().min(1),
-    enfants: z.coerce.number().int().min(0).max(999).default(0),
-    accompagnants: z.coerce.number().int().min(0).max(999).default(0),
-    theme: z.string().trim().max(255).default(""),
+    enfants: bookingEnfantsSchema.default(0),
+    accompagnants: bookingAccompagnantsSchema.default(0),
+    theme: bookingThemeSchema.default(""),
   })
   .refine(hasBothParticipants, hasBothParticipantsMsg);
 

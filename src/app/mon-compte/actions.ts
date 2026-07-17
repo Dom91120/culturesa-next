@@ -3,16 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { nomSchema, prenomSchema, telSchema } from "@/schemas/user";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { rateLimit } from "@/server/rate-limit";
 import { requestAccountDeletion } from "@/server/services/account-deletion";
 import { RgpdError } from "@/server/services/rgpd";
 
+// Identité : fragments partagés (schemas/user) — les plafonds locaux (80) divergeaient
+// de l'admin (100) : un prénom saisi par l'admin devenait non ré-enregistrable ici.
 const schema = z.object({
-  prenom: z.string().trim().max(80),
-  nom: z.string().trim().max(80),
-  tel: z.string().trim().max(30),
+  prenom: prenomSchema,
+  nom: nomSchema,
+  tel: telSchema,
 });
 
 export async function updateProfileAction(

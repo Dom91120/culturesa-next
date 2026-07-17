@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { stringIdSchema } from "@/schemas/config";
 import { requireServiceManager } from "@/server/guards";
 import { cycleService, setShowPreviousExercices, undoCycle } from "@/server/services/exercice";
 
@@ -23,7 +24,7 @@ export async function setShowPreviousExercicesAction(
 ): Promise<ActionState> {
   // Valider d'abord (valeur normalisée) puis garder avec le serviceId validé.
   const parsed = z
-    .object({ serviceId: z.string().trim().min(1), value: z.boolean() })
+    .object({ serviceId: stringIdSchema, value: z.boolean() })
     .safeParse({ serviceId, value });
   if (!parsed.success) {
     return { ok: false, error: "Valeurs invalides." };
@@ -39,7 +40,7 @@ export async function setShowPreviousExercicesAction(
 }
 
 const cycleSchema = z.object({
-  serviceId: z.string().trim().min(1),
+  serviceId: stringIdSchema,
   recreatePeriods: z.boolean(),
   recreateSlots: z.boolean(),
 });
@@ -66,7 +67,7 @@ export async function cycleAction(
   }
 }
 
-const undoSchema = z.object({ serviceId: z.string().trim().min(1) });
+const undoSchema = z.object({ serviceId: stringIdSchema });
 
 export async function undoCycleAction(serviceId: string): Promise<ActionState> {
   const parsed = undoSchema.safeParse({ serviceId });

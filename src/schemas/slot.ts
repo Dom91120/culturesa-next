@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DAYS } from "./config";
+import { DAYS, stringIdSchema } from "./config";
 
 /**
  * Validation de la CRÉATION de créneaux depuis l'agenda (mode « Création de créneau »).
@@ -13,6 +13,9 @@ import { DAYS } from "./config";
 // plages d'ouverture d'exercice (periodes/actions.ts) — évite qu'une heure hors 24 h
 // (« 27:61 ») soit acceptée d'un côté et rejetée de l'autre.
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Date « AAAA-MM-JJ » : source unique (même patron que TIME_RE) — la regex était
+// redéclarée dans 6 fichiers avant l'audit 2026-07-17.
+export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Le VIDE ("") est accepté ICI : un créneau « journée entière » est stocké sans horaires
 // (startTime/endTime vides), représentation lue par la grille (allday = !start || !end).
 const time = (label: string) =>
@@ -46,7 +49,7 @@ const hoursOrderedMsg = {
 
 export const recurringSlotCreateSchema = z
   .object({
-    serviceId: z.string().trim().min(1),
+    serviceId: stringIdSchema,
     periodId: z.coerce.number().int().positive(),
     dayKey: z.enum(DAYS),
     // weeks : "", "A" ou "B" (normalizeWeeks ramène toute autre valeur à "" = toutes
@@ -62,8 +65,8 @@ export const recurringSlotCreateSchema = z
 
 export const uniqueSlotCreateSchema = z
   .object({
-    serviceId: z.string().trim().min(1),
-    slotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide (format AAAA-MM-JJ)."),
+    serviceId: stringIdSchema,
+    slotDate: z.string().regex(DATE_RE, "Date invalide (format AAAA-MM-JJ)."),
     startTime: time("Heure de début"),
     endTime: time("Heure de fin"),
     capacity,

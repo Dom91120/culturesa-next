@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { stringIdSchema } from "@/schemas/config";
 import { requireServiceManager } from "@/server/guards";
 import {
   type DemandeurSettingRow,
@@ -16,7 +17,7 @@ const rowSchema = z.object({
 });
 
 const saveSchema = z.object({
-  serviceId: z.string().trim().min(1),
+  serviceId: stringIdSchema,
   rows: z.array(rowSchema).max(500),
 });
 

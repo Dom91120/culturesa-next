@@ -1,14 +1,8 @@
 import { csvResponse } from "@/lib/csv";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
-import { getServiceStats, type StatsType } from "@/server/services/stats";
-
-function parseType(v: string | null): StatsType {
-  return v === "rec" || v === "uniq" ? v : "all";
-}
-function parseDate(v: string | null): string | null {
-  return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-}
+import { getServiceStats } from "@/server/services/stats";
+import { parseStatsDate, parseStatsType } from "../params";
 
 /** Export CSV des statistiques d'un service (mêmes filtres que l'écran). */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,9 +10,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   await requireServiceManager(id);
 
   const sp = new URL(req.url).searchParams;
-  const type = parseType(sp.get("type"));
-  const dateFrom = parseDate(sp.get("from"));
-  const dateTo = parseDate(sp.get("to"));
+  const type = parseStatsType(sp.get("type"));
+  const dateFrom = parseStatsDate(sp.get("from"));
+  const dateTo = parseStatsDate(sp.get("to"));
 
   const [service, stats] = await Promise.all([
     prisma.service.findUnique({ where: { id }, select: { label: true } }),

@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import {
+  bookingAccompagnantsSchema,
   bookingCreateSchema,
-  hasBothParticipants,
-  hasBothParticipantsMsg,
+  bookingDetailSchema,
+  bookingEnfantsSchema,
+  bookingThemeSchema,
 } from "@/schemas/booking";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
@@ -411,8 +413,8 @@ async function moveInTx(
 /**
  * Met à jour les compteurs / le thème d'une réservation appartenant à l'usager.
  * Mêmes garde-fous que l'équivalent admin (`updateBookingDetailAction`) : bornes
- * 0–99 / thème 255, miroir non modifiable, réservation pointée refusée, verrou
- * « validation bloquante », et re-vérification de la jauge (anti-surbooking,
+ * bornes/thème du schéma partagé, miroir non modifiable, réservation pointée refusée,
+ * verrou « validation bloquante », et re-vérification de la jauge (anti-surbooking,
  * transaction sérialisable — gonfler les compteurs ne contourne pas la capacité).
  */
 async function updateInTx(
@@ -424,16 +426,18 @@ async function updateInTx(
   rawAccompagnants: number,
   rawTheme: string,
 ): Promise<void> {
-  const enf = Math.floor(rawEnfants);
-  const acc = Math.floor(rawAccompagnants);
-  if (!Number.isInteger(enf) || enf < 0 || enf > 99) throw new BookingError("Données invalides.");
-  if (!Number.isInteger(acc) || acc < 0 || acc > 99) throw new BookingError("Données invalides.");
-  // Au moins 1 enfant ET 1 accompagnant — même invariant qu'à la création (règle
-  // partagée), jusqu'ici absent de l'édition : on pouvait ramener une résa à 0/0.
-  if (!hasBothParticipants({ enfants: enf, accompagnants: acc })) {
-    throw new BookingError(hasBothParticipantsMsg.message);
+  // Bornes + invariant ≥1/≥1 : schéma UNIQUE partagé avec l'édition admin
+  // (bookingDetailSchema) — remplace la validation manuelle divergente (0-99,
+  // slice 255) relevée à l'audit 2026-07-17.
+  const parsedDetail = bookingDetailSchema.safeParse({
+    enfants: rawEnfants,
+    accompagnants: rawAccompagnants,
+    theme: rawTheme ?? "",
+  });
+  if (!parsedDetail.success) {
+    throw new BookingError(parsedDetail.error.issues[0]?.message ?? "Données invalides.");
   }
-  const themeLabel = (rawTheme ?? "").trim().slice(0, 255);
+  const { enfants: enf, accompagnants: acc, theme: themeLabel } = parsedDetail.data;
   const b = await tx.booking.findFirst({
     where: { id: bookingId, userId, serviceId },
     select: {
@@ -502,10 +506,11 @@ const draftSchema = z.object({
     .array(
       z.object({
         bookingId: z.coerce.number().int().positive(),
-        enfants: z.coerce.number().int(),
-        accompagnants: z.coerce.number().int(),
-        // Borne à la frontière (audit) — updateInTx re-tronque par ailleurs.
-        theme: z.string().max(255).default(""),
+        // Bornes UNIQUES 0-999 (schemas/booking) — ce sous-schéma ne bornait rien
+        // et reposait sur le garde runtime (audit 2026-07-17).
+        enfants: bookingEnfantsSchema,
+        accompagnants: bookingAccompagnantsSchema,
+        theme: bookingThemeSchema.default(""),
       }),
     )
     .default([]),
@@ -527,11 +532,11 @@ const draftSchema = z.object({
         slotId: z.string().trim().min(1),
         periodId: z.coerce.number().int().optional(),
         week: z.string().optional(),
-        // 255 = colonne themeLabel (seul l'ajout récurrent stockait la chaîne brute
-        // sans borne, propagée à tous les enfants — audit 2026-07-17).
-        theme: z.string().max(255).default(""),
-        enfants: z.coerce.number().int().min(0).max(999).default(0),
-        accompagnants: z.coerce.number().int().min(0).max(999).default(0),
+        // Fragments UNIQUES (schemas/booking) — seul l'ajout récurrent stockait la
+        // chaîne brute sans borne, propagée à tous les enfants (audit 2026-07-17).
+        theme: bookingThemeSchema.default(""),
+        enfants: bookingEnfantsSchema.default(0),
+        accompagnants: bookingAccompagnantsSchema.default(0),
       }),
     )
     .default([]),

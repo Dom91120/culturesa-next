@@ -5,6 +5,11 @@ import { nextCookies } from "better-auth/next-js";
 import { emailButton } from "@/lib/email-theme";
 import { greeting } from "@/lib/mail-render";
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/password";
+import {
+  PROFILE_MIN_ACCOMPAGNANTS_MSG,
+  PROFILE_MIN_ENFANTS_MSG,
+  profileCountOk,
+} from "@/schemas/user";
 import { verifyCaptcha } from "@/server/captcha";
 import { prisma } from "@/server/db";
 import { sendTemplatedMail } from "@/server/services/mail-send";
@@ -150,17 +155,13 @@ export const auth = betterAuth({
       if (ctx.path === "/sign-up/email") {
         const b = (ctx.body ?? {}) as { enfants?: unknown; accompagnants?: unknown };
         if (b.enfants !== undefined || b.accompagnants !== undefined) {
-          const enfants = Number(b.enfants);
-          const accompagnants = Number(b.accompagnants);
-          if (
-            !Number.isInteger(enfants) ||
-            enfants < 1 ||
-            !Number.isInteger(accompagnants) ||
-            accompagnants < 1
-          ) {
-            throw new APIError("BAD_REQUEST", {
-              message: "Indiquez au moins 1 enfant et 1 accompagnant.",
-            });
+          // Invariant + messages : source unique schemas/user (partagée avec le
+          // formulaire d'inscription et l'admin utilisateurs).
+          if (!profileCountOk(Number(b.enfants))) {
+            throw new APIError("BAD_REQUEST", { message: PROFILE_MIN_ENFANTS_MSG });
+          }
+          if (!profileCountOk(Number(b.accompagnants))) {
+            throw new APIError("BAD_REQUEST", { message: PROFILE_MIN_ACCOMPAGNANTS_MSG });
           }
         }
       }

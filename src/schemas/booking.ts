@@ -14,13 +14,33 @@ export const hasBothParticipantsMsg = {
   path: ["enfants"] as (string | number)[],
 };
 
+/**
+ * Compteurs d'une réservation : bornes UNIQUES 0-999, partagées par la création ET
+ * l'édition, admin ET usager (avant l'audit 2026-07-17 : 6 déclarations, l'édition
+ * plafonnait à 99 et le panier `updates` ne bornait rien). La limite réelle reste la
+ * jauge/capacité du créneau (assertSlotCapacity).
+ */
+export const bookingEnfantsSchema = z.coerce.number().int().min(0).max(999);
+export const bookingAccompagnantsSchema = z.coerce.number().int().min(0).max(999);
+/** Thème d'une réservation (colonne themeLabel, 255). */
+export const bookingThemeSchema = z.string().trim().max(255);
+
+/** Édition des compteurs + thème d'une réservation existante (admin ET usager). */
+export const bookingDetailSchema = z
+  .object({
+    enfants: bookingEnfantsSchema,
+    accompagnants: bookingAccompagnantsSchema,
+    theme: bookingThemeSchema.default(""),
+  })
+  .refine(hasBothParticipants, hasBothParticipantsMsg);
+
 /** Validation de la création d'une réservation (côté usager). */
 export const bookingCreateSchema = z
   .object({
     slotId: z.string().trim().min(1),
-    enfants: z.coerce.number().int().min(0).max(999).default(0),
-    accompagnants: z.coerce.number().int().min(0).max(999).default(0),
-    themeLabel: z.string().trim().max(255).default(""),
+    enfants: bookingEnfantsSchema.default(0),
+    accompagnants: bookingAccompagnantsSchema.default(0),
+    themeLabel: bookingThemeSchema.default(""),
   })
   .refine(hasBothParticipants, hasBothParticipantsMsg);
 export type BookingCreateInput = z.infer<typeof bookingCreateSchema>;

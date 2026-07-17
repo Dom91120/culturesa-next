@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
-import { DAYS } from "@/schemas/config";
-import { TIME_RE } from "@/schemas/slot";
+import { DAYS, stringIdSchema } from "@/schemas/config";
+import { DATE_RE, TIME_RE } from "@/schemas/slot";
 import { requireServiceManager } from "@/server/guards";
 import {
   createExercice,
@@ -25,11 +25,7 @@ function toDate(value: string | null | undefined): Date | null {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-const dateString = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide.")
-  .nullable()
-  .optional();
+const dateString = z.string().regex(DATE_RE, "Date invalide.").nullable().optional();
 
 // Refine partagé : si les deux dates sont fournies, début ≤ fin (comparaison
 // lexicographique valide sur des dates ISO YYYY-MM-DD).
@@ -45,69 +41,51 @@ const colorString = z
   .regex(/^#[0-9a-fA-F]{6}$/, "Couleur invalide.")
   .default("#6dceaa");
 
-const createSchema = z
-  .object({
-    serviceId: z.string().trim().min(1),
-    exerciceId: z.number().int().positive(),
-    label: z.string().trim().min(1, "Le libellé est requis."),
-    etiquette: z.string().trim().max(120).optional().default(""),
-    dateStart: dateString,
-    dateEnd: dateString,
-    // Ouverture des réservations usager (champ « Disponibilité ») ; vide = toujours ouvert.
-    disponibilite: dateString,
-    color: colorString,
-  })
+// Base UNIQUE période : le schéma de mise à jour = base + id (avant l'audit
+// 2026-07-17, create/update étaient deux copies jumelles — un champ ajouté à l'une,
+// comme `disponibilite`, pouvait être oublié dans l'autre sans que le typage bronche).
+const periodBase = z.object({
+  serviceId: stringIdSchema,
+  label: z.string().trim().min(1, "Le libellé est requis."),
+  etiquette: z.string().trim().max(120).optional().default(""),
+  dateStart: dateString,
+  dateEnd: dateString,
+  // Ouverture des réservations usager (champ « Disponibilité ») ; vide = toujours ouvert.
+  disponibilite: dateString,
+  color: colorString,
+});
+const createSchema = periodBase
+  .extend({ exerciceId: z.number().int().positive() })
+  .refine(dateOrderOk, dateOrderError);
+const updateSchema = periodBase
+  .extend({ id: z.number().int().positive() })
   .refine(dateOrderOk, dateOrderError);
 
 const exerciceTypeEnum = z.enum(["civile", "scolaire"]);
 
-const createExerciceSchema = z
-  .object({
-    serviceId: z.string().trim().min(1),
-    label: z.string().trim().min(1, "Le libellé est requis.").max(120),
-    type: exerciceTypeEnum,
-    dateStart: dateString,
-    dateEnd: dateString,
-  })
+// Base UNIQUE exercice (même principe que periodBase).
+const exerciceBase = z.object({
+  serviceId: stringIdSchema,
+  label: z.string().trim().min(1, "Le libellé est requis.").max(120),
+  type: exerciceTypeEnum,
+  dateStart: dateString,
+  dateEnd: dateString,
+});
+const createExerciceSchema = exerciceBase.refine(dateOrderOk, dateOrderError);
+const updateExerciceSchema = exerciceBase
+  .extend({ id: z.number().int().positive() })
   .refine(dateOrderOk, dateOrderError);
 
-const updateExerciceSchema = z
-  .object({
-    serviceId: z.string().trim().min(1),
-    id: z.number().int().positive(),
-    label: z.string().trim().min(1, "Le libellé est requis.").max(120),
-    type: exerciceTypeEnum,
-    dateStart: dateString,
-    dateEnd: dateString,
-  })
-  .refine(dateOrderOk, dateOrderError);
-
-const deleteExerciceSchema = z.object({
-  serviceId: z.string().trim().min(1),
+// Cible « serviceId + id » : partagé par les deux suppressions (période, exercice).
+const byIdSchema = z.object({
+  serviceId: stringIdSchema,
   id: z.number().int().positive(),
 });
-
-const updateSchema = z
-  .object({
-    id: z.number().int().positive(),
-    serviceId: z.string().trim().min(1),
-    label: z.string().trim().min(1, "Le libellé est requis."),
-    etiquette: z.string().trim().max(120).optional().default(""),
-    dateStart: dateString,
-    dateEnd: dateString,
-    // Ouverture des réservations usager (colonne « Dispo ») ; vide = toujours ouvert.
-    disponibilite: dateString,
-    color: colorString,
-  })
-  .refine(dateOrderOk, dateOrderError);
-
-const deleteSchema = z.object({
-  serviceId: z.string().trim().min(1),
-  id: z.number().int().positive(),
-});
+const deleteExerciceSchema = byIdSchema;
+const deleteSchema = byIdSchema;
 
 const openingSchema = z.object({
-  serviceId: z.string().trim().min(1),
+  serviceId: stringIdSchema,
   // Exercice cible : unique porteur des réglages d'ouverture (le service n'en a plus).
   exerciceId: z.number().int().positive(),
   activeDays: z.array(z.enum(DAYS)).max(7),
@@ -262,7 +240,7 @@ export async function deleteExerciceAction(input: {
 }
 
 const maximaSchema = z.object({
-  serviceId: z.string().trim().min(1),
+  serviceId: stringIdSchema,
   exerciceId: z.number().int().positive(),
   maxReservations: z.coerce.number().int().min(1),
   maxReservationsPeriod: z.coerce.number().int().min(1),
@@ -291,7 +269,7 @@ export async function saveExerciceMaximaAction(
 }
 
 const visibleToUsersSchema = z.object({
-  serviceId: z.string().trim().min(1),
+  serviceId: stringIdSchema,
   exerciceId: z.number().int().positive(),
   visible: z.boolean(),
 });

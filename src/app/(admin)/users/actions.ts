@@ -3,6 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import {
+  nomSchema,
+  PROFILE_MIN_ACCOMPAGNANTS_MSG,
+  PROFILE_MIN_ENFANTS_MSG,
+  prenomSchema,
+  profileCountOk,
+  telSchema,
+} from "@/schemas/user";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { getSession, requireRole } from "@/server/guards";
@@ -10,11 +18,12 @@ import { anonymizeUser, hardDeleteEmptyUser, RgpdError } from "@/server/services
 
 const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
 
-// Champs métier communs (création + édition).
+// Champs métier communs (création + édition). Identité : fragments partagés
+// (schemas/user) — plafonds uniques avec « Mon compte » et l'inscription.
 const baseUserSchema = z.object({
-  prenom: z.string().trim().max(100).default(""),
-  nom: z.string().trim().max(100).default(""),
-  tel: z.string().trim().max(30).default(""),
+  prenom: prenomSchema.default(""),
+  nom: nomSchema.default(""),
+  tel: telSchema.default(""),
   niveau: z.string().trim().max(100).default(""),
   enfants: z.coerce.number().int().min(0).max(99).default(0),
   accompagnants: z.coerce.number().int().min(0).max(99).default(0),
@@ -27,23 +36,24 @@ const baseUserSchema = z.object({
 // Un compte « utilisateur » doit toujours déclarer au moins 1 enfant ET
 // 1 accompagnant — à la création comme à l'édition (on ne peut pas le repasser
 // sous 1/1). L'exigence ne s'applique PAS aux gestionnaires/administrateurs.
+// Invariant + messages : source unique schemas/user (partagée avec l'inscription).
 function requireKidsForUser(
   d: { role: string; enfants: number; accompagnants: number },
   ctx: z.RefinementCtx,
 ) {
   if (d.role !== "utilisateur") return;
-  if (d.enfants < 1) {
+  if (!profileCountOk(d.enfants)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["enfants"],
-      message: "Au moins 1 enfant est requis pour un utilisateur.",
+      message: PROFILE_MIN_ENFANTS_MSG,
     });
   }
-  if (d.accompagnants < 1) {
+  if (!profileCountOk(d.accompagnants)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["accompagnants"],
-      message: "Au moins 1 accompagnant est requis pour un utilisateur.",
+      message: PROFILE_MIN_ACCOMPAGNANTS_MSG,
     });
   }
 }
@@ -68,7 +78,7 @@ const updateUserSchema = baseUserSchema
 const createUserSchema = baseUserSchema
   .extend({
     email: z.string().trim().pipe(z.email()),
-    nom: z.string().trim().min(1, "Le nom est obligatoire.").max(100),
+    nom: nomSchema.min(1, "Le nom est obligatoire."),
   })
   .superRefine(requireKidsForUser)
   .superRefine(requireServicesForManager);

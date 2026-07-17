@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { stringIdSchema } from "@/schemas/config";
 import { requireServiceManager } from "@/server/guards";
 import { saveServiceThemes } from "@/server/services/themes";
 
 const saveThemesSchema = z.object({
-  serviceId: z.string().trim().min(1),
+  serviceId: stringIdSchema,
   mode: z.enum(["libre", "liste"]),
   themes: z.array(z.string().max(255)).max(500),
 });

@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import {
+  PROFILE_MIN_ACCOMPAGNANTS_MSG,
+  PROFILE_MIN_ENFANTS_MSG,
+  profileCountOk,
+} from "@/schemas/user";
 import { createUserAction, sendPasswordResetAction, updateUserAction } from "./actions";
 import type { Demandeur, NiveauRef, ServiceRef, StructureRef, UserRow } from "./users-table";
 
@@ -108,12 +113,12 @@ export function UserModal({
     if (requireKids) {
       const nbEnfants = enfants === "" ? 0 : Number(enfants);
       const nbAccompagnants = accompagnants === "" ? 0 : Number(accompagnants);
-      if (!Number.isInteger(nbEnfants) || nbEnfants < 1) {
-        setError("Au moins 1 enfant est requis pour un utilisateur.");
+      if (!profileCountOk(nbEnfants)) {
+        setError(PROFILE_MIN_ENFANTS_MSG);
         return;
       }
-      if (!Number.isInteger(nbAccompagnants) || nbAccompagnants < 1) {
-        setError("Au moins 1 accompagnant est requis pour un utilisateur.");
+      if (!profileCountOk(nbAccompagnants)) {
+        setError(PROFILE_MIN_ACCOMPAGNANTS_MSG);
         return;
       }
     }

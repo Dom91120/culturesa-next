@@ -5,7 +5,8 @@ import {
   eligiblePeriodsWhere,
   pickEligibleExercices,
 } from "@/server/services/exercice";
-import { getServiceStats, type LabeledCount, type StatsType } from "@/server/services/stats";
+import { getServiceStats, type LabeledCount } from "@/server/services/stats";
+import { parseStatsDate, parseStatsType } from "./params";
 import { StatsFilters } from "./stats-filters";
 import { StatsToolbar } from "./stats-toolbar";
 
@@ -572,13 +573,6 @@ function FillCurve({ data, color }: { data: LabeledCount[]; color: string }) {
   );
 }
 
-function parseType(v: string | undefined): StatsType {
-  return v === "rec" || v === "uniq" ? v : "all";
-}
-function parseDate(v: string | undefined): string | null {
-  return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-}
-
 export default async function StatsPage({
   params,
   searchParams,
@@ -594,9 +588,9 @@ export default async function StatsPage({
   });
   if (!service) notFound();
 
-  const type = parseType(sp.type);
-  const rawFrom = parseDate(sp.from);
-  const rawTo = parseDate(sp.to);
+  const type = parseStatsType(sp.type);
+  const rawFrom = parseStatsDate(sp.from);
+  const rawTo = parseStatsDate(sp.to);
 
   // Exercices éligibles (comme l'agenda) : l'exercice COURANT par défaut, tous les
   // exercices non archivés si le service « affiche les exercices précédents »
