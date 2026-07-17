@@ -13,11 +13,16 @@ type Props = {
 
 type Mode = "none" | "create" | "undo";
 
+// AAAA-MM-JJ → JJ/MM/AAAA (affichage français des bornes d'exercice).
+const frDate = (ymd: string) => ymd.split("-").reverse().join("/");
+
 export function ExercicePanel({ serviceId, data }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  // Message de succès, teinté : accent pour une création, orange (--warn)
+  // pour une suppression d'exercice.
+  const [info, setInfo] = useState<{ text: string; tone: "accent" | "warn" } | null>(null);
 
   const [mode, setMode] = useState<Mode>("none");
   const [recreatePeriods, setRecreatePeriods] = useState(true);
@@ -55,9 +60,10 @@ export function ExercicePanel({ serviceId, data }: Props) {
         setError(res.error);
         return;
       }
-      setInfo(
-        `Exercice créé : ${res.created} période(s), ${res.slotsCreated} créneau(x) récurrent(s).`,
-      );
+      setInfo({
+        text: `Exercice ${data.nextName} créé : ${res.created} période(s), ${res.slotsCreated} créneau(x) récurrent(s).`,
+        tone: "accent",
+      });
       setMode("none");
       router.refresh();
     });
@@ -78,7 +84,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
         setError(res?.error ?? "Échec de l'annulation.");
         return;
       }
-      setInfo("Exercice supprimé, retour à l'année précédente effectué.");
+      setInfo({ text: "Exercice supprimé, retour à l'année précédente effectué.", tone: "warn" });
       setMode("none");
       setUndoAck(false);
       router.refresh();
@@ -118,7 +124,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
             {data.currentRange ? (
               <span className="muted">
                 {" "}
-                ({data.currentRange.start} → {data.currentRange.end})
+                ({frDate(data.currentRange.start)} → {frDate(data.currentRange.end)})
               </span>
             ) : null}
           </p>
@@ -130,7 +136,9 @@ export function ExercicePanel({ serviceId, data }: Props) {
           {error}
         </p>
       ) : null}
-      {info ? <p style={{ color: "var(--ok)", marginTop: 12, fontSize: ".9rem" }}>{info}</p> : null}
+      {info ? (
+        <p style={{ color: `var(--${info.tone})`, marginTop: 12, fontSize: ".9rem" }}>{info.text}</p>
+      ) : null}
 
       <div style={{ display: "flex", gap: 24, marginTop: 16, flexWrap: "wrap" }}>
         <label className="check">
