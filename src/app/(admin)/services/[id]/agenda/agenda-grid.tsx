@@ -2668,7 +2668,24 @@ export function AgendaGrid({
             <button
               type="button"
               className={`agenda-mode-btn${mode === "realweek" ? " active" : ""}`}
-              onClick={() => setMode("realweek")}
+              onClick={() => {
+                // Bascule Modèle → Semaine réelle : on CONSERVE l'onglet période
+                // sélectionné (même logique que le clic d'onglet en Semaine réelle) —
+                // période figée, et ancre déplacée sur son début si la semaine
+                // courante ne la couvre pas.
+                if (mode === "model") {
+                  const p = visiblePeriods[periodIdx];
+                  if (p?.dateStart && p.dateEnd) {
+                    setRwPeriodId(p.id);
+                    const anchor = anchorMonday ?? ymd(mondayOf(new Date()));
+                    const anchorSunday = ymd(addDays(anchor, 6));
+                    if (anchor > p.dateEnd || anchorSunday < p.dateStart) {
+                      setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
+                    }
+                  }
+                }
+                setMode("realweek");
+              }}
             >
               Semaine réelle
             </button>
