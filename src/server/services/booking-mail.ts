@@ -309,24 +309,29 @@ export type BookingCancellationParams = {
   periodId?: number | null;
   // Motif affiché dans l'e-mail (ex. « Supprimée par l'utilisateur »).
   motif: string;
+  // Déclencheur : annulation par l'usager (défaut), suppression d'une réservation
+  // validée par un gestionnaire, ou refus d'une demande en attente. Chacun porte
+  // ses réglages « Envoyer »/« Destinataire »/« Modèle » globaux.
+  trigger?: "cancel_user" | "cancel_manager" | "refuse";
 };
 
 /**
- * Envoie à l'usager l'e-mail « Réservation annulée » (kind `booking_cancelled`) après la
- * suppression d'une de ses réservations. Le créneau, le service et la période sont résolus
+ * Envoie l'e-mail d'annulation/refus après la suppression d'une réservation, selon le
+ * déclencheur (`cancel_user` par défaut). Le créneau, le service et la période sont résolus
  * APRÈS coup (le slot/le service existent toujours, seule la réservation est supprimée).
+ * Destinataires résolus par le réglage global « Destinataire » du déclencheur — le chemin
+ * gestionnaire n'envoyait avant qu'à l'usager, en ignorant ce réglage (audit 2026-07-17).
  * Totalement best-effort : toute erreur est seulement journalisée.
  */
 export async function sendBookingCancellationMail(
   params: BookingCancellationParams,
 ): Promise<void> {
   try {
-    // Annulation par l'usager lui-même (l'annulation/suppression par un gestionnaire
-    // passe par un autre chemin avec son propre déclencheur).
-    if (!(await isTriggerEnabled("cancel_user"))) return;
+    const trigger = params.trigger ?? "cancel_user";
+    if (!(await isTriggerEnabled(trigger))) return;
 
     const [recipients, slot, concerned] = await Promise.all([
-      resolveTriggerRecipients("cancel_user", params.serviceId, { userId: params.userId }),
+      resolveTriggerRecipients(trigger, params.serviceId, { userId: params.userId }),
       prisma.slot.findUnique({
         where: { id: params.slotId },
         select: {
@@ -358,7 +363,7 @@ export async function sendBookingCancellationMail(
       motif: params.motif,
     };
 
-    const kind = await resolveTriggerKind("cancel_user");
+    const kind = await resolveTriggerKind(trigger);
     for (const r of recipients) {
       const prenom = r.personal ? r.prenom : "";
       await sendTemplatedMail({

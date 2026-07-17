@@ -2272,7 +2272,7 @@ export function AgendaGrid({
             if (!dragged) return;
             // Refus : changement de type (récurrent↔ponctuel) ou récurrent en semaine réelle.
             if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell || realWeekRecurring) return;
-            runResult(moveBookingAction(id, service.id, b.dayKey, b.slotId));
+            runResult(moveBookingAction(id, service.id, b.slotId));
           }}
         >
           {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
@@ -3291,7 +3291,7 @@ export function AgendaGrid({
                   setDraggingId(null);
                   // Cible récurrente en semaine réelle (consultation) → déplacement refusé.
                   if (slot && !isRealweekRecurringSlot(slot.id))
-                    runResult(moveBookingAction(id, service.id, d, slot.id));
+                    runResult(moveBookingAction(id, service.id, slot.id));
                 }}
               >
                 <AgendaDayBackground

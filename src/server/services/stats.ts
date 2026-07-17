@@ -1,4 +1,5 @@
 import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
+import { todayParisISO } from "@/lib/booking-delay";
 import { gaugeUnits } from "@/lib/gauge";
 import { schoolYearLabel } from "@/lib/school-year";
 import { DAYS } from "@/schemas/config";
@@ -124,7 +125,8 @@ export async function getServiceStats(
   filters: StatsFilters,
 ): Promise<ServiceStats> {
   const { type, dateFrom, dateTo } = filters;
-  const today = ymd(new Date());
+  // « Aujourd'hui » = date calendaire à Paris (standardisation serveur, audit 2026-07-17).
+  const today = todayParisISO();
 
   // Service : capacité par défaut + prise en compte des accompagnants dans la jauge.
   const service = await prisma.service.findUnique({

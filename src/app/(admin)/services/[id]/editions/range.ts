@@ -1,3 +1,4 @@
+import { todayParisISO } from "@/lib/booking-delay";
 import { prisma } from "@/server/db";
 import type { DatedSession } from "@/server/services/editions";
 import {
@@ -168,7 +169,8 @@ export function resolveRange(
   // reste dans l'exercice même si « aujourd'hui » est hors de ses dates).
   const es = exercice?.dateStart ? ymd(exercice.dateStart) : null;
   const ee = exercice?.dateEnd ? ymd(exercice.dateEnd) : null;
-  const todayY = ymd(new Date());
+  // « Aujourd'hui » = date calendaire à Paris (standardisation serveur, audit 2026-07-17).
+  const todayY = todayParisISO();
   const fallback = es && todayY < es ? es : ee && todayY > ee ? ee : todayY;
   const dateParam =
     sp.date && reIso.test(sp.date) ? sp.date : sp.week && reIso.test(sp.week) ? sp.week : fallback;
@@ -204,7 +206,7 @@ export function resolveRange(
 
   // ── Trimestriel : navigation T1→T2→T3(→T4) via les flèches ──
   if (sp.mode === "trimester") {
-    const todayYmd = ymd(new Date());
+    const todayYmd = todayParisISO();
     let def = trimestres.findIndex((t) => ymd(t.from) <= todayYmd && todayYmd <= ymd(t.to));
     if (def < 0) def = 0;
     const raw = sp.trim != null && sp.trim !== "" ? Number(sp.trim) : def;

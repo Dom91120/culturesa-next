@@ -1,3 +1,4 @@
+import { todayParisISO } from "@/lib/booking-delay";
 import { prisma } from "@/server/db";
 import { openingForDate } from "@/server/services/opening";
 
@@ -54,7 +55,7 @@ export type DemandeurSettingLabeledRow = DemandeurSettingRow & {
 export async function getServiceDemandeurSettingsLabeled(
   serviceId: string,
 ): Promise<DemandeurSettingLabeledRow[]> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayParisISO();
   const [opening, rows] = await Promise.all([
     openingForDate(prisma, serviceId, today),
     prisma.serviceDemandeurSettings.findMany({

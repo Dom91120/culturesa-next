@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { todayParisISO } from "@/lib/booking-delay";
 import { listServicePeriods, parseActiveDays } from "@/server/services/periods";
 import { getService } from "@/server/services/services";
 import { ParamsSubnav } from "../params-subnav";
@@ -53,7 +54,7 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
 
   // Exercice EN COURS = celui dont l'intervalle [dateStart, dateEnd] contient la date
   // du jour (affiché à droite du titre du panneau Réservations). Aucun si hors plage.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayParisISO();
   const currentExercice =
     uiExercices.find((e) => e.dateStart && e.dateEnd && e.dateStart <= today && today <= e.dateEnd)
       ?.label ?? null;

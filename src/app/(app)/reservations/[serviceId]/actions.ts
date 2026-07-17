@@ -549,7 +549,10 @@ type ParsedDraft = z.infer<typeof draftSchema>;
  * déplacements → ajouts. Lève à la première erreur (→ rollback de toute la tx).
  * Renvoie les e-mails de confirmation à envoyer après le commit.
  */
-export async function commitDraftInTx(
+// NON exporté : dans un fichier "use server", tout export devient un endpoint POST
+// public — celui-ci prend userId en paramètre et n'a AUCUNE garde (elle est portée
+// par commitDraft). Usage strictement interne (audit sécurité 2026-07-17).
+async function commitDraftInTx(
   tx: Prisma.TransactionClient,
   userId: string,
   serviceId: string,

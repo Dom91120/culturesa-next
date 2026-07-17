@@ -5,7 +5,6 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { isBookingLockedByPointage } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
-import { greeting } from "@/lib/mail-render";
 import { hasBothParticipants, hasBothParticipantsMsg } from "@/schemas/booking";
 import { DAYS } from "@/schemas/config";
 import {
@@ -17,8 +16,7 @@ import {
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import {
-  formatSlotLabel,
-  resolvePeriodLabel,
+  sendBookingCancellationMail,
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
 import {
@@ -27,8 +25,6 @@ import {
   effectiveOpenOnSchoolHolidays,
 } from "@/server/services/bookings";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
-import { isTriggerEnabled, resolveTriggerKind } from "@/server/services/mail-prefs";
-import { sendTemplatedMail } from "@/server/services/mail-send";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import {
   addRecurringSlot,
@@ -457,9 +453,8 @@ export async function deleteBookingAdminAction(
       bookingType: true,
       parentBookingId: true,
       pointage: true,
-      user: { select: { email: true, prenom: true } },
-      service: { select: { label: true } },
-      slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
+      userId: true,
+      slotId: true,
     },
   });
   if (!booking) return { ok: false, error: "Réservation introuvable." };
@@ -477,44 +472,18 @@ export async function deleteBookingAdminAction(
   await prisma.booking.delete({ where: { id: id.data } });
   revalidatePath(`/services/${serviceId}/agenda`);
 
-  // Notification usager (best-effort) : n'interrompt pas le flux en cas d'échec —
-  // la suppression est déjà committée, tous les chemins ci-dessous sont un succès.
-  const email = booking?.user?.email?.trim();
-  if (booking && email?.includes("@")) {
-    const wasValidated = booking.validated;
-    // Action : suppression d'une réservation validée vs refus d'une demande en attente.
-    const trigger = wasValidated ? "cancel_manager" : "refuse";
-    // Préférence « Envoyer » (globale) de cette action activée ?
-    if (!(await isTriggerEnabled(trigger))) {
-      return { ok: true };
-    }
-    const serviceLabel = booking.service?.label ?? "";
-    const slotLabel = booking.slot ? formatSlotLabel(booking.slot) : "";
-    // Période : par id (récurrent) ou par date couverte (ponctuel).
-    const periodLabel = await resolvePeriodLabel({
-      serviceId,
-      periodId: booking.periodId,
-      slotDate: booking.slot?.slotDate ?? null,
-    });
-    const prenom = booking.user?.prenom?.trim() ?? "";
-    const vars: Record<string, string> = {
-      salutation: greeting(prenom),
-      prenom,
-      service: serviceLabel,
-      creneau: slotLabel,
-      periode: periodLabel,
-      motif: (motif ?? "").trim().slice(0, 1000),
-    };
-    // Best-effort : en cas d'échec, l'e-mail est mis en file (renvoyable depuis
-    // Administration > Messagerie). N'interrompt jamais la suppression.
-    const kind = await resolveTriggerKind(trigger);
-    await sendTemplatedMail({
-      to: email,
-      kind,
-      vars,
-      serviceId,
-    });
-  }
+  // Notification (best-effort, jamais bloquante) via le canal COMMUN d'annulation :
+  // réglages globaux « Envoyer »/« Destinataire »/« Modèle » du déclencheur honorés
+  // (l'ancien envoi direct à l'usager ignorait le réglage Destinataire — audit
+  // 2026-07-17). Suppression d'une réservation validée vs refus d'une demande.
+  await sendBookingCancellationMail({
+    userId: booking.userId,
+    serviceId,
+    slotId: booking.slotId,
+    periodId: booking.periodId,
+    motif: (motif ?? "").trim().slice(0, 1000),
+    trigger: booking.validated ? "cancel_manager" : "refuse",
+  });
   return { ok: true };
 }
 
@@ -621,7 +590,6 @@ export async function updateBookingDetailAction(input: {
 export async function moveBookingAction(
   bookingId: number,
   serviceId: string,
-  _dayKey: string,
   slotId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(serviceId);
@@ -646,12 +614,31 @@ export async function moveBookingAction(
   try {
     await prisma.$transaction(
       async (tx) => {
+        // Défense en profondeur (audit 2026-07-17) : créneau cible du MÊME service et
+        // du MÊME type que la réservation (récurrent→récurrent, ponctuel→ponctuel),
+        // comme le chemin usager (moveInTx). La période SUIT le créneau cible : sans
+        // cette mise à jour, la jauge restait décomptée sur la partition
+        // {slotId, ancienne période} → sous-comptage et sur-réservation possibles.
+        const wantType = lk.bookingType === "recurring" ? "recurring" : "unique";
+        const target = await tx.slot.findFirst({
+          where: { id: slotId, serviceId },
+          select: { slotType: true, periodId: true },
+        });
+        if (!target || target.slotType !== wantType) {
+          throw new BookingError("Ce créneau n'est pas disponible.");
+        }
+        if (wantType === "recurring" && !(target.periodId != null && target.periodId > 0)) {
+          throw new BookingError("Période requise pour une réservation récurrente.");
+        }
+        // Récurrent → période du créneau cible ; ponctuel → aucune période (NULL),
+        // aligné sur le chemin usager.
+        const newPeriodId = wantType === "recurring" ? target.periodId : null;
         // Anti-surbooking : déplacer vers un créneau complet est refusé (jauge/capacité).
         await assertSlotCapacity(tx, {
           serviceId,
           slotId,
-          bookingType: lk.bookingType === "recurring" ? "recurring" : "unique",
-          periodId: lk.periodId,
+          bookingType: wantType,
+          periodId: newPeriodId,
           enfants: lk.enfants,
           accompagnants: lk.accompagnants,
           excludeBookingId: id.data,
@@ -659,7 +646,7 @@ export async function moveBookingAction(
         await tx.booking.update({
           where: { id: id.data },
           // auto_validate_from réinitialisé à NOW() sur un déplacement (cf. logique d'origine).
-          data: { slotId, autoValidateFrom: new Date() },
+          data: { slotId, periodId: newPeriodId, autoValidateFrom: new Date() },
         });
         const b = await tx.booking.findUnique({
           where: { id: id.data },
@@ -736,9 +723,16 @@ export async function createRecurringBookingAction(input: {
         // propagerait ensuite. (assertSlotCapacity ne contrôle que le couple slot/service.)
         const target = await tx.slot.findFirst({
           where: { id: d.slotId, serviceId: d.serviceId },
-          select: { slotType: true },
+          select: { slotType: true, periodId: true },
         });
         if (target?.slotType !== "recurring") {
+          throw new BookingError("Ce créneau n'est pas disponible.");
+        }
+        // Anti-injection : la période annoncée DOIT être celle du créneau — la jauge et
+        // l'unicité uq_recurring sont cloisonnées par {slotId, periodId}, un periodId
+        // forgé les contournerait et matérialiserait les occurrences sur la mauvaise
+        // plage. Même garde que le chemin usager (reserveRecurringInTx).
+        if (target.periodId !== d.periodId) {
           throw new BookingError("Ce créneau n'est pas disponible.");
         }
         // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.

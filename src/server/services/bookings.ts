@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { earliestBookableISO } from "@/lib/booking-delay";
+import { earliestBookableISO, todayParisISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
@@ -14,10 +14,14 @@ import { deriveServiceModes } from "./service-modes";
 /** Erreur métier de réservation (message destiné à l'usager). */
 export class BookingError extends Error {}
 
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+/**
+ * Minuit UTC du jour calendaire de PARIS — à comparer aux `@db.Date` (stockés à
+ * minuit UTC). L'ancienne version prenait minuit dans le fuseau DU SERVEUR :
+ * décalage d'un jour possible entre 00h et 02h selon le TZ du process (audit
+ * 2026-07-17, standardisation « aujourd'hui = date à Paris »).
+ */
+function startOfToday(): Date {
+  return new Date(`${todayParisISO()}T00:00:00Z`);
 }
 
 /**
@@ -65,7 +69,7 @@ export function effectiveOpenOnSchoolHolidays(
  *   - disponibilité (colonne « Dispo » du panneau Périodes) : refuse tant que la
  *     date d'ouverture n'est pas atteinte. Période sans date (null) ou réservation
  *     sans période : réservable sans restriction.
- * Comparaison en date LOCALE (le champ est un @db.Date à minuit UTC).
+ * Comparaison en date calendaire de PARIS (le champ est un @db.Date à minuit UTC).
  */
 export async function assertPeriodOpenForUser(
   db: Prisma.TransactionClient,
@@ -85,7 +89,9 @@ export async function assertPeriodOpenForUser(
   const dispo = period?.disponibilite;
   if (!dispo) return;
   const dispoIso = dispo.toISOString().slice(0, 10);
-  const todayIso = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+  // « Aujourd'hui » = date calendaire à PARIS (et non le fuseau du serveur), comme
+  // partout côté serveur (todayParisISO — standardisation audit 2026-07-17).
+  const todayIso = todayParisISO();
   if (todayIso < dispoIso) {
     throw new BookingError(
       `Les réservations pour cette période ouvriront le ${dispo.toLocaleDateString("fr-FR", { timeZone: "UTC" })}.`,
@@ -505,7 +511,10 @@ export async function createUniqueBookingInTx(
 /**
  * Annule une réservation de l'usager dans un `tx` fourni (composable, panier atomique).
  * Renvoie true si supprimée. Verrou pointage : une réservation pointée, ou une
- * récurrente dont un miroir est pointé, n'est plus annulable.
+ * récurrente dont un miroir est pointé, n'est plus annulable — cas signalé par une
+ * BookingError (et non un `false` silencieux : l'UI affichait « Réservation
+ * supprimée » alors que rien n'était supprimé, cf. audit 2026-07-17), comme le fait
+ * déjà l'édition (updateInTx).
  */
 export async function cancelUserBookingInTx(
   tx: Prisma.TransactionClient,
@@ -517,11 +526,15 @@ export async function cancelUserBookingInTx(
     select: { pointage: true },
   });
   if (!b) return false;
-  if (b.pointage != null) return false;
+  if (b.pointage != null) {
+    throw new BookingError("Réservation pointée, annulation impossible.");
+  }
   const pointedChildren = await tx.booking.count({
     where: { parentBookingId: bookingId, pointage: { not: null } },
   });
-  if (pointedChildren > 0) return false;
+  if (pointedChildren > 0) {
+    throw new BookingError("Une séance de cette réservation est pointée, annulation impossible.");
+  }
   const res = await tx.booking.deleteMany({ where: { id: bookingId, userId } });
   return res.count > 0;
 }

@@ -124,6 +124,24 @@ function parseActiveDays(raw: string): number[] {
   return out;
 }
 
+/**
+ * Comparateur UNIQUE « exercice le plus récent d'abord » : date de début la plus
+ * tardive, nulls en dernier, départage par id décroissant. Partagé par la bascule,
+ * `currentExerciceIdForService` et le pane exercice — trois copies divergeaient
+ * (l'une sans départage par id) et pouvaient désigner un « courant » différent.
+ */
+function byMostRecentExercice(
+  a: { id: number; dateStart: Date | null },
+  b: { id: number; dateStart: Date | null },
+): number {
+  const as = a.dateStart?.getTime();
+  const bs = b.dateStart?.getTime();
+  if (as != null && bs != null) return bs - as || b.id - a.id;
+  if (as != null) return -1;
+  if (bs != null) return 1;
+  return b.id - a.id;
+}
+
 type SlotSnapshot = {
   startTime: string;
   endTime: string;
@@ -132,6 +150,9 @@ type SlotSnapshot = {
   weeks: string | null;
   // « A une jauge » : reconduit à l'identique par la bascule (clone + miroirs).
   jauge: boolean;
+  // Demandeurs autorisés (SlotDemandeur) : reconduits eux aussi — sans eux, un
+  // créneau restreint redevenait « ouvert à tous » après la bascule (audit 2026-07-17).
+  demandeurIds: number[];
 };
 
 /**
@@ -238,15 +259,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         where: { serviceId },
         select: { id: true, dateStart: true, visibleToUsers: true },
       });
-      const currentExoRow =
-        exercicesRows.slice().sort((a, b) => {
-          const as = a.dateStart?.getTime();
-          const bs = b.dateStart?.getTime();
-          if (as != null && bs != null) return bs - as || b.id - a.id;
-          if (as != null) return -1;
-          if (bs != null) return 1;
-          return b.id - a.id;
-        })[0] ?? null;
+      const currentExoRow = exercicesRows.slice().sort(byMostRecentExercice)[0] ?? null;
 
       // Périodes à reconduire : celles (actives) de l'exercice courant — repli legacy
       // sans exercice : toutes les périodes actives du service.
@@ -263,6 +276,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       for (const p of actives) {
         const slots = await tx.slot.findMany({
           where: { serviceId, periodId: p.id, slotType: "recurring" },
+          include: { demandeurs: { select: { demandeurId: true } } },
         });
         slotsByPeriod.set(
           p.id,
@@ -273,6 +287,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
             slotDay: s.slotDay,
             weeks: s.weeks,
             jauge: s.jauge,
+            demandeurIds: s.demandeurs.map((d) => d.demandeurId),
           })),
         );
       }
@@ -404,6 +419,13 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
               },
             });
             newRecurringSlotIds.push(newSlotId);
+            // Restrictions de demandeurs reconduites avec le créneau (les miroirs
+            // suivent leur parent, cf. createUniqueBookingInTx — pas de lignes propres).
+            if (s.demandeurIds.length > 0) {
+              await tx.slotDemandeur.createMany({
+                data: s.demandeurIds.map((demandeurId) => ({ slotId: newSlotId, demandeurId })),
+              });
+            }
 
             if (ns && ne) {
               const mirrors = await generateMirrorSlots(tx, {
@@ -593,14 +615,7 @@ export async function currentExerciceIdForService(serviceId: string): Promise<nu
     where: { serviceId },
     select: { id: true, dateStart: true },
   });
-  const current = rows.slice().sort((a, b) => {
-    const as = a.dateStart?.getTime();
-    const bs = b.dateStart?.getTime();
-    if (as != null && bs != null) return bs - as || b.id - a.id;
-    if (as != null) return -1;
-    if (bs != null) return 1;
-    return b.id - a.id;
-  })[0];
+  const current = rows.slice().sort(byMostRecentExercice)[0];
   return current?.id ?? null;
 }
 
@@ -659,16 +674,9 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
     }),
   ]);
 
-  // Exercice courant = le plus récent (date de début la plus tardive, nulls en dernier).
-  const sorted = exercices.slice().sort((a, b) => {
-    const as = a.dateStart?.getTime();
-    const bs = b.dateStart?.getTime();
-    if (as != null && bs != null) return bs - as;
-    if (as != null) return -1;
-    if (bs != null) return 1;
-    return b.label.localeCompare(a.label);
-  });
-  const current = sorted[0] ?? null;
+  // Exercice courant = le plus récent (comparateur unique — même départage que la
+  // bascule et currentExerciceIdForService, cf. byMostRecentExercice).
+  const current = exercices.slice().sort(byMostRecentExercice)[0] ?? null;
 
   // La bascule reconduit les périodes de l'exercice COURANT (portée par exercice
   // depuis la suppression de la notion d'état actif/archivé).
