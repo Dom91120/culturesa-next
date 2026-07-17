@@ -1,6 +1,8 @@
 # Déploiement — CultuRésa (Next.js auto-hébergé)
 
-Stack de prod : **Next.js standalone** + **PostgreSQL 17** + **Caddy** (reverse proxy + HTTPS auto), orchestrés par Docker Compose.
+Stack de prod : **Next.js standalone** + **PostgreSQL 17**, orchestrés par Docker Compose.
+L'app est publiée en **HTTP sur le port 3000** ; le TLS et les en-têtes de sécurité relèvent
+d'un **reverse proxy externe** à la stack (nginx, Traefik, Caddy hôte…) si elle est exposée à Internet.
 
 > 📘 Ce document couvre l'**installation** et les opérations de base. Pour l'**exploitation au
 > quotidien** (supervision, durcissement, sauvegarde hors-site, test de restauration, dépannage),
@@ -12,8 +14,9 @@ Stack de prod : **Next.js standalone** + **PostgreSQL 17** + **Caddy** (reverse 
 - **Dimensionnement minimal** : 2 vCPU, 2 Go RAM, 20 Go SSD. **Recommandé** : 2 vCPU, 4 Go RAM,
   40 Go SSD (le build de l'image Next.js et PostgreSQL sont les postes les plus gourmands ;
   prévoir de la marge disque pour `pgdata` + `./backups`).
-- Ports **80** et **443** ouverts (firewall) — `443/udp` aussi pour HTTP/3.
-- Un nom de domaine pointant (enregistrement A/AAAA) vers l'IP du VPS.
+- Port **3000** joignable par le reverse proxy externe (ou ouvert directement pour un usage LAN).
+- Si exposition à Internet : un nom de domaine pointant (enregistrement A/AAAA) vers l'IP du
+  proxy, et le TLS géré par celui-ci.
 
 ## Mise en route — installation automatisée (recommandé)
 
@@ -34,7 +37,7 @@ Le script est **idempotent** (relançable). Il :
   `POSTGRES_PASSWORD` (les valeurs déjà renseignées sont conservées) ;
 - demande le **domaine**, l'**e-mail admin** (= identifiant de connexion) et le
   **mot de passe admin** (généré et affiché si non fourni) ;
-- construit et démarre `app + db + caddy + cron`, applique les migrations, puis
+- construit et démarre `app + db + cron`, applique les migrations, puis
   crée le compte admin et les référentiels système d'e-mails (`db:init`).
 
 En non-interactif (CI) : `APP_DOMAIN=… ADMIN_EMAIL=… ADMIN_PASSWORD=… ./scripts/install.sh`.
@@ -152,17 +155,19 @@ Les éditions (Liste / Planning / Pointages) s'impriment via un PDF généré c�
 ## Points d'attention
 - `next.config.ts` contient `output: "standalone"` (requis pour l'image Docker).
 - Le conteneur `app` tourne en utilisateur non-root (`nextjs`).
-- HTTP/3 est activé (port 443/udp).
-- Pour le dev local sans domaine : mets `APP_DOMAIN=localhost` dans `.env`
-  (Caddy génère alors un certificat interne auto-signé).
+- L'app sert en **HTTP** sur `:3000` : si elle est exposée à Internet, placer devant un
+  reverse proxy TLS et y reporter les en-têtes de sécurité (HSTS, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Referrer-Policy`).
+- `APP_URL` / `NEXT_PUBLIC_APP_URL` (et au besoin `TRUSTED_ORIGINS`) doivent refléter
+  l'URL **réellement utilisée par les navigateurs** (celle du proxy, ou `http://<hôte>:3000`
+  en accès direct) — sinon l'inscription/connexion échoue (anti-CSRF).
 
 ## Fichiers de cette étape
 | Fichier | Rôle |
 |---|---|
 | `Dockerfile` | Build multi-stage Next.js standalone + Prisma |
 | `docker-entrypoint.sh` | Migrations Prisma puis démarrage |
-| `docker-compose.yml` | app + db + caddy + cron + `init` (one-shot) |
-| `Caddyfile` | Reverse proxy + HTTPS |
+| `docker-compose.yml` | app + db + cron + `init` (one-shot) |
 | `.env.example` | Modèle de configuration |
 | `scripts/install.sh` | Installation automatisée sur serveur vierge |
 | `prisma/seed-init.ts` | Init minimal : compte admin + référentiels e-mails (`db:init`) |

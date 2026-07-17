@@ -10,16 +10,19 @@ Pour l'utilisation fonctionnelle (réservations, gestion des services), voir le
 
 ## 1. Architecture
 
-CultuRésa s'installe en **auto-hébergé** via Docker Compose. Quatre conteneurs de service,
+CultuRésa s'installe en **auto-hébergé** via Docker Compose. Trois conteneurs de service,
 plus un conteneur d'initialisation ponctuel (`init`) :
 
 | Conteneur | Rôle |
 |-----------|------|
-| **app** | Application Next.js (standalone) + Prisma |
+| **app** | Application Next.js (standalone) + Prisma — servie en HTTP sur le port **3000** |
 | **db** | Base de données PostgreSQL 17 (volume persistant `pgdata`) |
-| **caddy** | Reverse proxy + HTTPS automatique (Let's Encrypt) |
 | **cron** | Tâches planifiées (auto-validation, rappels, RGPD) **et sauvegarde quotidienne de la base** |
 | **init** | One-shot (profil `init`, lancé à la demande) : crée le compte administrateur et les référentiels d'e-mails |
+
+> La stack n'embarque **pas de reverse proxy** : pour une exposition à Internet, placer
+> l'app derrière un proxy TLS externe (nginx, Traefik, Caddy hôte…) qui porte le
+> certificat HTTPS et les en-têtes de sécurité.
 
 Les migrations de base de données sont appliquées **automatiquement** au démarrage de
 `app` (`prisma migrate deploy`).
@@ -29,8 +32,8 @@ Les migrations de base de données sont appliquées **automatiquement** au déma
 ## 2. Prérequis serveur
 
 - Un serveur (VPS) avec **Docker** et le plugin **Compose** (`docker compose version`).
-- Les ports **80** et **443** ouverts (pare-feu) — HTTP/3 utilise aussi `443/udp`.
-- Un **nom de domaine** dont l'enregistrement DNS (A / AAAA) pointe vers l'IP du serveur.
+- Le port **3000** joignable par le reverse proxy externe (ou ouvert pour un usage LAN).
+- Si exposition à Internet : un **nom de domaine** pointant vers le proxy, qui gère le TLS.
 
 ---
 
@@ -41,9 +44,9 @@ committer le vrai `.env`** (il est déjà dans `.gitignore`).
 
 | Variable | Rôle |
 |----------|------|
-| `APP_DOMAIN` | Domaine public servi par Caddy (ex. `reservations.mon-asso.fr`) |
-| `APP_URL` | URL complète de l'app (doit correspondre au domaine) |
-| `ADMIN_EMAIL` | E-mail pour les certificats Let's Encrypt |
+| `APP_DOMAIN` | Domaine public de l'app (ex. `reservations.mon-asso.fr`), servi par le proxy externe |
+| `APP_URL` | URL complète **vue par les navigateurs** (celle du proxy, ou `http://<hôte>:3000` en accès direct) |
+| `ADMIN_EMAIL` | E-mail du compte administrateur (identifiant de connexion) |
 | `POSTGRES_USER` | Utilisateur PostgreSQL |
 | `POSTGRES_PASSWORD` | **Mot de passe fort** de la base |
 | `POSTGRES_DB` | Nom de la base |
@@ -82,10 +85,11 @@ docker compose logs -f app
 ```
 
 Au démarrage, `docker-entrypoint.sh` applique les migrations Prisma puis lance le serveur.
-Une fois `app` démarré et le DNS propagé, Caddy obtient automatiquement le certificat HTTPS.
+L'app répond alors en HTTP sur `http://<hôte>:3000` ; le HTTPS, s'il y a lieu, est porté
+par le reverse proxy externe.
 
-> Pour un essai local sans domaine : `APP_DOMAIN=localhost` (Caddy génère un certificat
-> interne auto-signé).
+> Pour un essai local sans domaine ni proxy : `APP_URL=http://localhost:3000` (et
+> `NEXT_PUBLIC_APP_URL` identique).
 
 ---
 

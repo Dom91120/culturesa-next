@@ -3,7 +3,7 @@
 # Installation de CultuRésa sur un nouveau serveur.
 #
 # Prépare l'environnement (.env + secrets), construit et démarre la stack Docker
-# (app + db + caddy + cron), applique les migrations Prisma puis initialise une
+# (app + db + cron), applique les migrations Prisma puis initialise une
 # base VIERGE avec UNIQUEMENT le compte administrateur (cf. prisma/seed-init.ts).
 #
 # Idempotent : relançable. Les secrets déjà renseignés dans .env sont conservés ;
@@ -81,8 +81,9 @@ if [ -z "$DOMAIN" ]; then
   read -r -p "Domaine public [${cur_domain:-localhost}] : " DOMAIN || true
   DOMAIN="${DOMAIN:-${cur_domain:-localhost}}"
 fi
-# HTTPS systématique : domaine public → certificat Let's Encrypt ; "localhost" →
-# certificat interne auto-signé généré par Caddy.
+# HTTPS supposé : le TLS relève désormais d'un reverse proxy EXTERNE à la stack
+# (Caddy retiré du compose). En accès direct http://<hôte>:3000, ajuster APP_URL
+# et NEXT_PUBLIC_APP_URL dans .env après l'installation.
 SCHEME="https"
 set_env APP_DOMAIN "$DOMAIN"
 set_env APP_URL "${SCHEME}://${DOMAIN}"
@@ -124,7 +125,7 @@ fi
 
 # ── 2. Build + démarrage de la stack ──
 say "2/5 · Construction et démarrage des conteneurs"
-$DC up -d --build app db caddy cron
+$DC up -d --build app db cron
 
 # ── 3. Attente de la base ──
 say "3/5 · Attente de PostgreSQL"

@@ -10,7 +10,7 @@ Réécriture de l'ancienne application PHP/LAMP en stack TypeScript moderne.
 - **Tailwind CSS v4** (UI à compléter avec shadcn/ui)
 - **Zod** (validation), **Nodemailer** (emails)
 - **Biome** (lint + format), **pnpm**
-- Déploiement **Docker** (app + PostgreSQL + Caddy + cron) — voir [DEPLOY.md](./DEPLOY.md)
+- Déploiement **Docker** (app + PostgreSQL + cron) — voir [DEPLOY.md](./DEPLOY.md)
 
 ## Prérequis (poste de dev)
 - **Node.js ≥ 22** — https://nodejs.org (LTS)

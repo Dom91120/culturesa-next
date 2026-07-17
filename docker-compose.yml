@@ -1,7 +1,8 @@
 # Stack de production auto-hébergée :
 #   - app    : Next.js (standalone) + Prisma
 #   - db     : PostgreSQL 17
-#   - caddy  : reverse proxy + HTTPS automatique (Let's Encrypt)
+# (Plus de reverse proxy dans la stack : l'app est publiée en HTTP sur :3000 —
+#  à placer derrière un proxy TLS externe si exposée à Internet.)
 #
 # Démarrage :  docker compose up -d --build
 # Logs      :  docker compose logs -f app
@@ -35,8 +36,8 @@ services:
       # Dossier des dumps (onglet admin « Sauvegardes ») — partagé avec le conteneur cron
       BACKUPS_DIR: /backups
       NODE_ENV: production
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     volumes:
       # Mêmes dumps que le cron : liste/téléchargement/restauration depuis l'admin.
       - ./backups:/backups
@@ -105,29 +106,8 @@ services:
     networks:
       - web
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      - app
-    environment:
-      APP_DOMAIN: ${APP_DOMAIN}
-      ADMIN_EMAIL: ${ADMIN_EMAIL}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"   # HTTP/3
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - web
-
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:
 
 networks:
   web:
