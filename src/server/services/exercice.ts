@@ -558,15 +558,21 @@ export async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
   const newPeriodIds = data.newPeriodIds ?? [];
   const allSlotIds = [...(data.newRecurringSlotIds ?? []), ...(data.newMirrorSlotIds ?? [])];
 
-  let count = 0;
+  // Compte ce que l'undo supprimera RÉELLEMENT : les créneaux créés après la bascule
+  // (ponctuel ajouté à l'agenda, nouveau récurrent, miroirs régénérés) ne sont pas dans
+  // le CycleEvent mais partent quand même par cascade Period → Slot → Booking — on
+  // passe donc par le rattachement aux nouvelles périodes, pas par les IDs figés seuls.
+  // Enfants d'occurrence exclus (parentBookingId) : une réservation = une ligne.
+  const or: Prisma.BookingWhereInput[] = [];
   if (newPeriodIds.length > 0) {
-    count += await prisma.booking.count({
-      where: { periodId: { in: newPeriodIds }, bookingType: "recurring" },
-    });
+    or.push({ periodId: { in: newPeriodIds } });
+    or.push({ slot: { periodId: { in: newPeriodIds } } });
   }
   if (allSlotIds.length > 0) {
-    count += await prisma.booking.count({ where: { slotId: { in: allSlotIds } } });
+    or.push({ slotId: { in: allSlotIds } });
   }
+  const count =
+    or.length > 0 ? await prisma.booking.count({ where: { parentBookingId: null, OR: or } }) : 0;
 
   return { hasUndo: true, createdAt: ev.createdAt.toISOString(), bookingsCount: count };
 }
