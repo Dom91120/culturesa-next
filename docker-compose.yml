@@ -38,8 +38,8 @@ services:
       # Dossier des dumps (onglet admin « Sauvegardes ») — partagé avec le conteneur cron
       BACKUPS_DIR: /backups
       NODE_ENV: production
-    ports:
-      - "3000:3000"
+    ports: !override
+      - "127.0.0.1:3000:3000"
     volumes:
       # Mêmes dumps que le cron : liste/téléchargement/restauration depuis l'admin.
       - ./backups:/backups
