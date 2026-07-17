@@ -11,14 +11,18 @@ import {
 } from "@/components/agenda-hooks";
 import {
   AgendaDayBackground,
+  AgendaEmptyWeekNotice,
   AgendaTimeColumn,
   AgendaWeekHeader,
+  PrintIconButton,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
   addDays,
+  autonomousUniqueIds,
   buildBlocksByDay,
+  buildMirrorMap,
   CLOSED_OPENING,
   coveringForYmd,
   DAY_NAMES,
@@ -34,13 +38,16 @@ import {
   mondayOf,
   type Pointage,
   parseWeeks,
+  periodsCoverToday,
   ROW_H,
   type Slot,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
   type UniqueSlot,
+  visiblePeriodsOf,
   weekContextOpenings,
+  weekDateLabels,
   ymd,
 } from "@/lib/agenda-core";
 import { earliestBookableISO } from "@/lib/booking-delay";
@@ -1157,15 +1164,12 @@ export function UserAgendaGrid({
   // gridDaysAndBounds.)
 
   // Périodes visibles = celles de l'exercice courant (toutes si aucun exercice).
-  const visiblePeriods =
-    currentExerciceId == null ? periods : periods.filter((p) => p.exerciceId === currentExerciceId);
+  const visiblePeriods = visiblePeriodsOf(periods, currentExerciceId);
 
   // « Aujourd'hui » n'a de sens que si la date du jour tombe dans une période de l'exercice
   // affiché (sinon le bouton renverrait hors de la plage visible) → on masque le bouton sinon.
   const todayYmd = ymd(new Date());
-  const todayInVisiblePeriods = visiblePeriods.some(
-    (p) => p.dateStart && p.dateEnd && p.dateStart <= todayYmd && p.dateEnd >= todayYmd,
-  );
+  const todayInVisiblePeriods = periodsCoverToday(visiblePeriods, todayYmd);
 
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
   // (Dérivation partagée deriveCoveringPeriod, agenda-core — verrou rwPeriodId
@@ -1278,13 +1282,7 @@ export function UserAgendaGrid({
   }
 
   // Libellé daté de chaque jour de la semaine réelle, par dayKey.
-  const weekDateByDay = useMemo(() => {
-    const out: Record<string, string> = {};
-    if (mondayStr) {
-      for (const d of days) out[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
-    }
-    return out;
-  }, [mondayStr, days]);
+  const weekDateByDay = useMemo(() => weekDateLabels(mondayStr, days), [mondayStr, days]);
   // Jour fermé / férié (semaine réelle) : prédicats partagés (makeDayClosure,
   // agenda-core). La politique vacances du DEMANDEUR est déjà combinée (∧) dans
   // openingForYmd. Mémoïsé : identités stables requises pour mémoïser `occupiedQ`
@@ -1327,10 +1325,7 @@ export function UserAgendaGrid({
   // Ids des créneaux ponctuels AUTONOMES (non miroirs) : affichés en vert et en
   // lecture seule (on neutralise la création/déplacement de résa récurrente dessus ;
   // la réservation ponctuelle relève d'un autre flux).
-  const uniqueIdSet = useMemo(
-    () => new Set(uniqueSlots.filter((s) => !s.parentSlotId).map((s) => s.id)),
-    [uniqueSlots],
-  );
+  const uniqueIdSet = useMemo(() => autonomousUniqueIds(uniqueSlots), [uniqueSlots]);
   // Index slot ponctuel → slot (lookup O(1)), au lieu d'un .find() linéaire répété par bloc.
   const uniqSlotById = useMemo(() => new Map(uniqueSlots.map((s) => [s.id, s])), [uniqueSlots]);
   // Index réservation → réservation : résout une occurrence ENFANT vers sa PARENTE
@@ -1342,15 +1337,7 @@ export function UserAgendaGrid({
   // Slots miroirs → parent + date : rattache les réservations-enfants à la cellule du
   // slot parent en « Semaine réelle » (elles y portent le pointage, en lecture seule
   // côté usager).
-  const mirrorMap = useMemo(
-    () =>
-      new Map(
-        uniqueSlots
-          .filter((s) => s.parentSlotId)
-          .map((s) => [s.id, { parentSlotId: s.parentSlotId as string, slotDate: s.slotDate }]),
-      ),
-    [uniqueSlots],
-  );
+  const mirrorMap = useMemo(() => buildMirrorMap(uniqueSlots), [uniqueSlots]);
 
   // ── Pause méridienne (port legacy renderAgendaWeekly) ───────────────────────
   // Zone entre morningEnd et afternoonStart. Si > 30 min, on COMPACTE : on ne garde
@@ -3030,40 +3017,10 @@ export function UserAgendaGrid({
             </label>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            <button
-              type="button"
+            <PrintIconButton
               onClick={printMyBookings}
-              data-tip="Imprimer la liste de mes réservations"
-              aria-label="Imprimer la liste de mes réservations"
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--muted)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
-            </button>
+              tip="Imprimer la liste de mes réservations"
+            />
           </div>
         </div>
       </div>
@@ -3143,20 +3100,10 @@ export function UserAgendaGrid({
             aucun sens (colonne horaire orpheline) — on affiche un état vide explicite à
             la place (même traitement que l'agenda admin). */}
         {displayDays.length === 0 ? (
-          <div
-            style={{
-              padding: "2.5rem 1rem",
-              textAlign: "center",
-              fontSize: ".8rem",
-              color: "var(--muted)",
-              background: "var(--surface1)",
-              border: "1px dashed var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
+          <AgendaEmptyWeekNotice>
             Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de
             période pour rejoindre une semaine couverte.
-          </div>
+          </AgendaEmptyWeekNotice>
         ) : (
           <div
             className="agenda-grid is-realweek"

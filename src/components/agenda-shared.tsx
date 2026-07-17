@@ -249,3 +249,65 @@ export function ModalOverlay({
     </div>
   );
 }
+
+/** Bouton d'impression (icône imprimante) des deux grilles — style et SVG
+ * strictement identiques des deux côtés avant l'extraction (audit 2026-07-17). */
+export function PrintIconButton({ onClick, tip }: { onClick: () => void; tip: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-tip={tip}
+      aria-label={tip}
+      style={{
+        background: "none",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--rad-sm)",
+        padding: ".28rem .38rem",
+        cursor: "pointer",
+        color: "var(--muted)",
+        display: "flex",
+        alignItems: "center",
+        lineHeight: 1,
+      }}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="6 9 6 2 18 2 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect x="6" y="14" width="12" height="8" />
+      </svg>
+    </button>
+  );
+}
+
+/** État vide de la grille (aucune colonne de jour à afficher) : cadre pointillé
+ * centré, message fourni par la grille (semaine hors période / exercice sans jour
+ * d'ouverture). */
+export function AgendaEmptyWeekNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: "2.5rem 1rem",
+        textAlign: "center",
+        fontSize: ".8rem",
+        color: "var(--muted)",
+        background: "var(--surface1)",
+        border: "1px dashed var(--border)",
+        borderRadius: "var(--radius)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}

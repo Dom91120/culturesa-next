@@ -11,16 +11,20 @@ import {
 } from "@/components/agenda-hooks";
 import {
   AgendaDayBackground,
+  AgendaEmptyWeekNotice,
   AgendaTimeColumn,
   AgendaWeekHeader,
   PointagePill,
+  PrintIconButton,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
   addDays,
+  autonomousUniqueIds,
   badgeStyle,
   buildBlocksByDay,
+  buildMirrorMap,
   CLOSED_OPENING,
   coveringForYmd,
   DAY_NAMES,
@@ -36,13 +40,16 @@ import {
   makeWeekNavigation,
   mondayOf,
   type Pointage,
+  periodsCoverToday,
   ROW_H,
   type Slot,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
   type UniqueSlot,
+  visiblePeriodsOf,
   weekContextOpenings,
+  weekDateLabels,
   ymd,
 } from "@/lib/agenda-core";
 import { escapeHtml } from "@/lib/email-theme";
@@ -451,16 +458,13 @@ export function AgendaGrid({
   const lastDayOffset = days.length ? (DAY_OFFSET[days[days.length - 1]] ?? 6) : 6;
 
   // Périodes visibles = celles de l'exercice courant (toutes si aucun exercice).
-  const visiblePeriods =
-    currentExerciceId == null ? periods : periods.filter((p) => p.exerciceId === currentExerciceId);
+  const visiblePeriods = visiblePeriodsOf(periods, currentExerciceId);
   const selectedPeriodId = visiblePeriods[periodIdx]?.id ?? null;
 
   // « Aujourd'hui » n'a de sens que si la date du jour tombe dans une période de l'exercice
   // affiché (sinon le bouton renverrait hors de la plage visible) → on masque le bouton sinon.
   const todayYmd = ymd(new Date());
-  const todayInVisiblePeriods = visiblePeriods.some(
-    (p) => p.dateStart && p.dateEnd && p.dateStart <= todayYmd && p.dateEnd >= todayYmd,
-  );
+  const todayInVisiblePeriods = periodsCoverToday(visiblePeriods, todayYmd);
 
   // Navigation entre exercices (◀ label ▶).
   const exIdx = exercices.findIndex((e) => e.id === currentExerciceId);
@@ -538,11 +542,7 @@ export function AgendaGrid({
     if (target) setAnchorMonday(target);
   }
   // Libellé daté de chaque jour de la semaine réelle, par dayKey.
-  const weekDateByDay: Record<string, string> = {};
-  if (mondayStr) {
-    for (const d of days)
-      weekDateByDay[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
-  }
+  const weekDateByDay = weekDateLabels(mondayStr, days);
   // Jour fermé / férié / vacances (Semaine réelle) : prédicats partagés
   // (makeDayClosure, agenda-core). Mémoïsé : identités stables entre rendus tant que
   // période/mode ne changent pas → permet la mémo des blocs par jour (cf. dayBlockEls).
@@ -587,21 +587,8 @@ export function AgendaGrid({
   // Ids des créneaux ponctuels AUTONOMES (non miroirs) : affichés en vert et en
   // lecture seule (on neutralise la création/déplacement de résa récurrente dessus ;
   // la réservation ponctuelle relève d'un autre flux).
-  const uniqueIdSet = useMemo(
-    () => new Set(uniqueSlots.filter((s) => !s.parentSlotId).map((s) => s.id)),
-    [uniqueSlots],
-  );
-  // Slots MIROIRS (matérialisations datées des récurrents) → leur slot parent + date.
-  // Sert à rattacher les réservations-ENFANTS à la cellule du parent en semaine réelle.
-  const mirrorMap = useMemo(
-    () =>
-      new Map(
-        uniqueSlots
-          .filter((s) => s.parentSlotId)
-          .map((s) => [s.id, { parentSlotId: s.parentSlotId as string, slotDate: s.slotDate }]),
-      ),
-    [uniqueSlots],
-  );
+  const uniqueIdSet = useMemo(() => autonomousUniqueIds(uniqueSlots), [uniqueSlots]);
+  const mirrorMap = useMemo(() => buildMirrorMap(uniqueSlots), [uniqueSlots]);
 
   // ── Pause méridienne (port legacy renderAgendaWeekly) ───────────────────────
   // Zone entre morningEnd et afternoonStart. Si > 30 min, on COMPACTE : on ne garde
@@ -2758,40 +2745,10 @@ export function AgendaGrid({
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
             {/* Boutons d'impression masqués en mode création. */}
             {!creationMode && (
-              <button
-                type="button"
+              <PrintIconButton
                 onClick={printSessionsList}
-                data-tip="Imprimer la liste des réservations"
-                aria-label="Imprimer la liste des réservations"
-                style={{
-                  background: "none",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--rad-sm)",
-                  padding: ".28rem .38rem",
-                  cursor: "pointer",
-                  color: "var(--muted)",
-                  display: "flex",
-                  alignItems: "center",
-                  lineHeight: 1,
-                }}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="6 9 6 2 18 2 18 9" />
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                  <rect x="6" y="14" width="12" height="8" />
-                </svg>
-              </button>
+                tip="Imprimer la liste des réservations"
+              />
             )}
             <button
               type="button"
@@ -2836,21 +2793,11 @@ export function AgendaGrid({
             sans jour actif en Modèle) : le squelette de grille n'a aucun sens (colonne
             horaire orpheline) — on affiche un état vide explicite à la place. */}
         {days.length === 0 ? (
-          <div
-            style={{
-              padding: "2.5rem 1rem",
-              textAlign: "center",
-              fontSize: ".8rem",
-              color: "var(--muted)",
-              background: "var(--surface1)",
-              border: "1px dashed var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
+          <AgendaEmptyWeekNotice>
             {mode === "realweek"
               ? "Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de période pour rejoindre une semaine couverte."
               : "Aucun jour d'ouverture n'est configuré pour cet exercice."}
-          </div>
+          </AgendaEmptyWeekNotice>
         ) : (
           <div
             className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}

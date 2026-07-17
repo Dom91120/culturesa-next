@@ -606,6 +606,53 @@ export function makeWeekNavigation(args: {
   return { canWeekPrev, canWeekNext, shiftTarget };
 }
 
+/** Ids des créneaux ponctuels AUTONOMES (non miroirs) — à appeler sous useMemo. */
+export function autonomousUniqueIds(uniqueSlots: UniqueSlot[]): Set<string> {
+  return new Set(uniqueSlots.filter((s) => !s.parentSlotId).map((s) => s.id));
+}
+
+/** Slots MIROIRS (matérialisations datées des récurrents) → slot parent + date.
+ * Sert à rattacher les réservations-ENFANTS à la cellule du parent en semaine
+ * réelle — à appeler sous useMemo. */
+export function buildMirrorMap(
+  uniqueSlots: UniqueSlot[],
+): Map<string, { parentSlotId: string; slotDate: string | null }> {
+  return new Map(
+    uniqueSlots
+      .filter((s) => s.parentSlotId)
+      .map((s) => [s.id, { parentSlotId: s.parentSlotId as string, slotDate: s.slotDate }]),
+  );
+}
+
+/** Libellé daté (jour + mois courts) de chaque jour de la semaine réelle, par dayKey. */
+export function weekDateLabels(mondayStr: string | null, days: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (mondayStr) {
+    for (const d of days) out[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
+  }
+  return out;
+}
+
+/** Périodes visibles = celles de l'exercice courant (toutes si aucun exercice). */
+export function visiblePeriodsOf<P extends { exerciceId: number | null }>(
+  periods: P[],
+  currentExerciceId: number | null,
+): P[] {
+  return currentExerciceId == null
+    ? periods
+    : periods.filter((p) => p.exerciceId === currentExerciceId);
+}
+
+/** La date du jour tombe-t-elle dans une des périodes ? (bouton « Aujourd'hui »). */
+export function periodsCoverToday(
+  periods: { dateStart: string | null; dateEnd: string | null }[],
+  todayYmd: string,
+): boolean {
+  return periods.some(
+    (p) => p.dateStart && p.dateEnd && p.dateStart <= todayYmd && p.dateEnd >= todayYmd,
+  );
+}
+
 /**
  * MOTEUR DE PROJECTION des blocs par jour — cœur commun des deux grilles (audit
  * 2026-07-17 : ~200 lignes jumelles par grille). Étapes : projection des ponctuels
