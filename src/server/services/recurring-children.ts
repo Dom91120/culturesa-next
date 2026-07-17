@@ -39,6 +39,36 @@ export async function getSchoolZone(): Promise<string> {
 }
 
 /**
+ * Cache partagé entre plusieurs appels de `syncRecurringChildren` au sein d'une MÊME
+ * transaction (régénérations en boucle : période, exercice, bascule). Sans lui, chaque
+ * parent refaisait ~6 requêtes identiques (vacances scolaires, ouverture d'exercice,
+ * délai du service, politique du demandeur, miroirs du créneau) — O(périodes × slots ×
+ * parents) requêtes séquentielles sous transaction Serializable (audit 2026-07-17).
+ * Rempli PARESSEUSEMENT par syncRecurringChildren ; un appel unitaire sans cache garde
+ * le comportement historique.
+ */
+export type SyncRecurringCache = {
+  // Plages de vacances (zone unique de l'app), remplies au premier besoin.
+  schoolRanges?: { dateStart: string; dateEnd: string }[];
+  exerciceIdByPeriod: Map<number, number | null>;
+  openingByExercice: Map<number, { activeDays: string; openOnSchoolHolidays: boolean } | null>;
+  delayByService: Map<string, number>;
+  openSchoolByUser: Map<string, boolean>;
+  // Miroirs par couple slot parent | période (partagés entre parents du même créneau).
+  mirrorsBySlotPeriod: Map<string, { id: string; slotDate: Date | null }[]>;
+};
+
+export function createSyncRecurringCache(): SyncRecurringCache {
+  return {
+    exerciceIdByPeriod: new Map(),
+    openingByExercice: new Map(),
+    delayByService: new Map(),
+    openSchoolByUser: new Map(),
+    mirrorsBySlotPeriod: new Map(),
+  };
+}
+
+/**
  * Rend les enfants d'une réservation récurrente exactement conformes à ses
  * occurrences cibles (miroirs du slot parent dans la période, filtrés par la
  * semaine A/B et les vacances scolaires du demandeur de l'usager). Idempotent,
@@ -49,52 +79,68 @@ export async function syncRecurringChildren(
   parent: ParentForSync,
   // cutoffISO : date min de matérialisation. Fournie par les appels GESTIONNAIRE
   // (= aujourd'hui, pas de délai) ; à défaut, calculée depuis le délai du service
-  // (comportement USAGER).
-  opts?: { schoolZone?: string; cutoffISO?: string },
+  // (comportement USAGER). cache : partage des lectures entre appels en boucle
+  // (cf. SyncRecurringCache) — absent = comportement unitaire historique.
+  opts?: { schoolZone?: string; cutoffISO?: string; cache?: SyncRecurringCache },
 ): Promise<{ created: number; updated: number; deleted: number }> {
   if (parent.periodId == null || parent.periodId <= 0) {
     const del = await tx.booking.deleteMany({ where: { parentBookingId: parent.id } });
     return { created: 0, updated: 0, deleted: del.count };
   }
+  const cache = opts?.cache;
 
   // Politique vacances scolaires = combinaison EXERCICE ∧ DEMANDEUR : on ne matérialise
   // une occurrence en vacances que si l'exercice de la période de la récurrente ET le
   // demandeur acceptent les vacances. Période sans exercice = FERMÉ (rien à créer).
-  const [user, svc, period] = await Promise.all([
-    tx.user.findUnique({
+  let userOpenSchool = cache?.openSchoolByUser.get(parent.userId);
+  if (userOpenSchool === undefined) {
+    const user = await tx.user.findUnique({
       where: { id: parent.userId },
       select: {
         demandeur: { select: { openOnSchoolHolidays: true } },
         structure: { select: { demandeur: { select: { openOnSchoolHolidays: true } } } },
       },
-    }),
-    tx.service.findUnique({
-      where: { id: parent.serviceId },
-      select: { bookingDelay: true },
-    }),
-    tx.period.findUnique({
+    });
+    userOpenSchool = effectiveOpenOnSchoolHolidays(user);
+    cache?.openSchoolByUser.set(parent.userId, userOpenSchool);
+  }
+  let exerciceId = cache?.exerciceIdByPeriod.get(parent.periodId);
+  if (exerciceId === undefined) {
+    const period = await tx.period.findUnique({
       where: { id: parent.periodId },
       select: { exerciceId: true },
-    }),
-  ]);
-  const opening =
-    period?.exerciceId != null
-      ? await tx.exercice.findUnique({
-          where: { id: period.exerciceId },
-          select: EXERCICE_OPENING_SELECT,
-        })
-      : null;
-  const openOnSchool =
-    (opening?.openOnSchoolHolidays ?? false) && effectiveOpenOnSchoolHolidays(user);
+    });
+    exerciceId = period?.exerciceId ?? null;
+    cache?.exerciceIdByPeriod.set(parent.periodId, exerciceId);
+  }
+  let opening: { activeDays: string; openOnSchoolHolidays: boolean } | null = null;
+  if (exerciceId != null) {
+    const cached = cache?.openingByExercice.get(exerciceId);
+    if (cached !== undefined) {
+      opening = cached;
+    } else {
+      opening = await tx.exercice.findUnique({
+        where: { id: exerciceId },
+        select: EXERCICE_OPENING_SELECT,
+      });
+      cache?.openingByExercice.set(exerciceId, opening);
+    }
+  }
+  const openOnSchool = (opening?.openOnSchoolHolidays ?? false) && userOpenSchool;
   let schoolRanges: { dateStart: string; dateEnd: string }[] = [];
   if (!openOnSchool) {
-    const zone = opts?.schoolZone ?? (await getSchoolZone());
-    schoolRanges = (
-      await tx.schoolHoliday.findMany({
-        where: { zone },
-        select: { dateStart: true, dateEnd: true },
-      })
-    ).map((r) => ({ dateStart: toISO(r.dateStart), dateEnd: toISO(r.dateEnd) }));
+    if (cache?.schoolRanges) {
+      schoolRanges = cache.schoolRanges;
+    } else {
+      const zone = opts?.schoolZone ?? (await getSchoolZone());
+      schoolRanges = (
+        await tx.schoolHoliday.findMany({
+          where: { zone },
+          select: { dateStart: true, dateEnd: true },
+        })
+      ).map((r) => ({ dateStart: toISO(r.dateStart), dateEnd: toISO(r.dateEnd) }));
+      if (cache) cache.schoolRanges = schoolRanges;
+    }
   }
   // Convention vacances scolaires : dateStart = dernier jour d'école → borne gauche
   // stricte (cf. lib/school-holidays). Corrige un off-by-one qui excluait à tort une
@@ -107,11 +153,20 @@ export async function syncRecurringChildren(
   // passées) — seules les occurrences devenues invalides (semaine/fériés/vacances) le sont.
   let cutoff = opts?.cutoffISO;
   if (!cutoff) {
+    let delay = cache?.delayByService.get(parent.serviceId);
+    if (delay === undefined) {
+      const svc = await tx.service.findUnique({
+        where: { id: parent.serviceId },
+        select: { bookingDelay: true },
+      });
+      delay = svc?.bookingDelay ?? 0;
+      cache?.delayByService.set(parent.serviceId, delay);
+    }
     // Jours ouvrés du délai = ceux de l'exercice de la période réservée (décision
     // produit). Période sans exercice → rien n'est matérialisable (cutoff infini).
     cutoff = opening
       ? earliestBookableISO(
-          svc?.bookingDelay ?? 0,
+          delay,
           opening.activeDays
             .split(",")
             .map((s) => s.trim())
@@ -122,14 +177,20 @@ export async function syncRecurringChildren(
 
   // Miroirs de la période : jours fériés + parité A/B du SLOT déjà exclus à leur
   // génération ; on applique ici le filtre A/B de la RÉSERVATION + vacances scolaires.
-  const mirrors = await tx.slot.findMany({
-    where: {
-      parentSlotId: parent.slotId,
-      slotType: "unique",
-      periodId: parent.periodId,
-    },
-    select: { id: true, slotDate: true },
-  });
+  // Partagés via le cache entre parents d'un même créneau.
+  const mirrorsKey = `${parent.slotId}|${parent.periodId}`;
+  let mirrors = cache?.mirrorsBySlotPeriod.get(mirrorsKey);
+  if (mirrors === undefined) {
+    mirrors = await tx.slot.findMany({
+      where: {
+        parentSlotId: parent.slotId,
+        slotType: "unique",
+        periodId: parent.periodId,
+      },
+      select: { id: true, slotDate: true },
+    });
+    cache?.mirrorsBySlotPeriod.set(mirrorsKey, mirrors);
+  }
 
   const validIds: string[] = []; // occurrences valides (semaine / fériés / vacances)
   const createIds: string[] = []; // celles à matérialiser (≥ cutoff délai)
@@ -221,7 +282,7 @@ export async function syncRecurringChildren(
 export async function syncChildrenForRecurringSlot(
   tx: Prisma.TransactionClient,
   parentSlotId: string,
-  opts?: { schoolZone?: string; cutoffISO?: string },
+  opts?: { schoolZone?: string; cutoffISO?: string; cache?: SyncRecurringCache },
 ): Promise<void> {
   const parents = await tx.booking.findMany({
     where: { slotId: parentSlotId, bookingType: "recurring", parentBookingId: null },
@@ -239,7 +300,13 @@ export async function syncChildrenForRecurringSlot(
     },
   });
   if (parents.length === 0) return;
-  const zone = opts?.schoolZone ?? (await getSchoolZone());
+  // Cache partagé entre les parents (et, si fourni par l'appelant, entre créneaux
+  // d'une même régénération) : lectures répétées mutualisées.
+  const cache = opts?.cache ?? createSyncRecurringCache();
   for (const p of parents)
-    await syncRecurringChildren(tx, p, { schoolZone: zone, cutoffISO: opts?.cutoffISO });
+    await syncRecurringChildren(tx, p, {
+      schoolZone: opts?.schoolZone,
+      cutoffISO: opts?.cutoffISO,
+      cache,
+    });
 }

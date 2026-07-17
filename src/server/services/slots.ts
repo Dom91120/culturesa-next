@@ -3,7 +3,11 @@ import { mirrorDates } from "@/lib/mirror-dates";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import { openingForExercice } from "@/server/services/opening";
-import { syncChildrenForRecurringSlot } from "@/server/services/recurring-children";
+import {
+  createSyncRecurringCache,
+  type SyncRecurringCache,
+  syncChildrenForRecurringSlot,
+} from "@/server/services/recurring-children";
 
 /** Refus d'une mutation de créneau (ex. régénération de miroirs bloquée par une
  *  réservation existante). Message destiné à l'admin. */
@@ -159,6 +163,10 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
   tx: Prisma.TransactionClient,
   serviceId: string,
   periodId: number,
+  // Cache partagé de resynchronisation des enfants : à fournir quand on régénère
+  // PLUSIEURS périodes dans la même transaction (config d'exercice), pour mutualiser
+  // vacances/ouvertures/politiques entre périodes (anti-N+1, audit 2026-07-17).
+  syncCache?: SyncRecurringCache,
 ): Promise<void> {
   const period = await tx.period.findUnique({
     where: { id: periodId },
@@ -195,6 +203,8 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
     },
   });
 
+  // Un seul cache pour toute la régénération (tous créneaux, tous parents).
+  const cache = syncCache ?? createSyncRecurringCache();
   for (const slot of recurringSlots) {
     if (!slot.slotDay) continue;
     const capVal = slot.capacity ?? serviceCapacity;
@@ -247,7 +257,7 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
     }
     // Resynchronise les enfants des réservations récurrentes de ce créneau (crée les
     // occurrences des nouvelles dates si la période s'est étendue).
-    await syncChildrenForRecurringSlot(tx, slot.id);
+    await syncChildrenForRecurringSlot(tx, slot.id, { cache });
   }
 }
 

@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { holidaysInRange } from "@/lib/french-holidays";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import { createSyncRecurringCache } from "@/server/services/recurring-children";
 import {
   regenerateRecurringMirrorsForPeriodInTx,
   SlotMutationError,
@@ -474,8 +475,13 @@ export async function saveExerciceOpeningConfig(
           where: { exerciceId, serviceId },
           select: { id: true },
         });
+        // Cache partagé entre TOUTES les périodes régénérées : vacances scolaires,
+        // ouvertures, délais et politiques demandeur lus une seule fois pour toute
+        // la transaction (anti-N+1, audit 2026-07-17). Rempli APRÈS l'update de
+        // l'exercice ci-dessus → il capture bien la nouvelle config.
+        const syncCache = createSyncRecurringCache();
         for (const p of periods) {
-          await regenerateRecurringMirrorsForPeriodInTx(tx, serviceId, p.id);
+          await regenerateRecurringMirrorsForPeriodInTx(tx, serviceId, p.id, syncCache);
         }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
