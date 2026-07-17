@@ -49,7 +49,13 @@ export async function setAgendaRefreshAction(seconds: number): Promise<ActionSta
   return { ok: true };
 }
 
-const appUrlSchema = z.string().trim().max(300);
+// URL http(s) valide (ou chaîne vide = pas de lien) : la valeur est injectée dans le
+// lien « Portail CultuRésa » des e-mails — pas de schéma exotique (javascript:, data:).
+const appUrlSchema = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((v) => v === "" || /^https?:\/\/[^\s]+$/i.test(v), "URL invalide (http(s) attendu).");
 
 /**
  * Enregistre l'URL publique de l'application (clé app_config `app.url`), utilisée pour le

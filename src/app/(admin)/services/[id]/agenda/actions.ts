@@ -81,6 +81,30 @@ async function bookingLocked(b: {
   return isBookingLockedByPointage(b, hasPointedChild);
 }
 
+/**
+ * Re-vérifie le verrou pointage/miroir DANS la transaction d'écriture (anti-TOCTOU,
+ * audit 2026-07-17) : un pointage posé entre la lecture hors transaction et l'écriture
+ * ne passe plus inaperçu. Le pré-contrôle hors transaction reste utile (message rapide),
+ * mais c'est CETTE vérification qui fait foi. Lève BookingError.
+ */
+async function assertBookingUnlockedInTx(
+  tx: Prisma.TransactionClient,
+  bookingId: number,
+  serviceId: string,
+): Promise<void> {
+  const b = await tx.booking.findFirst({
+    where: { id: bookingId, serviceId },
+    select: { id: true, bookingType: true, parentBookingId: true, pointage: true },
+  });
+  if (!b) throw new BookingError("Réservation introuvable.");
+  const hasPointedChild =
+    b.bookingType === "recurring" &&
+    (await tx.booking.count({ where: { parentBookingId: b.id, pointage: { not: null } } })) > 0;
+  if (isBookingLockedByPointage(b, hasPointedChild)) {
+    throw new BookingError("Réservation verrouillée (séance pointée ou miroir).");
+  }
+}
+
 export async function setBookingValidatedAction(
   bookingId: number,
   serviceId: string,
@@ -113,11 +137,24 @@ export async function setBookingValidatedAction(
     return { ok: false, error: "Réservation verrouillée (séance pointée ou miroir)." };
   }
   const changed = b.validated !== validated;
-  // Validation au niveau de la SÉRIE : le parent + propagation à tous ses miroirs.
-  await prisma.$transaction([
-    prisma.booking.update({ where: { id: id.data }, data: { validated } }),
-    prisma.booking.updateMany({ where: { parentBookingId: id.data }, data: { validated } }),
-  ]);
+  // Validation au niveau de la SÉRIE : le parent + propagation à tous ses miroirs,
+  // verrou pointage re-vérifié DANS la transaction (anti-TOCTOU, audit 2026-07-17).
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await assertBookingUnlockedInTx(tx, id.data, serviceId);
+        await tx.booking.update({ where: { id: id.data }, data: { validated } });
+        await tx.booking.updateMany({ where: { parentBookingId: id.data }, data: { validated } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Modification simultanée détectée, réessayez." };
+    }
+    throw e;
+  }
   revalidatePath(`/services/${serviceId}/agenda`);
 
   // Notifie l'usager d'une (dé)validation MANUELLE par le gestionnaire (best-effort,
@@ -469,7 +506,23 @@ export async function deleteBookingAdminAction(
   ) {
     return { ok: false, error: "Réservation verrouillée (séance pointée ou miroir)." };
   }
-  await prisma.booking.delete({ where: { id: id.data } });
+  // Suppression avec verrou re-vérifié DANS la transaction (anti-TOCTOU : un pointage
+  // posé entre le contrôle ci-dessus et le delete ne passe plus).
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await assertBookingUnlockedInTx(tx, id.data, serviceId);
+        await tx.booking.delete({ where: { id: id.data } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Suppression simultanée détectée, réessayez." };
+    }
+    throw e;
+  }
   revalidatePath(`/services/${serviceId}/agenda`);
 
   // Notification (best-effort, jamais bloquante) via le canal COMMUN d'annulation :
@@ -536,6 +589,8 @@ export async function updateBookingDetailAction(input: {
   try {
     await prisma.$transaction(
       async (tx) => {
+        // Verrou pointage re-vérifié dans la transaction (anti-TOCTOU).
+        await assertBookingUnlockedInTx(tx, d.bookingId, d.serviceId);
         // Anti-surbooking : augmenter les compteurs ne doit pas dépasser la jauge/capacité
         // (la réservation courante est exclue du décompte).
         await assertSlotCapacity(tx, {
@@ -614,6 +669,8 @@ export async function moveBookingAction(
   try {
     await prisma.$transaction(
       async (tx) => {
+        // Verrou pointage re-vérifié dans la transaction (anti-TOCTOU).
+        await assertBookingUnlockedInTx(tx, id.data, serviceId);
         // Défense en profondeur (audit 2026-07-17) : créneau cible du MÊME service et
         // du MÊME type que la réservation (récurrent→récurrent, ponctuel→ponctuel),
         // comme le chemin usager (moveInTx). La période SUIT le créneau cible : sans

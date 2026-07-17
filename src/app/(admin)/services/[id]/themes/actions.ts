@@ -9,7 +9,7 @@ import { saveServiceThemes } from "@/server/services/themes";
 const saveThemesSchema = z.object({
   serviceId: z.string().trim().min(1),
   mode: z.enum(["libre", "liste"]),
-  themes: z.array(z.string()).max(500),
+  themes: z.array(z.string().max(255)).max(500),
 });
 
 type SaveThemesInput = z.infer<typeof saveThemesSchema>;

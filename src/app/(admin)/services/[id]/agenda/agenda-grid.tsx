@@ -193,6 +193,7 @@ export function AgendaGrid({
   serviceDemandeurs,
   schoolHolidays,
   autoRefreshSeconds,
+  viewerEmail,
 }: {
   service: Service;
   periods: Period[];
@@ -212,6 +213,10 @@ export function AgendaGrid({
   schoolHolidays: { dateStart: string; dateEnd: string }[];
   // Intervalle d'auto-rafraîchissement de l'agenda, en secondes (0 = désactivé).
   autoRefreshSeconds: number;
+  // E-mail du gestionnaire connecté : préfixe la clé sessionStorage de la vue
+  // (sans lui, un compte héritait de la vue mémorisée du compte précédent dans le
+  // même onglet — même correctif que la grille usager, audit 2026-07-17).
+  viewerEmail: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -1898,7 +1903,7 @@ export function AgendaGrid({
   useEffect(() => {
     let anchored = false;
     try {
-      const raw = sessionStorage.getItem(`agenda-admin-view:${service.id}`);
+      const raw = sessionStorage.getItem(`agenda-admin-view:${service.id}:${viewerEmail}`);
       if (raw) {
         const v = JSON.parse(raw) as Partial<{
           exerciceId: number | null;
@@ -1933,11 +1938,11 @@ export function AgendaGrid({
     }
     try {
       sessionStorage.setItem(
-        `agenda-admin-view:${service.id}`,
+        `agenda-admin-view:${service.id}:${viewerEmail}`,
         JSON.stringify({ exerciceId: currentExerciceId, periodIdx, anchorMonday, weekAB }),
       );
     } catch {}
-  }, [service.id, currentExerciceId, periodIdx, anchorMonday, weekAB]);
+  }, [service.id, viewerEmail, currentExerciceId, periodIdx, anchorMonday, weekAB]);
 
   // Garde-fou : si la période sélectionnée/mémorisée est hors plage (ex. période
   // supprimée, ou index restauré du sessionStorage devenu invalide), on retombe sur

@@ -9,11 +9,13 @@ export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
   // Bride la génération (svg-captcha + crypto) pour éviter l'abus par appels en boucle.
-  // Clé = IP transmise par le reverse-proxy externe ; à défaut, un seau global partagé.
+  // Clé = IP transmise par le reverse-proxy externe. On prend l'entrée la plus À DROITE
+  // de x-forwarded-for : c'est celle AJOUTÉE par le proxy de confiance (l'IP réelle du
+  // client vue par lui) — la plus à gauche est librement forgeable par le client et
+  // permettait de contourner le quota (audit 2026-07-17). À défaut, seau global partagé.
+  const fwd = request.headers.get("x-forwarded-for");
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown";
+    fwd?.split(",").at(-1)?.trim() || request.headers.get("x-real-ip")?.trim() || "unknown";
   if (!rateLimit(`captcha:${ip}`, 30, 60_000)) {
     return NextResponse.json({ error: "Trop de requêtes." }, { status: 429 });
   }

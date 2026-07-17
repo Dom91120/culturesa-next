@@ -21,6 +21,21 @@ const nextConfig: NextConfig = {
   devIndicators: {
     position: "bottom-right",
   },
+  // En-têtes de sécurité posés PAR L'APP depuis le retrait de Caddy de la stack
+  // (l'app peut être servie en direct). HSTS reste au reverse proxy TLS externe
+  // (sans objet en HTTP) ; pas de CSP pour l'instant (inline scripts Next).
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
   experimental: {
     // Server Actions : autorise les origines du domaine de prod
     serverActions: {

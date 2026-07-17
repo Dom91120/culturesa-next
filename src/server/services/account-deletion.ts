@@ -17,33 +17,37 @@ import { anonymizeUser, assertNotLastActiveAdmin, RgpdError } from "@/server/ser
 
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 h
 
-// Signature du lien sous une clé dédiée à la suppression (séparation de domaine, server/crypto).
-function sign(userId: string, exp: number): string {
-  return hmacSign("account-deletion", `${userId}|${exp}`);
+// Signature du lien sous une clé dédiée à la suppression (séparation de domaine,
+// server/crypto). L'e-mail COURANT du compte fait partie du payload signé : après
+// anonymisation (qui remplace l'e-mail), un token déjà consommé ne se vérifie plus →
+// usage unique de fait, sans table de nonces (audit 2026-07-17). Un changement
+// d'adresse invalide de même un lien envoyé à l'ancienne adresse.
+function sign(userId: string, exp: number, email: string): string {
+  return hmacSign("account-deletion", `${userId}|${exp}|${email}`);
 }
 
 /** Token signé `${b64(userId)}.${exp}.${sig}` valable TTL_MS. */
-function makeToken(userId: string): string {
+function makeToken(userId: string, email: string): string {
   const exp = Date.now() + TTL_MS;
-  return `${Buffer.from(userId).toString("base64url")}.${exp}.${sign(userId, exp)}`;
+  return `${Buffer.from(userId).toString("base64url")}.${exp}.${sign(userId, exp, email)}`;
 }
 
-/** Décode et vérifie un token ; renvoie l'userId si valide et non expiré, sinon null. */
-function readToken(token: string | null | undefined): string | null {
+/** Décode la STRUCTURE d'un token (non expiré) ; la signature est vérifiée par
+ * l'appelant contre l'e-mail courant du compte (cf. sign). */
+function parseToken(
+  token: string | null | undefined,
+): { userId: string; exp: number; sig: string } | null {
   if (!token) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [u, expStr, sig] = parts;
   const exp = Number(expStr);
   if (!Number.isFinite(exp) || Date.now() > exp) return null;
-  let userId: string;
   try {
-    userId = Buffer.from(u, "base64url").toString("utf8");
+    return { userId: Buffer.from(u, "base64url").toString("utf8"), exp, sig };
   } catch {
     return null;
   }
-  if (!timingSafeEqualStr(sig, sign(userId, exp))) return null;
-  return userId;
 }
 
 /**
@@ -62,7 +66,7 @@ export async function requestAccountDeletion(userId: string): Promise<void> {
   await assertNotLastActiveAdmin(prisma, userId);
 
   const base = await getAppUrl();
-  const url = `${base}/auth/supprimer-compte?token=${encodeURIComponent(makeToken(userId))}`;
+  const url = `${base}/auth/supprimer-compte?token=${encodeURIComponent(makeToken(userId, email))}`;
   const prenom = user.prenom?.trim() ?? "";
   const vars = { salutation: greeting(prenom), prenom, url };
 
@@ -85,11 +89,19 @@ export type ConfirmDeletionResult =
 export async function confirmAccountDeletion(
   token: string | null | undefined,
 ): Promise<ConfirmDeletionResult> {
-  const userId = readToken(token);
-  if (!userId) return { ok: false, reason: "invalid" };
-  // anonymizeUser est idempotent : si déjà anonymisé, c'est un no-op → on confirme.
+  const parsed = parseToken(token);
+  if (!parsed) return { ok: false, reason: "invalid" };
+  // Vérification contre l'e-mail COURANT : un compte déjà anonymisé (e-mail remplacé)
+  // ou une adresse changée depuis l'envoi → signature caduque (usage unique).
+  const user = await prisma.user.findUnique({
+    where: { id: parsed.userId },
+    select: { email: true },
+  });
+  if (!user || !timingSafeEqualStr(parsed.sig, sign(parsed.userId, parsed.exp, user.email ?? ""))) {
+    return { ok: false, reason: "invalid" };
+  }
   try {
-    await anonymizeUser(userId, "self_service");
+    await anonymizeUser(parsed.userId, "self_service");
   } catch (e) {
     if (e instanceof RgpdError) return { ok: false, reason: "last_admin" };
     throw e;

@@ -49,7 +49,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   });
   try {
     const page = await browser.newPage();
-    if (cookie) await page.setExtraHTTPHeaders({ cookie });
+    // Cookie de session rejoué UNIQUEMENT vers l'origine cible (interception) :
+    // setExtraHTTPHeaders l'attachait à TOUTES les requêtes émises par la page — une
+    // sous-ressource externe ajoutée un jour aux éditions aurait exfiltré la session
+    // du gestionnaire (audit 2026-07-17). L'en-tête brut est conservé (compatible
+    // cookies Secure rejoués vers une cible interne http via PUPPETEER_BASE_URL).
+    if (cookie) {
+      await page.setRequestInterception(true);
+      page.on("request", (r) => {
+        const sameOrigin = r.url().startsWith(`${target.origin}/`) || r.url() === target.origin;
+        r.continue(sameOrigin ? { headers: { ...r.headers(), cookie } } : undefined);
+      });
+    }
     await page.goto(target.toString(), { waitUntil: "networkidle0", timeout: 45000 });
     await page.emulateMediaType("print");
 

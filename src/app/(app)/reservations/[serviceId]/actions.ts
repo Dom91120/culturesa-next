@@ -504,7 +504,8 @@ const draftSchema = z.object({
         bookingId: z.coerce.number().int().positive(),
         enfants: z.coerce.number().int(),
         accompagnants: z.coerce.number().int(),
-        theme: z.string().default(""),
+        // Borne à la frontière (audit) — updateInTx re-tronque par ailleurs.
+        theme: z.string().max(255).default(""),
       }),
     )
     .default([]),
@@ -526,7 +527,9 @@ const draftSchema = z.object({
         slotId: z.string().trim().min(1),
         periodId: z.coerce.number().int().optional(),
         week: z.string().optional(),
-        theme: z.string().default(""),
+        // 255 = colonne themeLabel (seul l'ajout récurrent stockait la chaîne brute
+        // sans borne, propagée à tous les enfants — audit 2026-07-17).
+        theme: z.string().max(255).default(""),
         enfants: z.coerce.number().int().min(0).max(999).default(0),
         accompagnants: z.coerce.number().int().min(0).max(999).default(0),
       }),

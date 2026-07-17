@@ -4,6 +4,7 @@ import { AdminDemInfo } from "@/components/admin-dem-info";
 import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
+import { getSession } from "@/server/guards";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { currentExerciceIdForService, eligiblePeriodsWhere } from "@/server/services/exercice";
 import { deriveServiceModes } from "@/server/services/service-modes";
@@ -311,6 +312,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         serviceDemandeurs={serviceDemandeurs}
         schoolHolidays={schoolHolidays}
         autoRefreshSeconds={autoRefreshSeconds}
+        viewerEmail={(await getSession())?.user.email ?? ""}
       />
       <AdminDemInfo rows={demRows} />
     </>
