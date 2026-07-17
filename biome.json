@@ -42,10 +42,6 @@
       "linter": { "enabled": false }
     },
     {
-      "includes": ["**/services/services-manager.tsx"],
-      "linter": { "rules": { "a11y": { "useKeyWithClickEvents": "off" } } }
-    },
-    {
       "includes": ["**/users/users-table.tsx"],
       "linter": { "rules": { "a11y": { "useKeyWithClickEvents": "off" } } }
     }

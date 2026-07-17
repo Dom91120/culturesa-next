@@ -82,6 +82,8 @@ let modePromise: Promise<BackupMode> | null = null;
 
 async function detectMode(): Promise<BackupMode> {
   const bin = pgBinPath("pg_dump");
+  // Sondes en cascade : l'échec d'une sonde est un résultat attendu (on passe à la
+  // suivante), pas une erreur à journaliser — les catch vides sont volontaires.
   try {
     await run(bin, ["--version"]);
     return "direct";

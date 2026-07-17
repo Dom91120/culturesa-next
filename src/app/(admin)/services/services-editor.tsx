@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 import { deleteServicesAction, saveServiceFromModalAction } from "./actions";
 import { ICON_CATEGORIES } from "./legacy-icons";
 
@@ -355,106 +356,83 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
         )}
       </div>
 
-      {/* Sélecteur d'icône (cible la ligne `pickerKey`). */}
+      {/* Sélecteur d'icône (cible la ligne `pickerKey`) : ModalOverlay partagé —
+          fermeture au clic sur le fond ET à Échap (l'ancien overlay recodé à la main
+          ignorait Échap, cf. audit 2026-07-17). */}
       {pickerKey !== null && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: fermeture au clic sur le fond
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.5)",
-            zIndex: 10020,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setPickerKey(null);
-          }}
+        <ModalOverlay
+          onClose={() => setPickerKey(null)}
+          boxStyle={{ maxWidth: 480, width: "92%", maxHeight: "80vh", overflowY: "auto" }}
         >
           <div
             style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--rad-sm)",
-              padding: "1.25rem 1.5rem",
-              maxWidth: 480,
-              width: "92%",
-              maxHeight: "80vh",
-              overflowY: "auto",
-              boxShadow: "0 8px 32px rgba(0,0,0,.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "1rem",
             }}
           >
-            <div
+            <span style={{ fontSize: ".95rem", fontWeight: 600, color: "var(--text)" }}>
+              Choisir une icône
+            </span>
+            <button
+              type="button"
+              onClick={() => setPickerKey(null)}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "1rem",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "1.2rem",
+                color: "var(--muted)",
+                lineHeight: 1,
               }}
             >
-              <span style={{ fontSize: ".95rem", fontWeight: 600, color: "var(--text)" }}>
-                Choisir une icône
-              </span>
-              <button
-                type="button"
-                onClick={() => setPickerKey(null)}
+              ✕
+            </button>
+          </div>
+          {ICON_CATEGORIES.map((cat) => (
+            <div key={cat.label} style={{ marginBottom: ".85rem" }}>
+              <div
                 style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: "1.2rem",
+                  fontSize: ".62rem",
+                  fontWeight: 700,
+                  letterSpacing: ".1em",
+                  textTransform: "uppercase",
                   color: "var(--muted)",
-                  lineHeight: 1,
+                  marginBottom: ".3rem",
                 }}
               >
-                ✕
-              </button>
-            </div>
-            {ICON_CATEGORIES.map((cat) => (
-              <div key={cat.label} style={{ marginBottom: ".85rem" }}>
-                <div
-                  style={{
-                    fontSize: ".62rem",
-                    fontWeight: 700,
-                    letterSpacing: ".1em",
-                    textTransform: "uppercase",
-                    color: "var(--muted)",
-                    marginBottom: ".3rem",
-                  }}
-                >
-                  {cat.label}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {cat.icons.map((ic) => (
-                    <button
-                      type="button"
-                      key={ic}
-                      onClick={() => {
-                        patch(pickerKey, { icon: ic });
-                        setPickerKey(null);
-                      }}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        fontSize: "1.15rem",
-                        border: "2px solid transparent",
-                        borderRadius: 6,
-                        background: "var(--surface2)",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {ic}
-                    </button>
-                  ))}
-                </div>
+                {cat.label}
               </div>
-            ))}
-          </div>
-        </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {cat.icons.map((ic) => (
+                  <button
+                    type="button"
+                    key={ic}
+                    onClick={() => {
+                      patch(pickerKey, { icon: ic });
+                      setPickerKey(null);
+                    }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      fontSize: "1.15rem",
+                      border: "2px solid transparent",
+                      borderRadius: 6,
+                      background: "var(--surface2)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {ic}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </ModalOverlay>
       )}
 
       <style>

@@ -137,7 +137,9 @@ export function ExercicePanel({ serviceId, data }: Props) {
         </p>
       ) : null}
       {info ? (
-        <p style={{ color: `var(--${info.tone})`, marginTop: 12, fontSize: ".9rem" }}>{info.text}</p>
+        <p style={{ color: `var(--${info.tone})`, marginTop: 12, fontSize: ".9rem" }}>
+          {info.text}
+        </p>
       ) : null}
 
       <div style={{ display: "flex", gap: 24, marginTop: 16, flexWrap: "wrap" }}>

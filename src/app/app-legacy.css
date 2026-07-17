@@ -1361,15 +1361,7 @@ textarea.theme-pending:focus::placeholder {
   gap: 1rem 6rem;
   margin-bottom: 1.5rem;
 }
-/* Titre + navigation exercice (« Exercice ◀ … ▶ ») : bandeau pleine largeur AU-DESSUS du
-   multi-colonnage (hors de la grille #periods-row). */
-.pr-head-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 3rem;
-  align-items: baseline;
-  margin-bottom: 1.5rem;
-}
+/* Titre + navigation exercice (« Exercice ◀ … ▶ ») du panneau Périodes. */
 .pr-head {
   display: flex;
   /* Centrage vertical : la nav ◀ … ▶ est un flex centré dont la « baseline » exportée

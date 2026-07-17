@@ -14,7 +14,6 @@ export type FailedMailRow = {
   error: string;
   attempts: number;
   createdAt: string; // ISO
-  lastTriedAt: string; // ISO
 };
 
 const dateFmt = new Intl.DateTimeFormat("fr-FR", {

@@ -27,7 +27,6 @@ export default async function MessageriePage() {
         error: true,
         attempts: true,
         createdAt: true,
-        lastTriedAt: true,
       },
     }),
   ]);
@@ -49,7 +48,6 @@ export default async function MessageriePage() {
         mails={failedMails.map((m) => ({
           ...m,
           createdAt: m.createdAt.toISOString(),
-          lastTriedAt: m.lastTriedAt.toISOString(),
         }))}
       />
     </>

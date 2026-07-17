@@ -1062,7 +1062,6 @@ export function UserAgendaGrid({
   >({});
   const [pendingMoves, setPendingMoves] = useState<Record<number, PendingMove>>({});
   const [committing, setCommitting] = useState(false);
-  const [_commitError, setCommitError] = useState<string | null>(null);
   // Toast (variantes --success vert / --danger rouge), repris de la grille admin : centré
   // sur .app-main, bas de page, auto-dismiss ~4 s. Sert au verrou « une seule action »
   // (rouge) et au résultat de l'enregistrement du brouillon (vert création/modif/déplacement,
@@ -2150,7 +2149,6 @@ export function UserAgendaGrid({
     // Verrou « une seule action » : décocher l'ajout courant reste permis (même clé) ;
     // cocher un AUTRE créneau alors qu'une action est en attente est bloqué.
     if (!guardSingleAction(`add:${key}`)) return;
-    setCommitError(null);
     setPendingAdds((prev) => {
       if (prev.some((a) => a.key === key)) return prev.filter((a) => a.key !== key);
       const time = slotTime(slotId, ponctuel);
@@ -2215,7 +2213,6 @@ export function UserAgendaGrid({
     value: number,
     remaining: number,
   ) {
-    setCommitError(null);
     setPendingAdds((prev) =>
       prev.map((a) => {
         if (a.key !== key) return a;
@@ -2263,8 +2260,6 @@ export function UserAgendaGrid({
     if (item.ponctuel !== ponctuel || b.full) return; // sécurité (déjà filtré au dragover)
     const targetPeriodId = ponctuel ? 0 : (effectivePeriodId ?? 0);
     const targetWeek = !ponctuel && abMode ? (effectiveWeek ?? "") : "";
-    setCommitError(null);
-
     if (item.kind === "draft") {
       setPendingAdds((prev) => {
         const cur = prev.find((a) => a.key === item.key);
@@ -2424,7 +2419,6 @@ export function UserAgendaGrid({
     // Verrou « une seule action » : modifier une résa déjà en cours de modif reste permis ;
     // modifier une AUTRE résa (ou modifier alors qu'une autre action est en attente) bloqué.
     if (!guardSingleAction(`bk:${bk.id}`)) return;
-    setCommitError(null);
     const cur = myCounts(bk);
     const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
     if (
@@ -2447,7 +2441,6 @@ export function UserAgendaGrid({
     remaining: number,
   ) {
     if (!guardSingleAction(`bk:${bk.id}`)) return;
-    setCommitError(null);
     const cur = myCounts(bk);
     const fieldCounts = field === "enfants" || service.gaugeAccompagnants;
     const otherUnits =
@@ -2458,7 +2451,6 @@ export function UserAgendaGrid({
   }
   function setMyTheme(bk: Booking, v: string) {
     if (!guardSingleAction(`bk:${bk.id}`)) return;
-    setCommitError(null);
     setPendingUpdates((prev) => ({ ...prev, [bk.id]: { ...myCounts(bk), theme: v } }));
   }
 
@@ -2468,7 +2460,6 @@ export function UserAgendaGrid({
     if (bookingLocked(bk)) return;
     // Démarquer la suppression courante → brouillon vidé de cette suppression (permis).
     if (pendingRemovals.some((r) => r.bookingId === bk.id)) {
-      setCommitError(null);
       setPendingRemovals((prev) => prev.filter((r) => r.bookingId !== bk.id));
       return;
     }
@@ -2477,7 +2468,6 @@ export function UserAgendaGrid({
     // Supprimer une AUTRE résa alors qu'un badge est en cours est bloqué (toast). Au commit,
     // la suppression prime : le déplacement/modif de cette résa est ignoré (cf. commitPending).
     if (!guardSingleAction(`bk:${bk.id}`)) return;
-    setCommitError(null);
     const time = slotTime(bk.slotId, uniqueIdSet.has(bk.slotId));
     const label = bk.dayKey ? `${DAY_NAMES[bk.dayKey] ?? bk.dayKey} · ${time}` : time;
     setPendingRemovals((prev) => [...prev, { bookingId: bk.id, label }]);
@@ -2488,7 +2478,6 @@ export function UserAgendaGrid({
     setPendingRemovals([]);
     setPendingUpdates({});
     setPendingMoves({});
-    setCommitError(null);
   }
 
   const pendingCount =
@@ -2542,7 +2531,6 @@ export function UserAgendaGrid({
             ? { text: "Réservation déplacée.", variant: "success" as const }
             : { text: "Réservation modifiée.", variant: "success" as const };
     setCommitting(true);
-    setCommitError(null);
     startTransition(async () => {
       // Tout le brouillon part en UNE action atomique (commitDraft) : suppressions →
       // modifications → déplacements → ajouts dans une seule transaction serveur.
@@ -2587,8 +2575,7 @@ export function UserAgendaGrid({
         router.refresh();
       } else {
         // Atomique : rien n'a été appliqué → on garde le panier intact pour correction.
-        // Plus de modale pour l'afficher → on signale l'échec par un toast rouge.
-        setCommitError(res.error ?? "Échec de l'enregistrement.");
+        // L'échec est signalé par un toast rouge.
         showToast(res.error ?? "Échec de l'enregistrement.", "danger");
         router.refresh();
       }
