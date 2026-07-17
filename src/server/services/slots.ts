@@ -40,7 +40,9 @@ function parseWeeks(weeks: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
-function newRecurId(): string {
+/** Id d'un nouveau créneau récurrent — exporté : la bascule d'exercice clone les
+ * créneaux avec la même convention (audit 2026-07-17, littéral dupliqué). */
+export function newRecurId(): string {
   return `sl_${crypto.randomUUID().slice(0, 8)}`;
 }
 
@@ -146,6 +148,86 @@ function computeWantedMirrors(args: {
 }
 
 /**
+ * Contexte de génération des miroirs d'une période : bornes, ouverture de son
+ * exercice (jours actifs / fériés) et fériés lus dans `period_holidays` — SOURCE
+ * UNIQUE partagée par les 4 mutations de créneau ET la bascule d'exercice (audit
+ * 2026-07-17 : deux pipelines parallèles, l'un lisant la table, l'autre recalculant
+ * les fériés en code). À charger APRÈS refreshPeriodHolidays pour une période neuve.
+ */
+export type MirrorContext = {
+  startDate: string;
+  endDate: string;
+  activeDays: DayKey[];
+  openOnHolidays: boolean;
+  holidaySet: Set<string>;
+};
+
+export async function loadMirrorContext(
+  db: Prisma.TransactionClient,
+  period: { id: number; dateStart: Date; dateEnd: Date; exerciceId: number | null },
+): Promise<MirrorContext> {
+  const opening = await openingForExercice(db, period.exerciceId);
+  const holidays = await db.periodHoliday.findMany({
+    where: { periodId: period.id },
+    select: { date: true },
+  });
+  return {
+    startDate: toISO(period.dateStart),
+    endDate: toISO(period.dateEnd),
+    activeDays: opening ? activeDayKeys(opening.activeDays) : [],
+    openOnHolidays: opening?.openOnHolidays ?? false,
+    holidaySet: new Set(holidays.map((h) => toISO(h.date))),
+  };
+}
+
+/**
+ * Lignes `slot.createMany` des MIROIRS d'un créneau récurrent : id déterministe
+ * `u_<slotId>_<date>`, horaires/jauge hérités du parent, capacité du créneau (repli
+ * capacité du service), semaines normalisées (« A,B » jamais persisté → toutes).
+ * Un créneau sans jour (slotDay null) ne génère rien.
+ */
+export function buildMirrorRows(args: {
+  serviceId: string;
+  periodId: number;
+  slot: {
+    id: string;
+    startTime: string;
+    endTime: string;
+    weeks: string | null;
+    slotDay: string | null;
+    capacity: number | null;
+    jauge: boolean;
+  };
+  ctx: MirrorContext;
+  serviceCapacity: number;
+}): Prisma.SlotCreateManyInput[] {
+  const { serviceId, periodId, slot, ctx, serviceCapacity } = args;
+  if (!slot.slotDay || !DAYS.includes(slot.slotDay as DayKey)) return [];
+  const wanted = computeWantedMirrors({
+    startDate: ctx.startDate,
+    endDate: ctx.endDate,
+    activeDays: ctx.activeDays,
+    holidaySet: ctx.holidaySet,
+    openOnHolidays: ctx.openOnHolidays,
+    weeks: parseWeeks(normalizeWeeks(slot.weeks)),
+    slotDay: slot.slotDay as DayKey,
+    capacity: slot.capacity ?? serviceCapacity,
+  });
+  return [...wanted.values()].map((mv) => ({
+    id: mirrorId(slot.id, mv.date),
+    serviceId,
+    slotType: "unique" as const,
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+    slotDate: fromISO(mv.date),
+    capacity: mv.cap,
+    periodId,
+    parentSlotId: slot.id,
+    jauge: slot.jauge,
+  }));
+}
+
+/**
  * Régénère les miroirs des créneaux récurrents d'une période après un changement de
  * dates (période) ou de config d'ouverture (exercice : jours actifs / fériés), DANS le
  * `tx` fourni. Pour chaque créneau récurrent actif de la période :
@@ -179,16 +261,13 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
     select: { capacity: true },
   });
   const serviceCapacity = service?.capacity ?? 1;
-  const opening =
-    period.exerciceId != null ? await openingForExercice(tx, period.exerciceId) : null;
-  const activeDays = opening ? activeDayKeys(opening.activeDays) : [];
-  const holidays = await tx.periodHoliday.findMany({
-    where: { periodId },
-    select: { date: true },
+  // Contexte de génération UNIQUE (bornes + ouverture + fériés), cf. loadMirrorContext.
+  const ctx = await loadMirrorContext(tx, {
+    id: periodId,
+    dateStart: period.dateStart,
+    dateEnd: period.dateEnd,
+    exerciceId: period.exerciceId,
   });
-  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
-  const startDate = toISO(period.dateStart);
-  const endDate = toISO(period.dateEnd);
 
   const recurringSlots = await tx.slot.findMany({
     where: { serviceId, slotType: "recurring", periodId },
@@ -207,18 +286,9 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
   const cache = syncCache ?? createSyncRecurringCache();
   for (const slot of recurringSlots) {
     if (!slot.slotDay) continue;
-    const capVal = slot.capacity ?? serviceCapacity;
-    const wanted = computeWantedMirrors({
-      startDate,
-      endDate,
-      activeDays,
-      holidaySet,
-      openOnHolidays: opening?.openOnHolidays ?? false,
-      weeks: parseWeeks(normalizeWeeks(slot.weeks)),
-      slotDay: slot.slotDay as DayKey,
-      capacity: capVal,
-    });
-    const wantedIds = new Set([...wanted.keys()].map((d) => mirrorId(slot.id, d)));
+    // Lignes attendues (pipeline unique buildMirrorRows) → diff avec l'existant.
+    const wantedRows = buildMirrorRows({ serviceId, periodId, slot, ctx, serviceCapacity });
+    const wantedIds = new Set(wantedRows.map((r) => r.id as string));
     const existing = await tx.slot.findMany({
       where: { parentSlotId: slot.id },
       select: { id: true },
@@ -236,24 +306,9 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
       }
       await tx.slot.deleteMany({ where: { id: { in: toDelete } } });
     }
-    const toCreate = [...wanted.values()].filter(
-      (mv) => !existingIds.has(mirrorId(slot.id, mv.date)),
-    );
+    const toCreate = wantedRows.filter((r) => !existingIds.has(r.id as string));
     if (toCreate.length > 0) {
-      await tx.slot.createMany({
-        data: toCreate.map((mv) => ({
-          id: mirrorId(slot.id, mv.date),
-          serviceId,
-          slotType: "unique" as const,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          slotDate: fromISO(mv.date),
-          capacity: mv.cap,
-          periodId,
-          parentSlotId: slot.id,
-          jauge: slot.jauge,
-        })),
-      });
+      await tx.slot.createMany({ data: toCreate });
     }
     // Resynchronise les enfants des réservations récurrentes de ce créneau (crée les
     // occurrences des nouvelles dates si la période s'est étendue).
@@ -289,19 +344,15 @@ export async function addRecurringSlot(
     const err = abWeekError(input.weeks);
     if (err) return { ok: false, error: err };
   }
-  // Jours actifs / fériés de l'EXERCICE de la période (période sans exercice =
-  // FERMÉ : aucun miroir, cf. opening.ts).
-  const opening = await openingForExercice(prisma, period.exerciceId);
-  const activeDays = opening ? activeDayKeys(opening.activeDays) : [];
-  const weeks = normalizeWeeks(input.weeks);
-  const holidays = await prisma.periodHoliday.findMany({
-    where: { periodId },
-    select: { date: true },
+  // Contexte de génération UNIQUE (bornes + ouverture de l'exercice + fériés) —
+  // période sans exercice = FERMÉ : aucun miroir, cf. opening.ts / loadMirrorContext.
+  const ctx = await loadMirrorContext(prisma, {
+    id: periodId,
+    dateStart: period.dateStart,
+    dateEnd: period.dateEnd,
+    exerciceId: period.exerciceId,
   });
-  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
-  // Hoisté hors transaction : la restriction de nullité ne survit pas dans la closure.
-  const startDate = toISO(period.dateStart);
-  const endDate = toISO(period.dateEnd);
+  const weeks = normalizeWeeks(input.weeks);
   const slId = newRecurId();
   const demandeurIds = normalizeDemandeurIds(input.demandeurIds);
   try {
@@ -327,31 +378,23 @@ export async function addRecurringSlot(
           data: demandeurIds.map((demandeurId) => ({ slotId: slId, demandeurId })),
         });
       }
-      const wanted = computeWantedMirrors({
-        startDate,
-        endDate,
-        activeDays,
-        holidaySet,
-        openOnHolidays: opening?.openOnHolidays ?? false,
-        weeks: parseWeeks(weeks),
-        slotDay: input.dayKey,
-        capacity: input.capacity,
-      });
-      // Un seul createMany : un INSERT par miroir risquait le timeout de transaction
-      // Prisma (5 s par défaut) sur une période annuelle.
-      const mirrorRows = [...wanted.values()].map((mv) => ({
-        id: mirrorId(slId, mv.date),
+      // Un seul createMany (pipeline unique buildMirrorRows) : un INSERT par miroir
+      // risquait le timeout de transaction Prisma sur une période annuelle.
+      const mirrorRows = buildMirrorRows({
         serviceId,
-        slotType: "unique" as const,
-        startTime: input.startTime,
-        endTime: input.endTime,
-        slotDate: fromISO(mv.date),
-        capacity: mv.cap,
         periodId,
-        parentSlotId: slId,
-        // Les miroirs héritent de la jauge du récurrent parent.
-        jauge: input.jauge ?? false,
-      }));
+        slot: {
+          id: slId,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          weeks,
+          slotDay: input.dayKey,
+          capacity: input.capacity,
+          jauge: input.jauge ?? false,
+        },
+        ctx,
+        serviceCapacity: service.capacity,
+      });
       if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
     });
   } catch (e) {
@@ -380,17 +423,14 @@ export async function copyRecurringWeek(
   if (!period?.dateStart || !period?.dateEnd) {
     return { ok: false, error: "Période introuvable ou sans dates" };
   }
-  // Jours actifs / fériés de l'EXERCICE de la période (période sans exercice =
-  // FERMÉ : aucun miroir, cf. opening.ts).
-  const opening = await openingForExercice(prisma, period.exerciceId);
-  const activeDays = opening ? activeDayKeys(opening.activeDays) : [];
-  const holidays = await prisma.periodHoliday.findMany({
-    where: { periodId },
-    select: { date: true },
+  // Contexte de génération UNIQUE (bornes + ouverture de l'exercice + fériés) —
+  // période sans exercice = FERMÉ : aucun miroir, cf. opening.ts / loadMirrorContext.
+  const ctx = await loadMirrorContext(prisma, {
+    id: periodId,
+    dateStart: period.dateStart,
+    dateEnd: period.dateEnd,
+    exerciceId: period.exerciceId,
   });
-  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
-  const startDate = toISO(period.dateStart);
-  const endDate = toISO(period.dateEnd);
 
   const slots = await prisma.slot.findMany({
     where: { serviceId, periodId, slotType: "recurring" },
@@ -445,29 +485,22 @@ export async function copyRecurringWeek(
               jauge: s.jauge,
             },
           });
-          const wanted = computeWantedMirrors({
-            startDate,
-            endDate,
-            activeDays,
-            holidaySet,
-            openOnHolidays: opening?.openOnHolidays ?? false,
-            weeks: parseWeeks(toWeek),
-            slotDay: s.slotDay,
-            capacity: s.capacity ?? service.capacity,
-          });
-          // Un seul createMany par créneau copié (cf. addRecurringSlot : anti-timeout).
-          const mirrorRows = [...wanted.values()].map((mv) => ({
-            id: mirrorId(newId, mv.date),
+          // Un seul createMany par créneau copié (pipeline unique buildMirrorRows).
+          const mirrorRows = buildMirrorRows({
             serviceId,
-            slotType: "unique" as const,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            slotDate: fromISO(mv.date),
-            capacity: mv.cap,
             periodId,
-            parentSlotId: newId,
-            jauge: s.jauge,
-          }));
+            slot: {
+              id: newId,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              weeks: toWeek,
+              slotDay: s.slotDay,
+              capacity: s.capacity,
+              jauge: s.jauge,
+            },
+            ctx,
+            serviceCapacity: service.capacity,
+          });
           if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
           const ids = demBySlot.get(s.id);
           if (ids?.length) {
@@ -562,17 +595,14 @@ export async function moveRecurringSlot(
   }
   const capVal = slot.capacity ?? service.capacity;
   const weeks = normalizeWeeks(slot.weeks);
-  // Jours actifs / fériés de l'EXERCICE de la période (période sans exercice =
-  // FERMÉ : aucun miroir, cf. opening.ts).
-  const opening = await openingForExercice(prisma, period.exerciceId);
-  const activeDays = opening ? activeDayKeys(opening.activeDays) : [];
-  const holidays = await prisma.periodHoliday.findMany({
-    where: { periodId: period.id },
-    select: { date: true },
+  // Contexte de génération UNIQUE (bornes + ouverture de l'exercice + fériés) —
+  // période sans exercice = FERMÉ : aucun miroir, cf. opening.ts / loadMirrorContext.
+  const ctx = await loadMirrorContext(prisma, {
+    id: period.id,
+    dateStart: period.dateStart,
+    dateEnd: period.dateEnd,
+    exerciceId: period.exerciceId,
   });
-  const holidaySet = new Set(holidays.map((h) => toISO(h.date)));
-  const startDate = toISO(period.dateStart);
-  const endDate = toISO(period.dateEnd);
   // Vérif « réservé » + suppression des miroirs + régénération dans UNE transaction
   // sérialisable : une réservation créée sur le créneau ou un miroir ENTRE le count et
   // le delete ne peut plus être supprimée en cascade sans être vue (Booking.slot est
@@ -600,30 +630,23 @@ export async function moveRecurringSlot(
           where: { id: slotId },
           data: { startTime, endTime, weeks, slotDay: toDayKey, capacity: capVal },
         });
-        const wanted = computeWantedMirrors({
-          startDate,
-          endDate,
-          activeDays,
-          holidaySet,
-          openOnHolidays: opening?.openOnHolidays ?? false,
-          weeks: parseWeeks(weeks),
-          slotDay: toDayKey,
-          capacity: capVal,
-        });
-        // Un seul createMany (cf. addRecurringSlot : anti-timeout).
-        const mirrorRows = [...wanted.values()].map((mv) => ({
-          id: mirrorId(slotId, mv.date),
+        // Un seul createMany (pipeline unique buildMirrorRows) ; miroirs régénérés
+        // avec la jauge du récurrent déplacé.
+        const mirrorRows = buildMirrorRows({
           serviceId,
-          slotType: "unique" as const,
-          startTime,
-          endTime,
-          slotDate: fromISO(mv.date),
-          capacity: mv.cap,
           periodId: period.id,
-          parentSlotId: slotId,
-          // Miroirs régénérés : jauge du récurrent déplacé.
-          jauge: slot.jauge,
-        }));
+          slot: {
+            id: slotId,
+            startTime,
+            endTime,
+            weeks,
+            slotDay: toDayKey,
+            capacity: capVal,
+            jauge: slot.jauge,
+          },
+          ctx,
+          serviceCapacity: service.capacity,
+        });
         if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

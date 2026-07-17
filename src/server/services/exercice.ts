@@ -1,11 +1,9 @@
-import { randomUUID } from "node:crypto";
 import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
-import { ISO_DAY_KEYS } from "@/lib/agenda-core";
-import { holidaysInRange } from "@/lib/french-holidays";
-import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
 import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";
 import { DEFAULT_OPENING, EXERCICE_OPENING_SELECT } from "@/server/services/opening";
+import { refreshPeriodHolidays } from "@/server/services/periods";
+import { buildMirrorRows, loadMirrorContext, newRecurId } from "@/server/services/slots";
 
 // =====================================================================================
 // Types
@@ -100,31 +98,6 @@ function exerciceLabel(type: "civile" | "scolaire", startYmd: string): string {
 }
 
 /**
- * Parse la colonne Service.activeDays vers un tableau d'entiers ISO 1..7.
- * Tolère le format numérique (« 1,2,3,4,5 ») et le format clé (« lun,mar,… »).
- */
-function parseActiveDays(raw: string): number[] {
-  const keyToIso: Record<string, number> = {
-    lun: 1,
-    mar: 2,
-    mer: 3,
-    jeu: 4,
-    ven: 5,
-    sam: 6,
-    dim: 7,
-  };
-  const out: number[] = [];
-  for (const tok of raw.split(",")) {
-    const t = tok.trim().toLowerCase();
-    if (!t) continue;
-    const num = Number.parseInt(t, 10);
-    if (Number.isInteger(num) && num >= 1 && num <= 7) out.push(num);
-    else if (t in keyToIso) out.push(keyToIso[t]);
-  }
-  return out;
-}
-
-/**
  * Comparateur UNIQUE « exercice le plus récent d'abord » : date de début la plus
  * tardive, nulls en dernier, départage par id décroissant. Partagé par la bascule,
  * `currentExerciceIdForService` et le pane exercice — trois copies divergeaient
@@ -155,86 +128,10 @@ type SlotSnapshot = {
   demandeurIds: number[];
 };
 
-/**
- * Génère les miroirs uniques (« u_<slotId>_<date> ») d'un créneau récurrent cloné sur
- * [rangeStart, rangeEnd] : dates de `src.slotDay` (jour actif), hors fériés si
- * !openOnHolidays, filtre semaines A/B — via le noyau partagé `mirrorDates`
- * (lib/mirror-dates), commun à la sauvegarde de créneau (slots.ts). Capacité miroir =
- * capacité unique du créneau. Renvoie les ids créés.
- */
-async function generateMirrorSlots(
-  tx: Prisma.TransactionClient,
-  params: {
-    serviceId: string;
-    slotId: string;
-    periodId: number;
-    src: SlotSnapshot;
-    rangeStart: string;
-    rangeEnd: string;
-    activeDays: number[];
-    openOnHolidays: boolean;
-    serviceCapacity: number;
-  },
-): Promise<string[]> {
-  const {
-    serviceId,
-    slotId,
-    periodId,
-    src,
-    rangeStart,
-    rangeEnd,
-    activeDays,
-    openOnHolidays,
-    serviceCapacity,
-  } = params;
-  // Slot mono-jour sans jour → aucun miroir. Capacité vide : repli sur la capacité du
-  // service, comme partout ailleurs (agenda, réservation, copie A/B) — sauter la
-  // génération laissait les créneaux clonés « Clôturés » côté usager.
-  if (src.slotDay == null) return [];
-  const cap = src.capacity ?? serviceCapacity;
-
-  const holidaySet = new Set<string>();
-  if (!openOnHolidays) {
-    for (const h of holidaysInRange(rangeStart, rangeEnd)) holidaySet.add(h.date);
-  }
-
-  const dates = mirrorDates({
-    startDate: rangeStart,
-    endDate: rangeEnd,
-    slotDay: src.slotDay as DayKey,
-    // Jour ISO 1..7 → clé : ISO_DAY_KEYS est indexé getDay (0=dim), donc n % 7 (7→dim=0).
-    activeDays: activeDays.map((n) => ISO_DAY_KEYS[n % 7] as DayKey),
-    allowedWeeks: src.weeks === "A" || src.weeks === "B" ? [src.weeks] : ["A", "B"],
-    holidaySet,
-    openOnHolidays,
-  });
-
-  // Accumulation puis UN SEUL createMany : un INSERT par occurrence faisait dépasser
-  // le timeout de transaction Prisma (5 s par défaut) dès quelques créneaux × périodes.
-  const created: string[] = [];
-  const rows: Prisma.SlotCreateManyInput[] = [];
-  for (const dateStr of dates) {
-    const mid = `u_${slotId}_${dateStr}`;
-    created.push(mid);
-    rows.push({
-      id: mid,
-      serviceId,
-      slotType: "unique",
-      startTime: src.startTime,
-      endTime: src.endTime,
-      slotDate: dateFromYmd(dateStr),
-      capacity: cap,
-      periodId,
-      parentSlotId: slotId,
-      weeks: null,
-      // Miroirs : jauge du récurrent cloné.
-      jauge: src.jauge,
-    });
-  }
-
-  if (rows.length > 0) await tx.slot.createMany({ data: rows });
-  return created;
-}
+// (La génération des miroirs des créneaux clonés passe par le pipeline UNIQUE de
+// slots.ts — loadMirrorContext + buildMirrorRows — depuis l'audit 2026-07-17 : la
+// bascule entretenait son propre générateur, avec une source de fériés et des
+// conventions de normalisation divergentes.)
 
 // =====================================================================================
 // CYCLE — création du prochain exercice
@@ -363,8 +260,8 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       });
       const exId = newExo.id;
 
-      // 6. recopie des périodes — jours actifs / fériés du nouvel exercice.
-      const activeDays = parseActiveDays(opening.activeDays);
+      // 6. recopie des périodes — jours actifs / fériés du nouvel exercice (résolus
+      // par loadMirrorContext depuis l'exercice créé, cf. plus bas).
       const newPeriodIds: number[] = [];
       const newRecurringSlotIds: string[] = [];
       const newMirrorSlotIds: string[] = [];
@@ -387,21 +284,27 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         });
         newPeriodIds.push(newPeriod.id);
 
-        // fériés de la nouvelle période (un seul createMany — cf. generateMirrorSlots)
-        if (ns && ne) {
-          const holidayRows = holidaysInRange(ns, ne).map((h) => ({
-            periodId: newPeriod.id,
-            date: dateFromYmd(h.date),
-            label: h.label,
-          }));
-          if (holidayRows.length > 0) await tx.periodHoliday.createMany({ data: holidayRows });
-        }
+        // Fériés de la nouvelle période : source unique refreshPeriodHolidays
+        // (la bascule recopiait la logique en inline — audit 2026-07-17).
+        if (ns && ne) await refreshPeriodHolidays(newPeriod.id, tx);
+
+        // Contexte de génération des miroirs UNIQUE (même pipeline que les
+        // mutations de créneau, slots.ts) — chargé APRÈS le remplissage des fériés.
+        const mirrorCtx =
+          recreateSlots && ns && ne && newPeriod.dateStart && newPeriod.dateEnd
+            ? await loadMirrorContext(tx, {
+                id: newPeriod.id,
+                dateStart: newPeriod.dateStart,
+                dateEnd: newPeriod.dateEnd,
+                exerciceId: exId,
+              })
+            : null;
 
         // créneaux
         if (recreateSlots) {
           const snapshot = slotsByPeriod.get(p.id) ?? [];
           for (const s of snapshot) {
-            const newSlotId = `sl_${randomUUID().slice(0, 8)}`;
+            const newSlotId = newRecurId();
             await tx.slot.create({
               data: {
                 id: newSlotId,
@@ -427,19 +330,24 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
               });
             }
 
-            if (ns && ne) {
-              const mirrors = await generateMirrorSlots(tx, {
+            if (mirrorCtx) {
+              const rows = buildMirrorRows({
                 serviceId,
-                slotId: newSlotId,
                 periodId: newPeriod.id,
-                src: s,
-                rangeStart: ns,
-                rangeEnd: ne,
-                activeDays,
-                openOnHolidays: opening.openOnHolidays,
+                slot: {
+                  id: newSlotId,
+                  startTime: s.startTime,
+                  endTime: s.endTime,
+                  weeks: s.weeks,
+                  slotDay: s.slotDay,
+                  capacity: s.capacity,
+                  jauge: s.jauge,
+                },
+                ctx: mirrorCtx,
                 serviceCapacity: service.capacity,
               });
-              for (const mid of mirrors) newMirrorSlotIds.push(mid);
+              if (rows.length > 0) await tx.slot.createMany({ data: rows });
+              for (const r of rows) newMirrorSlotIds.push(r.id as string);
             }
           }
         }
