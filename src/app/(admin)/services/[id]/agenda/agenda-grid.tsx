@@ -20,24 +20,22 @@ import {
   type AgendaBlockBase,
   addDays,
   badgeStyle,
+  buildBlocksByDay,
   CLOSED_OPENING,
   coveringForYmd,
   DAY_NAMES,
   DAY_OFFSET,
-  dayCap,
   dayKeyFromYmd,
   deriveCoveringPeriod,
   type ExerciceOpening,
   gridDaysAndBounds,
   gridGeometry,
   isBookingLockedByPointage,
-  type LayoutItem,
-  layoutOverlaps,
   lunchBounds,
+  makeDayClosure,
   makeWeekNavigation,
   mondayOf,
   type Pointage,
-  parseWeeks,
   ROW_H,
   type Slot,
   shortDateFmt,
@@ -49,7 +47,7 @@ import {
 } from "@/lib/agenda-core";
 import { escapeHtml } from "@/lib/email-theme";
 import { isFrenchHoliday } from "@/lib/french-holidays";
-import { gaugeColor, gaugeUnits } from "@/lib/gauge";
+import { gaugeColor } from "@/lib/gauge";
 import { printHtmlDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
@@ -545,53 +543,20 @@ export function AgendaGrid({
     for (const d of days)
       weekDateByDay[d] = shortDateFmt.format(addDays(mondayStr, DAY_OFFSET[d] ?? 0));
   }
-  // Jour fermé : uniquement en semaine réelle, pour un jour hors de la période
-  // active, férié quand le service ferme les fériés, OU en vacances scolaires quand
-  // le service ferme les vacances. Contrairement au legacy (grisage purement visuel),
-  // on bloque ici aussi toutes les interactions.
-  // Mémoïsé (useCallback) : stable d'un rendu à l'autre tant que période/mode ne
-  // changent pas → permet la mémo des blocs par jour (cf. dayBlockEls).
-  const isDayDisabled = useCallback(
-    (dayKey: string): boolean => {
-      if (mode !== "realweek" || !mondayStr) return false;
-      const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
-      // Réglages de l'exercice couvrant CE jour (les colonnes étant l'union des
-      // jours actifs, un jour inactif pour cet exercice est fermé ici).
-      const o = openingForYmd(dayYmd);
-      if (
-        !o.activeDays
-          .split(",")
-          .map((s) => s.trim())
-          .includes(dayKey)
-      ) {
-        return true;
-      }
-      if (
-        coveringPeriod?.dateStart &&
-        coveringPeriod.dateEnd &&
-        (dayYmd < coveringPeriod.dateStart || dayYmd > coveringPeriod.dateEnd)
-      ) {
-        return true;
-      }
-      if (!o.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
-      return !o.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays);
-    },
+  // Jour fermé / férié / vacances (Semaine réelle) : prédicats partagés
+  // (makeDayClosure, agenda-core). Mémoïsé : identités stables entre rendus tant que
+  // période/mode ne changent pas → permet la mémo des blocs par jour (cf. dayBlockEls).
+  const { isDayDisabled, isHolidayDay, isSchoolHolidayDay } = useMemo(
+    () =>
+      makeDayClosure({
+        active: mode === "realweek",
+        mondayStr,
+        coveringPeriod,
+        openingForYmd,
+        schoolHolidays,
+      }),
     [mode, mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
-  // Jour férié (exercice fermé les fériés), en semaine réelle.
-  const isHolidayDay = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr) return false;
-    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
-    if (openingForYmd(dayYmd).openOnHolidays) return false;
-    return isFrenchHoliday(dayYmd);
-  };
-  // Jour de vacances scolaires (exercice fermé les vacances), en semaine réelle.
-  const isSchoolHolidayDay = (dayKey: string): boolean => {
-    if (mode !== "realweek" || !mondayStr) return false;
-    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
-    if (openingForYmd(dayYmd).openOnSchoolHolidays) return false;
-    return inSchoolHolidayRange(dayYmd, schoolHolidays);
-  };
   // Classe de grisage : jour férié ou vacances scolaires → hachis (is-holiday) ;
   // hors période → hachis dédié (is-out-of-period).
   const outOfPeriodCls = (dayKey: string): string => {
@@ -750,199 +715,46 @@ export function AgendaGrid({
     return slotsParsed.find((s) => minute >= s.startMin && minute < s.endMin) ?? null;
   }
 
-  const blocksByDay = useMemo(() => {
-    // Créneaux ponctuels (datés) → en « Semaine réelle », on les projette sur le
-    // jour de la semaine affichée correspondant à leur date, sous forme de slots
-    // virtuels mono-jour : toute la logique de blocs/layout/rendu les traite alors
-    // comme des créneaux normaux (legacy renderAgendaWeekly, branche realweek).
-    const ponctuelSlots: Slot[] = [];
-    if (mode === "realweek" && mondayStr) {
-      const sunday = sundayStr ?? mondayStr;
-      for (const u of uniqueSlots) {
-        // Les miroirs (matérialisations de récurrents) sont déjà couverts par les
-        // créneaux récurrents affichés directement → on ne projette que les ponctuels
-        // autonomes (non miroirs), affichés en vert (cf. legacy).
-        if (u.parentSlotId) continue;
-        if (!u.slotDate || u.slotDate < mondayStr || u.slotDate > sunday) continue;
-        const dk = dayKeyFromYmd(u.slotDate);
-        if (!days.includes(dk)) continue;
-        ponctuelSlots.push({
-          id: u.id,
-          startTime: u.startTime,
-          endTime: u.endTime,
-          capacity: u.capacity ?? service.capacity,
-          slotDay: dk,
-          // periodId aligné sur la période effective pour passer le filtre de période.
-          periodId: effectivePeriodId,
-          weeks: null,
-          jauge: u.jauge,
-          slotDate: u.slotDate,
-        });
-      }
-    }
-    const allSlots = ponctuelSlots.length ? [...slots, ...ponctuelSlots] : slots;
-    const slotById = new Map(allSlots.map((s) => [s.id, s]));
-
-    // Le créneau tourne-t-il sur la semaine active (filtre A/B) ?
-    const slotMatchesWeek = (slot: Slot): boolean => {
-      if (!abMode || effectiveWeek == null) return true;
-      return parseWeeks(slot.weeks).includes(effectiveWeek);
-    };
-
-    // Réservations groupées par dayKey|slotId (filtrées période + semaine, comme avant).
-    const groups = new Map<string, Booking[]>();
-    const pushGroup = (key: string, b: Booking) => {
-      const arr = groups.get(key) ?? [];
-      arr.push(b);
-      groups.set(key, arr);
-    };
-    const uniqSunday = sundayStr ?? mondayStr;
-    // Lookup par id (l'ancien uniqueSlots.find dans la boucle était O(B×U)).
-    const uniqById = new Map(uniqueSlots.map((s) => [s.id, s]));
-    for (const b of bookings) {
-      // Réservation-ENFANT (matérialisation d'une récurrente sur un slot miroir daté) :
-      // en « Semaine réelle », rattachée à la cellule du SLOT PARENT du jour affiché
-      // (elle y porte le pointage). En mode « Modèle », c'est la parente qui s'affiche
-      // → l'enfant n'est pas projeté.
-      const mir = mirrorMap.get(b.slotId);
-      if (mir) {
-        if (mode !== "realweek" || !mondayStr) continue;
-        if (!mir.slotDate || mir.slotDate < mondayStr || (uniqSunday && mir.slotDate > uniqSunday))
-          continue;
-        const dk = dayKeyFromYmd(mir.slotDate);
-        if (!days.includes(dk)) continue;
-        pushGroup(`${dk}|${mir.parentSlotId}`, b);
-        continue;
-      }
-      // Réservation PONCTUELLE autonome : rattachée à son bloc ponctuel projeté (clé
-      // jour = jour de la date du créneau), en ignorant période/semaine.
-      if (uniqueIdSet.has(b.slotId)) {
-        if (mode !== "realweek" || !mondayStr) continue;
-        const u = uniqById.get(b.slotId);
-        if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
-          continue;
-        const dk = dayKeyFromYmd(u.slotDate);
-        if (!days.includes(dk)) continue;
-        pushGroup(`${dk}|${b.slotId}`, b);
-        continue;
-      }
-      // Réservation RÉCURRENTE parente : en semaine réelle, ce sont ses enfants datés
-      // qui s'affichent (ci-dessus) → on ne projette PAS la parente. En mode Modèle,
-      // projection normale sur son jour.
-      if (mode === "realweek") continue;
-      if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
-      // A/B : une résa sans semaine ("") vaut pour les deux semaines.
-      if (effectiveWeek != null && b.week !== effectiveWeek && b.week !== "") continue;
-      pushGroup(`${b.dayKey}|${b.slotId}`, b);
-    }
-
-    // === Cellules candidates ===
-    // Pour chaque créneau de la période active, sur chaque jour actif du service où
-    // une capacité est configurée → cellule candidate (même sans réservation). C'est
-    // ce qui fait apparaître les créneaux vides cliquables (port du legacy).
-    const candidates = new Map<string, { slotId: string; dayKey: string }>();
-    for (const slot of allSlots) {
-      if (effectivePeriodId != null && slot.periodId !== effectivePeriodId) continue;
-      if (!slotMatchesWeek(slot)) continue;
-      // Modèle « un slot = un jour » : le créneau s'affiche sur SON jour (slotDay),
-      // avec repli sur service.capacity si la capacité n'est pas fixée. Capacité 0 = fermé.
-      const dayKey = slot.slotDay;
-      if (!dayKey || !days.includes(dayKey)) continue;
-      const c = slot.capacity ?? service.capacity;
-      if (c <= 0) continue;
-      candidates.set(`${dayKey}|${slot.id}`, { slotId: slot.id, dayKey });
-    }
-    // Union avec les cellules portant des réservations : aucune résa n'est perdue,
-    // même sur un jour sans capacité configurée (donnée de seed incohérente possible).
-    for (const key of groups.keys()) {
-      if (candidates.has(key)) continue;
-      const [dayKey, slotId] = key.split("|");
-      candidates.set(key, { slotId, dayKey });
-    }
-
-    // Un bloc PAR CRÉNEAU (slot) regroupant toutes ses réservations (modèle legacy
-    // renderAgendaWeekly), au lieu d'un bloc par réservation juxtaposé.
-    const byDay: Record<string, Block[]> = {};
-    for (const { slotId, dayKey } of candidates.values()) {
-      const slot = slotById.get(slotId);
-      if (!slot) continue;
-      const list = groups.get(`${dayKey}|${slotId}`) ?? [];
-      // Créneau sans horaire (début ou fin vide) → « journée entière ».
-      const allday = !slot.startTime || !slot.endTime;
-      const s = toMinutes(slot.startTime, gridStartMin);
-      const e = toMinutes(slot.endTime, s + 60);
-      const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
-      // Places occupées, conditionnées à la jauge DE CE CRÉNEAU (slots.jauge, posée à
-      // la création) : en jauge = somme (enfants + adultes si comptés) ; hors jauge =
-      // nombre de réservations. Gater ici rend `used`/`full` cohérents pour TOUS les
-      // consommateurs (libellé, barre, flag « complet », modale pile).
-      const gaugeForSlot = slot.jauge;
-      const used = gaugeForSlot
-        ? list.reduce(
-            (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
-            0,
-          )
-        : list.length;
-      // Un bloc vide (used=0) n'est jamais "complet".
-      const full = used >= capacity && used > 0;
-      // biome-ignore lint/suspicious/noAssignInExpressions: init-or-push concis sur la map par jour
-      (byDay[dayKey] ??= []).push({
-        slotId,
-        dayKey,
-        bookings: list,
-        startMin: s,
-        endMin: e,
-        leftPct: 0,
-        widthPct: 100,
-        used,
-        capacity,
-        full,
-        jauge: gaugeForSlot,
-        isAllDay: allday,
-      });
-    }
-    // Chevauchements horaires : sur chaque colonne-jour, les créneaux qui se
-    // recouvrent dans le temps sont répartis sur N colonnes (cf. _agendaLayoutOverlaps).
-    // Chaque LayoutItem référence directement son bloc (id stable) → pas d'ambiguïté
-    // si deux créneaux partagent les mêmes horaires.
-    for (const dayKey of Object.keys(byDay)) {
-      // Les blocs « journée entière » ne sont pas positionnés sur la grille horaire :
-      // ils gardent leftPct:0/widthPct:100 et sont rendus dans la bande dédiée.
-      const blocks = byDay[dayKey].filter((bl) => !bl.isAllDay);
-      const items: (LayoutItem & { block: Block })[] = blocks.map((bl) => {
-        const slot = slotById.get(bl.slotId);
-        return {
-          startMin: toMinutes(slot?.startTime ?? "", gridStartMin),
-          endMin: toMinutes(slot?.endTime ?? "", gridStartMin + 60),
-          col: 0,
-          colCount: 1,
-          block: bl,
-        };
-      });
-      layoutOverlaps(items);
-      for (const it of items) {
-        it.block.leftPct = it.col * (100 / it.colCount);
-        it.block.widthPct = 100 / it.colCount;
-      }
-    }
-    return byDay;
-  }, [
-    bookings,
-    slots,
-    uniqueSlots,
-    uniqueIdSet,
-    mirrorMap,
-    mode,
-    mondayStr,
-    sundayStr,
-    days,
-    abMode,
-    effectivePeriodId,
-    effectiveWeek,
-    gridStartMin,
-    service.capacity,
-    service.gaugeAccompagnants,
-  ]);
+  // Blocs par jour : moteur PARTAGÉ (buildBlocksByDay, agenda-core). Côté admin, la
+  // parente récurrente est projetée sur son jour en mode Modèle (projectRecurringParent).
+  const blocksByDay = useMemo(
+    () =>
+      buildBlocksByDay({
+        slots,
+        uniqueSlots,
+        bookings,
+        days,
+        mondayStr,
+        sundayStr,
+        realweek: mode === "realweek",
+        effectivePeriodId,
+        effectiveWeek,
+        abMode,
+        gridStartMin,
+        serviceCapacity: service.capacity,
+        gaugeAccompagnants: service.gaugeAccompagnants,
+        uniqueIdSet,
+        mirrorMap,
+        projectRecurringParent: true,
+      }),
+    [
+      bookings,
+      slots,
+      uniqueSlots,
+      uniqueIdSet,
+      mirrorMap,
+      mode,
+      mondayStr,
+      sundayStr,
+      days,
+      abMode,
+      effectivePeriodId,
+      effectiveWeek,
+      gridStartMin,
+      service.capacity,
+      service.gaugeAccompagnants,
+    ],
+  );
 
   // Blocs affichés pour un jour : AUCUN sur un jour fermé (hors période active ou
   // férié) — sinon les créneaux/réservations de la période couvrante débordent sur

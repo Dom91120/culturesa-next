@@ -18,19 +18,18 @@ import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
   addDays,
+  buildBlocksByDay,
   CLOSED_OPENING,
   coveringForYmd,
   DAY_NAMES,
   DAY_OFFSET,
-  dayCap,
   dayKeyFromYmd,
   deriveCoveringPeriod,
   type ExerciceOpening,
   gridDaysAndBounds,
   gridGeometry,
-  type LayoutItem,
-  layoutOverlaps,
   lunchBounds,
+  makeDayClosure,
   makeWeekNavigation,
   mondayOf,
   type Pointage,
@@ -1286,51 +1285,24 @@ export function UserAgendaGrid({
     }
     return out;
   }, [mondayStr, days]);
-  // Jour fermé : uniquement en semaine réelle, pour un jour hors de la période
-  // active, OU férié quand le service ferme les fériés, OU en vacances scolaires
-  // quand le demandeur de l'usager ferme pendant les vacances. Contrairement au
-  // legacy (grisage purement visuel), on bloque ici aussi toutes les interactions
-  // → l'usager ne peut pas réserver ce jour-là (créneau miroir inclus).
-  // useCallback : référence stable requise pour mémoïser `occupiedQ` (sinon recalcul à
-  // chaque rendu, donc à chaque survol/drag). coveringPeriod est une réf stable (élément
-  // du tableau `periods` via find), les helpers (ymd/isFrenchHoliday/…) sont module-level.
-  const isDayDisabled = useCallback(
-    (dayKey: string): boolean => {
-      if (!mondayStr) return false;
-      const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
-      // Réglages de l'exercice couvrant CE jour (les colonnes étant l'union des
-      // jours actifs, un jour inactif pour cet exercice est fermé ici).
-      const o = openingForYmd(dayYmd);
-      if (
-        !o.activeDays
-          .split(",")
-          .map((s) => s.trim())
-          .includes(dayKey)
-      ) {
-        return true;
-      }
-      if (
-        coveringPeriod?.dateStart &&
-        coveringPeriod.dateEnd &&
-        (dayYmd < coveringPeriod.dateStart || dayYmd > coveringPeriod.dateEnd)
-      ) {
-        return true;
-      }
-      if (!o.openOnHolidays && isFrenchHoliday(dayYmd)) return true;
-      // Vacances scolaires : fermé si l'exercice (∧ demandeur) ferme pendant les vacances.
-      return !o.openOnSchoolHolidays && inSchoolHolidayRange(dayYmd, schoolHolidays ?? []);
-    },
+  // Jour fermé / férié (semaine réelle) : prédicats partagés (makeDayClosure,
+  // agenda-core). La politique vacances du DEMANDEUR est déjà combinée (∧) dans
+  // openingForYmd. Mémoïsé : identités stables requises pour mémoïser `occupiedQ`
+  // (sinon recalcul à chaque rendu, donc à chaque survol/drag).
+  const { isDayDisabled, isHolidayDay } = useMemo(
+    () =>
+      makeDayClosure({
+        active: true,
+        mondayStr,
+        coveringPeriod,
+        openingForYmd,
+        schoolHolidays: schoolHolidays ?? [],
+      }),
     [mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
-  // Jour férié français (exercice fermé les fériés).
-  const isHolidayDay = (dayKey: string): boolean => {
-    if (!mondayStr) return false;
-    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
-    if (openingForYmd(dayYmd).openOnHolidays) return false;
-    return isFrenchHoliday(dayYmd);
-  };
   // Classe de grisage : jour férié → hachis de la pause méridienne (is-holiday) ;
   // hors période / vacances scolaires → hachis dédié (is-out-of-period).
+  // (Divergence assumée avec l'admin, qui hachure AUSSI les vacances en is-holiday.)
   const outOfPeriodCls = (dayKey: string): string => {
     if (!isDayDisabled(dayKey)) return "";
     return isHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
@@ -1489,222 +1461,77 @@ export function UserAgendaGrid({
     return slotsParsed.find((s) => minute >= s.startMin && minute < s.endMin) ?? null;
   }
 
-  const blocksByDay = useMemo(() => {
-    // Créneaux ponctuels (datés) → projetés sur le jour de la semaine affichée
-    // correspondant à leur date, sous forme de slots virtuels mono-jour : toute la
-    // logique de blocs/layout/rendu les traite alors comme des créneaux normaux
-    // (legacy renderAgendaWeekly, branche realweek).
-    const ponctuelSlots: Slot[] = [];
-    if (mondayStr) {
-      const sunday = sundayStr ?? mondayStr;
-      for (const u of uniqueSlots) {
-        // Les miroirs (matérialisations de récurrents) sont déjà couverts par les
-        // créneaux récurrents affichés directement → on ne projette que les ponctuels
-        // autonomes (non miroirs), affichés en vert (cf. legacy).
-        if (u.parentSlotId) continue;
-        if (!u.slotDate || u.slotDate < mondayStr || u.slotDate > sunday) continue;
-        const dk = dayKeyFromYmd(u.slotDate);
-        if (!days.includes(dk)) continue;
-        ponctuelSlots.push({
-          id: u.id,
-          startTime: u.startTime,
-          endTime: u.endTime,
-          capacity: u.capacity ?? service.capacity,
-          slotDay: dk,
-          // periodId aligné sur la période effective pour passer le filtre de période.
-          periodId: effectivePeriodId,
-          weeks: null,
-          jauge: u.jauge,
-          slotDate: u.slotDate,
-        });
-      }
-    }
-    const allSlots = ponctuelSlots.length ? [...slots, ...ponctuelSlots] : slots;
-    const slotById = new Map(allSlots.map((s) => [s.id, s]));
-
-    // Le créneau tourne-t-il sur la semaine active (filtre A/B) ?
-    const slotMatchesWeek = (slot: Slot): boolean => {
-      if (!abMode || effectiveWeek == null) return true;
-      return parseWeeks(slot.weeks).includes(effectiveWeek);
-    };
-
-    // Réservations groupées par dayKey|slotId (filtrées période + semaine, comme avant).
-    const groups = new Map<string, Booking[]>();
-    const pushGroup = (key: string, b: Booking) => {
-      const arr = groups.get(key) ?? [];
-      arr.push(b);
-      groups.set(key, arr);
-    };
-    const uniqSunday = sundayStr ?? mondayStr;
-    // Lookup par id (l'ancien uniqueSlots.find dans la boucle était O(B×U)).
-    const uniqById = new Map(uniqueSlots.map((s) => [s.id, s]));
-    for (const b of bookings) {
-      // Réservation DÉPLACÉE (brouillon) : rattachée à son créneau CIBLE, plus à son
-      // créneau d'origine (used/full suivent automatiquement). Hors période/semaine
-      // active (récurrent) ou hors « Semaine réelle » (ponctuel) → masquée.
-      const mv = pendingMoves[b.id];
-      if (mv) {
-        if (mv.ponctuel) {
-          if (!mondayStr) continue;
-        } else {
-          if (effectivePeriodId != null && mv.periodId !== effectivePeriodId) continue;
-          if (effectiveWeek != null && mv.week !== effectiveWeek && mv.week !== "") continue;
-        }
-        pushGroup(`${mv.dayKey}|${mv.slotId}`, b);
-        continue;
-      }
-      // Réservation-ENFANT (matérialisation d'une récurrente, sur un slot miroir daté) :
-      // rattachée à la cellule du SLOT PARENT du jour affiché.
-      const mir = mirrorMap.get(b.slotId);
-      if (mir) {
-        if (!mondayStr) continue;
-        if (!mir.slotDate || mir.slotDate < mondayStr || (uniqSunday && mir.slotDate > uniqSunday))
-          continue;
-        const dk = dayKeyFromYmd(mir.slotDate);
-        if (!days.includes(dk)) continue;
-        pushGroup(`${dk}|${mir.parentSlotId}`, b);
-        continue;
-      }
-      // Réservation PONCTUELLE autonome : rattachée à son bloc ponctuel projeté (clé jour =
-      // jour de la date du créneau), en ignorant période/semaine.
-      if (uniqueIdSet.has(b.slotId)) {
-        if (!mondayStr) continue;
-        const u = uniqById.get(b.slotId);
-        if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
-          continue;
-        const dk = dayKeyFromYmd(u.slotDate);
-        if (!days.includes(dk)) continue;
-        pushGroup(`${dk}|${b.slotId}`, b);
-      }
-      // Réservation RÉCURRENTE parente : ses enfants datés s'affichent (ci-dessus) → on
-      // ne projette pas la parente elle-même (elle est simplement ignorée ici).
-    }
-
-    // Occurrences de MES récurrentes NON matérialisées pour la date affichée (semaine
-    // passée, ou occurrence encore dans le délai de réservation) : on les montre quand
-    // même comme « ma réservation » EN LECTURE SEULE, au lieu de laisser la cellule
-    // apparaître librement réservable (le serveur refuserait de toute façon une 2ᵉ
-    // réservation du même créneau). Les jours fermés (hors période / férié / vacances)
-    // sont écartés au rendu par dayBlocks → isDayDisabled, comme les cellules vides.
-    if (mondayStr) {
-      for (const p of bookings) {
-        if (!p.mine || p.bookingType !== "recurring" || p.parentBookingId !== null) continue;
-        if (effectivePeriodId != null && p.periodId !== effectivePeriodId) continue;
-        if (effectiveWeek != null && p.week !== effectiveWeek && p.week !== "") continue;
-        const dk = slotById.get(p.slotId)?.slotDay;
-        if (!dk || !days.includes(dk)) continue;
-        const key = `${dk}|${p.slotId}`;
-        // Occurrence déjà présente (enfant matérialisé de moi) → ne rien synthétiser.
-        if (groups.get(key)?.some((x) => x.mine)) continue;
-        pushGroup(key, { ...p, dayKey: dk, synthetic: true, pointage: null });
-      }
-    }
-
-    // === Cellules candidates ===
-    // Pour chaque créneau de la période active, sur chaque jour actif du service où
-    // une capacité est configurée → cellule candidate (même sans réservation). C'est
-    // ce qui fait apparaître les créneaux vides cliquables (port du legacy).
-    const candidates = new Map<string, { slotId: string; dayKey: string }>();
-    for (const slot of allSlots) {
-      if (effectivePeriodId != null && slot.periodId !== effectivePeriodId) continue;
-      if (!slotMatchesWeek(slot)) continue;
-      // Modèle « un slot = un jour » : le créneau s'affiche sur SON jour (slotDay),
-      // avec repli sur service.capacity si la capacité n'est pas fixée. Capacité 0 = fermé.
-      const dayKey = slot.slotDay;
-      if (!dayKey || !days.includes(dayKey)) continue;
-      const c = slot.capacity ?? service.capacity;
-      if (c <= 0) continue;
-      candidates.set(`${dayKey}|${slot.id}`, { slotId: slot.id, dayKey });
-    }
-    // Union avec les cellules portant des réservations : aucune résa n'est perdue,
-    // même sur un jour sans capacité configurée (donnée de seed incohérente possible).
-    for (const key of groups.keys()) {
-      if (candidates.has(key)) continue;
-      const [dayKey, slotId] = key.split("|");
-      candidates.set(key, { slotId, dayKey });
-    }
-
-    // Un bloc PAR CRÉNEAU (slot) regroupant toutes ses réservations (modèle legacy
-    // renderAgendaWeekly), au lieu d'un bloc par réservation juxtaposé.
-    const byDay: Record<string, Block[]> = {};
-    for (const { slotId, dayKey } of candidates.values()) {
-      const slot = slotById.get(slotId);
-      if (!slot) continue;
-      const list = groups.get(`${dayKey}|${slotId}`) ?? [];
-      // Créneau sans horaire (début ou fin vide) → « journée entière ».
-      const allday = !slot.startTime || !slot.endTime;
-      const s = toMinutes(slot.startTime, gridStartMin);
-      const e = toMinutes(slot.endTime, s + 60);
-      const capacity = dayCap(slot, dayKey) ?? slot.capacity ?? service.capacity;
-      // Places occupées, conditionnées à la jauge DE CE CRÉNEAU (slots.jauge, même
-      // règle que l'agenda admin) : en jauge = enfants + adultes (accompagnants) ;
-      // hors jauge = 1 par réservation.
-      const used = slot.jauge
-        ? list.reduce(
-            (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
-            0,
-          )
-        : list.length;
-      // Un bloc vide (used=0) n'est jamais "complet".
-      const full = used >= capacity && used > 0;
-      // biome-ignore lint/suspicious/noAssignInExpressions: init-or-push concis sur la map par jour
-      (byDay[dayKey] ??= []).push({
-        slotId,
-        dayKey,
-        bookings: list,
-        startMin: s,
-        endMin: e,
-        leftPct: 0,
-        widthPct: 100,
-        used,
-        capacity,
-        full,
-        jauge: slot.jauge,
-        isAllDay: allday,
-      });
-    }
-    // Chevauchements horaires : sur chaque colonne-jour, les créneaux qui se
-    // recouvrent dans le temps sont répartis sur N colonnes (cf. _agendaLayoutOverlaps).
-    // Chaque LayoutItem référence directement son bloc (id stable) → pas d'ambiguïté
-    // si deux créneaux partagent les mêmes horaires.
-    for (const dayKey of Object.keys(byDay)) {
-      // Les blocs « journée entière » ne sont pas positionnés sur la grille horaire :
-      // ils gardent leftPct:0/widthPct:100 et sont rendus dans la bande dédiée.
-      const blocks = byDay[dayKey].filter((bl) => !bl.isAllDay);
-      const items: (LayoutItem & { block: Block })[] = blocks.map((bl) => {
-        const slot = slotById.get(bl.slotId);
-        return {
-          startMin: toMinutes(slot?.startTime ?? "", gridStartMin),
-          endMin: toMinutes(slot?.endTime ?? "", gridStartMin + 60),
-          col: 0,
-          colCount: 1,
-          block: bl,
-        };
-      });
-      layoutOverlaps(items);
-      for (const it of items) {
-        it.block.leftPct = it.col * (100 / it.colCount);
-        it.block.widthPct = 100 / it.colCount;
-      }
-    }
-    return byDay;
-  }, [
-    bookings,
-    pendingMoves,
-    slots,
-    uniqueSlots,
-    uniqueIdSet,
-    mirrorMap,
-    mondayStr,
-    sundayStr,
-    days,
-    abMode,
-    effectivePeriodId,
-    effectiveWeek,
-    gridStartMin,
-    service.capacity,
-    service.gaugeAccompagnants,
-  ]);
+  // Blocs par jour : moteur PARTAGÉ (buildBlocksByDay, agenda-core) avec les deux
+  // points d'extension usager — re-routage des déplacements en brouillon
+  // (routeBooking) et occurrences synthétiques de MES récurrentes non matérialisées
+  // (injectExtra, lecture seule : le serveur refuserait de toute façon une 2ᵉ
+  // réservation du même créneau ; les jours fermés sont écartés par dayBlocks).
+  const blocksByDay = useMemo(
+    () =>
+      buildBlocksByDay<Booking>({
+        slots,
+        uniqueSlots,
+        bookings,
+        days,
+        mondayStr,
+        sundayStr,
+        realweek: true,
+        effectivePeriodId,
+        effectiveWeek,
+        abMode,
+        gridStartMin,
+        serviceCapacity: service.capacity,
+        gaugeAccompagnants: service.gaugeAccompagnants,
+        uniqueIdSet,
+        mirrorMap,
+        projectRecurringParent: false,
+        // Réservation DÉPLACÉE (brouillon) : rattachée à son créneau CIBLE, plus à
+        // son créneau d'origine (used/full suivent). Hors période/semaine active
+        // (récurrent) ou hors « Semaine réelle » (ponctuel) → masquée.
+        routeBooking: (b) => {
+          const mv = pendingMoves[b.id];
+          if (!mv) return "default";
+          if (mv.ponctuel) {
+            if (!mondayStr) return "skip";
+          } else {
+            if (effectivePeriodId != null && mv.periodId !== effectivePeriodId) return "skip";
+            if (effectiveWeek != null && mv.week !== effectiveWeek && mv.week !== "") return "skip";
+          }
+          return { dayKey: mv.dayKey, slotId: mv.slotId };
+        },
+        injectExtra: ({ groups, pushGroup, slotById }) => {
+          if (!mondayStr) return;
+          for (const p of bookings) {
+            if (!p.mine || p.bookingType !== "recurring" || p.parentBookingId !== null) continue;
+            if (effectivePeriodId != null && p.periodId !== effectivePeriodId) continue;
+            if (effectiveWeek != null && p.week !== effectiveWeek && p.week !== "") continue;
+            const dk = slotById.get(p.slotId)?.slotDay;
+            if (!dk || !days.includes(dk)) continue;
+            const key = `${dk}|${p.slotId}`;
+            // Occurrence déjà présente (enfant matérialisé de moi) → ne rien synthétiser.
+            if (groups.get(key)?.some((x) => x.mine)) continue;
+            pushGroup(key, { ...p, dayKey: dk, synthetic: true, pointage: null });
+          }
+        },
+      }),
+    [
+      bookings,
+      pendingMoves,
+      slots,
+      uniqueSlots,
+      uniqueIdSet,
+      mirrorMap,
+      mondayStr,
+      sundayStr,
+      days,
+      abMode,
+      effectivePeriodId,
+      effectiveWeek,
+      gridStartMin,
+      service.capacity,
+      service.gaugeAccompagnants,
+    ],
+  );
 
   // Blocs affichés pour un jour : AUCUN sur un jour fermé (hors période active,
   // vacances scolaires ou férié) — sinon les créneaux/réservations de la période
