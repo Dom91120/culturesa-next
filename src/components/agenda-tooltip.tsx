@@ -169,9 +169,17 @@ export function AgendaTooltip({
           ) : (
             tip.dates.length > 0 && (
               <div style={{ marginBottom: 4 }}>
-                <div style={{ fontWeight: 600, marginBottom: 2 }}>Journées concernées :</div>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                  {tip.dates.length > 1 ? "Journées concernées :" : "Journée concernée :"}
+                </div>
+                {/* Colonnes adaptées au contenu : autant que de dates (4 max), chacune à la
+                    largeur de son texte — l'info-bulle d'un ponctuel (1 date) reste compacte. */}
                 <div
-                  style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0 12px" }}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${Math.min(4, tip.dates.length)}, max-content)`,
+                    gap: "0 12px",
+                  }}
                 >
                   {tip.dates.map((d) => (
                     <div key={d}>• {TIP_DATE_FMT.format(new Date(`${d}T12:00:00`))}</div>

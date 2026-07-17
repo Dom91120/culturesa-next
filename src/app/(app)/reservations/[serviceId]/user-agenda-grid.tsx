@@ -1039,9 +1039,9 @@ export function UserAgendaGrid({
   // voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
   const [rwPeriodId, setRwPeriodId] = useState<number | null>(null);
   // « Masquer les horaires sans créneau » : compacte les heures qui ne portent AUCUN
-  // créneau. Préférence utilisateur (coché par défaut). Sur mobile, toujours forcée à
-  // true (case masquée) — voir la valeur effective `hideNoSlot` dérivée plus bas.
-  const [hideNoSlotPref, setHideNoSlotPref] = useState(true);
+  // créneau. Préférence utilisateur (décochée par défaut) — voir la valeur effective
+  // `hideNoSlot` dérivée plus bas (forcée sur mobile).
+  const [hideNoSlotPref, setHideNoSlotPref] = useState(false);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
   // Glisser-déplacer (pointer events, cf. usePointerDrag) : élément en cours de drag + clé
@@ -1159,6 +1159,10 @@ export function UserAgendaGrid({
     }
     return ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].filter((d) => set.has(d));
   }, [contextOpenings]);
+  // Offsets (depuis le lundi) du 1er et du dernier jour TRAVAILLÉ de la semaine :
+  // le libellé de la nav hebdo affiche ces bornes, pas lundi/dimanche fixes.
+  const firstDayOffset = days.length ? (DAY_OFFSET[days[0]] ?? 0) : 0;
+  const lastDayOffset = days.length ? (DAY_OFFSET[days[days.length - 1]] ?? 6) : 6;
 
   // ── Mobile : vue « un jour à la fois » ──────────────────────────────────────
   // Sur smartphone, la grille hebdo (5-7 colonnes) est illisible : on n'affiche
@@ -1469,6 +1473,10 @@ export function UserAgendaGrid({
   );
   // Index slot ponctuel → slot (lookup O(1)), au lieu d'un .find() linéaire répété par bloc.
   const uniqSlotById = useMemo(() => new Map(uniqueSlots.map((s) => [s.id, s])), [uniqueSlots]);
+  // Index réservation → réservation : résout une occurrence ENFANT vers sa PARENTE
+  // (les actions du badge — annulation, édition, déplacement — portent toujours sur
+  // la réservation logique, jamais sur une séance isolée).
+  const bookingById = useMemo(() => new Map(bookings.map((b) => [b.id, b])), [bookings]);
   // Idem pour les créneaux récurrents.
   const recurSlotById = useMemo(() => new Map(slots.map((s) => [s.id, s])), [slots]);
   // Slots miroirs → parent + date : rattache les réservations-enfants à la cellule du
@@ -1489,10 +1497,17 @@ export function UserAgendaGrid({
   // que 2 quarts visuels (30 min) — les quarts au-delà de lunchStart+30 sont sautés.
   // Le reste de la grille (lignes, heures, blocs, clics) suit un mapping par quarts
   // d'heure VISIBLES (mapMinToY), au lieu d'un mapping linéaire heure/heure.
-  // Bornes de pause de l'ouverture de contexte principale (exercice affiché en
-  // Modèle ; premier exercice de la semaine en Semaine réelle).
-  const lunchStart = toMinutes(contextOpenings[0]?.morningEnd ?? "", Number.NaN);
-  const lunchEnd = toMinutes(contextOpenings[0]?.afternoonStart ?? "", Number.NaN);
+  // Bornes de pause du PREMIER contexte qui en définit une (un jour hors exercice —
+  // CLOSED_OPENING, ex. lundi 31 août avant un exercice démarrant le 1er septembre —
+  // ne doit pas masquer la pause du reste de la semaine).
+  const lunchOpening =
+    contextOpenings.find((o) => {
+      const s = toMinutes(o.morningEnd, Number.NaN);
+      const e = toMinutes(o.afternoonStart, Number.NaN);
+      return Number.isFinite(s) && Number.isFinite(e) && e > s;
+    }) ?? contextOpenings[0];
+  const lunchStart = toMinutes(lunchOpening?.morningEnd ?? "", Number.NaN);
+  const lunchEnd = toMinutes(lunchOpening?.afternoonStart ?? "", Number.NaN);
   const hasLunch =
     Number.isFinite(lunchStart) &&
     Number.isFinite(lunchEnd) &&
@@ -2642,9 +2657,12 @@ export function UserAgendaGrid({
   }, [uniqueSlots, earliestFor, abMode, effectiveWeek, openingForYmd, schoolHolidays]);
 
   // Dates concrètes couvertes par un créneau récurrent un jour donné (cf. memo ci-dessus).
-  // Port _predictedDatesForCurrentUser.
-  const concernedDatesForBlock = (slotId: string, dayKey: string): string[] =>
-    concernedDatesByKey.get(`${slotId}|${dayKey}`) ?? [];
+  // Port _predictedDatesForCurrentUser. Ponctuel autonome : sa seule date.
+  const concernedDatesForBlock = (slotId: string, dayKey: string): string[] => {
+    const u = uniqSlotById.get(slotId);
+    if (u && !u.parentSlotId) return u.slotDate ? [u.slotDate] : [];
+    return concernedDatesByKey.get(`${slotId}|${dayKey}`) ?? [];
+  };
 
   // Créneau « clôturé » par le délai de réservation → non réservable, création bloquée.
   //   • Ponctuel  → sa date est antérieure à la 1re date réservable (aujourd'hui + délai).
@@ -2719,10 +2737,9 @@ export function UserAgendaGrid({
         setPendingAdds,
         beginDrag,
       } = blockApiRef.current;
-      // Info-bulle « Journées concernées » : créneaux RÉCURRENTS, en Modèle de période
-      // COMME en Semaine réelle (même comportement que l'agenda admin) — elle liste les
-      // occurrences à venir du créneau, utile dans les deux vues.
-      const isRecurringBlock = !uniqueIdSet.has(b.slotId);
+      // Info-bulle « Journées concernées » : créneaux RÉCURRENTS (liste des occurrences
+      // à venir, en Modèle COMME en Semaine réelle) ET ponctuels autonomes (leur seule
+      // date) — cf. concernedDatesForBlock.
       const posStyle: React.CSSProperties = allday
         ? {}
         : (() => {
@@ -2745,8 +2762,9 @@ export function UserAgendaGrid({
         // biome-ignore lint/a11y/useKeyWithClickEvents: bloc-créneau agenda (clic = créer)
         <div
           key={`${b.dayKey}|${b.slotId}`}
-          // data-* pour l'info-bulle déléguée « Journées concernées » (créneau récurrent).
-          data-slot-tip={isRecurringBlock ? "" : undefined}
+          // data-* pour l'info-bulle déléguée « Journées concernées » (tous les blocs :
+          // récurrents ET ponctuels autonomes).
+          data-slot-tip=""
           data-slotid={b.slotId}
           data-daykey={b.dayKey}
           // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
@@ -2826,7 +2844,16 @@ export function UserAgendaGrid({
               const shortSlot = !b.isAllDay && b.endMin - b.startMin <= 30;
               // Créneau très court (≤ 15 min) : décale les compteurs de la jauge vers le bas.
               const veryShortSlot = !b.isAllDay && b.endMin - b.startMin <= 15;
-              const myBk = b.bookings.find((x) => x.mine);
+              // Occurrence ENFANT d'une récurrente → on remonte à la réservation
+              // PARENTE : annulation, édition et déplacement portent sur la
+              // réservation logique entière (supprimer depuis une occurrence ne
+              // doit pas retirer UNE seule séance). Compteurs/état/validation des
+              // enfants étant synchronisés sur la parente, l'affichage est inchangé.
+              const myBkOcc = b.bookings.find((x) => x.mine);
+              const myBk =
+                myBkOcc?.parentBookingId != null
+                  ? (bookingById.get(myBkOcc.parentBookingId) ?? myBkOcc)
+                  : myBkOcc;
               // Brouillon : ma résa marquée pour annulation, ou créneau libre coché.
               const markedRemoval = myBk
                 ? pendingRemovals.some((r) => r.bookingId === myBk.id)
@@ -3278,7 +3305,7 @@ export function UserAgendaGrid({
               style={{ width: "8rem", textAlign: "center" }}
             >
               {mondayStr
-                ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
+                ? `${shortDateFmt.format(addDays(mondayStr, firstDayOffset))} → ${shortDateFmt.format(addDays(mondayStr, lastDayOffset))}`
                 : "…"}
             </span>
             <button
@@ -3843,19 +3870,25 @@ export function UserAgendaGrid({
             }}
           >
             {(() => {
-              // Ajout RÉCURRENT en attente → avertissement --danger à la place du
-              // compteur : nombre de dates réellement réservées (miroirs à venir du
-              // créneau parent — la parité A/B est déjà portée par les miroirs) sur
-              // la période citée. Le verrou « une seule action » garantit qu'il n'y
-              // a rien d'autre à afficher en même temps.
-              const rec = pendingAdds.find((a) => !a.ponctuel);
-              if (rec) {
+              // Ajout en attente → avertissement --danger à la place du compteur :
+              // nombre d'occurrences réellement réservées sur la période citée
+              // (récurrent : miroirs à venir du créneau parent — la parité A/B est
+              // déjà portée par les miroirs ; ponctuel : sa seule date). Le verrou
+              // « une seule action » garantit qu'il n'y a rien d'autre à afficher
+              // en même temps.
+              const add = pendingAdds[0];
+              if (add) {
                 const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
-                const n = uniqueSlots.filter(
-                  (u) => u.parentSlotId === rec.slotId && u.slotDate >= today,
-                ).length;
-                const periodLabel =
-                  periods.find((p) => p.id === rec.periodId)?.label ?? "la période";
+                const n = add.ponctuel
+                  ? 1
+                  : uniqueSlots.filter((u) => u.parentSlotId === add.slotId && u.slotDate >= today)
+                      .length;
+                // Période citée : celle de l'ajout (récurrent), sinon celle du
+                // créneau ponctuel daté.
+                const periodId = add.ponctuel
+                  ? uniqSlotById.get(add.slotId)?.periodId
+                  : add.periodId;
+                const periodLabel = periods.find((p) => p.id === periodId)?.label ?? "la période";
                 return (
                   // whiteSpace normal : le <p> conteneur est en nowrap — ce message,
                   // plus long que les compteurs, se replie sur 2 lignes quand la
@@ -3869,7 +3902,7 @@ export function UserAgendaGrid({
                       lineHeight: 1.2,
                     }}
                   >
-                    Ceci réservera {n} date{n > 1 ? "s" : ""} sur {periodLabel}
+                    Ceci réservera {n} occurrence{n > 1 ? "s" : ""} sur {periodLabel}
                   </span>
                 );
               }

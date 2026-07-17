@@ -262,9 +262,21 @@ async function cancelInTx(
 ): Promise<BookingCancellationParams | null> {
   const booking = await tx.booking.findFirst({
     where: { id: bookingId, userId, serviceId },
-    select: { serviceId: true, validated: true, periodId: true, slotId: true },
+    select: {
+      serviceId: true,
+      validated: true,
+      periodId: true,
+      slotId: true,
+      parentBookingId: true,
+    },
   });
   if (!booking) throw new BookingError("Réservation introuvable.");
+  // Occurrence ENFANT d'une récurrente : l'annulation porte sur la réservation
+  // PARENTE entière (les séances ne s'annulent pas à l'unité côté usager —
+  // supprimer un enfant seul laissait toutes les autres occurrences en place).
+  if (booking.parentBookingId != null) {
+    return cancelInTx(tx, userId, serviceId, booking.parentBookingId);
+  }
   // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
   await assertBookingUnlocked(tx, userId, booking);
   const deleted = await cancelUserBookingInTx(tx, userId, bookingId);

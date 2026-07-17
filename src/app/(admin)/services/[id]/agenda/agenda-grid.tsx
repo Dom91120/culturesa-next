@@ -249,6 +249,10 @@ export function AgendaGrid({
   // Mode « Création de créneau » : clic = créneau d'1 quart d'heure ; glisser
   // haut/bas = créneau de plusieurs quarts (validé au relâché). Cf. plus bas.
   const [creationMode, setCreationMode] = useState(false);
+  // « Création multiple » (Semaine réelle uniquement) : chaque créneau ponctuel créé
+  // est répliqué sur CHAQUE semaine de la période active (même parité A/B en mode
+  // A/B), en sautant les dates fermées — cf. uniqueCreateDates.
+  const [multiCreate, setMultiCreate] = useState(false);
   // Mode « Jauge » (icône capsule, OFF par défaut) : les créneaux créés portent
   // jauge = ce mode au moment de la création (colonne slots.jauge).
   const [jaugeMode, setJaugeMode] = useState(false);
@@ -440,6 +444,10 @@ export function AgendaGrid({
     }
     return ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].filter((d) => set.has(d));
   }, [contextOpenings]);
+  // Offsets (depuis le lundi) du 1er et du dernier jour TRAVAILLÉ de la semaine :
+  // le libellé de la nav hebdo affiche ces bornes, pas lundi/dimanche fixes.
+  const firstDayOffset = days.length ? (DAY_OFFSET[days[0]] ?? 0) : 0;
+  const lastDayOffset = days.length ? (DAY_OFFSET[days[days.length - 1]] ?? 6) : 6;
 
   // Bornes de la grille = amplitude des plages d'ouverture RÉELLEMENT ouvertes
   // (union sur les ouvertures de contexte). Une plage « fermée » (fin ≤ début,
@@ -722,10 +730,18 @@ export function AgendaGrid({
   // que 2 quarts visuels (30 min) — les quarts au-delà de lunchStart+30 sont sautés.
   // Le reste de la grille (lignes, heures, blocs, clics) suit un mapping par quarts
   // d'heure VISIBLES (mapMinToY), au lieu d'un mapping linéaire heure/heure.
-  // Bornes de pause de l'ouverture de contexte principale (exercice affiché en
-  // Modèle ; premier exercice de la semaine en Semaine réelle).
-  const lunchStart = toMinutes(contextOpenings[0]?.morningEnd ?? "", Number.NaN);
-  const lunchEnd = toMinutes(contextOpenings[0]?.afternoonStart ?? "", Number.NaN);
+  // Bornes de pause du PREMIER contexte qui en définit une (exercice affiché en
+  // Modèle ; en Semaine réelle, un jour hors exercice — CLOSED_OPENING, ex. lundi
+  // 31 août avant un exercice démarrant le 1er septembre — ne doit pas masquer la
+  // pause du reste de la semaine).
+  const lunchOpening =
+    contextOpenings.find((o) => {
+      const s = toMinutes(o.morningEnd, Number.NaN);
+      const e = toMinutes(o.afternoonStart, Number.NaN);
+      return Number.isFinite(s) && Number.isFinite(e) && e > s;
+    }) ?? contextOpenings[0];
+  const lunchStart = toMinutes(lunchOpening?.morningEnd ?? "", Number.NaN);
+  const lunchEnd = toMinutes(lunchOpening?.afternoonStart ?? "", Number.NaN);
   const hasLunch =
     Number.isFinite(lunchStart) &&
     Number.isFinite(lunchEnd) &&
@@ -1239,6 +1255,42 @@ export function AgendaGrid({
     return daysSpan(cd.startDay, cd.curDay);
   }
 
+  // Dates de création d'un ponctuel (Semaine réelle) pour une colonne : la date de la
+  // semaine affichée, ou — « Création multiple » — le même jour de CHAQUE semaine de la
+  // période active. Filtres alignés sur la génération des miroirs / isDayDisabled :
+  // parité A/B de la semaine affichée (mode A/B), jour actif de l'exercice couvrant,
+  // fériés et vacances scolaires fermés sautés.
+  function uniqueCreateDates(dayKey: string): string[] {
+    if (!mondayStr) return [];
+    const off = DAY_OFFSET[dayKey] ?? 0;
+    const single = ymd(addDays(mondayStr, off));
+    const p = coveringPeriod;
+    if (!multiCreate || !p?.dateStart || !p.dateEnd) return [single];
+    const dates: string[] = [];
+    let monday = ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`)));
+    // ≤ 120 itérations : garde-fou large (une période ≈ 53 semaines au plus).
+    for (let guard = 0; guard < 120 && monday <= p.dateEnd; guard++) {
+      const weekMonday = monday;
+      monday = ymd(addDays(monday, 7));
+      if (abMode && realWeekParity && slotWeekTag(weekMonday) !== realWeekParity) continue;
+      const d = ymd(addDays(weekMonday, off));
+      if (d < p.dateStart || d > p.dateEnd) continue;
+      const o = openingForYmd(d);
+      if (
+        !o.activeDays
+          .split(",")
+          .map((s) => s.trim())
+          .includes(dayKey)
+      ) {
+        continue;
+      }
+      if (!o.openOnHolidays && isFrenchHoliday(d)) continue;
+      if (!o.openOnSchoolHolidays && inSchoolHolidayRange(d, schoolHolidays)) continue;
+      dates.push(d);
+    }
+    return dates.length ? dates : [single];
+  }
+
   // Au relâché : UN créneau par colonne couverte, couvrant [start, max+15] (clic
   // simple = 1 quart, 1 colonne). Récurrent en Modèle de période (période + jour +
   // semaine A/B active), ponctuel daté en Semaine réelle. Capacité = service.capacity.
@@ -1279,16 +1331,18 @@ export function AgendaGrid({
       runResults(
         Promise.all(
           targets.flatMap((dayKey) =>
-            segments.map(([s, e]) =>
-              createUniqueSlotAction({
-                serviceId: service.id,
-                slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
-                startTime: minToHHMM(s),
-                endTime: minToHHMM(e),
-                capacity: createCap,
-                demandeurIds: createDemIds,
-                jauge: jaugeMode,
-              }),
+            uniqueCreateDates(dayKey).flatMap((slotDate) =>
+              segments.map(([s, e]) =>
+                createUniqueSlotAction({
+                  serviceId: service.id,
+                  slotDate,
+                  startTime: minToHHMM(s),
+                  endTime: minToHHMM(e),
+                  capacity: createCap,
+                  demandeurIds: createDemIds,
+                  jauge: jaugeMode,
+                }),
+              ),
             ),
           ),
         ),
@@ -1352,16 +1406,18 @@ export function AgendaGrid({
       if (!mondayStr) return;
       runResults(
         Promise.all(
-          targets.map((dayKey) =>
-            createUniqueSlotAction({
-              serviceId: service.id,
-              slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
-              startTime: "",
-              endTime: "",
-              capacity: createCap,
-              demandeurIds: createDemIds,
-              jauge: jaugeMode,
-            }),
+          targets.flatMap((dayKey) =>
+            uniqueCreateDates(dayKey).map((slotDate) =>
+              createUniqueSlotAction({
+                serviceId: service.id,
+                slotDate,
+                startTime: "",
+                endTime: "",
+                capacity: createCap,
+                demandeurIds: createDemIds,
+                jauge: jaugeMode,
+              }),
+            ),
           ),
         ),
       );
@@ -1670,16 +1726,18 @@ export function AgendaGrid({
       if (!mondayStr) return;
       runResults(
         Promise.all(
-          targets.map((dayKey) =>
-            createUniqueSlotAction({
-              serviceId: service.id,
-              slotDate: ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0)),
-              startTime,
-              endTime,
-              capacity: createCap,
-              demandeurIds: createDemIds,
-              jauge: jaugeMode,
-            }),
+          targets.flatMap((dayKey) =>
+            uniqueCreateDates(dayKey).map((slotDate) =>
+              createUniqueSlotAction({
+                serviceId: service.id,
+                slotDate,
+                startTime,
+                endTime,
+                capacity: createCap,
+                demandeurIds: createDemIds,
+                jauge: jaugeMode,
+              }),
+            ),
           ),
         ),
       );
@@ -2621,7 +2679,7 @@ export function AgendaGrid({
               style={{ width: "8rem", textAlign: "center" }}
             >
               {mondayStr
-                ? `${shortDateFmt.format(addDays(mondayStr, 0))} → ${shortDateFmt.format(addDays(mondayStr, 6))}`
+                ? `${shortDateFmt.format(addDays(mondayStr, firstDayOffset))} → ${shortDateFmt.format(addDays(mondayStr, lastDayOffset))}`
                 : "…"}
             </span>
             <button
@@ -2774,6 +2832,32 @@ export function AgendaGrid({
           {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B) ; sinon les cases. */}
           {creationMode ? (
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+              {/* « Création multiple » (Semaine réelle) : réplique chaque ponctuel créé
+                  sur toutes les semaines de la période active (parité A/B respectée). */}
+              {mode === "realweek" && (
+                <label
+                  data-tip="Créer le créneau sur chaque semaine de la période (parité A/B respectée)"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: ".3rem",
+                    fontSize: ".72rem",
+                    fontWeight: 600,
+                    color: multiCreate ? "var(--accent)" : "var(--muted)",
+                    textTransform: "none",
+                    letterSpacing: "normal",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  Création multiple
+                  <input
+                    type="checkbox"
+                    checked={multiCreate}
+                    onChange={(e) => setMultiCreate(e.target.checked)}
+                  />
+                </label>
+              )}
               <label
                 htmlFor="create-cap"
                 style={{
