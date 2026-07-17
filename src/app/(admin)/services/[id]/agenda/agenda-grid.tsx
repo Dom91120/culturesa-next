@@ -546,7 +546,7 @@ export function AgendaGrid({
   // Jour fermé / férié / vacances (Semaine réelle) : prédicats partagés
   // (makeDayClosure, agenda-core). Mémoïsé : identités stables entre rendus tant que
   // période/mode ne changent pas → permet la mémo des blocs par jour (cf. dayBlockEls).
-  const { isDayDisabled, isHolidayDay, isSchoolHolidayDay } = useMemo(
+  const { isDayDisabled, outOfPeriodCls } = useMemo(
     () =>
       makeDayClosure({
         active: mode === "realweek",
@@ -557,12 +557,6 @@ export function AgendaGrid({
       }),
     [mode, mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
-  // Classe de grisage : jour férié ou vacances scolaires → hachis (is-holiday) ;
-  // hors période → hachis dédié (is-out-of-period).
-  const outOfPeriodCls = (dayKey: string): string => {
-    if (!isDayDisabled(dayKey)) return "";
-    return isHolidayDay(dayKey) || isSchoolHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
-  };
 
   // ── Semaines A/B ── (dérivé de la matrice demandeurs, pas de la colonne service)
   const abMode = modes.abMode;

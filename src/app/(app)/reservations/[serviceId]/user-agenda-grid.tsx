@@ -1287,7 +1287,7 @@ export function UserAgendaGrid({
   // agenda-core). La politique vacances du DEMANDEUR est déjà combinée (∧) dans
   // openingForYmd. Mémoïsé : identités stables requises pour mémoïser `occupiedQ`
   // (sinon recalcul à chaque rendu, donc à chaque survol/drag).
-  const { isDayDisabled, isHolidayDay } = useMemo(
+  const { isDayDisabled, outOfPeriodCls } = useMemo(
     () =>
       makeDayClosure({
         active: true,
@@ -1298,13 +1298,6 @@ export function UserAgendaGrid({
       }),
     [mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
-  // Classe de grisage : jour férié → hachis de la pause méridienne (is-holiday) ;
-  // hors période / vacances scolaires → hachis dédié (is-out-of-period).
-  // (Divergence assumée avec l'admin, qui hachure AUSSI les vacances en is-holiday.)
-  const outOfPeriodCls = (dayKey: string): string => {
-    if (!isDayDisabled(dayKey)) return "";
-    return isHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
-  };
 
   // ── Semaines A/B ── (réglage GLOBAL du service : Service.recurrentMode ∧ semaineAb)
   const abMode = modes.abMode;

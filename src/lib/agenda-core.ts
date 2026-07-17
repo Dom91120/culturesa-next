@@ -481,11 +481,11 @@ export function deriveCoveringPeriod<
  * Prédicats de fermeture PAR JOUR de la semaine réelle : jour inactif de l'exercice
  * couvrant la date, hors période couvrante, férié quand l'exercice ferme les fériés,
  * vacances scolaires quand il ferme les vacances. `active` = false (admin en Modèle
- * de période) → tout ouvert. La CLASSE de grisage (outOfPeriodCls) reste dans chaque
- * grille : l'admin hachure les vacances comme les fériés (is-holiday), l'usager les
- * classe hors-période (divergence historique conservée telle quelle). À appeler sous
- * useMemo : les prédicats renvoyés doivent rester stables entre rendus (mémo des
- * blocs par jour).
+ * de période) → tout ouvert. `outOfPeriodCls` (classe de grisage) est UNIFIÉE
+ * (2026-07-17) : férié OU vacances → is-holiday, hors période → is-out-of-period —
+ * les deux classes partagent de toute façon la même règle CSS (hachis subtil,
+ * app-legacy.css). À appeler sous useMemo : les fonctions renvoyées doivent rester
+ * stables entre rendus (mémo des blocs par jour).
  */
 export function makeDayClosure(args: {
   active: boolean;
@@ -497,6 +497,7 @@ export function makeDayClosure(args: {
   isDayDisabled: (dayKey: string) => boolean;
   isHolidayDay: (dayKey: string) => boolean;
   isSchoolHolidayDay: (dayKey: string) => boolean;
+  outOfPeriodCls: (dayKey: string) => string;
 } {
   const { active, mondayStr, coveringPeriod, openingForYmd, schoolHolidays } = args;
   const isDayDisabled = (dayKey: string): boolean => {
@@ -535,7 +536,13 @@ export function makeDayClosure(args: {
     if (openingForYmd(dayYmd).openOnSchoolHolidays) return false;
     return isInSchoolHolidayRange(dayYmd, schoolHolidays);
   };
-  return { isDayDisabled, isHolidayDay, isSchoolHolidayDay };
+  // Classe de grisage : férié ou vacances scolaires → hachis is-holiday ;
+  // hors période → hachis is-out-of-period (visuel identique, cf. doc ci-dessus).
+  const outOfPeriodCls = (dayKey: string): string => {
+    if (!isDayDisabled(dayKey)) return "";
+    return isHolidayDay(dayKey) || isSchoolHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
+  };
+  return { isDayDisabled, isHolidayDay, isSchoolHolidayDay, outOfPeriodCls };
 }
 
 /**
