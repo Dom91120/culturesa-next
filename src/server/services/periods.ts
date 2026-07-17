@@ -107,7 +107,12 @@ export type CreateExerciceInput = {
   dateEnd: Date | null;
 };
 
-/** Crée un exercice pour un service (date de début ≤ date de fin). */
+/**
+ * Crée un exercice pour un service (date de début ≤ date de fin). « Affiché aux
+ * utilisateurs » par défaut, SAUF si un autre exercice du service l'est déjà
+ * (unicité par service : créer l'exercice suivant en avance ne doit pas retirer
+ * la visibilité de l'exercice en cours).
+ */
 export async function createExercice(
   serviceId: string,
   input: CreateExerciceInput,
@@ -115,15 +120,22 @@ export async function createExercice(
   if (input.dateStart && input.dateEnd && input.dateStart > input.dateEnd) {
     throw new PeriodError("La date de début doit être avant la date de fin.");
   }
-  return prisma.exercice.create({
-    data: {
-      serviceId,
-      label: input.label,
-      type: input.type,
-      dateStart: input.dateStart,
-      dateEnd: input.dateEnd,
-    },
-    select: EXERCICE_SELECT,
+  return prisma.$transaction(async (tx) => {
+    const alreadyVisible = await tx.exercice.findFirst({
+      where: { serviceId, visibleToUsers: true },
+      select: { id: true },
+    });
+    return tx.exercice.create({
+      data: {
+        serviceId,
+        label: input.label,
+        type: input.type,
+        dateStart: input.dateStart,
+        dateEnd: input.dateEnd,
+        visibleToUsers: alreadyVisible == null,
+      },
+      select: EXERCICE_SELECT,
+    });
   });
 }
 
