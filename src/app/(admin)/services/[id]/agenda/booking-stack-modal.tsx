@@ -25,7 +25,6 @@ export function BookingStackModal({
   isPonctuel,
   ponctuelDate,
   periodLabel,
-  mode,
   validation,
   pointageMode,
   creationMode,
@@ -52,7 +51,6 @@ export function BookingStackModal({
   isPonctuel: boolean;
   ponctuelDate: string | null | undefined; // date (YYYY-MM-DD) d'un créneau ponctuel
   periodLabel: string; // libellé de la période active (pastille, récurrent)
-  mode: "model" | "realweek";
   validation: boolean;
   pointageMode: boolean;
   creationMode: boolean;
@@ -165,9 +163,8 @@ export function BookingStackModal({
             de sens que sur une semaine datée — cf. legacy). La croix de
             fermeture est positionnée en haut à droite de la modale (modal-close). */}
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-          {/* « Mode validation » toujours disponible (récurrent en Semaine réelle inclus :
-              la validation porte sur la parente) ; « Mode pointage » seulement en Semaine
-              réelle (par occurrence). */}
+          {/* Validation (porte sur la réservation parente pour un récurrent) + pointage
+              (par occurrence). */}
           <label className="planning-option" style={{ margin: 0 }}>
             Mode validation{" "}
             <input
@@ -176,16 +173,14 @@ export function BookingStackModal({
               onChange={(e) => onToggleValidation(e.target.checked)}
             />
           </label>
-          {mode === "realweek" && (
-            <label className="planning-option" style={{ margin: 0 }}>
-              Mode pointage{" "}
-              <input
-                type="checkbox"
-                checked={pointageMode}
-                onChange={(e) => onTogglePointage(e.target.checked)}
-              />
-            </label>
-          )}
+          <label className="planning-option" style={{ margin: 0 }}>
+            Mode pointage{" "}
+            <input
+              type="checkbox"
+              checked={pointageMode}
+              onChange={(e) => onTogglePointage(e.target.checked)}
+            />
+          </label>
         </div>
       </div>
       <div className="csm-grid-wrap">

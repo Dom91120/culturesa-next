@@ -302,19 +302,15 @@ export function AgendaGrid({
   const [currentExerciceId, setCurrentExerciceId] = useState<number | null>(
     exercices.length ? exercices[exercices.length - 1].id : null,
   );
-  const [periodIdx, setPeriodIdx] = useState(0);
-  // Vue UNIQUE « Semaine réelle » : le « Modèle de période » a été retiré (la Semaine
-  // réelle couvre désormais toute sa fonction — création/édition des créneaux ET gestion
-  // complète des réservations récurrentes). `mode` reste typé le temps du nettoyage des
-  // branches `mode === "model"` héritées (désormais inertes).
-  const [mode] = useState<"model" | "realweek">("realweek");
+  // Vue UNIQUE « Semaine réelle » (le « Modèle de période » a été retiré : la Semaine réelle
+  // couvre toute sa fonction — création/édition des créneaux ET gestion complète des
+  // réservations récurrentes). La période active se déduit de la semaine affichée (verrou
+  // rwPeriodId), il n'y a plus de sélection de période/semaine A/B « abstraite ».
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
-  // Mode "Semaine réelle" : période active verrouillée. Sans ce verrou, on
-  // re-dérive la période depuis la semaine à chaque ◀/▶ — et quand une semaine
-  // chevauche la frontière de deux périodes contiguës, elle bascule sur la
-  // voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
+  // Période active verrouillée : sans ce verrou, on re-dérive la période depuis la semaine à
+  // chaque ◀/▶ — et quand une semaine chevauche la frontière de deux périodes contiguës,
+  // elle bascule sur la voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
   const [rwPeriodId, setRwPeriodId] = useState<number | null>(null);
-  const [weekAB, setWeekAB] = useState<"A" | "B">("A");
   const [hideEmpty, setHideEmpty] = useState(false);
   const [validation, setValidation] = useState(false);
   const [pointageMode, setPointageMode] = useState(false);
@@ -485,16 +481,12 @@ export function AgendaGrid({
   );
 
   // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
-  // Modèle de période → l'exercice affiché ; Semaine réelle → chaque jour de la
-  // semaine (dédupliqué) — une semaine à cheval sur deux exercices agrège les deux.
+  // chaque jour de la semaine affichée (dédupliqué) — une semaine à cheval sur deux
+  // exercices agrège les deux.
   const contextOpenings = useMemo(() => {
-    if (mode === "model") {
-      const ex = exercices.find((e) => e.id === currentExerciceId);
-      return [ex ? openingForYmd(ex.dateStart || "") : CLOSED_OPENING];
-    }
     if (!anchorMonday) return [CLOSED_OPENING];
     return weekContextOpenings(anchorMonday, openingForYmd);
-  }, [mode, exercices, currentExerciceId, anchorMonday, openingForYmd]);
+  }, [anchorMonday, openingForYmd]);
 
   // Colonnes (jours actifs du contexte — en Semaine réelle, UNION des exercices de la
   // semaine, le grisage par date fermant les jours inactifs) + bornes horaires de la
@@ -512,7 +504,6 @@ export function AgendaGrid({
 
   // Périodes visibles = celles de l'exercice courant (toutes si aucun exercice).
   const visiblePeriods = visiblePeriodsOf(periods, currentExerciceId);
-  const selectedPeriodId = visiblePeriods[periodIdx]?.id ?? null;
 
   // « Aujourd'hui » n'a de sens que si la date du jour tombe dans une période de l'exercice
   // affiché (sinon le bouton renverrait hors de la plage visible) → on masque le bouton sinon.
@@ -526,7 +517,6 @@ export function AgendaGrid({
   const canExNext = exIdx >= 0 && exIdx < exercices.length - 1;
   function gotoExercice(id: number) {
     setCurrentExerciceId(id);
-    setPeriodIdx(0);
   }
 
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
@@ -538,8 +528,9 @@ export function AgendaGrid({
     mondayStr,
     rwPeriodId,
   );
-  // En semaine réelle sans période couvrante, -1 ne matche rien → aucun bloc.
-  const effectivePeriodId = mode === "realweek" ? (coveringPeriod?.id ?? -1) : selectedPeriodId;
+  // Période active = celle qui couvre la semaine affichée. Sans période couvrante, -1 ne
+  // matche rien → aucun bloc.
+  const effectivePeriodId = coveringPeriod?.id ?? -1;
 
   // Dates (YYYY-MM-DD) des créneaux ponctuels (datés) ayant au moins une réservation
   // (port legacy _agendaBookedSlotDates). Trié croissant. Mémoïsé + Set : l'ancien
@@ -598,28 +589,24 @@ export function AgendaGrid({
   const weekDateByDay = weekDateLabels(mondayStr, days);
   // Jour fermé / férié / vacances (Semaine réelle) : prédicats partagés
   // (makeDayClosure, agenda-core). Mémoïsé : identités stables entre rendus tant que
-  // période/mode ne changent pas → permet la mémo des blocs par jour (cf. dayBlockEls).
+  // la période ne change pas → permet la mémo des blocs par jour (cf. dayBlockEls).
   const { isDayDisabled, outOfPeriodCls } = useMemo(
     () =>
       makeDayClosure({
-        active: mode === "realweek",
+        active: true,
         mondayStr,
         coveringPeriod,
         openingForYmd,
         schoolHolidays,
       }),
-    [mode, mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
+    [mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
 
   // ── Semaines A/B ── (dérivé de la matrice demandeurs, pas de la colonne service)
   const abMode = modes.abMode;
   const realWeekParity: "A" | "B" | null = mondayStr ? slotWeekTag(mondayStr) : null;
-  // Semaine effective filtrée : en modèle = choix A/B ; en réel = parité de la date.
-  const effectiveWeek: "A" | "B" | null = abMode
-    ? mode === "model"
-      ? weekAB
-      : realWeekParity
-    : null;
+  // Semaine effective filtrée = parité de la semaine affichée (mode A/B uniquement).
+  const effectiveWeek: "A" | "B" | null = abMode ? realWeekParity : null;
 
   // La plage horaire affichée reste fixe (matin → après-midi). « Masquer les
   // horaires sans réservation » ne resserre pas la plage : il COMPACTE les quarts
@@ -682,7 +669,7 @@ export function AgendaGrid({
     const uniqById = new Map(uniqueSlots.map((s) => [s.id, s]));
     for (const b of bookings) {
       if (uniqueIdSet.has(b.slotId)) {
-        if (mode !== "realweek" || !mondayStr) continue;
+        if (!mondayStr) continue;
         const u = uniqById.get(b.slotId);
         if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
           continue;
@@ -720,7 +707,6 @@ export function AgendaGrid({
     uniqueIdSet,
     slots,
     uniqueSlots,
-    mode,
     mondayStr,
     sundayStr,
     effectivePeriodId,
@@ -760,8 +746,8 @@ export function AgendaGrid({
     return slotsParsed.find((s) => minute >= s.startMin && minute < s.endMin) ?? null;
   }
 
-  // Blocs par jour : moteur PARTAGÉ (buildBlocksByDay, agenda-core). Côté admin, la
-  // parente récurrente est projetée sur son jour en mode Modèle (projectRecurringParent).
+  // Blocs par jour : moteur PARTAGÉ (buildBlocksByDay, agenda-core), toujours en Semaine
+  // réelle (les récurrents s'affichent via leurs occurrences datées de la semaine).
   const blocksByDay = useMemo(
     () =>
       buildBlocksByDay({
@@ -771,7 +757,7 @@ export function AgendaGrid({
         days,
         mondayStr,
         sundayStr,
-        realweek: mode === "realweek",
+        realweek: true,
         effectivePeriodId,
         effectiveWeek,
         abMode,
@@ -788,7 +774,6 @@ export function AgendaGrid({
       uniqueSlots,
       uniqueIdSet,
       mirrorMap,
-      mode,
       mondayStr,
       sundayStr,
       days,
@@ -949,8 +934,7 @@ export function AgendaGrid({
   function onCreateMouseDown(e: React.MouseEvent, dayKey: string) {
     if (!creationMode || isDayDisabled(dayKey)) return;
     if ((e.target as HTMLElement).closest(".agenda-block")) return;
-    if (mode === "model" && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
-    if (mode === "realweek" && !mondayStr) return;
+    if (!mondayStr) return;
     e.preventDefault();
     const colTop = e.currentTarget.getBoundingClientRect().top;
     const startMin = quarterAtY(colTop, e.clientY);
@@ -1020,8 +1004,8 @@ export function AgendaGrid({
     if (!segments.length) return;
     const targets = draggedDays(cd);
     if (!targets.length) return;
-    // Récurrent en Modèle de période, ou en Semaine réelle si le sélecteur est sur "rec".
-    if (mode === "model" || createKind === "rec") {
+    // Récurrent si le sélecteur est sur "rec" ; sinon ponctuel daté.
+    if (createKind === "rec") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
       const weeks = abMode && effectiveWeek ? effectiveWeek : "";
       runResults(
@@ -1086,21 +1070,20 @@ export function AgendaGrid({
   function onAllDayCreateMouseDown(e: React.MouseEvent, dayKey: string) {
     if (!creationMode || isDayDisabled(dayKey)) return;
     if ((e.target as HTMLElement).closest(".agenda-block")) return;
-    if (mode === "model" && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
-    if (mode === "realweek" && !mondayStr) return;
+    if (!mondayStr) return;
     e.preventDefault();
     const dd = { startDay: dayKey, curDay: dayKey };
     allDayDragH.start(dd);
   }
 
   // Au relâché : UN créneau SANS horaire (journée entière) par jour couvert (clic
-  // simple = 1 jour ; glisser horizontal = plusieurs). Récurrent en Modèle, ponctuel
-  // daté en Semaine réelle. startTime/endTime vides → bloc « journée entière ».
+  // simple = 1 jour ; glisser horizontal = plusieurs). Récurrent si le sélecteur est sur
+  // "rec", sinon ponctuel daté. startTime/endTime vides → bloc « journée entière ».
   function finalizeAllDayCreate(dd: AllDayDrag) {
     const targets = daysSpan(dd.startDay, dd.curDay);
     if (!targets.length) return;
-    // Récurrent en Modèle de période, ou en Semaine réelle si le sélecteur est sur "rec".
-    if (mode === "model" || createKind === "rec") {
+    // Récurrent si le sélecteur est sur "rec" ; sinon ponctuel daté.
+    if (createKind === "rec") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
       const weeks = abMode && effectiveWeek ? effectiveWeek : "";
       runResults(
@@ -1574,7 +1557,7 @@ export function AgendaGrid({
       runResult(setBookingValidatedAction(target.id, service.id, !target.validated));
       return true;
     }
-    if (pointageMode && mode === "realweek") {
+    if (pointageMode) {
       // Pointage = PAR OCCURRENCE → sur l'enfant cliqué (bk), pas la parente.
       const next: Pointage = !bk.pointage ? "present" : bk.pointage === "present" ? "absent" : null;
       runResult(setBookingPointageAction(bk.id, service.id, next));
@@ -1584,29 +1567,17 @@ export function AgendaGrid({
   }
 
   // Impression « liste » (bouton N&B) : au lieu du modèle graphique, la LISTE nominative
-  // des réservations de TOUS les usagers pour la semaine affichée (Semaine réelle) ou la
-  // période affichée (Modèle). Une ligne par occurrence datée (ponctuels + miroirs des
-  // récurrentes), via une action gardée gestionnaire (listDatedSessions). Rendu dans un
-  // iframe caché (printHtmlDocument) — sans pop-up ni fenêtre visible.
+  // des réservations de TOUS les usagers pour la semaine affichée. Une ligne par occurrence
+  // datée (ponctuels + miroirs des récurrentes), via une action gardée gestionnaire
+  // (listDatedSessions). Rendu dans un iframe caché (printHtmlDocument) — sans pop-up.
   async function printSessionsList() {
     if (typeof window === "undefined") return;
-    let from = "";
-    let to = "";
-    let scopeLabel = "";
-    if (mode === "realweek") {
-      if (!mondayStr) return;
-      from = mondayStr;
-      to = sundayStr ?? mondayStr;
-      scopeLabel = `Semaine du ${shortDateFmt.format(addDays(mondayStr, 0))} au ${shortDateFmt.format(
-        addDays(mondayStr, 6),
-      )}`;
-    } else {
-      const period = visiblePeriods[periodIdx] ?? null;
-      if (!period?.dateStart || !period?.dateEnd) return;
-      from = period.dateStart;
-      to = period.dateEnd;
-      scopeLabel = period.label;
-    }
+    if (!mondayStr) return;
+    const from = mondayStr;
+    const to = sundayStr ?? mondayStr;
+    const scopeLabel = `Semaine du ${shortDateFmt.format(
+      addDays(mondayStr, 0),
+    )} au ${shortDateFmt.format(addDays(mondayStr, 6))}`;
     if (!from || !to) return;
 
     let sessions: Awaited<ReturnType<typeof listAgendaSessionsAction>> = [];
@@ -1661,9 +1632,7 @@ export function AgendaGrid({
   // clé PAR gestionnaire). À défaut, ancre la semaine réelle sur le lundi courant.
   usePersistedAgendaView<{
     exerciceId: number | null;
-    periodIdx: number;
     anchorMonday: string | null;
-    weekAB: "A" | "B";
   }>({
     storageKey: `agenda-admin-view:${service.id}:${viewerEmail}`,
     restore: (v) => {
@@ -1675,8 +1644,6 @@ export function AgendaGrid({
         if (v.exerciceId != null && exercices.some((e) => e.id === v.exerciceId)) {
           setCurrentExerciceId(v.exerciceId);
         }
-        if (typeof v.periodIdx === "number" && v.periodIdx >= 0) setPeriodIdx(v.periodIdx);
-        if (v.weekAB === "A" || v.weekAB === "B") setWeekAB(v.weekAB);
         if (typeof v.anchorMonday === "string") {
           setAnchorMonday(v.anchorMonday);
           anchored = true;
@@ -1684,32 +1651,12 @@ export function AgendaGrid({
       }
       if (!anchored) setAnchorMonday(ymd(mondayOf(new Date())));
     },
-    snapshot: () => ({ exerciceId: currentExerciceId, periodIdx, anchorMonday, weekAB }),
-    deps: [service.id, viewerEmail, currentExerciceId, periodIdx, anchorMonday, weekAB],
+    snapshot: () => ({ exerciceId: currentExerciceId, anchorMonday }),
+    deps: [service.id, viewerEmail, currentExerciceId, anchorMonday],
   });
 
-  // Garde-fou : si la période sélectionnée/mémorisée est hors plage (ex. période
-  // supprimée, ou index restauré du sessionStorage devenu invalide), on retombe sur
-  // la période qui couvre la date du jour — sinon la première. Évite un agenda vide
-  // bloqué sur une période inexistante/hors saison.
-  useEffect(() => {
-    if (visiblePeriods.length === 0) return;
-    if (periodIdx >= 0 && periodIdx < visiblePeriods.length) return;
-    const today = ymd(new Date());
-    const todayIdx = visiblePeriods.findIndex(
-      (p) => p.dateStart && p.dateEnd && p.dateStart <= today && p.dateEnd >= today,
-    );
-    setPeriodIdx(todayIdx >= 0 ? todayIdx : 0);
-  }, [periodIdx, visiblePeriods]);
-
-  // Le mode pointage n'a de sens qu'en semaine réelle : on le désactive si on
-  // repasse en "modèle de période" (cohérent avec le legacy).
-  useEffect(() => {
-    if (mode !== "realweek" && pointageMode) setPointageMode(false);
-  }, [mode, pointageMode]);
-
   // Verrouille la période active en semaine réelle (hook partagé, cf. agenda-hooks).
-  useCoveringPeriodLock(mode === "realweek", coveringPeriod, rwPeriodId, setRwPeriodId);
+  useCoveringPeriodLock(true, coveringPeriod, rwPeriodId, setRwPeriodId);
 
   function openCreate(dayKey: string, slotId: string, ponctuel = false, slotDate?: string) {
     setCreateCtx({ dayKey, slotId, ponctuel, slotDate });
@@ -1794,8 +1741,8 @@ export function AgendaGrid({
       .filter((d) => {
         if (!abMode || effectiveWeek == null) return true;
         // Convention UNIQUE de l'app : semaine ISO impaire = A (lib/iso-week).
-        // effectiveWeek (Modèle = weekAB, Semaine réelle = realWeekParity) est dans
-        // cette même convention → comparaison directe, le jour en cours est inclus.
+        // effectiveWeek (= parité de la semaine affichée) suit cette même convention →
+        // comparaison directe, le jour en cours est inclus.
         return slotWeekTag(d) === effectiveWeek;
       })
       .sort();
@@ -2177,7 +2124,7 @@ export function AgendaGrid({
             {b.bookings.length < 2 &&
               b.bookings.map((bk) => {
                 const pendingValidation = validation && !bk.validated;
-                const quickActive = pendingValidation || (pointageMode && mode === "realweek");
+                const quickActive = pendingValidation || pointageMode;
                 // Legacy : ligne1 = structure sinon catégorie (demandeur),
                 // ligne2 = NOM Prénom, ligne3 = thème (si présent).
                 const primaryLabel = bk.structure || bk.demandeur;
@@ -2310,7 +2257,6 @@ export function AgendaGrid({
     },
     [
       uniqueIdSet,
-      mode,
       modes,
       creationMode,
       effectivePeriodId,
@@ -2396,60 +2342,57 @@ export function AgendaGrid({
             </span>
           </span>
         </div>
-        {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
-            titre et le sélecteur. */}
-        {mode === "realweek" && (
-          // gap resserré : flèches ◀ ▶ au plus près du libellé (largeur figée).
-          <div className="periode-nav" style={{ margin: "0 auto", gap: ".1rem" }}>
+        {/* Navigation semaine : centrée sur la même ligne que le titre et le sélecteur.
+            gap resserré : flèches ◀ ▶ au plus près du libellé (largeur figée). */}
+        <div className="periode-nav" style={{ margin: "0 auto", gap: ".1rem" }}>
+          <button
+            type="button"
+            className="ex-arrow"
+            disabled={!canWeekPrev}
+            onClick={() => canWeekPrev && shiftWeek(-1)}
+          >
+            ◀
+          </button>
+          <span
+            className="ex-nav-label"
+            // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
+            // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police inchangée.
+            style={{ width: "8rem", textAlign: "center" }}
+          >
+            {mondayStr
+              ? `${shortDateFmt.format(addDays(mondayStr, firstDayOffset))} → ${shortDateFmt.format(addDays(mondayStr, lastDayOffset))}`
+              : "…"}
+          </span>
+          <button
+            type="button"
+            className="ex-arrow"
+            disabled={!canWeekNext}
+            onClick={() => canWeekNext && shiftWeek(1)}
+          >
+            ▶
+          </button>
+          {todayInVisiblePeriods && (
             <button
               type="button"
-              className="ex-arrow"
-              disabled={!canWeekPrev}
-              onClick={() => canWeekPrev && shiftWeek(-1)}
+              className="btn btn-ghost"
+              style={{ padding: ".05rem .45rem", fontSize: ".64rem", marginLeft: ".4rem" }}
+              onClick={() => {
+                // Retour à la semaine courante : on verrouille sur la période
+                // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
+                // qui diffère quand la semaine chevauche deux périodes — sinon
+                // on afficherait la période du mois précédent).
+                setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
+                setAnchorMonday(ymd(mondayOf(new Date())));
+              }}
             >
-              ◀
+              Aujourd&apos;hui
             </button>
-            <span
-              className="ex-nav-label"
-              // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
-              // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police inchangée.
-              style={{ width: "8rem", textAlign: "center" }}
-            >
-              {mondayStr
-                ? `${shortDateFmt.format(addDays(mondayStr, firstDayOffset))} → ${shortDateFmt.format(addDays(mondayStr, lastDayOffset))}`
-                : "…"}
-            </span>
-            <button
-              type="button"
-              className="ex-arrow"
-              disabled={!canWeekNext}
-              onClick={() => canWeekNext && shiftWeek(1)}
-            >
-              ▶
-            </button>
-            {todayInVisiblePeriods && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ padding: ".05rem .45rem", fontSize: ".64rem", marginLeft: ".4rem" }}
-                onClick={() => {
-                  // Retour à la semaine courante : on verrouille sur la période
-                  // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
-                  // qui diffère quand la semaine chevauche deux périodes — sinon
-                  // on afficherait la période du mois précédent).
-                  setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
-                  setAnchorMonday(ymd(mondayOf(new Date())));
-                }}
-              >
-                Aujourd&apos;hui
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
         {/* Sélecteur Semaine A/B (indicateur de parité de la semaine affichée). */}
         <div className="agenda-mode-toggles-wrap">
-          {abMode && (mode === "model" || realWeekParity) && (
-            // « Semaine » + toggle A / B. En Modèle : choix libre (weekAB). En Semaine
+          {abMode && realWeekParity && (
+            // « Semaine » + toggle A / B. En Semaine
             // réelle : seule la parité de la semaine affichée est montrée (lecture seule).
             <div
               style={{
@@ -2461,25 +2404,9 @@ export function AgendaGrid({
               }}
             >
               <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>Semaine</span>
+              {/* Indicateur (lecture seule) de la parité A/B de la semaine affichée. */}
               <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
-                {(["A", "B"] as const).map((w) => {
-                  const isRealweek = mode !== "model";
-                  // En Semaine réelle, on n'affiche QUE la parité de la semaine courante.
-                  if (isRealweek && realWeekParity !== w) return null;
-                  const activeWeek = isRealweek ? realWeekParity : weekAB;
-                  return (
-                    <button
-                      key={w}
-                      type="button"
-                      className={`agenda-mode-btn${activeWeek === w ? " active" : ""}`}
-                      onClick={() => {
-                        if (!isRealweek) setWeekAB(w);
-                      }}
-                    >
-                      {w}
-                    </button>
-                  );
-                })}
+                <span className="agenda-mode-btn active">{realWeekParity}</span>
               </div>
             </div>
           )}
@@ -2496,8 +2423,8 @@ export function AgendaGrid({
         }}
       >
         <div className="period-tabs" id="agenda-period-tabs">
-          {visiblePeriods.map((p, i) => {
-            const active = mode === "realweek" ? p.id === coveringPeriod?.id : i === periodIdx;
+          {visiblePeriods.map((p) => {
+            const active = p.id === coveringPeriod?.id;
             return (
               <button
                 key={p.id}
@@ -2505,15 +2432,11 @@ export function AgendaGrid({
                 className={`period-btn ${active ? "active" : ""}`}
                 style={{ "--period-color": p.color } as React.CSSProperties}
                 onClick={() => {
-                  if (mode === "realweek") {
-                    // Onglet choisi = source de vérité : on fige la période ET on
-                    // ancre la semaine sur son début (cf. legacy _pickedP).
-                    if (p.dateStart) {
-                      setRwPeriodId(p.id);
-                      setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
-                    }
-                  } else {
-                    setPeriodIdx(i);
+                  // Onglet choisi = source de vérité : on fige la période ET on ancre la
+                  // semaine sur son début (cf. legacy _pickedP).
+                  if (p.dateStart) {
+                    setRwPeriodId(p.id);
+                    setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
                   }
                 }}
               >
@@ -2532,49 +2455,47 @@ export function AgendaGrid({
           {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B) ; sinon les cases. */}
           {creationMode ? (
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-              {/* Sélecteur du type de créneau à créer (Semaine réelle) : récurrent /
-                  ponctuel unique / ponctuel répliqué sur toute la période. L'état "rec"
-                  n'est proposé que si le service a un mode récurrent. */}
-              {mode === "realweek" && (
-                <div style={{ display: "inline-flex", alignItems: "center" }}>
-                  {CREATE_KINDS.filter((k) => k.kind !== "rec" || modes.recurringMode).map((k) => {
-                    const active = createKind === k.kind;
-                    return (
-                      <button
-                        key={k.kind}
-                        type="button"
-                        data-tip={k.tip}
-                        aria-label={k.label}
-                        aria-pressed={active}
-                        onClick={() => setCreateKind(k.kind)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: ".3rem",
-                          padding: ".1rem .3rem",
-                          fontSize: ".72rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          border: "1px solid",
-                          borderColor: active ? "var(--accent)" : "transparent",
-                          borderRadius: "calc(var(--rad-sm) - 2px)",
-                          background: active
-                            ? "color-mix(in srgb, var(--accent) 15%, transparent)"
-                            : "transparent",
-                          color: active ? "var(--text)" : "var(--muted)",
-                          opacity: active ? 1 : 0.5,
-                        }}
-                      >
-                        {k.multi && "Multi"}
-                        <span
-                          className={`agenda-legend-swatch ${k.swatch}`}
-                          style={{ width: 28, height: 18 }}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {/* Sélecteur du type de créneau à créer : récurrent / ponctuel unique /
+                  ponctuel répliqué sur toute la période. L'état "rec" n'est proposé que si
+                  le service a un mode récurrent. */}
+              <div style={{ display: "inline-flex", alignItems: "center" }}>
+                {CREATE_KINDS.filter((k) => k.kind !== "rec" || modes.recurringMode).map((k) => {
+                  const active = createKind === k.kind;
+                  return (
+                    <button
+                      key={k.kind}
+                      type="button"
+                      data-tip={k.tip}
+                      aria-label={k.label}
+                      aria-pressed={active}
+                      onClick={() => setCreateKind(k.kind)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: ".3rem",
+                        padding: ".1rem .3rem",
+                        fontSize: ".72rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "1px solid",
+                        borderColor: active ? "var(--accent)" : "transparent",
+                        borderRadius: "calc(var(--rad-sm) - 2px)",
+                        background: active
+                          ? "color-mix(in srgb, var(--accent) 15%, transparent)"
+                          : "transparent",
+                        color: active ? "var(--text)" : "var(--muted)",
+                        opacity: active ? 1 : 0.5,
+                      }}
+                    >
+                      {k.multi && "Multi"}
+                      <span
+                        className={`agenda-legend-swatch ${k.swatch}`}
+                        style={{ width: 28, height: 18 }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
               <label
                 htmlFor="create-cap"
                 style={{
@@ -2771,16 +2692,14 @@ export function AgendaGrid({
                     onChange={(e) => toggleValidation(e.target.checked)}
                   />
                 </label>
-                {mode === "realweek" && (
-                  <label className="planning-option">
-                    Mode pointage
-                    <input
-                      type="checkbox"
-                      checked={pointageMode}
-                      onChange={(e) => togglePointageMode(e.target.checked)}
-                    />
-                  </label>
-                )}
+                <label className="planning-option">
+                  Mode pointage
+                  <input
+                    type="checkbox"
+                    checked={pointageMode}
+                    onChange={(e) => togglePointageMode(e.target.checked)}
+                  />
+                </label>
               </div>
             </div>
           )}
@@ -2831,25 +2750,23 @@ export function AgendaGrid({
       </div>
 
       <div className="planning-wrap">
-        {/* Aucune colonne de jour (semaine hors période en Semaine réelle, ou exercice
-            sans jour actif en Modèle) : le squelette de grille n'a aucun sens (colonne
-            horaire orpheline) — on affiche un état vide explicite à la place. */}
+        {/* Aucune colonne de jour (semaine hors période) : le squelette de grille n'a aucun
+            sens (colonne horaire orpheline) — on affiche un état vide explicite à la place. */}
         {days.length === 0 ? (
           <AgendaEmptyWeekNotice>
-            {mode === "realweek"
-              ? "Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de période pour rejoindre une semaine couverte."
-              : "Aucun jour d'ouverture n'est configuré pour cet exercice."}
+            Aucune période ne couvre cette semaine — utilisez les flèches ou les raccourcis de
+            période pour rejoindre une semaine couverte.
           </AgendaEmptyWeekNotice>
         ) : (
           <div
-            className={`agenda-grid${mode === "realweek" ? " is-realweek" : ""}`}
+            className="agenda-grid is-realweek"
             style={{ gridTemplateColumns: `44px repeat(${days.length}, minmax(0, 1fr))` }}
           >
             <AgendaWeekHeader
               days={days}
               abMode={abMode}
               effectiveWeek={effectiveWeek}
-              realweek={mode === "realweek"}
+              realweek={true}
               weekDateByDay={weekDateByDay}
               outOfPeriodCls={outOfPeriodCls}
             />
@@ -2873,8 +2790,8 @@ export function AgendaGrid({
                   const inAllDayDrag =
                     allDayDrag != null &&
                     daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
-                  // Couleur de l'aperçu : jaune = récurrent (Modèle), vert = ponctuel (Semaine réelle).
-                  const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
+                  // Couleur de l'aperçu selon le type créé : jaune = récurrent, vert = ponctuel.
+                  const drawColor = createKind === "rec" ? "var(--warn)" : "var(--accent)";
                   return (
                     <div
                       key={`ad-${d}`}
@@ -2993,9 +2910,8 @@ export function AgendaGrid({
                       gridEndMin,
                       Math.max(createDrag.startMin, createDrag.curMin) + 15,
                     );
-                    // Couleur du mode dessiné : jaune = récurrent (Modèle de période),
-                    // vert = ponctuel (Semaine réelle).
-                    const drawColor = mode === "model" ? "var(--warn)" : "var(--accent)";
+                    // Couleur de l'aperçu selon le type créé : jaune = récurrent, vert = ponctuel.
+                    const drawColor = createKind === "rec" ? "var(--warn)" : "var(--accent)";
                     return lunchSplitSegments(s, e2)
                       .filter(([a, b]) => b > a)
                       .map(([segS, segE]) => {
@@ -3171,30 +3087,28 @@ export function AgendaGrid({
               ? "saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
               : "cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un autre créneau pour le déplacer."}
           </p>
-          {mode === "realweek" && (
-            <div className="agenda-legend" style={{ flexShrink: 0 }}>
-              {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
+          <div className="agenda-legend" style={{ flexShrink: 0 }}>
+            {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
                 cet item de légende. */}
-              {modes.recurringMode && (
-                <span className="agenda-legend-item">
-                  <span className="agenda-legend-swatch is-rec" />
-                  Récurrent
-                </span>
-              )}
+            {modes.recurringMode && (
               <span className="agenda-legend-item">
-                <span className="agenda-legend-swatch is-uniq" />
-                Ponctuel
+                <span className="agenda-legend-swatch is-rec" />
+                Récurrent
               </span>
-              <span className="agenda-legend-item">
-                <span className="indic_p">P</span>
-                Présent
-              </span>
-              <span className="agenda-legend-item">
-                <span className="indic_a">A</span>
-                Absent
-              </span>
-            </div>
-          )}
+            )}
+            <span className="agenda-legend-item">
+              <span className="agenda-legend-swatch is-uniq" />
+              Ponctuel
+            </span>
+            <span className="agenda-legend-item">
+              <span className="indic_p">P</span>
+              Présent
+            </span>
+            <span className="agenda-legend-item">
+              <span className="indic_a">A</span>
+              Absent
+            </span>
+          </div>
         </div>
       )}
 
@@ -3206,7 +3120,6 @@ export function AgendaGrid({
           isPonctuel={uniqueIdSet.has(stackKey.slotId)}
           ponctuelDate={uniqueSlots.find((s) => s.id === stackKey.slotId)?.slotDate}
           periodLabel={periods.find((p) => p.id === effectivePeriodId)?.label ?? ""}
-          mode={mode}
           validation={validation}
           pointageMode={pointageMode}
           creationMode={creationMode}
@@ -3298,10 +3211,10 @@ export function AgendaGrid({
                 .filter((d): d is string => !!d)
                 .sort()
             : [];
-          // Lecture seule si : récurrent en semaine réelle, OU réservation verrouillée
-          // par un pointage (pointée / parent à miroir pointé) → ni édition, ni
-          // suppression, ni validation depuis la fiche.
-          const readOnly = (mode === "realweek" && !!recurSlot) || lockedByPointage(bk);
+          // Lecture seule si la fiche pointe une réservation récurrente PARENTE (édition via
+          // ses occurrences), ou si elle est verrouillée par un pointage (pointée / parent à
+          // miroir pointé) → ni édition, ni suppression, ni validation depuis la fiche.
+          const readOnly = !!recurSlot || lockedByPointage(bk);
           return (
             <BookingDetailModal
               booking={bk}
