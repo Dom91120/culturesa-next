@@ -39,7 +39,6 @@ export function BookingStackModal({
   onTogglePointage,
   onCreateClick,
   onQuickAction,
-  warnRecurringValidation,
   onOpenDetail,
   onDelete,
   onContextMenu,
@@ -70,7 +69,6 @@ export function BookingStackModal({
   onTogglePointage: (v: boolean) => void;
   onCreateClick: () => void;
   onQuickAction: (bk: Booking) => boolean;
-  warnRecurringValidation: () => void;
   onOpenDetail: (bk: Booking) => void;
   onDelete: (bk: Booking) => void;
   onContextMenu: (bk: Booking, x: number, y: number) => void;
@@ -78,9 +76,11 @@ export function BookingStackModal({
   onDragEndBooking: () => void;
   onClose: () => void;
 }) {
-  // Récurrent en semaine réelle → consultation seule (pas d'édition rapide,
-  // ni suppression ; clic = modale détail en lecture seule).
-  const stackReadOnly = mode === "realweek" && !isPonctuel;
+  // Récurrent affiché en Semaine réelle : la gestion des RÉSERVATIONS (valider / supprimer
+  // / déplacer / pointer) y est autorisée — elle porte sur la réservation parente, résolue
+  // côté grille via les callbacks. Seul le copier/coller d'une réservation récurrente reste
+  // une action Modèle (cf. onContextMenu).
+  const recurringRealweek = mode === "realweek" && !isPonctuel;
   const ponctDateLabel =
     isPonctuel && ponctuelDate
       ? new Date(`${ponctuelDate}T00:00:00`).toLocaleDateString("fr-FR", {
@@ -167,40 +167,26 @@ export function BookingStackModal({
             de sens que sur une semaine datée — cf. legacy). La croix de
             fermeture est positionnée en haut à droite de la modale (modal-close). */}
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-          {stackReadOnly ? (
-            <>
-              {/* Récurrent en semaine réelle : pointage par séance autorisé sur
-                  les réservations-enfants ; validation/édition en vue Modèle. */}
-              <label className="planning-option" style={{ margin: 0 }}>
-                Mode pointage{" "}
-                <input
-                  type="checkbox"
-                  checked={pointageMode}
-                  onChange={(e) => onTogglePointage(e.target.checked)}
-                />
-              </label>
-            </>
-          ) : (
-            <>
-              <label className="planning-option" style={{ margin: 0 }}>
-                Mode validation{" "}
-                <input
-                  type="checkbox"
-                  checked={validation}
-                  onChange={(e) => onToggleValidation(e.target.checked)}
-                />
-              </label>
-              {mode === "realweek" && (
-                <label className="planning-option" style={{ margin: 0 }}>
-                  Mode pointage{" "}
-                  <input
-                    type="checkbox"
-                    checked={pointageMode}
-                    onChange={(e) => onTogglePointage(e.target.checked)}
-                  />
-                </label>
-              )}
-            </>
+          {/* « Mode validation » toujours disponible (récurrent en Semaine réelle inclus :
+              la validation porte sur la parente) ; « Mode pointage » seulement en Semaine
+              réelle (par occurrence). */}
+          <label className="planning-option" style={{ margin: 0 }}>
+            Mode validation{" "}
+            <input
+              type="checkbox"
+              checked={validation}
+              onChange={(e) => onToggleValidation(e.target.checked)}
+            />
+          </label>
+          {mode === "realweek" && (
+            <label className="planning-option" style={{ margin: 0 }}>
+              Mode pointage{" "}
+              <input
+                type="checkbox"
+                checked={pointageMode}
+                onChange={(e) => onTogglePointage(e.target.checked)}
+              />
+            </label>
           )}
         </div>
       </div>
@@ -262,17 +248,12 @@ export function BookingStackModal({
                 <div
                   key={bk.id}
                   className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
-                  // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée
-                  // ou parent à miroir pointé) ou en consultation (récurrent semaine réelle).
-                  draggable={!lockedByPointage(bk) && !stackReadOnly}
+                  // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée / occurrence
+                  // pointée). Récurrent en Semaine réelle inclus (déplace la parente).
+                  draggable={!lockedByPointage(bk)}
                   style={{
                     ...badgeStyle(bk.validated),
-                    cursor:
-                      !lockedByPointage(bk) && !stackReadOnly
-                        ? "grab"
-                        : stackReadOnly && pointageMode
-                          ? "pointer"
-                          : "default",
+                    cursor: !lockedByPointage(bk) ? "grab" : "default",
                     position: "relative",
                     opacity:
                       draggingId === bk.id ||
@@ -282,7 +263,7 @@ export function BookingStackModal({
                   }}
                   data-tip={badgeTitle(bk)}
                   onDragStart={
-                    lockedByPointage(bk) || stackReadOnly
+                    lockedByPointage(bk)
                       ? undefined
                       : (e) => {
                           // On amorce le drag, PUIS le parent ferme la pile au tick
@@ -292,38 +273,26 @@ export function BookingStackModal({
                           onDragStartBooking(bk);
                         }
                   }
-                  onDragEnd={
-                    lockedByPointage(bk) || stackReadOnly ? undefined : () => onDragEndBooking()
-                  }
+                  onDragEnd={lockedByPointage(bk) ? undefined : () => onDragEndBooking()}
                   onClick={() => {
-                    // Récurrent en semaine réelle : pas d'action rapide → la modale
-                    // détail s'ouvre en consultation (lecture seule).
-                    // Mode validation : un récurrent ne se valide pas ici.
-                    if (stackReadOnly && validation) {
-                      warnRecurringValidation();
-                      return;
-                    }
-                    // Pointage autorisé sur les réservations-enfants (récurrent
-                    // en semaine réelle) même si la pile est en lecture seule.
-                    if (stackReadOnly && pointageMode && onQuickAction(bk)) return;
-                    if (!stackReadOnly && onQuickAction(bk)) return;
-                    // On garde la pile ouverte : la modale détail s'empile
-                    // par-dessus, et sa fermeture y ramène.
+                    // Action rapide (valider = parente, pointer = occurrence) si un mode est
+                    // actif ; sinon la modale détail s'empile par-dessus (fermeture y ramène).
+                    if (onQuickAction(bk)) return;
                     onOpenDetail(bk);
                   }}
-                  // Clic droit → menu « Copier » (pas en création/consultation, ni
-                  // sur une réservation verrouillée par un pointage).
+                  // Clic droit → menu « Copier » (pas en création, ni sur un récurrent en
+                  // Semaine réelle — copier/coller reste Modèle —, ni sur une résa verrouillée).
                   onContextMenu={(e) => {
-                    if (creationMode || stackReadOnly || lockedByPointage(bk)) return;
+                    if (creationMode || recurringRealweek || lockedByPointage(bk)) return;
                     e.preventDefault();
                     e.stopPropagation();
                     onContextMenu(bk, e.clientX, e.clientY);
                   }}
                 >
                   <PointagePill pointage={bk.pointage} />
-                  {/* Croix masquée si verrouillée (pointée / parent à miroir pointé)
-                      ou en consultation (récurrent en semaine réelle). */}
-                  {!lockedByPointage(bk) && !stackReadOnly && (
+                  {/* Croix masquée si verrouillée (pointée / occurrence pointée). Récurrent
+                      en Semaine réelle : supprime la réservation récurrente (via la parente). */}
+                  {!lockedByPointage(bk) && (
                     <button
                       type="button"
                       className="planning-name-tag-close"

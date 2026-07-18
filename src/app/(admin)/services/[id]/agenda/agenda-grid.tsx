@@ -868,15 +868,6 @@ export function AgendaGrid({
   function showWarnToast(content: React.ReactNode) {
     showToast({ content });
   }
-  // Avertissement « réservation récurrente » (Semaine réelle + mode validation).
-  function warnRecurringValidation() {
-    showWarnToast(
-      <>
-        Pour valider/dévalider une réservation récurrente, veuillez passer en mode{" "}
-        <strong>Modèle de période</strong>
-      </>,
-    );
-  }
 
   // "Mode validation" / "Mode pointage" / "Création de créneau" : mutuellement exclusifs.
   function toggleValidation(on: boolean) {
@@ -1283,14 +1274,6 @@ export function AgendaGrid({
     setCapModal({ slotId });
   }
 
-  // Créneau récurrent affiché en SEMAINE RÉELLE. Son CRÉNEAU est éditable comme en
-  // Modèle (config, redimension, déplacement, suppression via le mode création ci-dessus)
-  // — c'est le slot PARENT qui est édité (b.slotId = parent). En revanche les
-  // interactions sur les RÉSERVATIONS (créer/déplacer/valider une résa récurrente) restent
-  // désactivées en Semaine réelle : elles se font par occurrence, flux distinct.
-  const isRealweekRecurringSlot = (slotId: string) =>
-    mode === "realweek" && !uniqueIdSet.has(slotId);
-
   // Le créneau porte-t-il au moins une réservation ? Ponctuel : ses réservations datées
   // (b.bookings). Récurrent : la réservation parente, TOUTES semaines confondues
   // (recurringSlotsWithBookings) — b.bookings ne verrait que la semaine affichée en
@@ -1568,17 +1551,26 @@ export function AgendaGrid({
   const lockedByPointage = (bk: Booking): boolean =>
     isBookingLockedByPointage(bk, parentsWithPointedChild.has(bk.id));
 
+  // Réservation cible des actions de GESTION (valider / supprimer / déplacer) : en
+  // Semaine réelle, le badge d'un récurrent est l'OCCURRENCE (enfant) → ces gestes portent
+  // sur toute la récurrente, donc sur la réservation PARENTE. Ponctuel, ou récurrent en
+  // Modèle (bk = parent) : la réservation elle-même. Le POINTAGE, lui, reste par occurrence.
+  const actionBooking = (bk: Booking): Booking =>
+    bk.parentBookingId != null ? (bookings.find((b) => b.id === bk.parentBookingId) ?? bk) : bk;
+
   function onBlockQuickAction(bk: Booking): boolean {
     if (validation) {
+      // Validation sur la réservation PARENTE (propagée aux occurrences) pour un récurrent.
+      const target = actionBooking(bk);
       // Une résa verrouillée (pointée, ou parent à miroir pointé) ne se valide plus.
       // On laisse le clic ouvrir la fiche plutôt que d'agir silencieusement.
-      if (lockedByPointage(bk)) return false;
+      if (lockedByPointage(target)) return false;
       // Bascule validé ↔ en attente (legacy _quickValidate togglait dans les deux sens).
-      runResult(setBookingValidatedAction(bk.id, service.id, !bk.validated));
+      runResult(setBookingValidatedAction(target.id, service.id, !target.validated));
       return true;
     }
     if (pointageMode && mode === "realweek") {
-      // Cycle présent → absent → effacé.
+      // Pointage = PAR OCCURRENCE → sur l'enfant cliqué (bk), pas la parente.
       const next: Pointage = !bk.pointage ? "present" : bk.pointage === "present" ? "absent" : null;
       runResult(setBookingPointageAction(bk.id, service.id, next));
       return true;
@@ -1850,8 +1842,8 @@ export function AgendaGrid({
     onResizeSlotMouseDownH,
     onDeleteEmptySlot,
     onBlockQuickAction,
-    warnRecurringValidation,
     lockedByPointage,
+    actionBooking,
   };
   const blockApiRef = useRef(blockApi);
   blockApiRef.current = blockApi;
@@ -1879,8 +1871,8 @@ export function AgendaGrid({
         onResizeSlotMouseDownH,
         onDeleteEmptySlot,
         onBlockQuickAction,
-        warnRecurringValidation,
         lockedByPointage,
+        actionBooking,
       } = blockApiRef.current;
       // Info-bulle de survol du créneau (capacité + demandeurs autorisés, et pour les
       // Créneau COMPLET (mode-aware) → pas de création possible. Jauge = enfants[+adultes] ;
@@ -2010,9 +2002,8 @@ export function AgendaGrid({
             const dragged = bookings.find((bk) => bk.id === draggingId);
             if (!dragged) return;
             // Cible valide = MÊME type que la source (récurrent↔récurrent ou
-            // ponctuel↔ponctuel) et pas un récurrent en semaine réelle (consultation).
-            if (uniqueIdSet.has(dragged.slotId) === isPonctuelCell && !realWeekRecurring)
-              e.preventDefault();
+            // ponctuel↔ponctuel). Récurrent en Semaine réelle inclus (déplace la parente).
+            if (uniqueIdSet.has(dragged.slotId) === isPonctuelCell) e.preventDefault();
           }}
           onDrop={(e) => {
             // Le créneau est la cible de drop : déplace la résa glissée ici.
@@ -2023,9 +2014,11 @@ export function AgendaGrid({
             const dragged = bookings.find((bk) => bk.id === id);
             setDraggingId(null);
             if (!dragged) return;
-            // Refus : changement de type (récurrent↔ponctuel) ou récurrent en semaine réelle.
-            if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell || realWeekRecurring) return;
-            runResult(moveBookingAction(id, service.id, b.slotId));
+            // Refus : changement de type (récurrent↔ponctuel).
+            if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell) return;
+            // Récurrent en Semaine réelle : on déplace la réservation PARENTE (toute la
+            // récurrente), pas l'occurrence glissée.
+            runResult(moveBookingAction(actionBooking(dragged).id, service.id, b.slotId));
           }}
         >
           {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
@@ -2188,16 +2181,17 @@ export function AgendaGrid({
                 // ligne2 = NOM Prénom, ligne3 = thème (si présent).
                 const primaryLabel = bk.structure || bk.demandeur;
                 const accentColor = bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)";
-                // Verrouillée (pointée, ou parent à miroir pointé) → ni déplacement, ni
-                // suppression, ni copie (cf. règles métier).
-                const locked = lockedByPointage(bk);
+                // Verrou pointage des actions de GESTION (déplacer/supprimer/valider) :
+                // évalué sur la réservation cible (la parente pour une occurrence récurrente),
+                // qui inclut « une occurrence pointée » (parentsWithPointedChild).
+                const locked = lockedByPointage(actionBooking(bk));
                 return (
                   // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic = valider/pointer/éditer)
                   <div
                     key={bk.id}
                     className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${locked ? " is-locked" : ""}`}
-                    // Récurrent en semaine réelle (consultation) → non déplaçable.
-                    draggable={!locked && !realWeekRecurring}
+                    // Déplaçable (récurrent en Semaine réelle inclus : déplace la parente).
+                    draggable={!locked}
                     style={{
                       ...badgeStyle(bk.validated),
                       position: "relative",
@@ -2206,12 +2200,7 @@ export function AgendaGrid({
                         (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
                           ? 0.4
                           : 1,
-                      cursor:
-                        quickActive && (!realWeekRecurring || pointageMode)
-                          ? "pointer"
-                          : locked || realWeekRecurring
-                            ? "default"
-                            : "grab",
+                      cursor: quickActive ? "pointer" : locked ? "default" : "grab",
                       // L'ombre portée (box-shadow 2px 2px 4px) déborde sous le badge sans
                       // occuper de hauteur en flux : on réserve l'extent de l'ombre (offset 2
                       // + blur 4 = 6px) afin que le centrage vertical (justify-content du
@@ -2219,8 +2208,8 @@ export function AgendaGrid({
                       marginBottom: 6,
                     }}
                     data-tip={badgeTitle(bk)}
-                    // Clic droit → menu « Copier » (pas en mode création ni sur un
-                    // récurrent en semaine réelle).
+                    // Clic droit → menu « Copier » (pas en mode création, ni sur un récurrent
+                    // en Semaine réelle : copier/coller une récurrente reste une action Modèle).
                     onContextMenu={(e) => {
                       // Verrouillée (pointée / parent à miroir pointé) → pas de copier/couper.
                       if (creationMode || realWeekRecurring || locked) return;
@@ -2230,35 +2219,27 @@ export function AgendaGrid({
                       setCtxMenu({ x: e.clientX, y: e.clientY, kind: "booking", booking: bk });
                     }}
                     onDragStart={
-                      locked || realWeekRecurring
+                      locked
                         ? undefined
                         : (e) => {
                             e.stopPropagation();
                             setDraggingId(bk.id);
                           }
                     }
-                    onDragEnd={locked || realWeekRecurring ? undefined : () => setDraggingId(null)}
+                    onDragEnd={locked ? undefined : () => setDraggingId(null)}
                     onClick={(e) => {
                       // Le badge porte les actions sur la réservation (cf. legacy).
-                      // Validation/pointage ON = clic rapide ; sinon = modale d'édition.
-                      // En semaine réelle sur un récurrent : consultation seule (pas d'action
-                      // rapide), la modale s'ouvre en lecture seule.
+                      // Validation/pointage ON = clic rapide (valider = parente, pointer =
+                      // occurrence) ; sinon = modale d'édition/consultation.
                       e.stopPropagation();
-                      // Semaine réelle + mode validation : un récurrent ne se valide pas ici.
-                      if (realWeekRecurring && validation) {
-                        warnRecurringValidation();
-                        return;
-                      }
-                      // Pointage autorisé sur les réservations-enfants (cellule récurrente
-                      // en semaine réelle) même si le reste de la cellule est en lecture seule.
-                      if (realWeekRecurring && pointageMode && onBlockQuickAction(bk)) return;
-                      if (!realWeekRecurring && onBlockQuickAction(bk)) return;
+                      if (onBlockQuickAction(bk)) return;
                       setDetail({ booking: bk });
                     }}
                   >
-                    {/* Croix de suppression (survol) — masquée si la résa est pointée
-                      (verrouillée) ou en semaine réelle sur un récurrent (consultation). */}
-                    {!locked && !realWeekRecurring && (
+                    {/* Croix de suppression (survol) — masquée si la résa est verrouillée
+                      (pointée / occurrence pointée). Récurrent en Semaine réelle : supprime
+                      la réservation récurrente (toutes occurrences) via la parente. */}
+                    {!locked && (
                       <button
                         type="button"
                         className="planning-name-tag-close"
@@ -2270,7 +2251,7 @@ export function AgendaGrid({
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDeleteTarget(bk);
+                          setDeleteTarget(actionBooking(bk));
                         }}
                       >
                         ×
@@ -3021,9 +3002,11 @@ export function AgendaGrid({
                   );
                   const id = draggingId;
                   setDraggingId(null);
-                  // Cible récurrente en semaine réelle (consultation) → déplacement refusé.
-                  if (slot && !isRealweekRecurringSlot(slot.id))
-                    runResult(moveBookingAction(id, service.id, slot.id));
+                  const dragged = bookings.find((bk) => bk.id === id);
+                  // Récurrent en Semaine réelle : on déplace la réservation PARENTE (le
+                  // serveur refuse un changement de type récurrent↔ponctuel).
+                  if (slot && dragged)
+                    runResult(moveBookingAction(actionBooking(dragged).id, service.id, slot.id));
                 }}
               >
                 <AgendaDayBackground
@@ -3275,7 +3258,9 @@ export function AgendaGrid({
           gaugeAccompagnants={service.gaugeAccompagnants}
           draggingId={draggingId}
           copiedBooking={copiedBooking}
-          lockedByPointage={lockedByPointage}
+          // Verrou de gestion résolu sur la parente (occurrence récurrente → réservation
+          // récurrente), comme dans la grille.
+          lockedByPointage={(bk) => lockedByPointage(actionBooking(bk))}
           onToggleValidation={toggleValidation}
           onTogglePointage={togglePointageMode}
           onCreateClick={() => {
@@ -3290,9 +3275,9 @@ export function AgendaGrid({
             );
           }}
           onQuickAction={onBlockQuickAction}
-          warnRecurringValidation={warnRecurringValidation}
           onOpenDetail={(bk) => setDetail({ booking: bk })}
-          onDelete={(bk) => setDeleteTarget(bk)}
+          // Récurrent en Semaine réelle : supprime la réservation récurrente (via la parente).
+          onDelete={(bk) => setDeleteTarget(actionBooking(bk))}
           onContextMenu={(bk, x, y) => {
             clearTip();
             setCtxMenu({ x, y, kind: "booking", booking: bk });
