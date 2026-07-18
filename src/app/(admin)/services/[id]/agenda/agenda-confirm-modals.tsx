@@ -11,6 +11,7 @@ import { ModalOverlay } from "@/components/agenda-shared";
  */
 export function SlotDeleteModal({
   timePart,
+  recurring = false,
   seriesCount,
   onCancel,
   onConfirm,
@@ -18,6 +19,9 @@ export function SlotDeleteModal({
 }: {
   // Plage horaire « 9:00–10:30 » du créneau, ou "" si inconnue.
   timePart: string;
+  // Créneau récurrent : sa suppression retire le créneau ET toutes ses occurrences
+  // (toutes les semaines de la période). Sert au message d'avertissement.
+  recurring?: boolean;
   // Nombre TOTAL de créneaux identiques sur la période (référence incluse) —
   // fourni seulement quand l'option « toute la série » a un sens (> 1).
   seriesCount?: number;
@@ -33,6 +37,7 @@ export function SlotDeleteModal({
       </div>
       <p style={{ fontSize: ".85rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
         Vous êtes sur le point de supprimer ce créneau
+        {recurring ? " récurrent" : null}
         {timePart ? (
           <>
             {" "}
@@ -41,6 +46,12 @@ export function SlotDeleteModal({
         ) : null}
         .
       </p>
+      {recurring ? (
+        <p style={{ fontSize: ".8rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
+          Ce créneau est <strong>récurrent</strong> : sa suppression retire le créneau et{" "}
+          <strong>toutes ses occurrences</strong> (toutes les semaines de la période).
+        </p>
+      ) : null}
       {hasSeries ? (
         <p style={{ fontSize: ".8rem", lineHeight: 1.5, margin: "0 0 .4rem" }}>
           Création multiple : ce créneau existe en <strong>{seriesCount} exemplaires</strong>{" "}

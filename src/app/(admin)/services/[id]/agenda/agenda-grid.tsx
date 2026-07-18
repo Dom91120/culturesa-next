@@ -637,6 +637,17 @@ export function AgendaGrid({
   const uniqueIdSet = useMemo(() => autonomousUniqueIds(uniqueSlots), [uniqueSlots]);
   const mirrorMap = useMemo(() => buildMirrorMap(uniqueSlots), [uniqueSlots]);
 
+  // Ids des créneaux récurrents qui portent AU MOINS une réservation (toutes semaines
+  // confondues) : la réservation récurrente parente vit sur le slot récurrent lui-même
+  // (bookingType "recurring"). Sert à n'autoriser la suppression d'un récurrent depuis
+  // la Semaine réelle que s'il est vide (comme la vue Modèle) — sinon la suppression
+  // effacerait des réservations d'autres semaines sans que l'utilisateur les voie.
+  const recurringSlotsWithBookings = useMemo(() => {
+    const set = new Set<string>();
+    for (const bk of bookings) if (bk.bookingType === "recurring") set.add(bk.slotId);
+    return set;
+  }, [bookings]);
+
   // ── Pause méridienne (port legacy renderAgendaWeekly) ───────────────────────
   // Zone entre morningEnd et afternoonStart. Si > 30 min, on COMPACTE : on ne garde
   // que 2 quarts visuels (30 min) — les quarts au-delà de lunchStart+30 sont sautés.
@@ -1150,10 +1161,10 @@ export function AgendaGrid({
   }
 
   // Supprime un créneau existant sans réservation (× en mode création) : ouvre une
-  // modale de confirmation dédiée.
+  // modale de confirmation dédiée. En Semaine réelle, un créneau récurrent PEUT être
+  // supprimé (le créneau récurrent en totalité, toutes occurrences) tant qu'il est vide
+  // — la visibilité de la croix (recurringSlotsWithBookings) garantit ce « vide ».
   function onDeleteEmptySlot(slotId: string) {
-    // En semaine réelle, un créneau récurrent n'est pas supprimable (cf. vue Modèle).
-    if (isRealweekRecurringSlot(slotId)) return;
     setSlotDeleteTarget(slotId);
   }
 
@@ -2070,25 +2081,28 @@ export function AgendaGrid({
           >
             {/* Mode création : croix de suppression sur les créneaux vides (confirmation).
               Même style que la croix des badges colorés (planning-name-tag-close).
-              En SEMAINE RÉELLE, les créneaux récurrents ne sont pas supprimables (pas de croix) :
-              leur suppression se fait en vue « Modèle de période ». */}
-            {creationMode && b.bookings.length === 0 && !realWeekRecurring && (
-              <button
-                type="button"
-                className="planning-name-tag-close"
-                data-tip="Supprimer ce créneau"
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteEmptySlot(b.slotId);
-                }}
-              >
-                ×
-              </button>
-            )}
+              En SEMAINE RÉELLE, un créneau récurrent est supprimable EN TOTALITÉ (toutes
+              occurrences) via cette croix, mais seulement s'il ne porte aucune réservation
+              (aucune semaine) — recurringSlotsWithBookings. */}
+            {creationMode &&
+              b.bookings.length === 0 &&
+              (!realWeekRecurring || !recurringSlotsWithBookings.has(b.slotId)) && (
+                <button
+                  type="button"
+                  className="planning-name-tag-close"
+                  data-tip="Supprimer ce créneau"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteEmptySlot(b.slotId);
+                  }}
+                >
+                  ×
+                </button>
+              )}
             {/* ≥2 réservations → pile de badges (legacy .planning-stack-wrap) :
             jusqu'à 3 badges superposés + compteur ; clic = modale liste. */}
             {b.bookings.length >= 2 && (
@@ -2312,6 +2326,7 @@ export function AgendaGrid({
       service,
       validation,
       pointageMode,
+      recurringSlotsWithBookings,
     ],
   );
 
@@ -3453,6 +3468,8 @@ export function AgendaGrid({
           suppression de toute la série. */}
       {slotDeleteTarget &&
         (() => {
+          // Récurrent = créneau présent dans `slots` (les ponctuels sont dans uniqueSlots).
+          const isRecurring = slots.some((s) => s.id === slotDeleteTarget);
           const slot =
             slots.find((s) => s.id === slotDeleteTarget) ??
             uniqueSlots.find((s) => s.id === slotDeleteTarget) ??
@@ -3462,6 +3479,7 @@ export function AgendaGrid({
           return (
             <SlotDeleteModal
               timePart={timePart}
+              recurring={isRecurring}
               seriesCount={seriesCount > 1 ? seriesCount : undefined}
               onCancel={() => setSlotDeleteTarget(null)}
               onConfirm={confirmDeleteSlot}
