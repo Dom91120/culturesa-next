@@ -93,79 +93,122 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   // Sans cette borne, l'agenda chargeait TOUS les exercices accumulés — payload
   // et requêtes croissant sans limite à chaque bascule d'exercice (audit perf).
   const periodIds = periods.map((p) => p.id);
+  // Exercices distincts présents parmi les périodes (chargés dans la même vague).
+  const exerciceIds = [
+    ...new Set(periods.map((p) => p.exerciceId).filter((x): x is number => x != null)),
+  ];
 
-  const [slots, uniqueSlots, bookings] = await Promise.all([
-    prisma.slot.findMany({
-      where: { serviceId: id, slotType: "recurring", periodId: { in: periodIds } },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-        capacity: true,
-        slotDay: true,
-        periodId: true,
-        weeks: true,
-        jauge: true,
-      },
-    }),
-    // Créneaux ponctuels (datés) : affichés dans l'agenda en mode « Semaine réelle »
-    // sur le jour de leur date (cf. legacy renderAgendaWeekly, branche realweek).
-    prisma.slot.findMany({
-      where: { serviceId: id, slotType: "unique", periodId: { in: periodIds } },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-        capacity: true,
-        slotDate: true,
-        parentSlotId: true,
-        jauge: true,
-      },
-    }),
-    prisma.booking.findMany({
-      // Récurrentes ET ponctuelles : les ponctuelles (bookingType "unique") sont
-      // rattachées à leur bloc ponctuel daté dans l'agenda « Semaine réelle ».
-      // Bornées via leur créneau : seules celles d'un créneau affiché sont rendues.
-      where: {
-        serviceId: id,
-        bookingType: { in: ["recurring", "unique"] },
-        slot: { periodId: { in: periodIds } },
-      },
-      select: {
-        id: true,
-        slotId: true,
-        periodId: true,
-        week: true,
-        bookingType: true,
-        parentBookingId: true,
-        enfants: true,
-        accompagnants: true,
-        themeLabel: true,
-        validated: true,
-        pointage: true,
-        user: {
-          select: {
-            nom: true,
-            prenom: true,
-            tel: true,
-            email: true,
-            demandeur: { select: { label: true } },
-            structure: { select: { label: true } },
+  // Une seule vague pour toutes les requêtes indépendantes (l'agenda payait ~8-10
+  // allers-retours EN SÉRIE à chaque tick d'auto-refresh — audit perf 2026-07-17).
+  const [slots, uniqueSlots, bookings, exerciceRowsRaw, themesRows, refreshCfg] = await Promise.all(
+    [
+      prisma.slot.findMany({
+        where: { serviceId: id, slotType: "recurring", periodId: { in: periodIds } },
+        select: {
+          id: true,
+          startTime: true,
+          endTime: true,
+          capacity: true,
+          slotDay: true,
+          periodId: true,
+          weeks: true,
+          jauge: true,
+        },
+      }),
+      // Créneaux ponctuels (datés) : affichés dans l'agenda en mode « Semaine réelle »
+      // sur le jour de leur date (cf. legacy renderAgendaWeekly, branche realweek).
+      prisma.slot.findMany({
+        where: { serviceId: id, slotType: "unique", periodId: { in: periodIds } },
+        select: {
+          id: true,
+          startTime: true,
+          endTime: true,
+          capacity: true,
+          slotDate: true,
+          parentSlotId: true,
+          jauge: true,
+        },
+      }),
+      prisma.booking.findMany({
+        // Récurrentes ET ponctuelles : les ponctuelles (bookingType "unique") sont
+        // rattachées à leur bloc ponctuel daté dans l'agenda « Semaine réelle ».
+        // Bornées via leur créneau : seules celles d'un créneau affiché sont rendues.
+        where: {
+          serviceId: id,
+          bookingType: { in: ["recurring", "unique"] },
+          slot: { periodId: { in: periodIds } },
+        },
+        select: {
+          id: true,
+          slotId: true,
+          periodId: true,
+          week: true,
+          bookingType: true,
+          parentBookingId: true,
+          enfants: true,
+          accompagnants: true,
+          themeLabel: true,
+          validated: true,
+          pointage: true,
+          user: {
+            select: {
+              nom: true,
+              prenom: true,
+              tel: true,
+              email: true,
+              demandeur: { select: { label: true } },
+              structure: { select: { label: true } },
+            },
           },
         },
-      },
+      }),
+      // Exercices affichés (réglages d'ouverture résolus par la grille).
+      exerciceIds.length
+        ? prisma.exercice.findMany({
+            where: { id: { in: exerciceIds } },
+            select: {
+              id: true,
+              label: true,
+              dateStart: true,
+              dateEnd: true,
+              morningStart: true,
+              morningEnd: true,
+              afternoonStart: true,
+              afternoonEnd: true,
+              activeDays: true,
+              openOnHolidays: true,
+              openOnSchoolHolidays: true,
+            },
+          })
+        : Promise.resolve([]),
+      // Thèmes du service (mode "liste" seulement — sinon champ libre, liste inutile).
+      service.themesMode === "liste"
+        ? prisma.serviceTheme.findMany({
+            where: { serviceId: id },
+            orderBy: [{ position: "asc" }, { id: "asc" }],
+            select: { label: true },
+          })
+        : Promise.resolve([]),
+      // Intervalle d'auto-rafraîchissement + zone de vacances scolaires.
+      getConfigMany(["agenda.autoRefreshSeconds", "school.zone"]),
+    ],
+  );
+
+  // Seconde vague (dépendante de la première) : demandeurs autorisés par créneau
+  // + plages de vacances scolaires de la zone configurée.
+  const slotIds = [...slots.map((s) => s.id), ...uniqueSlots.map((s) => s.id)];
+  const [slotDemRows, schoolHolidayRows] = await Promise.all([
+    slotIds.length
+      ? prisma.slotDemandeur.findMany({
+          where: { slotId: { in: slotIds } },
+          select: { slotId: true, demandeurId: true },
+        })
+      : Promise.resolve([]),
+    prisma.schoolHoliday.findMany({
+      where: { zone: refreshCfg["school.zone"] || "A" },
+      select: { dateStart: true, dateEnd: true },
     }),
   ]);
-
-  // Demandeurs autorisés par créneau (SlotDemandeur) + liste des demandeurs du service,
-  // pour la modale « configuration de créneau » du mode création de l'agenda.
-  const slotIds = [...slots.map((s) => s.id), ...uniqueSlots.map((s) => s.id)];
-  const slotDemRows = slotIds.length
-    ? await prisma.slotDemandeur.findMany({
-        where: { slotId: { in: slotIds } },
-        select: { slotId: true, demandeurId: true },
-      })
-    : [];
   const slotDemandeurs: Record<string, number[]> = {};
   for (const r of slotDemRows) {
     const list = slotDemandeurs[r.slotId] ?? [];
@@ -174,25 +217,33 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   }
   const serviceDemandeurs = demRows.map((r) => ({ id: r.demandeurId, label: r.label }));
 
-  const bookingsData = bookings.map((b) => ({
-    id: b.id,
-    slotId: b.slotId,
-    // DTO client : convention 0 = aucune période (la grille admin raisonne en number).
-    periodId: b.periodId ?? 0,
-    week: b.week,
-    bookingType: b.bookingType,
-    parentBookingId: b.parentBookingId,
-    enfants: b.enfants,
-    accompagnants: b.accompagnants,
-    theme: b.themeLabel ?? "",
-    validated: b.validated,
-    pointage: b.pointage,
-    name: `${b.user.nom} ${b.user.prenom}`.trim() || "—",
-    tel: b.user.tel ?? "",
-    email: b.user.email ?? "",
-    demandeur: b.user.demandeur?.label ?? "",
-    structure: b.user.structure?.label ?? "",
-  }));
+  const bookingsData = bookings.map((b) => {
+    // Identité portée UNIQUEMENT par la réservation PARENTE (même usager par
+    // construction) : les ~36 occurrences ENFANTS d'une récurrente ne dupliquent
+    // plus nom/tél/e-mail/demandeur/structure dans le payload RSC — re-sérialisé à
+    // chaque tick d'auto-refresh (audit perf 2026-07-17). La grille réhydrate les
+    // enfants depuis leur parente (cf. agenda-grid, mémo bookings).
+    const child = b.parentBookingId != null;
+    return {
+      id: b.id,
+      slotId: b.slotId,
+      // DTO client : convention 0 = aucune période (la grille admin raisonne en number).
+      periodId: b.periodId ?? 0,
+      week: b.week,
+      bookingType: b.bookingType,
+      parentBookingId: b.parentBookingId,
+      enfants: b.enfants,
+      accompagnants: b.accompagnants,
+      theme: b.themeLabel ?? "",
+      validated: b.validated,
+      pointage: b.pointage,
+      name: child ? "" : `${b.user.nom} ${b.user.prenom}`.trim() || "—",
+      tel: child ? "" : (b.user.tel ?? ""),
+      email: child ? "" : (b.user.email ?? ""),
+      demandeur: child ? "" : (b.user.demandeur?.label ?? ""),
+      structure: child ? "" : (b.user.structure?.label ?? ""),
+    };
+  });
 
   const slotsData = slots.map((s) => ({
     id: s.id,
@@ -225,33 +276,11 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     exerciceId: p.exerciceId,
   }));
 
-  // Exercices distincts présents parmi les périodes → navigation ◀ label ▶
-  // (charte legacy exercice-nav-inline). Triés par libellé (= années scolaires).
-  // Chaque exercice publie ses réglages d'ouverture RÉSOLUS (surcharge ?? service,
-  // cf. opening.ts) : la grille les applique à l'exercice couvrant chaque jour.
-  const exerciceIds = [
-    ...new Set(periods.map((p) => p.exerciceId).filter((x): x is number => x != null)),
-  ];
-  const exerciceRows = (
-    exerciceIds.length
-      ? await prisma.exercice.findMany({
-          where: { id: { in: exerciceIds } },
-          select: {
-            id: true,
-            label: true,
-            dateStart: true,
-            dateEnd: true,
-            morningStart: true,
-            morningEnd: true,
-            afternoonStart: true,
-            afternoonEnd: true,
-            activeDays: true,
-            openOnHolidays: true,
-            openOnSchoolHolidays: true,
-          },
-        })
-      : []
-  ).sort((a, b) => a.label.localeCompare(b.label));
+  // Exercices → navigation ◀ label ▶ (charte legacy exercice-nav-inline), triés par
+  // libellé (= années scolaires). Chaque exercice publie ses réglages d'ouverture
+  // RÉSOLUS (surcharge ?? service, cf. opening.ts) : la grille les applique à
+  // l'exercice couvrant chaque jour. (Chargés dans la première vague.)
+  const exerciceRows = exerciceRowsRaw.sort((a, b) => a.label.localeCompare(b.label));
   const exercices = exerciceRows.map((e) => ({
     id: e.id,
     label: e.label,
@@ -269,29 +298,13 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   }));
 
   // En mode thèmes "liste", la modale d'édition propose un <select> des thèmes du
-  // service (sinon champ libre). On ne charge la liste qu'au besoin.
-  const themes =
-    service.themesMode === "liste"
-      ? (
-          await prisma.serviceTheme.findMany({
-            where: { serviceId: id },
-            orderBy: [{ position: "asc" }, { id: "asc" }],
-            select: { label: true },
-          })
-        ).map((t) => t.label)
-      : [];
+  // service (sinon champ libre). (Chargés dans la première vague.)
+  const themes = themesRows.map((t) => t.label);
 
   // Intervalle d'auto-rafraîchissement de l'agenda (Administration > Configuration). Défaut 60 s.
-  // + zone de vacances scolaires (pour filtrer les occurrences des demandeurs « fermés »).
-  const refreshCfg = await getConfigMany(["agenda.autoRefreshSeconds", "school.zone"]);
   const rawAgendaRefresh = Number.parseInt(refreshCfg["agenda.autoRefreshSeconds"], 10);
   const autoRefreshSeconds = Number.isFinite(rawAgendaRefresh) ? rawAgendaRefresh : 60;
-  const schoolHolidays = (
-    await prisma.schoolHoliday.findMany({
-      where: { zone: refreshCfg["school.zone"] || "A" },
-      select: { dateStart: true, dateEnd: true },
-    })
-  ).map((h) => ({
+  const schoolHolidays = schoolHolidayRows.map((h) => ({
     dateStart: h.dateStart.toISOString().slice(0, 10),
     dateEnd: h.dateEnd.toISOString().slice(0, 10),
   }));

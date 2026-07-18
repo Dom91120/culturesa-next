@@ -243,10 +243,27 @@ export function AgendaGrid({
   const bookings = useMemo<Booking[]>(() => {
     const recurDay = new Map(slots.map((s) => [s.id, s.slotDay ?? ""]));
     const uniqDay = new Map(uniqueSlots.map((s) => [s.id, dayKeyFromYmd(s.slotDate)]));
-    return bookingsRaw.map((b) => ({
-      ...b,
-      dayKey: recurDay.get(b.slotId) ?? uniqDay.get(b.slotId) ?? "",
-    }));
+    // Réhydratation des ENFANTS d'occurrence : le payload ne porte l'identité
+    // (nom/tél/e-mail/demandeur/structure) que sur la réservation PARENTE — même
+    // usager par construction — pour ne plus la dupliquer ~36× par récurrente à
+    // chaque tick d'auto-refresh (audit perf 2026-07-17, cf. page.tsx).
+    const byId = new Map(bookingsRaw.map((b) => [b.id, b]));
+    return bookingsRaw.map((b) => {
+      const parent = b.parentBookingId != null ? byId.get(b.parentBookingId) : undefined;
+      return {
+        ...b,
+        ...(parent
+          ? {
+              name: parent.name,
+              tel: parent.tel,
+              email: parent.email,
+              demandeur: parent.demandeur,
+              structure: parent.structure,
+            }
+          : {}),
+        dayKey: recurDay.get(b.slotId) ?? uniqDay.get(b.slotId) ?? "",
+      };
+    });
   }, [bookingsRaw, slots, uniqueSlots]);
   // Exercice courant : par défaut le plus récent (dernier après tri par libellé).
   const [currentExerciceId, setCurrentExerciceId] = useState<number | null>(
