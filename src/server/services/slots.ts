@@ -54,29 +54,6 @@ function activeDayKeys(csv: string): DayKey[] {
     .filter((d): d is DayKey => DAYS.includes(d as DayKey));
 }
 
-/** Un service est-il en mode semaine A/B ? (réglage GLOBAL du service, ssi récurrent actif). */
-async function serviceHasAbMode(serviceId: string): Promise<boolean> {
-  const svc = await prisma.service.findUnique({
-    where: { id: serviceId },
-    select: { recurrentMode: true, semaineAb: true },
-  });
-  return !!svc && svc.recurrentMode && svc.semaineAb;
-}
-
-/**
- * Modèle « 1 créneau = 1 semaine » en mode A/B : un créneau récurrent doit porter la
- * semaine A OU B (jamais « A & B »). On évite ainsi qu'un même créneau cumule les
- * réservations des deux semaines dans un seul seau de capacité. (Hors mode A/B, `weeks`
- * vaut « A,B » = toutes les semaines, ce qui reste valide.) Renvoie un message d'erreur
- * si la valeur est invalide pour un service A/B, sinon null.
- */
-function abWeekError(weeks: string | null | undefined): string | null {
-  const w = (weeks ?? "").trim();
-  return w === "A" || w === "B"
-    ? null
-    : "En mode A/B, un créneau doit être sur la semaine A ou la semaine B (pas « A & B »).";
-}
-
 /**
  * Valeur `weeks` à PERSISTER, normalisée selon la convention :
  *   - "A" ou "B" → mode A/B, semaine unique ;
@@ -340,10 +317,9 @@ export async function addRecurringSlot(
   if (!period?.dateStart || !period?.dateEnd) {
     return { ok: false, error: "Période introuvable ou sans dates" };
   }
-  if (await serviceHasAbMode(serviceId)) {
-    const err = abWeekError(input.weeks);
-    if (err) return { ok: false, error: err };
-  }
+  // NB : en mode A/B, `weeks` peut être "A", "B" OU "" (toutes les semaines) — le bouton
+  // « Semaine A/B » de l'agenda pilote ce choix ; normalizeWeeks ramène toute autre valeur
+  // à "". Plus de contrainte « parité obligatoire » (ex-vue Modèle).
   // Contexte de génération UNIQUE (bornes + ouverture de l'exercice + fériés) —
   // période sans exercice = FERMÉ : aucun miroir, cf. opening.ts / loadMirrorContext.
   const ctx = await loadMirrorContext(prisma, {

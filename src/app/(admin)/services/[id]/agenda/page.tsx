@@ -21,7 +21,6 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       label: true,
       capacity: true,
       recurrentMode: true,
-      semaineAb: true,
       themesMode: true,
       showPreviousExercices: true,
       gaugeAccompagnants: true,

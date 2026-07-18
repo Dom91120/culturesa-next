@@ -10,7 +10,7 @@ import { Switch } from "@/components/switch";
 import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
-import { setGaugeAccompagnantsAction, setRecurrentModeAction, setSemaineAbAction } from "./actions";
+import { setGaugeAccompagnantsAction, setRecurrentModeAction } from "./actions";
 
 // ── Types & helpers ──────────────────────────────────────────────────────────
 
@@ -32,7 +32,6 @@ type Props = {
   initialThemes: string[];
   initialGaugeAccompagnants: boolean;
   initialRecurrentMode: boolean;
-  initialSemaineAb: boolean;
 };
 
 /** Reprojette l'état par-demandeur vers la matrice service × demandeur.
@@ -86,7 +85,6 @@ export function ConfigPanel({
   initialThemes,
   initialGaugeAccompagnants,
   initialRecurrentMode,
-  initialSemaineAb,
 }: Props) {
   const counter = useRef(0);
 
@@ -108,15 +106,6 @@ export function ConfigPanel({
       await setRecurrentModeAction(serviceId, v);
     });
   }
-  const [semaineAb, setSemaineAb] = useState(initialSemaineAb);
-  const [, startSemaineAb] = useTransition();
-  function toggleSemaineAb(v: boolean) {
-    setSemaineAb(v);
-    startSemaineAb(async () => {
-      await setSemaineAbAction(serviceId, v);
-    });
-  }
-
   const [rows, setRows] = useState<DemRow[]>(() =>
     initialRows.map((r, i) => ({
       key: `db-${i}`,
@@ -268,20 +257,10 @@ export function ConfigPanel({
           </p>
 
           <GlobalRow
-            label="Créneaux récurrents (Modèle de période)"
-            desc="Le service propose des créneaux récurrents, définis semaine type par période (vue « Modèle de période » de l'agenda)."
+            label="Créneaux récurrents"
+            desc="Le service propose des créneaux qui reviennent chaque semaine (création dans l'agenda, mode « Création de créneau »). L'alternance Semaine A/B se règle créneau par créneau via le bouton « Semaine A/B » de l'agenda."
           >
             <Switch on={recurrentMode} onChange={toggleRecurrentMode} />
-          </GlobalRow>
-          <GlobalRow
-            label="Alternance Semaine A / B"
-            desc={
-              recurrentMode
-                ? "Les créneaux récurrents alternent une semaine A et une semaine B."
-                : "Sans effet : les créneaux récurrents sont désactivés."
-            }
-          >
-            <Switch on={semaineAb} disabled={!recurrentMode} onChange={toggleSemaineAb} />
           </GlobalRow>
           {/* La jauge s'active désormais PAR CRÉNEAU (icône capsule du mode création
               de l'agenda, colonne slots.jauge) — plus de bascule globale ici. */}

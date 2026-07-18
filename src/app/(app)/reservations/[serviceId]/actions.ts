@@ -58,10 +58,12 @@ async function reserveRecurringInTx(
     theme: string;
     enfants: number;
     accompagnants: number;
-    wk: "A" | "B" | "";
+    // `wk` (parité annoncée) n'est plus utilisé : la parité de la réservation est dérivée
+    // du créneau (Slot.weeks). Conservé pour compat des appelants.
+    wk?: "A" | "B" | "";
   },
 ): Promise<BookingConfirmationParams> {
-  const { slotId, periodId, theme, enfants, accompagnants, wk } = args;
+  const { slotId, periodId, theme, enfants, accompagnants } = args;
   // Une réservation récurrente est TOUJOURS rattachée à une période (FK bookings.periodId).
   // Garde défensif : refuse un periodId absent/invalide plutôt que de violer la FK.
   if (!(periodId > 0)) {
@@ -81,6 +83,9 @@ async function reserveRecurringInTx(
   if (slot.periodId !== periodId) {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
+  // La réservation SUIT la parité du CRÉNEAU (Slot.weeks), pas la semaine annoncée par le
+  // client : "A"/"B" → cette parité ; "" (toutes semaines) → toutes les occurrences.
+  const slotWeek = slot.weeks === "A" || slot.weeks === "B" ? slot.weeks : "";
   // Accès service : le demandeur effectif de l'usager doit accepter ce service.
   if (!(await userCanAccessService(tx, userId, serviceId))) {
     throw new BookingError("Vous n'avez pas accès à ce service.");
@@ -137,7 +142,7 @@ async function reserveRecurringInTx(
       serviceId,
       slotId,
       periodId,
-      week: wk,
+      week: slotWeek,
       enfants: myEnfants,
       accompagnants: myAcc,
       themeLabel: theme,
@@ -152,7 +157,7 @@ async function reserveRecurringInTx(
     serviceId,
     slotId,
     periodId,
-    week: wk,
+    week: slotWeek,
     themeLabel: theme,
     enfants: myEnfants,
     accompagnants: myAcc,

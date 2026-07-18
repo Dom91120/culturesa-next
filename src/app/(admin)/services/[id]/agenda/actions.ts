@@ -500,7 +500,7 @@ export async function deleteSlotSeriesAction(
       capacity: true,
       jauge: true,
       demandeurs: { select: { demandeurId: true } },
-      service: { select: { recurrentMode: true, semaineAb: true } },
+      service: { select: { recurrentMode: true } },
     },
   });
   if (!ref?.slotDate) return { ok: false, error: "Créneau introuvable." };
@@ -510,7 +510,7 @@ export async function deleteSlotSeriesAction(
     revalidatePath(`/services/${serviceId}/agenda`);
     return res.ok ? { ok: true, deleted: res.deleted } : { ok: false, error: res.error };
   }
-  const abMode = ref.service.recurrentMode && ref.service.semaineAb;
+  const abMode = ref.service.recurrentMode;
   const refDow = ref.slotDate.getUTCDay();
   const refParity = slotWeekTag(ref.slotDate.toISOString().slice(0, 10));
   const demKey = (rows: { demandeurId: number }[]) =>
@@ -840,7 +840,7 @@ export async function createRecurringBookingAction(input: {
         // propagerait ensuite. (assertSlotCapacity ne contrôle que le couple slot/service.)
         const target = await tx.slot.findFirst({
           where: { id: d.slotId, serviceId: d.serviceId },
-          select: { slotType: true, periodId: true },
+          select: { slotType: true, periodId: true, weeks: true },
         });
         if (target?.slotType !== "recurring") {
           throw new BookingError("Ce créneau n'est pas disponible.");
@@ -852,6 +852,9 @@ export async function createRecurringBookingAction(input: {
         if (target.periodId !== d.periodId) {
           throw new BookingError("Ce créneau n'est pas disponible.");
         }
+        // La réservation SUIT la parité du CRÉNEAU (Slot.weeks), pas la semaine annoncée par
+        // le client : "A"/"B" → cette parité ; "" (toutes semaines) → toutes les occurrences.
+        const slotWeek = target.weeks === "A" || target.weeks === "B" ? target.weeks : "";
         // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.
         // (pas de délai de réservation côté gestionnaire, mais la capacité s'applique.)
         await assertSlotCapacity(tx, {
@@ -869,7 +872,7 @@ export async function createRecurringBookingAction(input: {
             serviceId: d.serviceId,
             slotId: d.slotId,
             periodId: d.periodId,
-            week: d.week,
+            week: slotWeek,
             enfants: d.enfants,
             accompagnants: d.accompagnants,
             themeLabel: d.theme,
@@ -885,7 +888,7 @@ export async function createRecurringBookingAction(input: {
             serviceId: d.serviceId,
             slotId: d.slotId,
             periodId: d.periodId,
-            week: d.week,
+            week: slotWeek,
             themeLabel: d.theme,
             enfants: d.enfants,
             accompagnants: d.accompagnants,

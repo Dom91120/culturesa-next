@@ -52,8 +52,8 @@ export const recurringSlotCreateSchema = z
     serviceId: stringIdSchema,
     periodId: z.coerce.number().int().positive(),
     dayKey: z.enum(DAYS),
-    // weeks : "", "A" ou "B" (normalizeWeeks ramène toute autre valeur à "" = toutes
-    // semaines). On reste permissif ici ; la règle A/B stricte est appliquée par abWeekError.
+    // weeks : "", "A" ou "B" (normalizeWeeks ramène toute autre valeur à "" = toutes les
+    // semaines). "" est valide même en mode A/B (créneau récurrent sur toutes les semaines).
     weeks: z.string().max(8).default(""),
     startTime: time("Heure de début"),
     endTime: time("Heure de fin"),

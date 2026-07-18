@@ -40,6 +40,7 @@ import {
   makeWeekNavigation,
   mondayOf,
   type Pointage,
+  parseWeeks,
   periodsCoverToday,
   ROW_H,
   type Slot,
@@ -94,7 +95,6 @@ type Service = {
   id: string;
   label: string;
   capacity: number;
-  semaineAb: boolean;
   themesMode: "libre" | "liste";
   gaugeAccompagnants: boolean;
 };
@@ -324,6 +324,10 @@ export function AgendaGrid({
   // sautées — cf. uniqueCreateDates. En « Modèle de période » la création est toujours
   // récurrente (le sélecteur est masqué). Défaut "uniq" (comportement historique).
   const [createKind, setCreateKind] = useState<CreateKind>("uniq");
+  // Mode « Semaine A/B » (service A/B, bouton A/B de l'en-tête, OFF par défaut) : quand il
+  // est activé, les créneaux RÉCURRENTS créés sont limités à la parité de la semaine
+  // affichée (weeks = "A"/"B") ; désactivé = toutes les semaines (weeks = "").
+  const [parityScoped, setParityScoped] = useState(false);
   // Mode « Jauge » (icône capsule, OFF par défaut) : les créneaux créés portent
   // jauge = ce mode au moment de la création (colonne slots.jauge).
   const [jaugeMode, setJaugeMode] = useState(false);
@@ -607,6 +611,11 @@ export function AgendaGrid({
   const realWeekParity: "A" | "B" | null = mondayStr ? slotWeekTag(mondayStr) : null;
   // Semaine effective filtrée = parité de la semaine affichée (mode A/B uniquement).
   const effectiveWeek: "A" | "B" | null = abMode ? realWeekParity : null;
+  // Parité appliquée aux créneaux RÉCURRENTS créés (bouton « Semaine A/B ») : la semaine
+  // affichée si le mode est activé, sinon "" = toutes les semaines. N'affecte QUE la
+  // création — l'affichage/filtrage reste piloté par la parité réelle (effectiveWeek).
+  const createWeeks: "A" | "B" | "" =
+    abMode && parityScoped && realWeekParity ? realWeekParity : "";
 
   // La plage horaire affichée reste fixe (matin → après-midi). « Masquer les
   // horaires sans réservation » ne resserre pas la plage : il COMPACTE les quarts
@@ -634,6 +643,19 @@ export function AgendaGrid({
     for (const bk of bookings) if (bk.bookingType === "recurring") set.add(bk.slotId);
     return set;
   }, [bookings]);
+
+  // Parité (A/B) des créneaux récurrents limités à UNE seule semaine (weeks = "A"/"B") :
+  // sert à marquer ces créneaux d'une lettre. Un récurrent « toutes semaines » (weeks
+  // "" / "A,B") n'a pas de parité → pas de lettre.
+  const slotParityById = useMemo(() => {
+    const m = new Map<string, "A" | "B">();
+    if (!modes.abMode) return m;
+    for (const s of slots) {
+      const w = parseWeeks(s.weeks);
+      if (w.length === 1) m.set(s.id, w[0]);
+    }
+    return m;
+  }, [slots, modes.abMode]);
 
   // ── Pause méridienne (port legacy renderAgendaWeekly) ───────────────────────
   // Zone entre morningEnd et afternoonStart. Si > 30 min, on COMPACTE : on ne garde
@@ -1007,7 +1029,7 @@ export function AgendaGrid({
     // Récurrent si le sélecteur est sur "rec" ; sinon ponctuel daté.
     if (createKind === "rec") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
-      const weeks = abMode && effectiveWeek ? effectiveWeek : "";
+      const weeks = createWeeks;
       runResults(
         Promise.all(
           targets.flatMap((dayKey) =>
@@ -1085,7 +1107,7 @@ export function AgendaGrid({
     // Récurrent si le sélecteur est sur "rec" ; sinon ponctuel daté.
     if (createKind === "rec") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
-      const weeks = abMode && effectiveWeek ? effectiveWeek : "";
+      const weeks = createWeeks;
       runResults(
         Promise.all(
           targets.map((dayKey) =>
@@ -1483,7 +1505,7 @@ export function AgendaGrid({
       );
     } else {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
-      const weeks = abMode && effectiveWeek ? effectiveWeek : "";
+      const weeks = createWeeks;
       runResults(
         Promise.all(
           targets.map((dayKey) =>
@@ -1838,6 +1860,8 @@ export function AgendaGrid({
       const slotBooked = isPonctuelCell
         ? b.bookings.length > 0
         : recurringSlotsWithBookings.has(b.slotId);
+      // Parité d'un créneau récurrent limité à une seule semaine (A/B) → lettre au centre.
+      const blockParity = isPonctuelCell ? undefined : slotParityById.get(b.slotId);
       // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
       const gaugeForCell = b.jauge;
       const cellFull = b.used >= b.capacity;
@@ -1969,6 +1993,29 @@ export function AgendaGrid({
             runResult(moveBookingAction(actionBooking(dragged).id, service.id, b.slotId));
           }}
         >
+          {/* Créneau récurrent limité à une semaine A/B : lettre au centre, dans la couleur
+              du contour pointillé du créneau (jaune récurrent). Décorative (derrière les
+              badges), n'intercepte pas les clics. */}
+          {blockParity && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffee24",
+                fontWeight: 800,
+                fontSize: "1.2rem",
+                opacity: 0.55,
+                pointerEvents: "none",
+                zIndex: 0,
+              }}
+            >
+              {blockParity}
+            </span>
+          )}
           {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
           vide. Curseur ns-resize au survol ; le mousedown amorce le glisser-étirer
           (stopPropagation → n'amorce ni déplacer ni créer). Récurrent en Semaine réelle
@@ -2272,6 +2319,7 @@ export function AgendaGrid({
       validation,
       pointageMode,
       recurringSlotsWithBookings,
+      slotParityById,
     ],
   );
 
@@ -2389,137 +2437,62 @@ export function AgendaGrid({
             </button>
           )}
         </div>
-        {/* Sélecteur Semaine A/B (indicateur de parité de la semaine affichée). */}
-        <div className="agenda-mode-toggles-wrap">
-          {abMode && realWeekParity && (
-            // « Semaine » + toggle A / B. En Semaine
-            // réelle : seule la parité de la semaine affichée est montrée (lecture seule).
+        <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+          {/* Hors création : cases à cocher (masquer horaires / validation / pointage),
+              à gauche du bouton Imprimer. */}
+          {!creationMode && (
             <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                gap: ".3rem",
-                minWidth: 100,
-              }}
+              className="planning-options-row"
+              style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
             >
-              <span style={{ fontSize: ".62rem", color: "var(--muted)" }}>Semaine</span>
-              {/* Indicateur (lecture seule) de la parité A/B de la semaine affichée. */}
-              <div className="agenda-mode-toggle" aria-label="Semaine A ou B">
-                <span className="agenda-mode-btn active">{realWeekParity}</span>
+              <label className="planning-option">
+                Masquer les horaires sans réservation
+                <input
+                  type="checkbox"
+                  checked={hideEmpty}
+                  onChange={(e) => setHideEmpty(e.target.checked)}
+                />
+              </label>
+              <div style={{ display: "flex", gap: ".6rem", alignItems: "center" }}>
+                <label className="planning-option">
+                  Mode validation
+                  <input
+                    type="checkbox"
+                    checked={validation}
+                    onChange={(e) => toggleValidation(e.target.checked)}
+                  />
+                </label>
+                <label className="planning-option">
+                  Mode pointage
+                  <input
+                    type="checkbox"
+                    checked={pointageMode}
+                    onChange={(e) => togglePointageMode(e.target.checked)}
+                  />
+                </label>
               </div>
             </div>
           )}
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: ".75rem",
-          marginBottom: ".5rem",
-        }}
-      >
-        <div className="period-tabs" id="agenda-period-tabs">
-          {visiblePeriods.map((p) => {
-            const active = p.id === coveringPeriod?.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className={`period-btn ${active ? "active" : ""}`}
-                style={{ "--period-color": p.color } as React.CSSProperties}
-                onClick={() => {
-                  // Onglet choisi = source de vérité : on fige la période ET on ancre la
-                  // semaine sur son début (cf. legacy _pickedP).
-                  if (p.dateStart) {
-                    setRwPeriodId(p.id);
-                    setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
-                  }
-                }}
-              >
-                <span className="period-badge" />
-                {[p.etiquette, p.label].filter(Boolean).join(" · ")}
-              </button>
-            );
-          })}
-          {periods.length === 0 && (
-            <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>
-              Aucune période active.
-            </span>
+          {/* Hors création : bouton Imprimer, à gauche du bouton « Mode création ». */}
+          {!creationMode && (
+            <PrintIconButton onClick={printSessionsList} tip="Imprimer la liste des réservations" />
           )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B) ; sinon les cases. */}
-          {creationMode ? (
-            <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-              {/* Sélecteur du type de créneau à créer : récurrent / ponctuel unique /
-                  ponctuel répliqué sur toute la période. L'état "rec" n'est proposé que si
-                  le service a un mode récurrent. */}
-              <div style={{ display: "inline-flex", alignItems: "center" }}>
-                {CREATE_KINDS.filter((k) => k.kind !== "rec" || modes.recurringMode).map((k) => {
-                  const active = createKind === k.kind;
-                  return (
-                    <button
-                      key={k.kind}
-                      type="button"
-                      data-tip={k.tip}
-                      aria-label={k.label}
-                      aria-pressed={active}
-                      onClick={() => setCreateKind(k.kind)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: ".3rem",
-                        padding: ".1rem .3rem",
-                        fontSize: ".72rem",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        border: "1px solid",
-                        borderColor: active ? "var(--accent)" : "transparent",
-                        borderRadius: "calc(var(--rad-sm) - 2px)",
-                        background: active
-                          ? "color-mix(in srgb, var(--accent) 15%, transparent)"
-                          : "transparent",
-                        color: active ? "var(--text)" : "var(--muted)",
-                        opacity: active ? 1 : 0.5,
-                      }}
-                    >
-                      {k.multi && "Multi"}
-                      <span
-                        className={`agenda-legend-swatch ${k.swatch}`}
-                        style={{ width: 28, height: 18 }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-              <label
-                htmlFor="create-cap"
-                style={{
-                  fontSize: ".72rem",
-                  fontWeight: 600,
-                  color: "var(--muted)",
-                  textTransform: "none",
-                  letterSpacing: "normal",
-                }}
-              >
-                Capacité
-              </label>
+          {/* Capacité / jauge / demandeurs par défaut des créneaux créés (mode création). */}
+          {creationMode && (
+            <>
               <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
                 <input
                   id="create-cap"
                   type="number"
                   min={1}
                   data-tip="Capacité par défaut"
+                  aria-label="Capacité par défaut"
                   value={capStr}
                   onChange={(e) => onCapChange(e.target.value)}
                   style={{
-                    width: 46,
-                    fontSize: ".72rem",
-                    padding: ".12rem .3rem",
+                    width: 38,
+                    fontSize: ".62rem",
+                    padding: ".12rem .1rem",
                     background: "var(--surface2)",
                     color: "var(--text)",
                     border: "1px solid var(--border)",
@@ -2543,10 +2516,8 @@ export function AgendaGrid({
                   ✓
                 </span>
               </span>
-              {/* Bascule « mode Jauge » (capsule vert/orange/rouge), à droite de la
-                  capacité. Icône NUE (pas de boîte de bouton), hauteur des boutons
-                  voisins (~26px). OFF par défaut : grisée ; ON : en couleur. Les
-                  créneaux créés portent jauge = ce mode. */}
+              {/* Bascule « mode Jauge » (capsule vert/orange/rouge). OFF par défaut : grisée ;
+                  ON : en couleur. Les créneaux créés portent jauge = ce mode. */}
               <button
                 type="button"
                 onClick={() => setJaugeMode((v) => !v)}
@@ -2603,9 +2574,6 @@ export function AgendaGrid({
                   background: createDemIds.length ? "var(--accent-dim)" : "none",
                   border: `1px solid ${createDemIds.length ? "var(--accent)" : "var(--border)"}`,
                   borderRadius: "var(--rad-sm)",
-                  // Dimensions identiques à la boîte du bouton « Mode création »
-                  // (icône 15px + padding .28rem/.38rem + bordure 1px). L'emoji 👥 étant
-                  // plus large/haut qu'un SVG 15px, on fixe la boîte et on centre.
                   boxSizing: "border-box",
                   height: "calc(0.56rem + 17px)",
                   width: "calc(0.76rem + 17px)",
@@ -2644,108 +2612,217 @@ export function AgendaGrid({
                   </span>
                 )}
               </button>
-              {/* Copie des créneaux d'une semaine A/B vers l'autre (service A/B). */}
+            </>
+          )}
+          {/* Bouton « Mode création » (bascule), à droite du sélecteur de type. */}
+          <button
+            type="button"
+            onClick={() => toggleCreationMode(!creationMode)}
+            data-tip="Mode création"
+            aria-label="Mode création"
+            aria-pressed={creationMode}
+            style={{
+              background: creationMode ? "var(--danger)" : "none",
+              border: `1px solid ${creationMode ? "var(--danger)" : "var(--border)"}`,
+              borderRadius: "var(--rad-sm)",
+              padding: ".28rem .38rem",
+              cursor: "pointer",
+              color: creationMode ? "var(--accent-contrast, #fff)" : "var(--danger)",
+              display: "flex",
+              alignItems: "center",
+              lineHeight: 1,
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              <path d="m15 5 4 4" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: ".75rem",
+          marginBottom: ".5rem",
+        }}
+      >
+        <div className="period-tabs" id="agenda-period-tabs">
+          {visiblePeriods.map((p) => {
+            const active = p.id === coveringPeriod?.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                className={`period-btn ${active ? "active" : ""}`}
+                style={{ "--period-color": p.color } as React.CSSProperties}
+                onClick={() => {
+                  // Onglet choisi = source de vérité : on fige la période ET on ancre la
+                  // semaine sur son début (cf. legacy _pickedP).
+                  if (p.dateStart) {
+                    setRwPeriodId(p.id);
+                    setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
+                  }
+                }}
+              >
+                <span className="period-badge" />
+                {[p.etiquette, p.label].filter(Boolean).join(" · ")}
+              </button>
+            );
+          })}
+          {periods.length === 0 && (
+            <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>
+              Aucune période active.
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B). Les cases à cocher
+              (masquer horaires / validation / pointage) sont dans l'en-tête. */}
+          {creationMode && (
+            <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+              {/* Sélecteur du type de créneau à créer : récurrent / ponctuel unique /
+                  ponctuel répliqué. L'état "rec" n'est proposé qu'avec un mode récurrent. */}
+              <div style={{ display: "inline-flex", alignItems: "center" }}>
+                {CREATE_KINDS.filter((k) => k.kind !== "rec" || modes.recurringMode).map((k) => {
+                  const active = createKind === k.kind;
+                  return (
+                    <button
+                      key={k.kind}
+                      type="button"
+                      data-tip={k.tip}
+                      aria-label={k.label}
+                      aria-pressed={active}
+                      onClick={() => setCreateKind(k.kind)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        padding: ".1rem .3rem",
+                        cursor: "pointer",
+                        border: "1px solid",
+                        borderColor: active ? "var(--accent)" : "transparent",
+                        borderRadius: "calc(var(--rad-sm) - 2px)",
+                        background: active
+                          ? "color-mix(in srgb, var(--accent) 15%, transparent)"
+                          : "transparent",
+                        opacity: active ? 1 : 0.5,
+                      }}
+                    >
+                      {/* Multi → « Multi » dans la pastille. Récurrent + mode Semaine A/B
+                          activé → la parité (A/B) affichée en jaune #ffee24 dans la pastille. */}
+                      <span
+                        className={`agenda-legend-swatch ${k.swatch}`}
+                        style={{
+                          width: 30,
+                          height: 20,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: ".5rem",
+                          fontWeight: 700,
+                          color: "var(--text)",
+                        }}
+                      >
+                        {k.multi &&
+                          (parityScoped && realWeekParity ? `Multi ${realWeekParity}` : "Multi")}
+                        {k.kind === "rec" && parityScoped && realWeekParity && (
+                          <span style={{ color: "#ffee24", fontSize: ".6rem" }}>
+                            {realWeekParity}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Bouton « Semaine A/B » (service A/B) : le libellé = parité de la semaine
+                  affichée. Désactivé (estompé) → récurrents créés pour toutes les semaines ;
+                  activé → limités à la parité affichée. */}
+              {abMode && realWeekParity && (
+                <button
+                  type="button"
+                  aria-label={`Limiter les créneaux récurrents à la semaine ${realWeekParity}`}
+                  aria-pressed={parityScoped}
+                  onClick={() => setParityScoped((v) => !v)}
+                  data-tip={
+                    parityScoped
+                      ? `Créneaux récurrents créés en semaine ${realWeekParity} uniquement (cliquer pour toutes les semaines)`
+                      : "Créneaux récurrents créés pour toutes les semaines (cliquer pour limiter à la semaine affichée)"
+                  }
+                  style={{
+                    boxSizing: "border-box",
+                    padding: ".32rem .35rem",
+                    border: `1px solid ${parityScoped ? "var(--accent)" : "var(--border)"}`,
+                    borderRadius: "var(--rad-sm)",
+                    background: parityScoped ? "var(--accent-dim)" : "none",
+                    color: parityScoped ? "var(--accent)" : "var(--muted)",
+                    fontSize: ".62rem",
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    whiteSpace: "nowrap",
+                    // OFF = aspect désactivé (estompé), comme le sélecteur 3 états inactif.
+                    opacity: parityScoped ? 1 : 0.5,
+                  }}
+                >
+                  Semaine {realWeekParity}
+                </button>
+              )}
+              {/* Copie des créneaux d'une semaine A/B vers l'autre (service A/B) : grisé/
+                  désactivé tant que le mode Semaine A/B n'est pas activé. */}
               {abMode &&
                 effectiveWeek != null &&
                 effectivePeriodId != null &&
                 effectivePeriodId > 0 && (
                   <button
                     type="button"
-                    className="btn btn-ghost"
                     onClick={copyWeek}
-                    data-tip={`Copier les créneaux de la semaine ${effectiveWeek} vers la semaine ${effectiveWeek === "A" ? "B" : "A"}`}
+                    disabled={!parityScoped}
+                    data-tip={
+                      parityScoped
+                        ? `Copier les créneaux de la semaine ${effectiveWeek} vers la semaine ${effectiveWeek === "A" ? "B" : "A"}`
+                        : "Activez le mode « Semaine A/B » pour copier une parité vers l'autre"
+                    }
                     style={{
-                      fontSize: ".6rem",
-                      // Même hauteur que le bouton « Mode création » (icône 15px + padding
-                      // .28rem + bordure 1px).
-                      height: "calc(0.56rem + 17px)",
                       boxSizing: "border-box",
-                      padding: "0 .35rem",
-                      display: "inline-flex",
-                      alignItems: "center",
+                      padding: ".32rem .35rem",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--rad-sm)",
+                      background: "none",
+                      // Désactivé = même aspect que « Semaine A/B » OFF (grisé, estompé).
+                      color: parityScoped ? "var(--text)" : "var(--muted)",
+                      fontSize: ".62rem",
+                      fontWeight: 600,
                       lineHeight: 1,
+                      cursor: parityScoped ? "pointer" : "default",
+                      display: "flex",
+                      alignItems: "center",
+                      whiteSpace: "nowrap",
+                      opacity: parityScoped ? 1 : 0.5,
                     }}
                   >
                     Copier → {effectiveWeek === "A" ? "B" : "A"}
                   </button>
                 )}
             </div>
-          ) : (
-            <div
-              className="planning-options-row"
-              style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
-            >
-              <label className="planning-option">
-                Masquer les horaires sans réservation
-                <input
-                  type="checkbox"
-                  checked={hideEmpty}
-                  onChange={(e) => setHideEmpty(e.target.checked)}
-                />
-              </label>
-              <div style={{ display: "flex", gap: ".6rem", alignItems: "center" }}>
-                <label className="planning-option">
-                  Mode validation
-                  <input
-                    type="checkbox"
-                    checked={validation}
-                    onChange={(e) => toggleValidation(e.target.checked)}
-                  />
-                </label>
-                <label className="planning-option">
-                  Mode pointage
-                  <input
-                    type="checkbox"
-                    checked={pointageMode}
-                    onChange={(e) => togglePointageMode(e.target.checked)}
-                  />
-                </label>
-              </div>
-            </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            {/* Boutons d'impression masqués en mode création. */}
-            {!creationMode && (
-              <PrintIconButton
-                onClick={printSessionsList}
-                tip="Imprimer la liste des réservations"
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => toggleCreationMode(!creationMode)}
-              data-tip="Mode création"
-              aria-label="Mode création"
-              aria-pressed={creationMode}
-              style={{
-                background: creationMode ? "var(--danger)" : "none",
-                border: `1px solid ${creationMode ? "var(--danger)" : "var(--border)"}`,
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: creationMode ? "var(--accent-contrast, #fff)" : "var(--danger)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                <path d="m15 5 4 4" />
-              </svg>
-            </button>
-          </div>
         </div>
       </div>
 

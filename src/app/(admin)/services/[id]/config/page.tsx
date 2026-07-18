@@ -34,7 +34,6 @@ export default async function ConfigPage({ params }: { params: Promise<{ id: str
         initialThemes={themesData.themes}
         initialGaugeAccompagnants={service.gaugeAccompagnants}
         initialRecurrentMode={service.recurrentMode}
-        initialSemaineAb={service.semaineAb}
       />
     </div>
   );
