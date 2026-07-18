@@ -303,11 +303,11 @@ export function AgendaGrid({
     exercices.length ? exercices[exercices.length - 1].id : null,
   );
   const [periodIdx, setPeriodIdx] = useState(0);
-  // Sans demandeur récurrent, le « Modèle de période » n'a pas de sens : on démarre
-  // (et on reste) en « Semaine réelle » — le bouton Modèle est masqué (cf. sélecteur).
-  const [mode, setMode] = useState<"model" | "realweek">(
-    modes.recurringMode ? "model" : "realweek",
-  );
+  // Vue UNIQUE « Semaine réelle » : le « Modèle de période » a été retiré (la Semaine
+  // réelle couvre désormais toute sa fonction — création/édition des créneaux ET gestion
+  // complète des réservations récurrentes). `mode` reste typé le temps du nettoyage des
+  // branches `mode === "model"` héritées (désormais inertes).
+  const [mode] = useState<"model" | "realweek">("realweek");
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
   // Mode "Semaine réelle" : période active verrouillée. Sans ce verrou, on
   // re-dérive la période depuis la semaine à chaque ◀/▶ — et quand une semaine
@@ -2446,45 +2446,8 @@ export function AgendaGrid({
             )}
           </div>
         )}
-        {/* Sélecteurs alignés à droite : Modèle/Semaine réelle, puis le toggle Semaine A/B. */}
+        {/* Sélecteur Semaine A/B (indicateur de parité de la semaine affichée). */}
         <div className="agenda-mode-toggles-wrap">
-          <div className="agenda-mode-toggle" role="tablist" aria-label="Mode d&apos;affichage">
-            {/* « Modèle de période » n'a de sens qu'avec au moins un demandeur récurrent ;
-                sinon on masque ce demi-sélecteur (la vue reste en « Semaine réelle »). */}
-            {modes.recurringMode && (
-              <button
-                type="button"
-                className={`agenda-mode-btn${mode === "model" ? " active" : ""}`}
-                onClick={() => setMode("model")}
-              >
-                Modèle de période
-              </button>
-            )}
-            <button
-              type="button"
-              className={`agenda-mode-btn${mode === "realweek" ? " active" : ""}`}
-              onClick={() => {
-                // Bascule Modèle → Semaine réelle : on CONSERVE l'onglet période
-                // sélectionné (même logique que le clic d'onglet en Semaine réelle) —
-                // période figée, et ancre déplacée sur son début si la semaine
-                // courante ne la couvre pas.
-                if (mode === "model") {
-                  const p = visiblePeriods[periodIdx];
-                  if (p?.dateStart && p.dateEnd) {
-                    setRwPeriodId(p.id);
-                    const anchor = anchorMonday ?? ymd(mondayOf(new Date()));
-                    const anchorSunday = ymd(addDays(anchor, 6));
-                    if (anchor > p.dateEnd || anchorSunday < p.dateStart) {
-                      setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
-                    }
-                  }
-                }
-                setMode("realweek");
-              }}
-            >
-              Semaine réelle
-            </button>
-          </div>
           {abMode && (mode === "model" || realWeekParity) && (
             // « Semaine » + toggle A / B. En Modèle : choix libre (weekAB). En Semaine
             // réelle : seule la parité de la semaine affichée est montrée (lecture seule).
