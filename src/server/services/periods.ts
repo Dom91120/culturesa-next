@@ -44,6 +44,19 @@ export async function refreshPeriodHolidays(
 // Sous-onglet Paramètres → Périodes et réservations (par service)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Garde anti-IDOR partagée : l'exercice chargé doit exister ET appartenir au
+ * service couvert par le guard de l'action (6 copies identiques avant l'audit
+ * 2026-07-17). Renvoie la ligne non-nulle pour chaînage.
+ */
+function assertExerciceOwned<T extends { serviceId: string | null }>(
+  serviceId: string,
+  row: T | null,
+): T {
+  if (!row || row.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  return row;
+}
+
 /** Erreur métier de gestion des périodes/exercices (message destiné à l'admin). */
 export class PeriodError extends Error {}
 
@@ -151,11 +164,13 @@ export async function updateExercice(
   id: number,
   input: UpdateExerciceInput,
 ): Promise<ExerciceRow> {
-  const current = await prisma.exercice.findUnique({
-    where: { id },
-    select: { serviceId: true, dateStart: true, dateEnd: true },
-  });
-  if (!current || current.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  const current = assertExerciceOwned(
+    serviceId,
+    await prisma.exercice.findUnique({
+      where: { id },
+      select: { serviceId: true, dateStart: true, dateEnd: true },
+    }),
+  );
   const nextStart = input.dateStart !== undefined ? input.dateStart : current.dateStart;
   const nextEnd = input.dateEnd !== undefined ? input.dateEnd : current.dateEnd;
   if (nextStart && nextEnd && nextStart > nextEnd) {
@@ -190,11 +205,13 @@ export async function updateExercice(
 
 /** Suppression d'un exercice (anti-IDOR). Refuse s'il a encore des périodes. */
 export async function deleteExercice(serviceId: string, id: number): Promise<void> {
-  const current = await prisma.exercice.findUnique({
-    where: { id },
-    select: { serviceId: true, _count: { select: { periods: true } } },
-  });
-  if (!current || current.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  const current = assertExerciceOwned(
+    serviceId,
+    await prisma.exercice.findUnique({
+      where: { id },
+      select: { serviceId: true, _count: { select: { periods: true } } },
+    }),
+  );
   if (current._count.periods > 0) {
     throw new PeriodError("Supprimez d'abord les périodes de cet exercice.");
   }
@@ -218,11 +235,13 @@ async function validatePeriodWithinExercice(
   dateEnd: Date | null,
   excludePeriodId?: number,
 ): Promise<void> {
-  const exo = await prisma.exercice.findUnique({
-    where: { id: exerciceId },
-    select: { serviceId: true, dateStart: true, dateEnd: true },
-  });
-  if (!exo || exo.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  const exo = assertExerciceOwned(
+    serviceId,
+    await prisma.exercice.findUnique({
+      where: { id: exerciceId },
+      select: { serviceId: true, dateStart: true, dateEnd: true },
+    }),
+  );
   if (dateStart && dateEnd && dateStart > dateEnd) {
     throw new PeriodError("La date de début doit être avant la date de fin.");
   }
@@ -446,11 +465,13 @@ export async function saveExerciceOpeningConfig(
   exerciceId: number,
   config: ServiceOpeningConfig,
 ): Promise<void> {
-  const ex = await prisma.exercice.findUnique({
-    where: { id: exerciceId },
-    select: { serviceId: true },
-  });
-  if (!ex || ex.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  assertExerciceOwned(
+    serviceId,
+    await prisma.exercice.findUnique({
+      where: { id: exerciceId },
+      select: { serviceId: true },
+    }),
+  );
   const activeDays = DAYS.filter((d) => config.activeDays.includes(d)).join(",");
   // Update de la config + régénération des miroirs de TOUTES les périodes actives de
   // l'exercice (les jours actifs / fériés ont pu changer), DANS une transaction
@@ -501,11 +522,13 @@ export async function saveExerciceMaxima(
   exerciceId: number,
   maxima: { maxReservations: number; maxReservationsPeriod: number },
 ): Promise<void> {
-  const ex = await prisma.exercice.findUnique({
-    where: { id: exerciceId },
-    select: { serviceId: true },
-  });
-  if (!ex || ex.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  assertExerciceOwned(
+    serviceId,
+    await prisma.exercice.findUnique({
+      where: { id: exerciceId },
+      select: { serviceId: true },
+    }),
+  );
   await prisma.exercice.update({
     where: { id: exerciceId },
     data: {
@@ -526,11 +549,13 @@ export async function setExerciceVisibleToUsers(
   exerciceId: number,
   visible: boolean,
 ): Promise<void> {
-  const ex = await prisma.exercice.findUnique({
-    where: { id: exerciceId },
-    select: { serviceId: true },
-  });
-  if (!ex || ex.serviceId !== serviceId) throw new PeriodError("Exercice introuvable.");
+  assertExerciceOwned(
+    serviceId,
+    await prisma.exercice.findUnique({
+      where: { id: exerciceId },
+      select: { serviceId: true },
+    }),
+  );
   await prisma.$transaction(async (tx) => {
     if (visible) {
       await tx.exercice.updateMany({

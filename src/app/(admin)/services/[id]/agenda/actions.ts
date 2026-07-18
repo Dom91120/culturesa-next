@@ -30,9 +30,13 @@ import {
   assertSlotCapacity,
   BookingError,
   effectiveOpenOnSchoolHolidays,
+  mapBookingError,
 } from "@/server/services/bookings";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
-import { syncRecurringChildren } from "@/server/services/recurring-children";
+import {
+  PARENT_FOR_SYNC_SELECT,
+  syncRecurringChildren,
+} from "@/server/services/recurring-children";
 import {
   addRecurringSlot,
   addUniqueSlot,
@@ -686,19 +690,8 @@ export async function updateBookingDetailAction(input: {
         });
         const b = await tx.booking.findUnique({
           where: { id: d.bookingId },
-          select: {
-            id: true,
-            bookingType: true,
-            userId: true,
-            serviceId: true,
-            slotId: true,
-            periodId: true,
-            week: true,
-            themeLabel: true,
-            enfants: true,
-            accompagnants: true,
-            validated: true,
-          },
+          // Select UNIQUE du parent à resynchroniser (+ bookingType pour la branche).
+          select: { ...PARENT_FOR_SYNC_SELECT, bookingType: true },
         });
         // Récurrente : propage counts/thème aux réservations-enfants.
         // Gestionnaire : pas de délai de réservation, on borne juste au présent.
@@ -785,19 +778,8 @@ export async function moveBookingAction(
         });
         const b = await tx.booking.findUnique({
           where: { id: id.data },
-          select: {
-            id: true,
-            bookingType: true,
-            userId: true,
-            serviceId: true,
-            slotId: true,
-            periodId: true,
-            week: true,
-            themeLabel: true,
-            enfants: true,
-            accompagnants: true,
-            validated: true,
-          },
+          // Select UNIQUE du parent à resynchroniser (+ bookingType pour la branche).
+          select: { ...PARENT_FOR_SYNC_SELECT, bookingType: true },
         });
         // Récurrente : régénère les enfants sur les miroirs du nouveau créneau.
         // Gestionnaire : pas de délai de réservation, on borne juste au présent.
@@ -916,14 +898,10 @@ export async function createRecurringBookingAction(input: {
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { ok: false, error: "Cet usager a déjà une réservation sur ce créneau." };
-    }
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, réessayez." };
-    }
-    throw e;
+    // Source unique du mapping (bookings.mapBookingError) — message doublon admin.
+    return mapBookingError(e, {
+      duplicate: "Cet usager a déjà une réservation sur ce créneau.",
+    });
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
   // Confirmation à l'usager (best-effort) : réservation créée par un gestionnaire = validée.
@@ -1038,14 +1016,10 @@ export async function createUniqueBookingAction(input: {
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { ok: false, error: "Cet usager a déjà une réservation sur ce créneau." };
-    }
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, réessayez." };
-    }
-    throw e;
+    // Source unique du mapping (bookings.mapBookingError) — message doublon admin.
+    return mapBookingError(e, {
+      duplicate: "Cet usager a déjà une réservation sur ce créneau.",
+    });
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
   // Confirmation à l'usager (best-effort) : réservation créée par un gestionnaire = validée.

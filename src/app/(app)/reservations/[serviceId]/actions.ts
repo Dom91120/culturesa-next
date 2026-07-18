@@ -29,6 +29,7 @@ import {
   createUniqueBookingInTx,
   effectiveDemandeurId,
   isValidationMode,
+  mapBookingError,
   userCanAccessService,
 } from "@/server/services/bookings";
 import { openingForDate } from "@/server/services/opening";
@@ -40,18 +41,7 @@ function revalidate(serviceId: string) {
 
 type Result = { ok: boolean; error?: string };
 
-/** Mappe une erreur d'opération de réservation vers un `Result` (BookingError +
- * collisions Prisma P2002/P2034). Réutilisé par les actions mono-op et commitDraft. */
-function mapBookingError(e: unknown): Result {
-  if (e instanceof BookingError) return { ok: false, error: e.message };
-  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-    return { ok: false, error: "Vous avez déjà réservé ce créneau." };
-  }
-  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-    return { ok: false, error: "Réservation simultanée détectée, réessayez." };
-  }
-  throw e;
-}
+// (mapBookingError : source unique dans server/services/bookings — audit 2026-07-17.)
 
 // ── Cœurs transactionnels (composables dans UNE tx — panier atomique commitDraft) ──
 // Chaque helper exécute validation + écritures d'UNE opération dans le `tx` fourni et

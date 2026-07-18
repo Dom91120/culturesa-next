@@ -30,6 +30,22 @@ export type ParentForSync = {
   validated: boolean;
 };
 
+/** Select Prisma alimentant `ParentForSync` — SOURCE UNIQUE (3 copies champ à
+ * champ avant l'audit 2026-07-17 : ici + 2 actions de l'agenda admin). Étendre
+ * `ParentForSync` = étendre CE select, les consommateurs suivent. */
+export const PARENT_FOR_SYNC_SELECT = {
+  id: true,
+  userId: true,
+  serviceId: true,
+  slotId: true,
+  periodId: true,
+  week: true,
+  themeLabel: true,
+  enfants: true,
+  accompagnants: true,
+  validated: true,
+} as const;
+
 const toISO = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Zone de vacances scolaires configurée (défaut "A"). */
@@ -286,18 +302,7 @@ export async function syncChildrenForRecurringSlot(
 ): Promise<void> {
   const parents = await tx.booking.findMany({
     where: { slotId: parentSlotId, bookingType: "recurring", parentBookingId: null },
-    select: {
-      id: true,
-      userId: true,
-      serviceId: true,
-      slotId: true,
-      periodId: true,
-      week: true,
-      themeLabel: true,
-      enfants: true,
-      accompagnants: true,
-      validated: true,
-    },
+    select: PARENT_FOR_SYNC_SELECT,
   });
   if (parents.length === 0) return;
   // Cache partagé entre les parents (et, si fourni par l'appelant, entre créneaux

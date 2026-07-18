@@ -1,4 +1,4 @@
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { earliestBookableISO, todayParisISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
@@ -13,6 +13,27 @@ import { deriveServiceModes } from "./service-modes";
 
 /** Erreur métier de réservation (message destiné à l'usager). */
 export class BookingError extends Error {}
+
+/**
+ * Mappe une erreur d'opération de réservation vers `{ ok:false, error }` :
+ * BookingError (message métier), P2002 (doublon d'unicité uq_recurring), P2034
+ * (conflit de sérialisation). Toute autre erreur est RELANCÉE. Source unique
+ * (audit 2026-07-17 : 7 copies aux messages déjà divergents) — messages
+ * surchargeables : « Cet usager… » côté admin, « Vous avez… » côté usager.
+ */
+export function mapBookingError(
+  e: unknown,
+  msgs?: { duplicate?: string; conflict?: string },
+): { ok: false; error: string } {
+  if (e instanceof BookingError) return { ok: false, error: e.message };
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    return { ok: false, error: msgs?.duplicate ?? "Vous avez déjà réservé ce créneau." };
+  }
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+    return { ok: false, error: msgs?.conflict ?? "Réservation simultanée détectée, réessayez." };
+  }
+  throw e;
+}
 
 /**
  * Minuit UTC du jour calendaire de PARIS — à comparer aux `@db.Date` (stockés à
