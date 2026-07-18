@@ -77,10 +77,8 @@ export function BookingStackModal({
   onClose: () => void;
 }) {
   // Récurrent affiché en Semaine réelle : la gestion des RÉSERVATIONS (valider / supprimer
-  // / déplacer / pointer) y est autorisée — elle porte sur la réservation parente, résolue
-  // côté grille via les callbacks. Seul le copier/coller d'une réservation récurrente reste
-  // une action Modèle (cf. onContextMenu).
-  const recurringRealweek = mode === "realweek" && !isPonctuel;
+  // / déplacer / copier / pointer) y est autorisée — les gestes portent sur la réservation
+  // parente, résolue côté grille via les callbacks.
   const ponctDateLabel =
     isPonctuel && ponctuelDate
       ? new Date(`${ponctuelDate}T00:00:00`).toLocaleDateString("fr-FR", {
@@ -280,10 +278,10 @@ export function BookingStackModal({
                     if (onQuickAction(bk)) return;
                     onOpenDetail(bk);
                   }}
-                  // Clic droit → menu « Copier » (pas en création, ni sur un récurrent en
-                  // Semaine réelle — copier/coller reste Modèle —, ni sur une résa verrouillée).
+                  // Clic droit → menu « Copier » (récurrent en Semaine réelle inclus ; pas en
+                  // création ni sur une réservation verrouillée par un pointage).
                   onContextMenu={(e) => {
-                    if (creationMode || recurringRealweek || lockedByPointage(bk)) return;
+                    if (creationMode || lockedByPointage(bk)) return;
                     e.preventDefault();
                     e.stopPropagation();
                     onContextMenu(bk, e.clientX, e.clientY);

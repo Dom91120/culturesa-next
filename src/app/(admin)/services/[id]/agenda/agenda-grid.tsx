@@ -1201,21 +1201,23 @@ export function AgendaGrid({
   }
 
   // Le créneau `b` peut-il recevoir un collage ? (= mêmes règles que cellCreatable :
-  // non complet, période active pour un récurrent, et NON récurrent en semaine réelle.)
+  // non complet, période active pour un récurrent — récurrent en Semaine réelle inclus.)
   function isCellPasteable(b: Block): boolean {
     if (creationMode) return false;
     const isPonctuel = uniqueIdSet.has(b.slotId);
-    if (mode === "realweek" && !isPonctuel) return false;
     // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
     if (b.used >= b.capacity) return false;
     return isPonctuel || (effectivePeriodId != null && effectivePeriodId > 0);
   }
 
-  // Colle la réservation copiée sur le créneau cible `b` (récurrent ou ponctuel).
-  // La cible est forcément « collable » (cf. cellCreatable au point d'appel) : non
-  // complète, et non récurrente en semaine réelle (verrou de consultation).
+  // Colle la réservation copiée sur le créneau cible `b` (récurrent ou ponctuel). La cible
+  // est « collable » (cf. isCellPasteable). Le presse-papier retient l'OCCURRENCE cliquée
+  // (pour l'estompage « couper ») → on résout la source vers la réservation PARENTE, comme
+  // les autres gestes de gestion.
   function pasteBookingOnto(b: Block) {
     if (!copiedBooking) return;
+    const src = bookings.find((x) => x.id === copiedBooking.id);
+    const sourceBookingId = src ? actionBooking(src).id : copiedBooking.id;
     const target = uniqueIdSet.has(b.slotId)
       ? ({ kind: "unique", slotId: b.slotId } as const)
       : ({
@@ -1226,7 +1228,7 @@ export function AgendaGrid({
           week: effectiveWeek ?? "",
         } as const);
     const action = copiedBooking.mode === "cut" ? cutBookingAction : copyBookingAction;
-    runResult(action({ serviceId: service.id, sourceBookingId: copiedBooking.id, target }));
+    runResult(action({ serviceId: service.id, sourceBookingId, target }));
     // Couper = à usage unique (la source est déplacée) → on vide le presse-papier.
     if (copiedBooking.mode === "cut") setCopiedBooking(null);
   }
@@ -1878,13 +1880,9 @@ export function AgendaGrid({
       // Créneau COMPLET (mode-aware) → pas de création possible. Jauge = enfants[+adultes] ;
       // sinon = nombre de réservations (1/résa).
       const isPonctuelCell = uniqueIdSet.has(b.slotId);
-      // Créneau récurrent affiché en semaine réelle. La CRÉATION d'une réservation
-      // récurrente y est désormais possible (createRecurringBookingAction, période/parité
-      // du contexte réel). En revanche déplacer / valider / supprimer une réservation
-      // récurrente EXISTANTE reste désactivé ici (on agirait sur l'occurrence, pas le
-      // parent) : ces gestes se font encore par la vue Modèle. Le CRÉNEAU, lui, est
-      // pleinement éditable en mode création (déplacer/redimensionner/configurer/supprimer).
-      const realWeekRecurring = mode === "realweek" && !isPonctuelCell;
+      // NB : un créneau récurrent affiché en Semaine réelle est désormais PLEINEMENT gérable
+      // (créneau : édition en mode création ; réservations : créer/valider/déplacer/supprimer/
+      // copier via la réservation parente) — plus aucun verrou « consultation » spécifique.
       // Le créneau porte-t-il une réservation ? (toutes semaines pour un récurrent) —
       // verrou d'édition structurelle (déplacer/redimension/suppression = créneaux vides).
       const slotBooked = isPonctuelCell
@@ -1964,9 +1962,9 @@ export function AgendaGrid({
           }}
           onMouseDown={(e) => onMoveSlotMouseDown(e, b)}
           // Clic droit sur la zone vide d'un créneau → menu « Coller » (si presse-papier actif).
-          // Pas de menu en mode création ni sur un récurrent en semaine réelle (consultation).
+          // Récurrent en Semaine réelle inclus (coller y crée une réservation récurrente).
           onContextMenu={(e) => {
-            if (creationMode || realWeekRecurring) return;
+            if (creationMode) return;
             e.preventDefault();
             clearTip(); // ferme l'info-bulle
             if (!copiedBooking) return;
@@ -2208,11 +2206,11 @@ export function AgendaGrid({
                       marginBottom: 6,
                     }}
                     data-tip={badgeTitle(bk)}
-                    // Clic droit → menu « Copier » (pas en mode création, ni sur un récurrent
-                    // en Semaine réelle : copier/coller une récurrente reste une action Modèle).
+                    // Clic droit → menu « Copier » (récurrent en Semaine réelle inclus :
+                    // copie/coupe la réservation récurrente, résolue à la parente au collage).
                     onContextMenu={(e) => {
-                      // Verrouillée (pointée / parent à miroir pointé) → pas de copier/couper.
-                      if (creationMode || realWeekRecurring || locked) return;
+                      // Verrouillée (pointée / occurrence pointée) → pas de copier/couper.
+                      if (creationMode || locked) return;
                       e.preventDefault();
                       e.stopPropagation();
                       clearTip();
@@ -3533,7 +3531,8 @@ export function AgendaGrid({
                   type="button"
                   className="ctx-danger"
                   onClick={() => {
-                    setDeleteTarget(ctxMenu.booking);
+                    // Récurrent en Semaine réelle : supprime la réservation récurrente (parente).
+                    setDeleteTarget(actionBooking(ctxMenu.booking));
                     setCtxMenu(null);
                   }}
                 >
