@@ -1467,10 +1467,16 @@ export function UserAgendaGrid({
         projectRecurringParent: false,
         // Réservation DÉPLACÉE (brouillon) : rattachée à son créneau CIBLE, plus à
         // son créneau d'origine (used/full suivent). Hors période/semaine active
-        // (récurrent) ou hors « Semaine réelle » (ponctuel) → masquée.
+        // (récurrent) ou hors « Semaine réelle » (ponctuel) → masquée. Le déplacement
+        // porte sur la réservation PARENTE (réservation logique) : ses ENFANTS
+        // matérialisés sont masqués tant que le déplacement est en brouillon — sinon
+        // le badge apparaissait à la fois sur l'origine (enfant) et la cible (parente).
         routeBooking: (b) => {
           const mv = pendingMoves[b.id];
-          if (!mv) return "default";
+          if (!mv) {
+            if (b.parentBookingId != null && pendingMoves[b.parentBookingId]) return "skip";
+            return "default";
+          }
           if (mv.ponctuel) {
             if (!mondayStr) return "skip";
           } else {
@@ -1483,6 +1489,9 @@ export function UserAgendaGrid({
           if (!mondayStr) return;
           for (const p of bookings) {
             if (!p.mine || p.bookingType !== "recurring" || p.parentBookingId !== null) continue;
+            // Parente en cours de DÉPLACEMENT (brouillon) : ne rien synthétiser sur
+            // l'origine — le badge ne doit apparaître que sur la cible.
+            if (pendingMoves[p.id]) continue;
             if (effectivePeriodId != null && p.periodId !== effectivePeriodId) continue;
             if (effectiveWeek != null && p.week !== effectiveWeek && p.week !== "") continue;
             const dk = slotById.get(p.slotId)?.slotDay;
