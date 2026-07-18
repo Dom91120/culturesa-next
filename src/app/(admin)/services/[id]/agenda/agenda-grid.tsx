@@ -1283,18 +1283,28 @@ export function AgendaGrid({
     setCapModal({ slotId });
   }
 
-  // ── Mode création : glisser-DÉPLACER un créneau vide ────────────────────────
-  // Démarre sur le corps d'un bloc vide (× et badges gérés à part). Le créneau suit
-  // le curseur (haut du bloc = quart sous le curseur), durée préservée.
-  // Créneau récurrent affiché en SEMAINE RÉELLE : non éditable (config, redimension,
-  // déplacement, suppression interdits) — toute édition se fait en vue « Modèle de période ».
+  // Créneau récurrent affiché en SEMAINE RÉELLE. Son CRÉNEAU est éditable comme en
+  // Modèle (config, redimension, déplacement, suppression via le mode création ci-dessus)
+  // — c'est le slot PARENT qui est édité (b.slotId = parent). En revanche les
+  // interactions sur les RÉSERVATIONS (créer/déplacer/valider une résa récurrente) restent
+  // désactivées en Semaine réelle : elles se font par occurrence, flux distinct.
   const isRealweekRecurringSlot = (slotId: string) =>
     mode === "realweek" && !uniqueIdSet.has(slotId);
 
+  // Le créneau porte-t-il au moins une réservation ? Ponctuel : ses réservations datées
+  // (b.bookings). Récurrent : la réservation parente, TOUTES semaines confondues
+  // (recurringSlotsWithBookings) — b.bookings ne verrait que la semaine affichée en
+  // Semaine réelle. Verrou d'édition STRUCTURELLE (déplacer / redimension / suppression
+  // réservés aux créneaux vides, comme en Modèle).
+  const slotHasBooking = (b: Block): boolean =>
+    uniqueIdSet.has(b.slotId) ? b.bookings.length > 0 : recurringSlotsWithBookings.has(b.slotId);
+
+  // ── Mode création : glisser-DÉPLACER un créneau vide ────────────────────────
+  // Démarre sur le corps d'un bloc vide (× et badges gérés à part). Le créneau suit
+  // le curseur (haut du bloc = quart sous le curseur), durée préservée.
   function onMoveSlotMouseDown(e: React.MouseEvent, b: Block) {
     justMovedRef.current = false; // nouvelle interaction : on repart d'un « pas déplacé »
-    if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
-    if (isRealweekRecurringSlot(b.slotId)) return;
+    if (!creationMode || slotHasBooking(b) || b.isAllDay) return;
     if (isDayDisabled(b.dayKey)) return;
     if ((e.target as HTMLElement).closest("button")) return; // ne pas gêner la croix ×
     e.stopPropagation(); // n'amorce pas un glisser-CRÉER sur la colonne
@@ -1379,8 +1389,8 @@ export function AgendaGrid({
   // Poignée haut/bas sur un bloc vide. Le bord opposé reste fixe ; on étire jusqu'au
   // quart sous le curseur (durée minimale d'un quart). Validé au relâché.
   function onResizeSlotMouseDown(e: React.MouseEvent, b: Block, edge: "top" | "bottom") {
-    if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
-    if (isDayDisabled(b.dayKey) || isRealweekRecurringSlot(b.slotId)) return;
+    if (!creationMode || slotHasBooking(b) || b.isAllDay) return;
+    if (isDayDisabled(b.dayKey)) return;
     justMovedRef.current = true; // redimensionnement → le clic résiduel n'ouvre pas la modale
     e.stopPropagation(); // n'amorce ni un glisser-déplacer ni un glisser-créer
     e.preventDefault();
@@ -1457,8 +1467,8 @@ export function AgendaGrid({
   // Poignée gauche/droite sur un bloc vide. En traversant les colonnes, on prépare un
   // créneau par jour couvert (même plage horaire que la source). Validé au relâché.
   function onResizeSlotMouseDownH(e: React.MouseEvent, b: Block, edge: "left" | "right") {
-    if (!creationMode || b.bookings.length > 0 || b.isAllDay) return;
-    if (isDayDisabled(b.dayKey) || isRealweekRecurringSlot(b.slotId)) return;
+    if (!creationMode || slotHasBooking(b) || b.isAllDay) return;
+    if (isDayDisabled(b.dayKey)) return;
     justMovedRef.current = true; // extension latérale → le clic résiduel n'ouvre pas la modale
     e.stopPropagation(); // n'amorce ni déplacer, ni créer, ni redimensionner vertical
     e.preventDefault();
@@ -1876,9 +1886,15 @@ export function AgendaGrid({
       // Créneau COMPLET (mode-aware) → pas de création possible. Jauge = enfants[+adultes] ;
       // sinon = nombre de réservations (1/résa).
       const isPonctuelCell = uniqueIdSet.has(b.slotId);
-      // Créneau récurrent en semaine réelle : non éditable (ni déplacement, ni
-      // redimension, ni config, ni suppression) — cf. vue Modèle de période.
+      // Créneau récurrent affiché en semaine réelle : ses RÉSERVATIONS restent en lecture
+      // seule ici (création/déplacement/validation de résa désactivés) ; son CRÉNEAU, lui,
+      // est éditable en mode création (déplacer/redimensionner/configurer/supprimer).
       const realWeekRecurring = mode === "realweek" && !isPonctuelCell;
+      // Le créneau porte-t-il une réservation ? (toutes semaines pour un récurrent) —
+      // verrou d'édition structurelle (déplacer/redimension/suppression = créneaux vides).
+      const slotBooked = isPonctuelCell
+        ? b.bookings.length > 0
+        : recurringSlotsWithBookings.has(b.slotId);
       // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
       const gaugeForCell = b.jauge;
       const cellFull = b.used >= b.capacity;
@@ -1943,7 +1959,7 @@ export function AgendaGrid({
               : {}),
             // Mode création : créneau vide déplaçable (curseur move) ; bloc en cours
             // de déplacement estompé. Hors création : pointer si on peut y créer une résa.
-            ...(creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring
+            ...(creationMode && !slotBooked && !allday
               ? { cursor: "move" }
               : cellCreatable
                 ? { cursor: "pointer" }
@@ -1970,8 +1986,7 @@ export function AgendaGrid({
                 justMovedRef.current = false;
                 return;
               }
-              // En semaine réelle, un créneau récurrent n'est pas configurable (cf. vue Modèle).
-              if (realWeekRecurring) return;
+              // Configure le créneau (récurrent inclus en Semaine réelle : édite le parent).
               openCapModal(b.slotId);
               return;
             }
@@ -2011,9 +2026,9 @@ export function AgendaGrid({
         >
           {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
           vide. Curseur ns-resize au survol ; le mousedown amorce le glisser-étirer
-          (stopPropagation → n'amorce ni déplacer ni créer). En semaine réelle, les
-          créneaux récurrents ne sont pas redimensionnables (pas de poignées). */}
-          {creationMode && b.bookings.length === 0 && !allday && !realWeekRecurring && (
+          (stopPropagation → n'amorce ni déplacer ni créer). Récurrent en Semaine réelle
+          inclus (édite le parent) tant qu'il est vide — cf. slotBooked. */}
+          {creationMode && !slotBooked && !allday && (
             <>
               <div
                 data-tip="Étirer le créneau"
@@ -2081,28 +2096,26 @@ export function AgendaGrid({
           >
             {/* Mode création : croix de suppression sur les créneaux vides (confirmation).
               Même style que la croix des badges colorés (planning-name-tag-close).
-              En SEMAINE RÉELLE, un créneau récurrent est supprimable EN TOTALITÉ (toutes
-              occurrences) via cette croix, mais seulement s'il ne porte aucune réservation
-              (aucune semaine) — recurringSlotsWithBookings. */}
-            {creationMode &&
-              b.bookings.length === 0 &&
-              (!realWeekRecurring || !recurringSlotsWithBookings.has(b.slotId)) && (
-                <button
-                  type="button"
-                  className="planning-name-tag-close"
-                  data-tip="Supprimer ce créneau"
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteEmptySlot(b.slotId);
-                  }}
-                >
-                  ×
-                </button>
-              )}
+              Récurrent en Semaine réelle : suppression EN TOTALITÉ (toutes occurrences) via
+              cette croix, uniquement s'il ne porte aucune réservation (toutes semaines,
+              slotBooked). */}
+            {creationMode && !slotBooked && (
+              <button
+                type="button"
+                className="planning-name-tag-close"
+                data-tip="Supprimer ce créneau"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteEmptySlot(b.slotId);
+                }}
+              >
+                ×
+              </button>
+            )}
             {/* ≥2 réservations → pile de badges (legacy .planning-stack-wrap) :
             jusqu'à 3 badges superposés + compteur ; clic = modale liste. */}
             {b.bookings.length >= 2 && (
