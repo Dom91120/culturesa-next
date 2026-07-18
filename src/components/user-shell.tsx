@@ -1,12 +1,9 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { useEffect, useState } from "react";
+import { SIDEBAR_WRAP_STYLE, SidebarBrand, SidebarToggle, UserBar } from "@/components/app-shell";
 import { useSidebarCollapse } from "@/components/use-sidebar-collapse";
-import { signOut } from "@/lib/auth-client";
-import { initialsOf } from "@/lib/format";
 
 type ServiceItem = { id: string; label: string; icon: string | null };
 
@@ -21,13 +18,11 @@ export function UserShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [menuOpen, setMenuOpen] = useState(false);
   // Repli sidebar (préférence + fenêtre étroite), avec bascule mobile 640px : en mobile la
   // sidebar est une barre horizontale pleine largeur → l'état replié ne s'y applique jamais.
   const { effCollapsed, narrow, toggleSidebar } = useSidebarCollapse({ mobileBreakpoint: 640 });
   // Menu « sandwich » des services en mode smartphone (replié par défaut).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const match = pathname.match(/^\/reservations\/([^/]+)/);
   const activeServiceId = match ? match[1] : null;
@@ -49,97 +44,18 @@ export function UserShell({
     setMobileNavOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    }
-    document.addEventListener("click", onDoc);
-    return () => document.removeEventListener("click", onDoc);
-  }, []);
-
-  async function onLogout() {
-    await signOut();
-    router.push("/auth/login");
-    router.refresh();
-  }
-
   return (
     <>
-      <div className="user-bar" id="user-bar">
-        <div className="user-pill-wrap" ref={menuRef}>
-          <button
-            type="button"
-            className="user-pill"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            <div className="avatar">{initialsOf(user.name, user.email)}</div>
-            <span id="user-display-name" style={{ fontSize: ".78rem", color: "var(--text)" }}>
-              {user.name || user.email}
-            </span>
-            <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>▾</span>
-          </button>
-          <div id="user-menu" className={menuOpen ? "open" : ""}>
-            <button
-              type="button"
-              onClick={() => {
-                router.push("/mon-compte");
-                setMenuOpen(false);
-              }}
-            >
-              👤 Mon compte
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                window.dispatchEvent(new Event(ONBOARDING_REPLAY_EVENT));
-              }}
-            >
-              💡 Revoir la présentation
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                window.open("/aide/guide-utilisation.html", "_blank", "noopener");
-              }}
-            >
-              📖 Guide d&apos;utilisation
-            </button>
-            <button type="button" className="danger" onClick={onLogout}>
-              ⏏ Déconnexion
-            </button>
-          </div>
-        </div>
-        <ThemeToggle />
-      </div>
+      <UserBar user={user} />
 
       <main>
         <div className="app-layout">
           <div
             id="service-sidebar-wrap"
             className={`${effCollapsed ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
-            style={{
-              width: "16%",
-              minWidth: "fit-content",
-              maxWidth: 300,
-              flexShrink: 0,
-              position: "relative",
-            }}
+            style={SIDEBAR_WRAP_STYLE}
           >
-            {/* Bascule masquée en fenêtre étroite : la réduction y est forcée. */}
-            {!narrow && (
-              <button
-                type="button"
-                id="sidebar-toggle"
-                onClick={toggleSidebar}
-                title="Réduire / agrandir"
-              >
-                ☰
-              </button>
-            )}
+            <SidebarToggle narrow={narrow} toggleSidebar={toggleSidebar} />
             {/* Bouton « sandwich » visible uniquement en mode smartphone (CSS) :
                 déplie/replie la liste des services affichée sur plusieurs lignes. */}
             <button
@@ -163,16 +79,7 @@ export function UserShell({
               </span>
             </button>
             {/* Marque dans la sidebar (comme le shell admin) : plus de bandeau-titre en haut. */}
-            <div className="sidebar-header">
-              <div
-                className="sidebar-title"
-                style={{ fontSize: "1rem", fontWeight: "bolder", color: "var(--text)" }}
-              >
-                <span className="sidebar-title-resa">Cultu</span>
-                <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
-              </div>
-              <div className="sidebar-tagline">Réservation d&apos;activités culturelles</div>
-            </div>
+            <SidebarBrand />
 
             <div className="sidebar-label">Réservations</div>
             <div id="service-sidebar">

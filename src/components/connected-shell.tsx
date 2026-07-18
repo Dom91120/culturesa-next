@@ -1,12 +1,9 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { useEffect } from "react";
+import { SIDEBAR_WRAP_STYLE, SidebarBrand, SidebarToggle, UserBar } from "@/components/app-shell";
 import { useSidebarCollapse } from "@/components/use-sidebar-collapse";
-import { signOut } from "@/lib/auth-client";
-import { initialsOf } from "@/lib/format";
 
 export type ServiceItem = { id: string; label: string; icon: string | null };
 type Tab = { href: string; label: string; icon: string };
@@ -46,8 +43,6 @@ export function ConnectedShell({
   const router = useRouter();
   // Repli sidebar (préférence persistée + fenêtre étroite), cf. useSidebarCollapse.
   const { effCollapsed, narrow, toggleSidebar } = useSidebarCollapse();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const serviceMatch = pathname.match(/^\/services\/([^/]+)/);
   const activeServiceId = serviceMatch ? serviceMatch[1] : null;
@@ -65,14 +60,6 @@ export function ConnectedShell({
       activeHref = t.href;
     }
   }
-
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, []);
 
   // Mémorise le dernier sous-onglet ouvert PAR service (agenda / editions / stats / periodes…)
   // pour y revenir quand on rouvre ce service. La racine `/services/{id}` (qui redirige) n'est
@@ -127,99 +114,19 @@ export function ConnectedShell({
     router.push(`/services/${id}/${target}`);
   }
 
-  async function onLogout() {
-    await signOut();
-    router.push("/auth/login");
-    router.refresh();
-  }
-
   return (
     <>
-      <div className="user-bar" id="user-bar">
-        <div className="user-pill-wrap" ref={menuRef}>
-          <button
-            type="button"
-            className="user-pill"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            <div className="avatar">{initialsOf(user.name, user.email)}</div>
-            <span id="user-display-name" style={{ fontSize: ".78rem", color: "var(--text)" }}>
-              {user.name || user.email}
-            </span>
-            <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>▾</span>
-          </button>
-          <div id="user-menu" className={menuOpen ? "open" : ""}>
-            <button
-              type="button"
-              onClick={() => {
-                router.push("/mon-compte");
-                setMenuOpen(false);
-              }}
-            >
-              👤 Mon compte
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                window.dispatchEvent(new Event(ONBOARDING_REPLAY_EVENT));
-              }}
-            >
-              💡 Revoir la présentation
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                window.open("/aide/guide-utilisation.html", "_blank", "noopener");
-              }}
-            >
-              📖 Guide d&apos;utilisation
-            </button>
-            <button type="button" className="danger" onClick={onLogout}>
-              ⏏ Déconnexion
-            </button>
-          </div>
-        </div>
-        <ThemeToggle />
-      </div>
+      <UserBar user={user} />
 
       <main>
         <div className="app-layout">
           <div
             id="service-sidebar-wrap"
             className={effCollapsed ? "collapsed" : ""}
-            style={{
-              width: "16%",
-              minWidth: "fit-content",
-              maxWidth: 300,
-              flexShrink: 0,
-              position: "relative",
-            }}
+            style={SIDEBAR_WRAP_STYLE}
           >
-            {/* Bascule masquée en fenêtre étroite : la réduction y est forcée. */}
-            {!narrow && (
-              <button
-                type="button"
-                id="sidebar-toggle"
-                onClick={toggleSidebar}
-                title="Réduire / agrandir"
-              >
-                ☰
-              </button>
-            )}
-            <div className="sidebar-header">
-              <div
-                className="sidebar-title"
-                style={{ fontSize: "1rem", fontWeight: "bolder", color: "var(--text)" }}
-              >
-                <span className="sidebar-title-resa">Cultu</span>
-                <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
-              </div>
-              <div className="sidebar-tagline">Réservation d&apos;activités culturelles</div>
-            </div>
+            <SidebarToggle narrow={narrow} toggleSidebar={toggleSidebar} />
+            <SidebarBrand />
 
             <div className="sidebar-label">Services</div>
             <div id="service-sidebar">
