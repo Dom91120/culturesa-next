@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import { anonymizeServiceUserAction } from "./actions";
 
 const PAGE_SIZE = 10;
@@ -14,12 +15,6 @@ export type ServiceRgpdRow = {
   email: string;
   lastSeen: string | null;
 };
-
-const dateFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
 
 // Recherche accent-insensible (calque _normSearch du legacy / users-table).
 function normSearch(s: string): string {

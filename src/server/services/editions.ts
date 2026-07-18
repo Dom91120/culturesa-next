@@ -1,16 +1,11 @@
 import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
+import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import { prisma } from "@/server/db";
 
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
 
 /** Libellés des états de pointage (partagé par les écrans Liste et Pointages). */
 export const POINTAGE_LABEL: Record<string, string> = { present: "Présent", absent: "Absent" };
-
-const dateFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
 
 export type EditionRow = {
   id: number;

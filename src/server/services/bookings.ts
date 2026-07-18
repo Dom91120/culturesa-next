@@ -4,9 +4,9 @@ import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import type { BookingCreateInput } from "@/schemas/booking";
-import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
+import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { openingForDate } from "@/server/services/opening";
 import { getServiceDemandeurSettings } from "./demandeur-settings";
 import { deriveServiceModes } from "./service-modes";
@@ -46,9 +46,19 @@ function startOfToday(): Date {
 }
 
 /**
- * Demandeur EFFECTIF de l'usager : le sien, sinon celui de sa structure (port du
+ * Demandeur EFFECTIF : le sien, sinon celui de sa structure (port du
  * `COALESCE(u.demandeur_id, str.demandeur_id)` legacy). `null` = aucun (ex. admin).
+ * Version PURE (usager déjà chargé) — voir `effectiveDemandeurId` pour la version qui
+ * requête. Source unique (2 copies inline avant l'audit 2026-07-18).
  */
+export function resolveEffectiveDemandeurId(u: {
+  demandeurId: number | null;
+  structure?: { demandeurId: number | null } | null;
+}): number | null {
+  return u.demandeurId ?? u.structure?.demandeurId ?? null;
+}
+
+/** Demandeur EFFECTIF de l'usager, chargé depuis son id. */
 export async function effectiveDemandeurId(
   db: Prisma.TransactionClient,
   userId: string,
@@ -57,7 +67,7 @@ export async function effectiveDemandeurId(
     where: { id: userId },
     select: { demandeurId: true, structure: { select: { demandeurId: true } } },
   });
-  return u?.demandeurId ?? u?.structure?.demandeurId ?? null;
+  return u ? resolveEffectiveDemandeurId(u) : null;
 }
 
 /**
@@ -175,15 +185,7 @@ export async function isValidationMode(
 export async function listBookableServices() {
   const session = await getSession();
   const userId = session?.user?.id;
-  let demandeurId: number | null = null;
-  if (userId) {
-    // Demandeur effectif (usager direct, sinon celui de sa structure).
-    const u = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { demandeurId: true, structure: { select: { demandeurId: true } } },
-    });
-    demandeurId = u?.demandeurId ?? u?.structure?.demandeurId ?? null;
-  }
+  const demandeurId = userId ? await effectiveDemandeurId(prisma, userId) : null;
   return prisma.service.findMany({
     where: demandeurId != null ? { demandeurSettings: { some: { demandeurId } } } : undefined,
     orderBy: [{ position: "asc" }, { label: "asc" }],
@@ -413,13 +415,7 @@ export async function assertNotSchoolHolidayForUser(
   });
   const demandeurOpen = effectiveOpenOnSchoolHolidays(u);
   if (serviceOpenOnSchoolHolidays && demandeurOpen) return;
-  const zone = (await getConfigMany(["school.zone"]))["school.zone"] || "A";
-  const ranges = (
-    await db.schoolHoliday.findMany({
-      where: { zone },
-      select: { dateStart: true, dateEnd: true },
-    })
-  ).map((r) => ({ dateStart: toDateInput(r.dateStart), dateEnd: toDateInput(r.dateEnd) }));
+  const ranges = await loadSchoolHolidayRanges(db, await getSchoolZone());
   if (isInSchoolHolidayRange(toDateInput(slotDate), ranges)) {
     throw new BookingError("Ce créneau tombe en vacances scolaires.");
   }
@@ -628,8 +624,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     },
   });
 
-  // Demandeur effectif : l'usager direct, sinon celui de sa structure (COALESCE legacy).
-  const effDemandeurId = user?.demandeurId ?? user?.structure?.demandeurId ?? null;
+  const effDemandeurId = user ? resolveEffectiveDemandeurId(user) : null;
 
   // Accès direct : un usager ne peut ouvrir un service que s'il accepte SON type de
   // demandeur (cf. listBookableServices). Compte sans demandeur (ex. admin) : autorisé.
@@ -795,13 +790,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   // Vacances scolaires de la zone configurée : sert à filtrer les dates « prédites »
   // d'un créneau récurrent quand le demandeur de l'usager ferme pendant les vacances
   // (port legacy _predictedDatesForCurrentUser / _isSchoolVacance).
-  const schoolZone = (await getConfigMany(["school.zone"]))["school.zone"] || "A";
-  const schoolHolidays = (
-    await prisma.schoolHoliday.findMany({
-      where: { zone: schoolZone },
-      select: { dateStart: true, dateEnd: true },
-    })
-  ).map((h) => ({ dateStart: toDateInput(h.dateStart), dateEnd: toDateInput(h.dateEnd) }));
+  const schoolHolidays = await loadSchoolHolidayRanges(prisma, await getSchoolZone());
 
   const exerciceIds = [
     ...new Set(periods.map((p) => p.exerciceId).filter((x): x is number => x != null)),

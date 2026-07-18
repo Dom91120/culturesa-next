@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { INPUT_CHROME } from "@/components/ui-styles";
+import { DATETIME_FMT_FR as dtFmt } from "@/lib/format";
 import { createBackupAction, deleteBackupAction, restoreBackupAction } from "./actions";
 
 /** Dump sérialisé reçu du serveur (date en ISO string). */
@@ -18,14 +19,6 @@ const KIND_META: Record<BackupRow["kind"], { label: string; color: string }> = {
   manuel: { label: "Manuel", color: "#e8a45a" },
   televerse: { label: "Téléversé", color: "var(--slot-uniq-color)" },
 };
-
-const dtFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;

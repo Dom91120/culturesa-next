@@ -16,6 +16,30 @@ export function toDateInput(d: Date | null | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Date courte fr-FR "JJ/MM/AAAA" — source unique (7 copies avant l'audit 2026-07-18). */
+export const DATE_FMT_FR = new Intl.DateTimeFormat("fr-FR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+/** Idem, ancrée en UTC (dates `@db.Date`, sans dérive de fuseau à l'affichage). */
+export const DATE_FMT_FR_UTC = new Intl.DateTimeFormat("fr-FR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** Date + heure fr-FR "JJ/MM/AAAA HH:MM". */
+export const DATETIME_FMT_FR = new Intl.DateTimeFormat("fr-FR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 /**
  * Formate un numéro de téléphone FR en groupes de 2 chiffres : "06 12 34 56 78".
  * Renvoie "—" si vide, ou la valeur brute si ce n'est pas un 10 chiffres.

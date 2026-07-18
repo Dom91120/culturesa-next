@@ -2,8 +2,8 @@ import type { Prisma } from "@/generated/prisma/client";
 import { earliestBookableISO } from "@/lib/booking-delay";
 import { slotWeekTag } from "@/lib/iso-week";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
-import { getConfigMany } from "@/server/config";
 import { effectiveOpenOnSchoolHolidays } from "@/server/services/bookings";
+import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { EXERCICE_OPENING_SELECT } from "@/server/services/opening";
 
 // ════════════════════════════════════════════════════════════
@@ -48,11 +48,7 @@ export const PARENT_FOR_SYNC_SELECT = {
 
 const toISO = (d: Date) => d.toISOString().slice(0, 10);
 
-/** Zone de vacances scolaires configurée (défaut "A"). */
-export async function getSchoolZone(): Promise<string> {
-  const cfg = await getConfigMany(["school.zone"]);
-  return cfg["school.zone"] || "A";
-}
+export { getSchoolZone };
 
 /**
  * Cache partagé entre plusieurs appels de `syncRecurringChildren` au sein d'une MÊME
@@ -149,12 +145,7 @@ export async function syncRecurringChildren(
       schoolRanges = cache.schoolRanges;
     } else {
       const zone = opts?.schoolZone ?? (await getSchoolZone());
-      schoolRanges = (
-        await tx.schoolHoliday.findMany({
-          where: { zone },
-          select: { dateStart: true, dateEnd: true },
-        })
-      ).map((r) => ({ dateStart: toISO(r.dateStart), dateEnd: toISO(r.dateEnd) }));
+      schoolRanges = await loadSchoolHolidayRanges(tx, zone);
       if (cache) cache.schoolRanges = schoolRanges;
     }
   }

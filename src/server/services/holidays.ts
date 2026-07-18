@@ -1,8 +1,35 @@
+import type { Prisma } from "@/generated/prisma/client";
+import { toDateInput } from "@/lib/format";
+import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 
 /** Nombre de périodes de vacances en base pour une zone. */
 export function countSchoolHolidays(zone: string) {
   return prisma.schoolHoliday.count({ where: { zone } });
+}
+
+/** Zone de vacances scolaires configurée (défaut "A"). */
+export async function getSchoolZone(): Promise<string> {
+  const cfg = await getConfigMany(["school.zone"]);
+  return cfg["school.zone"] || "A";
+}
+
+export type SchoolHolidayRange = { dateStart: string; dateEnd: string };
+
+/** Plages de vacances scolaires (ISO `yyyy-mm-dd`) d'une zone — source unique
+ *  (4 copies du `findMany` + mapping avant l'audit 2026-07-18). */
+export async function loadSchoolHolidayRanges(
+  db: Prisma.TransactionClient,
+  zone: string,
+): Promise<SchoolHolidayRange[]> {
+  const rows = await db.schoolHoliday.findMany({
+    where: { zone },
+    select: { dateStart: true, dateEnd: true },
+  });
+  return rows.map((r) => ({
+    dateStart: toDateInput(r.dateStart),
+    dateEnd: toDateInput(r.dateEnd),
+  }));
 }
 
 type GovRow = {

@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { greeting } from "@/lib/mail-render";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
+import { resolveEffectiveDemandeurId } from "@/server/services/bookings";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 
 export type AnonymizeReason = "self_service" | "admin" | "retention";
@@ -307,8 +308,8 @@ export async function listServiceRgpdUsers(serviceId: string): Promise<ServiceRg
   });
 
   const eligible = users.filter((u) => {
-    const effectiveDemandeurId = u.demandeurId ?? u.structure?.demandeurId ?? null;
-    return effectiveDemandeurId != null && configuredDemandeurIds.has(effectiveDemandeurId);
+    const demandeurId = resolveEffectiveDemandeurId(u);
+    return demandeurId != null && configuredDemandeurIds.has(demandeurId);
   });
 
   const bookingByUser = await lastBookingMap(eligible.map((u) => u.id));
@@ -348,10 +349,10 @@ export async function isUserInServicesRgpdScope(
     },
   });
   if (u?.role !== "utilisateur" || u.anonymizedAt) return false;
-  const effectiveDemandeurId = u.demandeurId ?? u.structure?.demandeurId ?? null;
-  if (effectiveDemandeurId == null) return false;
+  const demandeurId = resolveEffectiveDemandeurId(u);
+  if (demandeurId == null) return false;
   const setting = await prisma.serviceDemandeurSettings.findFirst({
-    where: { serviceId: { in: serviceIds }, demandeurId: effectiveDemandeurId },
+    where: { serviceId: { in: serviceIds }, demandeurId },
     select: { serviceId: true },
   });
   return setting != null;

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
 import { INPUT_CHROME } from "@/components/ui-styles";
+import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import {
   anonymizeInactiveAction,
   sendInactivityNoticesAction,
@@ -25,12 +26,6 @@ export type InactiveRow = {
   lastSeen: string;
   lastSeenSource: "connexion" | "réservation" | "création";
 };
-
-const dateFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
 
 // "il y a 2 ans 3 mois" / "il y a 4 jours" / "aujourd'hui" (calque _rgpdFmtDuration).
 function fmtDuration(days: number): string {

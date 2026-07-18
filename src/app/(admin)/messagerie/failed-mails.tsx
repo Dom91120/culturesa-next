@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { DATETIME_FMT_FR as dateFmt } from "@/lib/format";
 import {
   deleteFailedMailAction,
   retryAllFailedMailsAction,
@@ -15,14 +16,6 @@ export type FailedMailRow = {
   attempts: number;
   createdAt: string; // ISO
 };
-
-const dateFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 function fmt(iso: string): string {
   const d = new Date(iso);

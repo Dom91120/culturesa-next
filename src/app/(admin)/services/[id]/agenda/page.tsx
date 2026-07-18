@@ -7,6 +7,7 @@ import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { currentExerciceIdForService, eligiblePeriodsWhere } from "@/server/services/exercice";
+import { loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { deriveServiceModes } from "@/server/services/service-modes";
 import { AgendaGrid } from "./agenda-grid";
 
@@ -197,17 +198,14 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   // Seconde vague (dépendante de la première) : demandeurs autorisés par créneau
   // + plages de vacances scolaires de la zone configurée.
   const slotIds = [...slots.map((s) => s.id), ...uniqueSlots.map((s) => s.id)];
-  const [slotDemRows, schoolHolidayRows] = await Promise.all([
+  const [slotDemRows, schoolHolidays] = await Promise.all([
     slotIds.length
       ? prisma.slotDemandeur.findMany({
           where: { slotId: { in: slotIds } },
           select: { slotId: true, demandeurId: true },
         })
       : Promise.resolve([]),
-    prisma.schoolHoliday.findMany({
-      where: { zone: refreshCfg["school.zone"] || "A" },
-      select: { dateStart: true, dateEnd: true },
-    }),
+    loadSchoolHolidayRanges(prisma, refreshCfg["school.zone"] || "A"),
   ]);
   const slotDemandeurs: Record<string, number[]> = {};
   for (const r of slotDemRows) {
@@ -304,10 +302,6 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   // Intervalle d'auto-rafraîchissement de l'agenda (Administration > Configuration). Défaut 60 s.
   const rawAgendaRefresh = Number.parseInt(refreshCfg["agenda.autoRefreshSeconds"], 10);
   const autoRefreshSeconds = Number.isFinite(rawAgendaRefresh) ? rawAgendaRefresh : 60;
-  const schoolHolidays = schoolHolidayRows.map((h) => ({
-    dateStart: h.dateStart.toISOString().slice(0, 10),
-    dateEnd: h.dateEnd.toISOString().slice(0, 10),
-  }));
 
   return (
     <>

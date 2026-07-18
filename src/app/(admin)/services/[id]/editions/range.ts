@@ -1,4 +1,5 @@
 import { todayParisISO } from "@/lib/booking-delay";
+import { DATE_FMT_FR_UTC as fmtShort } from "@/lib/format";
 import { prisma } from "@/server/db";
 import type { DatedSession } from "@/server/services/editions";
 import {
@@ -30,12 +31,6 @@ const monthStart = (d: Date): Date => new Date(Date.UTC(d.getUTCFullYear(), d.ge
 const monthEnd = (d: Date): Date => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
 const addMonthsToFirst = (d: Date, n: number): Date =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
-const fmtShort = new Intl.DateTimeFormat("fr-FR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  timeZone: "UTC",
-});
 // Jour + mois abrégé, sans année (ex. « 29 juin », « 5 juil. ») — nav de plage hebdo.
 const fmtDayMonth = new Intl.DateTimeFormat("fr-FR", {
   day: "numeric",

@@ -1,16 +1,9 @@
+import { DATETIME_FMT_FR as dtFmt } from "@/lib/format";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { getGraceDays, getRetentionYears, listInactiveScan } from "@/server/services/rgpd";
 import { type AuditEntry, AuditLog, type AuditParty } from "./audit-log";
 import { type InactiveRow, InactivityScan } from "./inactivity-scan";
-
-const dtFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 export default async function RgpdAdminPage() {
   // Administration réservée aux administrateurs (les gestionnaires n'y ont pas accès).
