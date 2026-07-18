@@ -196,6 +196,39 @@ type HResizeDrag = {
   curDay: string;
 };
 
+// Type de créneau créé en « Semaine réelle » (mode création) — sélecteur à 3 états qui
+// remplace l'ancienne case « Création multiple ». L'icône reprend les pastilles de
+// légende (is-rec = récurrent jaune, is-uniq = ponctuel vert). L'état « rec » n'est
+// proposé que si le service a un mode récurrent (cf. modes.recurringMode).
+type CreateKind = "rec" | "uniq" | "multi";
+const CREATE_KINDS: {
+  kind: CreateKind;
+  swatch: string;
+  multi?: boolean;
+  label: string;
+  tip: string;
+}[] = [
+  {
+    kind: "rec",
+    swatch: "is-rec",
+    label: "Créneaux récurrents",
+    tip: "Créer des créneaux récurrents (chaque semaine de la période)",
+  },
+  {
+    kind: "uniq",
+    swatch: "is-uniq",
+    label: "Créneau ponctuel",
+    tip: "Créer un créneau ponctuel (cette semaine)",
+  },
+  {
+    kind: "multi",
+    swatch: "is-uniq",
+    multi: true,
+    label: "Créneaux ponctuels multiples",
+    tip: "Créer un créneau ponctuel sur chaque semaine de la période (parité A/B respectée)",
+  },
+];
+
 export function AgendaGrid({
   service,
   periods,
@@ -288,10 +321,13 @@ export function AgendaGrid({
   // Mode « Création de créneau » : clic = créneau d'1 quart d'heure ; glisser
   // haut/bas = créneau de plusieurs quarts (validé au relâché). Cf. plus bas.
   const [creationMode, setCreationMode] = useState(false);
-  // « Création multiple » (Semaine réelle uniquement) : chaque créneau ponctuel créé
-  // est répliqué sur CHAQUE semaine de la période active (même parité A/B en mode
-  // A/B), en sautant les dates fermées — cf. uniqueCreateDates.
-  const [multiCreate, setMultiCreate] = useState(false);
+  // Type de créneau créé en « Semaine réelle » (sélecteur à 3 états, remplace l'ancienne
+  // case « Création multiple ») : "rec" = récurrent (période + jour + parité A/B) ;
+  // "uniq" = ponctuel daté de la semaine affichée ; "multi" = ponctuel répliqué sur
+  // CHAQUE semaine de la période active (même parité A/B en mode A/B), dates fermées
+  // sautées — cf. uniqueCreateDates. En « Modèle de période » la création est toujours
+  // récurrente (le sélecteur est masqué). Défaut "uniq" (comportement historique).
+  const [createKind, setCreateKind] = useState<CreateKind>("uniq");
   // Mode « Jauge » (icône capsule, OFF par défaut) : les créneaux créés portent
   // jauge = ce mode au moment de la création (colonne slots.jauge).
   const [jaugeMode, setJaugeMode] = useState(false);
@@ -940,7 +976,7 @@ export function AgendaGrid({
     const off = DAY_OFFSET[dayKey] ?? 0;
     const single = ymd(addDays(mondayStr, off));
     const p = coveringPeriod;
-    if (!multiCreate || !p?.dateStart || !p.dateEnd) return [single];
+    if (createKind !== "multi" || !p?.dateStart || !p.dateEnd) return [single];
     const dates: string[] = [];
     let monday = ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`)));
     // ≤ 120 itérations : garde-fou large (une période ≈ 53 semaines au plus).
@@ -979,7 +1015,8 @@ export function AgendaGrid({
     if (!segments.length) return;
     const targets = draggedDays(cd);
     if (!targets.length) return;
-    if (mode === "model") {
+    // Récurrent en Modèle de période, ou en Semaine réelle si le sélecteur est sur "rec".
+    if (mode === "model" || createKind === "rec") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
       const weeks = abMode && effectiveWeek ? effectiveWeek : "";
       runResults(
@@ -1057,7 +1094,8 @@ export function AgendaGrid({
   function finalizeAllDayCreate(dd: AllDayDrag) {
     const targets = daysSpan(dd.startDay, dd.curDay);
     if (!targets.length) return;
-    if (mode === "model") {
+    // Récurrent en Modèle de période, ou en Semaine réelle si le sélecteur est sur "rec".
+    if (mode === "model" || createKind === "rec") {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
       const weeks = abMode && effectiveWeek ? effectiveWeek : "";
       runResults(
@@ -1125,8 +1163,8 @@ export function AgendaGrid({
     setSlotDeleteTarget(null);
   }
 
-  // « Création multiple » : supprime le créneau ponctuel ET tous ses jumeaux de la
-  // période (le serveur recalcule la série depuis le créneau de référence).
+  // Création ponctuelle « Multi » : supprime le créneau ponctuel ET tous ses jumeaux de
+  // la période (le serveur recalcule la série depuis le créneau de référence).
   function confirmDeleteSlotSeries() {
     if (!slotDeleteTarget) return;
     runResult(deleteSlotSeriesAction(service.id, slotDeleteTarget));
@@ -1134,7 +1172,7 @@ export function AgendaGrid({
   }
 
   // Jumeaux du créneau ponctuel `target` sur sa période (affichage de la modale de
-  // suppression en « Création multiple ») : ponctuels AUTONOMES au même jour de
+  // suppression, créneau ponctuel « Multi ») : ponctuels AUTONOMES au même jour de
   // semaine, mêmes horaires/capacité/jauge/demandeurs — même parité A/B en mode A/B.
   // Le décompte client sert à l'AFFICHAGE ; la série effective est recalculée côté
   // serveur (deleteSlotSeriesAction).
@@ -2517,31 +2555,48 @@ export function AgendaGrid({
           {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B) ; sinon les cases. */}
           {creationMode ? (
             <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-              {/* « Création multiple » (Semaine réelle) : réplique chaque ponctuel créé
-                  sur toutes les semaines de la période active (parité A/B respectée). */}
+              {/* Sélecteur du type de créneau à créer (Semaine réelle) : récurrent /
+                  ponctuel unique / ponctuel répliqué sur toute la période. L'état "rec"
+                  n'est proposé que si le service a un mode récurrent. */}
               {mode === "realweek" && (
-                <label
-                  data-tip="Créer le créneau sur chaque semaine de la période (parité A/B respectée)"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: ".3rem",
-                    fontSize: ".72rem",
-                    fontWeight: 600,
-                    color: multiCreate ? "var(--accent)" : "var(--muted)",
-                    textTransform: "none",
-                    letterSpacing: "normal",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  Création multiple
-                  <input
-                    type="checkbox"
-                    checked={multiCreate}
-                    onChange={(e) => setMultiCreate(e.target.checked)}
-                  />
-                </label>
+                <div style={{ display: "inline-flex", alignItems: "center" }}>
+                  {CREATE_KINDS.filter((k) => k.kind !== "rec" || modes.recurringMode).map((k) => {
+                    const active = createKind === k.kind;
+                    return (
+                      <button
+                        key={k.kind}
+                        type="button"
+                        data-tip={k.tip}
+                        aria-label={k.label}
+                        aria-pressed={active}
+                        onClick={() => setCreateKind(k.kind)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: ".3rem",
+                          padding: ".1rem .3rem",
+                          fontSize: ".72rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          border: "1px solid",
+                          borderColor: active ? "var(--accent)" : "transparent",
+                          borderRadius: "calc(var(--rad-sm) - 2px)",
+                          background: active
+                            ? "color-mix(in srgb, var(--accent) 15%, transparent)"
+                            : "transparent",
+                          color: active ? "var(--text)" : "var(--muted)",
+                          opacity: active ? 1 : 0.5,
+                        }}
+                      >
+                        {k.multi && "Multi"}
+                        <span
+                          className={`agenda-legend-swatch ${k.swatch}`}
+                          style={{ width: 28, height: 18 }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
               )}
               <label
                 htmlFor="create-cap"
@@ -3393,8 +3448,8 @@ export function AgendaGrid({
           );
         })()}
 
-      {/* Confirmation de suppression d'un créneau (mode création). En « Création
-          multiple », un ponctuel avec des jumeaux sur la période propose aussi la
+      {/* Confirmation de suppression d'un créneau (mode création). Créneau ponctuel
+          « Multi » : un ponctuel avec des jumeaux sur la période propose aussi la
           suppression de toute la série. */}
       {slotDeleteTarget &&
         (() => {
@@ -3403,7 +3458,7 @@ export function AgendaGrid({
             uniqueSlots.find((s) => s.id === slotDeleteTarget) ??
             null;
           const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
-          const seriesCount = multiCreate ? countSlotSeries(slotDeleteTarget) : 0;
+          const seriesCount = createKind === "multi" ? countSlotSeries(slotDeleteTarget) : 0;
           return (
             <SlotDeleteModal
               timePart={timePart}
