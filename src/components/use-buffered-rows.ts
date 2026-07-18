@@ -15,8 +15,9 @@ export type RefActionResult = { ok: boolean; error?: string };
  * confirmation, drag) restent au composant — voir `extraDirty` et `onSyncReset`.
  */
 export function useBufferedRows<
-  Init extends { id: number },
-  Row extends { id: number | null },
+  Id extends string | number,
+  Init extends { id: Id },
+  Row extends { id: Id | null },
 >(opts: {
   initial: Init[];
   /** Mappe une entrée serveur vers une ligne d'édition (sans `key`, ajouté en interne). */
@@ -26,8 +27,8 @@ export function useBufferedRows<
   /** La ligne diffère-t-elle de son état initial ? (déclenche un update) */
   isDirty: (row: Row, init: Init) => boolean;
   onCreate: (row: Row) => Promise<RefActionResult>;
-  onUpdate: (id: number, row: Row) => Promise<RefActionResult>;
-  onDelete: (id: number) => Promise<RefActionResult>;
+  onUpdate: (id: Id, row: Row) => Promise<RefActionResult>;
+  onDelete: (id: Id) => Promise<RefActionResult>;
   /** Condition `dirty` supplémentaire propre au composant (ex. une ligne en édition). */
   extraDirty?: boolean;
   /** Appelé quand le tampon est réinitialisé (resync/cancel/rien-à-enregistrer) : le
@@ -61,7 +62,7 @@ export function useBufferedRows<
   }
 
   const initialById = new Map(initial.map((d) => [d.id, d]));
-  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is number => id != null));
+  const currentIds = new Set(rows.map((r) => r.id).filter((id): id is Id => id != null));
   const dirty =
     !!opts.extraDirty ||
     rows.some((r) => r.id == null) ||
@@ -127,7 +128,7 @@ export function useBufferedRows<
           if (!res.ok) throw new Error(res.error);
         }
         for (const r of toUpdate) {
-          const res = await onUpdate(r.id as number, r);
+          const res = await onUpdate(r.id as Id, r);
           if (!res.ok) throw new Error(res.error);
         }
       } catch (e) {

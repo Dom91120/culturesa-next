@@ -1,6 +1,15 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useState } from "react";
+import {
+  DEM_GHOST_HOVER_CSS,
+  DEM_ROW_HOVER_CSS,
+  RefColumnHeaders,
+  RefDeleteConfirm,
+  RefEditorFooter,
+  RefEditorHeader,
+  RefEmptyState,
+} from "@/components/ref-editor-shell";
 import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
 
@@ -71,7 +80,7 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   // Logique « mode tampon » mutualisée (état des lignes, dirty, resync, saveAll, cancel).
   const { rows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
-    useBufferedRows<Init, Row>({
+    useBufferedRows<number, Init, Row>({
       initial,
       fromInitial,
       isValid,
@@ -98,47 +107,10 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
   return (
     <div>
       {/* En-tête : erreur éventuelle + bouton d'ajout (le titre est porté par la modale). */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: ".75rem",
-          marginBottom: ".5rem",
-        }}
-      >
-        {error && (
-          <span className="field-error" style={{ fontSize: ".72rem" }}>
-            {error}
-          </span>
-        )}
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={add}
-          disabled={addDisabled}
-          style={{ fontSize: ".64rem", padding: ".18rem .5rem" }}
-        >
-          ＋ Ajouter
-        </button>
-      </div>
+      <RefEditorHeader error={error} onAdd={add} addDisabled={addDisabled} />
 
       {/* En-têtes de colonnes (discrets) */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: gridTemplate,
-          gap: ".75rem",
-          alignItems: "center",
-          padding: "0 .75rem .5rem",
-          borderBottom: "1px solid var(--border)",
-          fontSize: ".66rem",
-          fontWeight: 600,
-          letterSpacing: ".05em",
-          textTransform: "uppercase",
-          color: "var(--muted)",
-        }}
-      >
+      <RefColumnHeaders gridTemplate={gridTemplate}>
         <span style={{ paddingLeft: ".5rem" }}>{labels.header}</span>
         {extraHeaders.map((h, i) => (
           <span key={i} style={h.style}>
@@ -146,7 +118,7 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
           </span>
         ))}
         <span style={{ textAlign: "center" }}>Action</span>
-      </div>
+      </RefColumnHeaders>
 
       {rows.map((r) => {
         const confirming = confirmKey === r.key;
@@ -183,43 +155,13 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
             />
 
             {confirming ? (
-              <div
-                style={{
-                  gridColumn: `2 / ${confirmSpanEnd}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  gap: ".5rem",
-                }}
-              >
-                <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
-                  {labels.confirm}
-                  {confirmExtra?.(r)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => remove(r.key)}
-                  style={{
-                    border: "1px solid var(--danger)",
-                    background: "transparent",
-                    color: "var(--danger)",
-                    borderRadius: "var(--rad-sm)",
-                    fontSize: ".72rem",
-                    padding: ".2rem .55rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Supprimer
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setConfirmKey(null)}
-                  style={{ fontSize: ".72rem", padding: ".2rem .55rem" }}
-                >
-                  Annuler
-                </button>
-              </div>
+              <RefDeleteConfirm
+                gridColumn={`2 / ${confirmSpanEnd}`}
+                message={labels.confirm}
+                extra={confirmExtra?.(r)}
+                onConfirm={() => remove(r.key)}
+                onCancel={() => setConfirmKey(null)}
+              />
             ) : (
               <>
                 {renderExtraCells(r, patch)}
@@ -244,69 +186,19 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
         );
       })}
 
-      {rows.length === 0 && (
-        <div
-          style={{
-            padding: "1.5rem",
-            textAlign: "center",
-            fontSize: ".82rem",
-            color: "var(--muted)",
-          }}
-        >
-          {labels.empty}
-        </div>
-      )}
+      {rows.length === 0 && <RefEmptyState>{labels.empty}</RefEmptyState>}
 
       {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
           ou création est en cours (mode tampon, enregistrement explicite). */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: ".6rem",
-          marginTop: "1.25rem",
-        }}
-      >
-        {dirty ? (
-          <>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={cancelEdits}
-              disabled={saving}
-              style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={saveAll}
-              disabled={saving}
-              style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
-            >
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => onClose?.()}
-            disabled={saving}
-            style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
-          >
-            Fermer
-          </button>
-        )}
-      </div>
+      <RefEditorFooter
+        dirty={dirty}
+        saving={saving}
+        onCancel={cancelEdits}
+        onSave={saveAll}
+        onClose={onClose}
+      />
 
-      <style>
-        {
-          ".dem-row:hover{background:var(--surface2)}.dem-ghost:hover{background:var(--surface2)}.dem-ghost:focus{background:var(--surface2);box-shadow:inset 0 -2px 0 var(--accent)}"
-        }
-      </style>
+      <style>{DEM_ROW_HOVER_CSS + DEM_GHOST_HOVER_CSS}</style>
     </div>
   );
 }

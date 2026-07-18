@@ -1,6 +1,14 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import {
+  DEM_ROW_HOVER_CSS,
+  RefColumnHeaders,
+  RefDeleteConfirm,
+  RefEditorFooter,
+  RefEditorHeader,
+  RefEmptyState,
+} from "@/components/ref-editor-shell";
 import { GHOST_DANGER_STYLE, INPUT_CHROME } from "@/components/ui-styles";
 import { useBufferedRows } from "@/components/use-buffered-rows";
 import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
@@ -68,7 +76,7 @@ export function NiveauxEditor({
   // L'état UI propre aux niveaux (édition par ligne, confirmation, drag) reste ici et est
   // remis à zéro via onSyncReset ; `extraDirty` signale qu'une ligne est en édition.
   const { rows, setRows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
-    useBufferedRows<Initial, Row>({
+    useBufferedRows<number, Initial, Row>({
       initial,
       fromInitial: (n) => ({
         id: n.id,
@@ -169,51 +177,15 @@ export function NiveauxEditor({
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: ".75rem",
-          marginBottom: ".5rem",
-        }}
-      >
-        {error && (
-          <span className="field-error" style={{ fontSize: ".72rem" }}>
-            {error}
-          </span>
-        )}
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={add}
-          style={{ fontSize: ".64rem", padding: ".18rem .5rem" }}
-        >
-          ＋ Ajouter
-        </button>
-      </div>
+      <RefEditorHeader error={error} onAdd={add} />
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: GRID,
-          gap: ".75rem",
-          alignItems: "center",
-          padding: "0 .75rem .5rem",
-          borderBottom: "1px solid var(--border)",
-          fontSize: ".66rem",
-          fontWeight: 600,
-          letterSpacing: ".05em",
-          textTransform: "uppercase",
-          color: "var(--muted)",
-        }}
-      >
+      <RefColumnHeaders gridTemplate={GRID}>
         <span />
         <span style={{ paddingLeft: ".5rem" }}>Demandeur</span>
         <span style={{ textAlign: "center" }}>Position</span>
         <span>Niveau</span>
         <span style={{ textAlign: "center" }}>Action</span>
-      </div>
+      </RefColumnHeaders>
 
       {sorted.map((r, i) => {
         const editing = editKey === r.key;
@@ -313,42 +285,12 @@ export function NiveauxEditor({
             )}
 
             {confirming ? (
-              <div
-                style={{
-                  gridColumn: "3 / 6",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  gap: ".5rem",
-                }}
-              >
-                <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
-                  Supprimer ce niveau ?
-                </span>
-                <button
-                  type="button"
-                  onClick={() => remove(r.key)}
-                  style={{
-                    border: "1px solid var(--danger)",
-                    background: "transparent",
-                    color: "var(--danger)",
-                    borderRadius: "var(--rad-sm)",
-                    fontSize: ".72rem",
-                    padding: ".2rem .55rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Supprimer
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setConfirmKey(null)}
-                  style={{ fontSize: ".72rem", padding: ".2rem .55rem" }}
-                >
-                  Annuler
-                </button>
-              </div>
+              <RefDeleteConfirm
+                gridColumn="3 / 6"
+                message="Supprimer ce niveau ?"
+                onConfirm={() => remove(r.key)}
+                onCancel={() => setConfirmKey(null)}
+              />
             ) : (
               <>
                 {/* Position */}
@@ -414,65 +356,19 @@ export function NiveauxEditor({
         );
       })}
 
-      {rows.length === 0 && (
-        <div
-          style={{
-            padding: "1.5rem",
-            textAlign: "center",
-            fontSize: ".82rem",
-            color: "var(--muted)",
-          }}
-        >
-          Aucun niveau. Cliquez sur « Ajouter ».
-        </div>
-      )}
+      {rows.length === 0 && <RefEmptyState>Aucun niveau. Cliquez sur « Ajouter ».</RefEmptyState>}
 
       {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
           ou création est en cours. */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: ".6rem",
-          marginTop: "1.25rem",
-        }}
-      >
-        {dirty ? (
-          <>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={cancelEdits}
-              disabled={saving}
-              style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={saveAll}
-              disabled={saving}
-              style={{ fontSize: ".7rem", padding: ".22rem .75rem" }}
-            >
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => onClose?.()}
-            disabled={saving}
-            style={{ fontSize: ".7rem", padding: ".22rem .65rem" }}
-          >
-            Fermer
-          </button>
-        )}
-      </div>
+      <RefEditorFooter
+        dirty={dirty}
+        saving={saving}
+        onCancel={cancelEdits}
+        onSave={saveAll}
+        onClose={onClose}
+      />
 
-      <style>{".dem-row:hover{background:var(--surface2)}"}</style>
+      <style>{DEM_ROW_HOVER_CSS}</style>
     </div>
   );
 }
