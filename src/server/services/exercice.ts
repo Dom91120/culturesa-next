@@ -168,25 +168,26 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         throw new Error("Aucune période active à reconduire.");
       }
 
-      // 2. snapshot des créneaux récurrents actifs par période active
+      // 2. snapshot des créneaux récurrents actifs par période active — UNE requête
+      // pour toutes les périodes (le findMany PAR période était un N+1, audit perf).
+      const snapshotRows = await tx.slot.findMany({
+        where: { serviceId, periodId: { in: actives.map((p) => p.id) }, slotType: "recurring" },
+        include: { demandeurs: { select: { demandeurId: true } } },
+      });
       const slotsByPeriod = new Map<number, SlotSnapshot[]>();
-      for (const p of actives) {
-        const slots = await tx.slot.findMany({
-          where: { serviceId, periodId: p.id, slotType: "recurring" },
-          include: { demandeurs: { select: { demandeurId: true } } },
+      for (const s of snapshotRows) {
+        if (s.periodId == null) continue;
+        const list = slotsByPeriod.get(s.periodId) ?? [];
+        list.push({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          capacity: s.capacity,
+          slotDay: s.slotDay,
+          weeks: s.weeks,
+          jauge: s.jauge,
+          demandeurIds: s.demandeurs.map((d) => d.demandeurId),
         });
-        slotsByPeriod.set(
-          p.id,
-          slots.map((s) => ({
-            startTime: s.startTime,
-            endTime: s.endTime,
-            capacity: s.capacity,
-            slotDay: s.slotDay,
-            weeks: s.weeks,
-            jauge: s.jauge,
-            demandeurIds: s.demandeurs.map((d) => d.demandeurId),
-          })),
-        );
+        slotsByPeriod.set(s.periodId, list);
       }
 
       // (Les exercices antérieurs ne sont plus archivés : la notion d'état a été
@@ -300,36 +301,37 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
               })
             : null;
 
-        // créneaux
+        // Créneaux clonés : ACCUMULÉS puis UN createMany par table — créneaux, puis
+        // restrictions de demandeurs, puis miroirs (les parents doivent exister
+        // avant leurs miroirs). Les inserts unitaires en boucle rendaient la
+        // bascule inutilement longue sous son timeout (audit perf 2026-07-17).
         if (recreateSlots) {
           const snapshot = slotsByPeriod.get(p.id) ?? [];
+          const slotRows: Prisma.SlotCreateManyInput[] = [];
+          const demandeurRows: { slotId: string; demandeurId: number }[] = [];
+          const mirrorRows: Prisma.SlotCreateManyInput[] = [];
           for (const s of snapshot) {
             const newSlotId = newRecurId();
-            await tx.slot.create({
-              data: {
-                id: newSlotId,
-                serviceId,
-                slotType: "recurring",
-                startTime: s.startTime,
-                endTime: s.endTime,
-                slotDate: null,
-                capacity: s.capacity,
-                slotDay: s.slotDay,
-                periodId: newPeriod.id,
-                parentSlotId: null,
-                weeks: s.weeks,
-                jauge: s.jauge,
-              },
+            slotRows.push({
+              id: newSlotId,
+              serviceId,
+              slotType: "recurring",
+              startTime: s.startTime,
+              endTime: s.endTime,
+              slotDate: null,
+              capacity: s.capacity,
+              slotDay: s.slotDay,
+              periodId: newPeriod.id,
+              parentSlotId: null,
+              weeks: s.weeks,
+              jauge: s.jauge,
             });
             newRecurringSlotIds.push(newSlotId);
             // Restrictions de demandeurs reconduites avec le créneau (les miroirs
             // suivent leur parent, cf. createUniqueBookingInTx — pas de lignes propres).
-            if (s.demandeurIds.length > 0) {
-              await tx.slotDemandeur.createMany({
-                data: s.demandeurIds.map((demandeurId) => ({ slotId: newSlotId, demandeurId })),
-              });
+            for (const demandeurId of s.demandeurIds) {
+              demandeurRows.push({ slotId: newSlotId, demandeurId });
             }
-
             if (mirrorCtx) {
               const rows = buildMirrorRows({
                 serviceId,
@@ -346,10 +348,13 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
                 ctx: mirrorCtx,
                 serviceCapacity: service.capacity,
               });
-              if (rows.length > 0) await tx.slot.createMany({ data: rows });
+              mirrorRows.push(...rows);
               for (const r of rows) newMirrorSlotIds.push(r.id as string);
             }
           }
+          if (slotRows.length > 0) await tx.slot.createMany({ data: slotRows });
+          if (demandeurRows.length > 0) await tx.slotDemandeur.createMany({ data: demandeurRows });
+          if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
         }
 
         // (Les périodes reconduites RESTENT actives : « exercice précédent » se déduit
