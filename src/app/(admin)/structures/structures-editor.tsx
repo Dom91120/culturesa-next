@@ -1,6 +1,7 @@
 "use client";
 
 import { RefEditor } from "@/components/ref-editor";
+import { INPUT_CHROME } from "@/components/ui-styles";
 import { createStructureAction, deleteStructureAction, updateStructureAction } from "./actions";
 
 type DemandeurOption = { id: number; label: string };
@@ -15,10 +16,7 @@ const GRID = "minmax(0, 1fr) 180px 64px 80px";
 const SELECT_STYLE = {
   fontSize: ".8rem",
   padding: ".15rem .35rem",
-  borderRadius: "var(--rad-sm)",
-  border: "1px solid var(--border)",
-  background: "var(--surface2)",
-  color: "var(--text)",
+  ...INPUT_CHROME,
   width: "100%",
 } as const;
 

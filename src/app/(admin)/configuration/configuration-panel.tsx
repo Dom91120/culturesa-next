@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { INPUT_CHROME } from "@/components/ui-styles";
 import {
   refreshSchoolHolidaysAction,
   setAgendaRefreshAction,
@@ -44,10 +45,7 @@ const subtitleStyle: React.CSSProperties = { fontSize: ".85rem", fontWeight: 500
 const selectStyle: React.CSSProperties = {
   fontSize: ".78rem",
   padding: ".15rem .4rem",
-  borderRadius: "var(--rad-sm)",
-  border: "1px solid var(--border)",
-  background: "var(--surface2)",
-  color: "var(--text)",
+  ...INPUT_CHROME,
 };
 
 export function ConfigurationPanel({
@@ -195,10 +193,7 @@ export function ConfigurationPanel({
           style={{
             fontSize: ".78rem",
             padding: ".2rem .45rem",
-            borderRadius: "var(--rad-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--surface2)",
-            color: "var(--text)",
+            ...INPUT_CHROME,
             minWidth: 220,
           }}
         />

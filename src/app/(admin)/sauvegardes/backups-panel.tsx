@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
+import { INPUT_CHROME } from "@/components/ui-styles";
 import { createBackupAction, deleteBackupAction, restoreBackupAction } from "./actions";
 
 /** Dump sérialisé reçu du serveur (date en ISO string). */
@@ -313,10 +314,7 @@ export function BackupsPanel({
           style={{
             fontSize: ".78rem",
             padding: ".3rem .5rem",
-            borderRadius: "var(--rad-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--surface2)",
-            color: "var(--text)",
+            ...INPUT_CHROME,
             minWidth: 280,
           }}
         >

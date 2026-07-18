@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
 
 type RowBase = { id: number | null; label: string };
@@ -231,8 +232,7 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
                     fontSize: ".75rem",
                     padding: ".15rem .4rem",
                     lineHeight: 1,
-                    color: "#e05555",
-                    borderColor: "rgba(220,80,80,.4)",
+                    ...GHOST_DANGER_STYLE,
                     justifySelf: "center",
                   }}
                 >

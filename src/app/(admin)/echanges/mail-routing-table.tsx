@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { INPUT_CHROME } from "@/components/ui-styles";
 import { setMailTriggerAction, setTriggerKindAction, setTriggerRecipientAction } from "./actions";
 import type { RoutingRow } from "./mail-rows";
 
@@ -116,10 +117,7 @@ export function MailRoutingTable({
   const selStyle: React.CSSProperties = {
     fontSize: ".82rem",
     padding: ".25rem .4rem",
-    borderRadius: "var(--rad-sm)",
-    border: "1px solid var(--border)",
-    background: "var(--surface2)",
-    color: "var(--text)",
+    ...INPUT_CHROME,
     maxWidth: "100%",
   };
 

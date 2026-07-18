@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { GHOST_DANGER_STYLE, INPUT_CHROME } from "@/components/ui-styles";
 import { useBufferedRows } from "@/components/use-buffered-rows";
 import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
 
@@ -17,10 +18,7 @@ const GRID = "28px 180px 72px minmax(0, 1fr) 96px";
 const FIELD_STYLE = {
   fontSize: ".78rem",
   padding: ".2rem .35rem",
-  borderRadius: "var(--rad-sm)",
-  border: "1px solid var(--border)",
-  background: "var(--surface2)",
-  color: "var(--text)",
+  ...INPUT_CHROME,
   width: "100%",
   boxSizing: "border-box",
 } as const;
@@ -405,11 +403,7 @@ export function NiveauxEditor({
                     onClick={() => setConfirmKey(r.key)}
                     title="Supprimer ce niveau"
                     aria-label="Supprimer ce niveau"
-                    style={{
-                      ...ACTION_BTN,
-                      color: "#e05555",
-                      borderColor: "rgba(220,80,80,.4)",
-                    }}
+                    style={{ ...ACTION_BTN, ...GHOST_DANGER_STYLE }}
                   >
                     🗑️
                   </button>

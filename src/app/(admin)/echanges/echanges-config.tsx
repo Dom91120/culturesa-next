@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useMemo, useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import { renderHtmlTemplate } from "@/lib/mail-render";
 import {
@@ -575,8 +576,9 @@ const Row = memo(function Row({
                   style={{
                     padding: ".25rem .45rem",
                     fontSize: ".76rem",
-                    color: r.used ? "var(--muted)" : "#e05555",
-                    borderColor: r.used ? "var(--border)" : "rgba(220,80,80,.4)",
+                    ...(r.used
+                      ? { color: "var(--muted)", borderColor: "var(--border)" }
+                      : GHOST_DANGER_STYLE),
                     cursor: r.used ? "not-allowed" : "pointer",
                   }}
                 >

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import { deleteServicesAction, saveServiceFromModalAction } from "./actions";
 import { ICON_CATEGORIES } from "./legacy-icons";
 
@@ -285,8 +286,7 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
                     fontSize: ".75rem",
                     padding: ".15rem .4rem",
                     lineHeight: 1,
-                    color: "#e05555",
-                    borderColor: "rgba(220,80,80,.4)",
+                    ...GHOST_DANGER_STYLE,
                     justifySelf: "center",
                   }}
                 >

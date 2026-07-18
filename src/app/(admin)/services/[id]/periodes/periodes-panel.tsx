@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
 import { TimeStepper } from "@/components/time-stepper";
+import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import { setShowPreviousExercicesAction } from "../exercice/actions";
 import {
   createExerciceAction,
@@ -788,8 +789,7 @@ export function PeriodesPanel({
                     disabled={pending}
                     title="Supprimer l'exercice"
                     style={{
-                      borderColor: "rgba(220,80,80,.4)",
-                      color: "#e05555",
+                      ...GHOST_DANGER_STYLE,
                       padding: "0 .5rem",
                       fontSize: ".62rem",
                       height: 17,
@@ -940,8 +940,7 @@ export function PeriodesPanel({
                   onClick={deleteSelected}
                   disabled={pending}
                   style={{
-                    borderColor: "rgba(220,80,80,.4)",
-                    color: "#e05555",
+                    ...GHOST_DANGER_STYLE,
                     padding: ".25rem .65rem",
                     fontSize: ".68rem",
                   }}

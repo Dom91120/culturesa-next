@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { INPUT_CHROME } from "@/components/ui-styles";
 
 const DEFAULT_MAX = 23 * 60 + 45;
 
@@ -114,10 +115,7 @@ export function TimeStepper({
           // est héritée dans les lignes radio (panneau Notifications) et élargit « HH:MM » → rognage.
           letterSpacing: "normal",
           padding: "0 .35rem",
-          borderRadius: "var(--rad-sm)",
-          border: "1px solid var(--border)",
-          background: "var(--surface2)",
-          color: "var(--text)",
+          ...INPUT_CHROME,
           textAlign: "center",
         }}
       />

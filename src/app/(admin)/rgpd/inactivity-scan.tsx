@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
+import { INPUT_CHROME } from "@/components/ui-styles";
 import {
   anonymizeInactiveAction,
   sendInactivityNoticesAction,
@@ -259,10 +260,7 @@ export function InactivityScan({
               width: 60,
               fontSize: ".78rem",
               padding: ".2rem .4rem",
-              borderRadius: "var(--rad-sm)",
-              border: "1px solid var(--border)",
-              background: "var(--surface2)",
-              color: "var(--text)",
+              ...INPUT_CHROME,
             }}
           />
           années
@@ -288,10 +286,7 @@ export function InactivityScan({
               width: 60,
               fontSize: ".78rem",
               padding: ".2rem .4rem",
-              borderRadius: "var(--rad-sm)",
-              border: "1px solid var(--border)",
-              background: "var(--surface2)",
-              color: "var(--text)",
+              ...INPUT_CHROME,
             }}
           />
           jours

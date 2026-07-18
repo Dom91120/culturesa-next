@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import type { Role } from "@/generated/prisma/client";
 import { formatTel } from "@/lib/format";
 import { anonymizeUserAction, deleteEmptyUserAction, resendVerificationAction } from "./actions";
@@ -397,8 +398,7 @@ export function UsersTable({
               onClick={() => selected && setAnonymizeTarget(selected)}
               disabled={pending}
               style={{
-                borderColor: "rgba(220,80,80,.4)",
-                color: "#e05555",
+                ...GHOST_DANGER_STYLE,
                 fontSize: ".68rem",
                 padding: ".25rem .65rem",
               }}
@@ -414,8 +414,7 @@ export function UsersTable({
               onClick={() => selected && setDeleteTarget(selected)}
               disabled={pending}
               style={{
-                borderColor: "rgba(220,80,80,.4)",
-                color: "#e05555",
+                ...GHOST_DANGER_STYLE,
                 fontSize: ".68rem",
                 padding: ".25rem .65rem",
               }}
