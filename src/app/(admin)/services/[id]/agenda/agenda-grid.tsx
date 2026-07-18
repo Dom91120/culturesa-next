@@ -2790,8 +2790,9 @@ export function AgendaGrid({
                   const inAllDayDrag =
                     allDayDrag != null &&
                     daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
-                  // Couleur de l'aperçu selon le type créé : jaune = récurrent, vert = ponctuel.
-                  const drawColor = createKind === "rec" ? "var(--warn)" : "var(--accent)";
+                  // Couleur de l'aperçu = celle du créneau créé : jaune récurrent (#ffee24,
+                  // cf. .agenda-block) / gris-bleu ponctuel (--slot-uniq-color, .is-uniq).
+                  const drawColor = createKind === "rec" ? "#ffee24" : "var(--slot-uniq-color)";
                   return (
                     <div
                       key={`ad-${d}`}
@@ -2910,8 +2911,9 @@ export function AgendaGrid({
                       gridEndMin,
                       Math.max(createDrag.startMin, createDrag.curMin) + 15,
                     );
-                    // Couleur de l'aperçu selon le type créé : jaune = récurrent, vert = ponctuel.
-                    const drawColor = createKind === "rec" ? "var(--warn)" : "var(--accent)";
+                    // Couleur de l'aperçu = celle du créneau créé : jaune récurrent (#ffee24,
+                    // cf. .agenda-block) / gris-bleu ponctuel (--slot-uniq-color, .is-uniq).
+                    const drawColor = createKind === "rec" ? "#ffee24" : "var(--slot-uniq-color)";
                     return lunchSplitSegments(s, e2)
                       .filter(([a, b]) => b > a)
                       .map(([segS, segE]) => {
@@ -2953,7 +2955,7 @@ export function AgendaGrid({
                     const e2 = Math.min(gridEndMin, s + moveDrag.durationMin);
                     const top = mapMinToY(s);
                     const h = mapMinToY(e2) - top;
-                    const moveColor = moveDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                    const moveColor = moveDrag.isUnique ? "var(--slot-uniq-color)" : "#ffee24";
                     return (
                       <div
                         className="agenda-move-preview"
@@ -2986,7 +2988,7 @@ export function AgendaGrid({
                   (() => {
                     const top = mapMinToY(resizeDrag.curStart);
                     const h = mapMinToY(resizeDrag.curEnd) - top;
-                    const rColor = resizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                    const rColor = resizeDrag.isUnique ? "var(--slot-uniq-color)" : "#ffee24";
                     return (
                       <div
                         className="agenda-resize-preview"
@@ -3021,7 +3023,7 @@ export function AgendaGrid({
                   (() => {
                     const top = mapMinToY(hResizeDrag.startMin);
                     const h = mapMinToY(hResizeDrag.endMin) - top;
-                    const rColor = hResizeDrag.isUnique ? "var(--accent)" : "var(--warn)";
+                    const rColor = hResizeDrag.isUnique ? "var(--slot-uniq-color)" : "#ffee24";
                     return (
                       <div
                         className="agenda-hresize-preview"
