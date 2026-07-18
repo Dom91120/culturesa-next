@@ -9,7 +9,13 @@ import {
   type SessionAttendee,
 } from "@/server/services/editions";
 import { ExerciceNav } from "../exercice-nav";
-import { bucketSessions, computeTotals, resolveEditionExercice, resolveRange } from "../range";
+import {
+  bucketSessions,
+  computeTotals,
+  rangeSearchParams,
+  resolveEditionExercice,
+  resolveRange,
+} from "../range";
 import { RangeBar } from "../range-bar";
 import { RuptureHeading, TotalsLine } from "../totals";
 
@@ -155,17 +161,9 @@ export default async function EditionsListePage({
   const groups = groupBy(pageRows);
   const allGroups = groupBy(flat);
 
-  // Base d'URL : conserve exercice + plage (mode/date/trim) + ruptures + tri.
-  const baseParams = () => {
-    const p = new URLSearchParams();
-    if (selected) p.set("exercice", String(selected.id));
-    p.set("mode", range.mode);
-    if (range.mode === "week" || range.mode === "month") p.set("date", range.dateParam);
-    if (range.mode === "trimester" && range.trimIndex != null)
-      p.set("trim", String(range.trimIndex));
-    if (withRuptures) p.set("ruptures", "1");
-    return p;
-  };
+  // Base d'URL : conserve exercice + plage (mode/date/trim) + ruptures — source
+  // unique rangeSearchParams (editions/range), le tri s'ajoute par lien.
+  const baseParams = () => rangeSearchParams(range, selected?.id ?? null, withRuptures);
   const sortHref = (key: SortKey) => {
     const p = baseParams();
     p.set("sort", key);

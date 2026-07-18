@@ -110,6 +110,26 @@ export async function resolveEditionExercice(
   };
 }
 
+/**
+ * Paramètres d'URL conservant la VUE COURANTE (exercice + mode + date/trimestre +
+ * ruptures) — contrat écran ↔ PDF Puppeteer et pagination. Source unique (audit
+ * 2026-07-17 : bloc recopié dans les 3 écrans d'édition ; un paramètre ajouté à la
+ * plage aurait été oublié dans l'un d'eux et le PDF n'aurait plus reflété l'écran).
+ */
+export function rangeSearchParams(
+  range: Pick<RangeResult, "mode" | "dateParam" | "trimIndex">,
+  selectedExerciceId: number | null,
+  withRuptures: boolean,
+): URLSearchParams {
+  const p = new URLSearchParams();
+  if (selectedExerciceId != null) p.set("exercice", String(selectedExerciceId));
+  p.set("mode", range.mode);
+  if (range.mode === "week" || range.mode === "month") p.set("date", range.dateParam);
+  if (range.mode === "trimester" && range.trimIndex != null) p.set("trim", String(range.trimIndex));
+  if (withRuptures) p.set("ruptures", "1");
+  return p;
+}
+
 type Trimestre = { label: string; from: Date; to: Date };
 const TRIM_LABELS = ["1er trimestre", "2e trimestre", "3e trimestre", "4e trimestre"];
 

@@ -1,16 +1,6 @@
-import { notFound } from "next/navigation";
-import { prisma } from "@/server/db";
-import { type DatedSession, listDatedSessions, POINTAGE_LABEL } from "@/server/services/editions";
-import { ExerciceNav } from "../exercice-nav";
-import {
-  bucketSessions,
-  computeTotals,
-  formatDateHeading,
-  resolveEditionExercice,
-  resolveRange,
-} from "../range";
-import { RangeBar } from "../range-bar";
-import { RuptureHeading, TotalsLine } from "../totals";
+import { type DatedSession, POINTAGE_LABEL } from "@/server/services/editions";
+import { formatDateHeading, type SessionBucket } from "../range";
+import { EditionScreenView, type EditionSearchParams, loadEditionScreen } from "../screen";
 
 export const metadata = { title: "CultuRésa — Pointages" };
 
@@ -19,53 +9,12 @@ export default async function PointagesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{
-    mode?: string;
-    date?: string;
-    week?: string;
-    trim?: string;
-    ruptures?: string;
-    exercice?: string;
-  }>;
+  searchParams: Promise<EditionSearchParams>;
 }) {
   const { id } = await params;
-  const sp = await searchParams;
-
-  const [service, exo] = await Promise.all([
-    prisma.service.findUnique({ where: { id }, select: { label: true } }),
-    resolveEditionExercice(id, sp.exercice),
-  ]);
-  if (!service) notFound();
-  const { exercices, selected } = exo;
-
-  const range = resolveRange(id, "pointages", sp, selected, selected?.id);
-  const titleLabel =
-    range.mode === "month"
-      ? "Pointages mensuels"
-      : range.mode === "trimester"
-        ? "Pointages trimestriels"
-        : range.mode === "year"
-          ? "Pointages annuels"
-          : "Pointages hebdomadaires";
-
-  const sessions = await listDatedSessions(id, range.fromYmd, range.toYmd, selected?.periodIds);
-  // Ruptures (case « avec ruptures ») OFF par défaut → un seul bloc sans sous-total.
-  const withRuptures = sp.ruptures === "1";
-  // Impression = PDF serveur (Puppeteer) : même vue (plage/ruptures/exercice).
-  const pdfParams = new URLSearchParams();
-  if (selected) pdfParams.set("exercice", String(selected.id));
-  pdfParams.set("mode", range.mode);
-  if (range.mode === "week" || range.mode === "month") pdfParams.set("date", range.dateParam);
-  if (range.mode === "trimester" && range.trimIndex != null)
-    pdfParams.set("trim", String(range.trimIndex));
-  if (withRuptures) pdfParams.set("ruptures", "1");
-  const pdfHref = `/services/${id}/editions/pdf?kind=pointages&${pdfParams.toString()}`;
-  const buckets = withRuptures
-    ? bucketSessions(range.mode, sessions, range.trimestres)
-    : sessions.length > 0
-      ? [{ key: "all", label: "", sessions }]
-      : [];
-  const withSubtotals = withRuptures && buckets.length > 1;
+  // Prologue commun aux écrans datés (service, exercice, plage, séances, PDF) :
+  // cf. editions/screen.tsx — seule la présentation d'un bucket est propre aux Pointages.
+  const data = await loadEditionScreen(id, "pointages", await searchParams);
 
   const th: React.CSSProperties = {
     textAlign: "left",
@@ -128,53 +77,9 @@ export default async function PointagesPage({
     </section>
   );
 
-  return (
-    <div>
-      <RangeBar
-        serviceId={id}
-        screen="pointages"
-        range={range}
-        ruptures={withRuptures}
-        pdfHref={pdfHref}
-        selectedExerciceId={selected?.id ?? null}
-        title={
-          <span
-            style={{ display: "inline-flex", alignItems: "center", gap: ".5rem", fontWeight: 700 }}
-          >
-            {titleLabel}
-            <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
-            <span className="print-only">- {service.label}</span>
-          </span>
-        }
-      />
+  const renderBucket = (b: SessionBucket) => b.sessions.map(renderSession);
 
-      {sessions.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucune séance sur cette période.
-        </p>
-      ) : (
-        <>
-          {buckets.map((b) => (
-            <div key={b.key}>
-              {b.label && <RuptureHeading>{b.label}</RuptureHeading>}
-              {b.sessions.map(renderSession)}
-              {withSubtotals && (
-                <TotalsLine
-                  label={`Sous-total — ${b.label}`}
-                  totals={computeTotals(b.sessions)}
-                  variant="pointages"
-                />
-              )}
-            </div>
-          ))}
-          <TotalsLine
-            label="Total général"
-            totals={computeTotals(sessions)}
-            variant="pointages"
-            strong
-          />
-        </>
-      )}
-    </div>
+  return (
+    <EditionScreenView serviceId={id} screen="pointages" data={data} renderBucket={renderBucket} />
   );
 }
