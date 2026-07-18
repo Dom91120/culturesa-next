@@ -1886,9 +1886,12 @@ export function AgendaGrid({
       // Créneau COMPLET (mode-aware) → pas de création possible. Jauge = enfants[+adultes] ;
       // sinon = nombre de réservations (1/résa).
       const isPonctuelCell = uniqueIdSet.has(b.slotId);
-      // Créneau récurrent affiché en semaine réelle : ses RÉSERVATIONS restent en lecture
-      // seule ici (création/déplacement/validation de résa désactivés) ; son CRÉNEAU, lui,
-      // est éditable en mode création (déplacer/redimensionner/configurer/supprimer).
+      // Créneau récurrent affiché en semaine réelle. La CRÉATION d'une réservation
+      // récurrente y est désormais possible (createRecurringBookingAction, période/parité
+      // du contexte réel). En revanche déplacer / valider / supprimer une réservation
+      // récurrente EXISTANTE reste désactivé ici (on agirait sur l'occurrence, pas le
+      // parent) : ces gestes se font encore par la vue Modèle. Le CRÉNEAU, lui, est
+      // pleinement éditable en mode création (déplacer/redimensionner/configurer/supprimer).
       const realWeekRecurring = mode === "realweek" && !isPonctuelCell;
       // Le créneau porte-t-il une réservation ? (toutes semaines pour un récurrent) —
       // verrou d'édition structurelle (déplacer/redimension/suppression = créneaux vides).
@@ -1898,11 +1901,12 @@ export function AgendaGrid({
       // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
       const gaugeForCell = b.jauge;
       const cellFull = b.used >= b.capacity;
-      // Le créneau est cliquable pour créer une réservation (hors mode création).
+      // Le créneau est cliquable pour créer une réservation (hors mode création). Récurrent
+      // en Semaine réelle INCLUS : la réservation récurrente se pose sur la période
+      // couvrante + parité de la semaine affichée (cf. submitCreate).
       const cellCreatable =
         !creationMode &&
         !cellFull &&
-        !realWeekRecurring &&
         (isPonctuelCell || (effectivePeriodId != null && effectivePeriodId > 0));
       const pct = Math.min(100, b.capacity > 0 ? (b.used / b.capacity) * 100 : 0);
       // Couleur du compteur de places (barre de jauge ET texte X/Y) selon le
@@ -3260,10 +3264,9 @@ export function AgendaGrid({
           validation={validation}
           pointageMode={pointageMode}
           creationMode={creationMode}
-          // Créables : pas complet, pas un récurrent en semaine réelle (consultation),
-          // période active pour un récurrent (mêmes conditions que cellCreatable).
+          // Créables : pas complet, période active pour un récurrent (mêmes conditions
+          // que cellCreatable — récurrent en Semaine réelle inclus).
           creatable={
-            !(mode === "realweek" && !uniqueIdSet.has(stackKey.slotId)) &&
             stackBlock.used < stackBlock.capacity &&
             (uniqueIdSet.has(stackKey.slotId) ||
               (effectivePeriodId != null && effectivePeriodId > 0))
