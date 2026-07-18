@@ -894,8 +894,11 @@ export function AgendaGrid({
 
   // Mode création + Modèle de période + A/B : copie les créneaux récurrents de la
   // semaine active vers l'autre (non destructif).
+  // Copie tous les créneaux récurrents de la semaine (parité) courante vers l'autre A/B,
+  // dans la période active. En Semaine réelle : parité de la semaine affichée (effectiveWeek
+  // = realWeekParity) → l'autre, sur la période couvrante.
   function copyWeek() {
-    if (mode !== "model" || !abMode || effectiveWeek == null) return;
+    if (!abMode || effectiveWeek == null) return;
     if (effectivePeriodId == null || effectivePeriodId <= 0) return;
     const from = effectiveWeek;
     const to: "A" | "B" = from === "A" ? "B" : "A";
@@ -2757,9 +2760,8 @@ export function AgendaGrid({
                   </span>
                 )}
               </button>
-              {/* Copie des créneaux d'une semaine A/B vers l'autre (Modèle + A/B). */}
+              {/* Copie des créneaux d'une semaine A/B vers l'autre (service A/B). */}
               {abMode &&
-                mode === "model" &&
                 effectiveWeek != null &&
                 effectivePeriodId != null &&
                 effectivePeriodId > 0 && (
