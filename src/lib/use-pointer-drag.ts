@@ -47,6 +47,20 @@ export function usePointerDrag<T>(handlers: {
       e.preventDefault();
       handlersRef.current.onMove(st.item, e);
     };
+    // Un drag ACTIVÉ ne doit produire AUCUN clic résiduel : quand l'origine et le
+    // relâché partagent un ancêtre cliquable (ex. la colonne-jour de l'agenda, dont
+    // le clic crée un brouillon de réservation), le navigateur dispatche un `click`
+    // sur cet ancêtre après le pointerup — avalé ici en phase capture, one-shot.
+    // Filet : si aucun click n'est émis (relâché hors document), l'écouteur est
+    // retiré au tick suivant (le click, lui, précède les timers).
+    const suppressNextClick = () => {
+      const swallow = (ev: MouseEvent) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+      };
+      window.addEventListener("click", swallow, { capture: true, once: true });
+      window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
+    };
     const finish = (e: PointerEvent, cancelled: boolean) => {
       const st = stateRef.current;
       stateRef.current = null;
@@ -54,6 +68,7 @@ export function usePointerDrag<T>(handlers: {
       setActive(false);
       // Pas activé = simple tap → on ne fait rien (le clic suit son cours).
       if (!st.activated) return;
+      suppressNextClick();
       if (cancelled) handlersRef.current.onCancel?.(st.item);
       else handlersRef.current.onDrop(st.item, e);
     };
