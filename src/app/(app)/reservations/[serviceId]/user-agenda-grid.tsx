@@ -1810,12 +1810,64 @@ export function UserAgendaGrid({
       : "";
   }
 
+  // Réplique CLIENT de assertReservationLimits (server/services/bookings) : bloque
+  // dès le CLIC sur un créneau — au lieu d'un refus à l'enregistrement — quand une
+  // limite de réservations de l'exercice est atteinte. Comptage par TYPE, comme le
+  // serveur : une création récurrente compte MES récurrentes (période visée, puis
+  // exercice entier) ; une ponctuelle compte MES ponctuelles STANDALONE via la
+  // période de leur créneau (miroirs/enfants exclus). Le brouillon est intégré
+  // (ajouts comptés, suppressions déduites) ; le serveur re-vérifie de toute façon.
+  function reservationLimitError(slotId: string, ponctuel: boolean): string | null {
+    const targetPeriodId = ponctuel
+      ? (uniqSlotById.get(slotId)?.periodId ?? 0)
+      : (effectivePeriodId ?? 0);
+    if (!targetPeriodId || targetPeriodId <= 0) return null;
+    const exoPeriodIds = new Set(periods.map((p) => p.id));
+    const removed = new Set(pendingRemovals.map((r) => r.bookingId));
+    // Période de chacune de mes réservations existantes du même type.
+    const minePeriodIds: number[] = [];
+    for (const b of bookings) {
+      if (!b.mine || b.parentBookingId !== null || removed.has(b.id)) continue;
+      if (ponctuel) {
+        if (b.bookingType !== "unique") continue;
+        const pid = uniqSlotById.get(b.slotId)?.periodId ?? null;
+        if (pid != null && pid > 0) minePeriodIds.push(pid);
+      } else {
+        if (b.bookingType !== "recurring") continue;
+        if (b.periodId > 0) minePeriodIds.push(b.periodId);
+      }
+    }
+    // + les ajouts du brouillon du même type (déjà cochés, pas encore enregistrés).
+    for (const a of pendingAdds) {
+      if (a.ponctuel !== ponctuel) continue;
+      const pid = a.ponctuel ? (uniqSlotById.get(a.slotId)?.periodId ?? 0) : a.periodId;
+      if (pid > 0) minePeriodIds.push(pid);
+    }
+    if (
+      minePeriodIds.filter((pid) => pid === targetPeriodId).length >= service.maxReservationsPeriod
+    ) {
+      return "Limite de réservations atteinte pour cette période.";
+    }
+    if (minePeriodIds.filter((pid) => exoPeriodIds.has(pid)).length >= service.maxReservations) {
+      return "Limite annuelle de réservations atteinte.";
+    }
+    return null;
+  }
+
   // Coche / décoche un créneau libre pour réservation (sans appel serveur).
   function togglePendingAdd(slotId: string, dayKey: string, ponctuel: boolean) {
     const key = pendKey(slotId, dayKey, ponctuel);
     // Verrou « une seule action » : décocher l'ajout courant reste permis (même clé) ;
     // cocher un AUTRE créneau alors qu'une action est en attente est bloqué.
     if (!guardSingleAction(`add:${key}`)) return;
+    // Limites de réservation : contrôle AU CLIC (décocher reste toujours permis).
+    if (!pendingAdds.some((a) => a.key === key)) {
+      const limitError = reservationLimitError(slotId, ponctuel);
+      if (limitError) {
+        showToast(limitError, "danger");
+        return;
+      }
+    }
     setPendingAdds((prev) => {
       if (prev.some((a) => a.key === key)) return prev.filter((a) => a.key !== key);
       const time = slotTime(slotId, ponctuel);
