@@ -1,6 +1,17 @@
 import type { Metadata, Viewport } from "next";
+import { Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import "./app-legacy.css";
+
+// Police AUTO-HÉBERGÉE via next/font (audit sécurité 2026-07-19) : téléchargée au build
+// et servie depuis l'origine de l'app → plus de requête visiteur vers fonts.googleapis.com
+// / fonts.gstatic.com (fuite d'IP, jurisprudence RGPD). Exposée en variable CSS, consommée
+// par app-legacy.css. (« Barlow Condensed », chargée mais jamais utilisée, est supprimée.)
+const instrumentSans = Instrument_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-instrument-sans",
+});
 
 export const metadata: Metadata = {
   title: "CultuRésa — Réservations",
@@ -21,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning : le script <head> ci-dessous MUTE les classes de <html>
     // avant l'hydratation (thème sombre, sidebar repliée) — divergence attendue avec le
     // rendu serveur, sans conséquence (même patron que next-themes).
-    <html lang="fr" className="light" suppressHydrationWarning>
+    <html lang="fr" className={`light ${instrumentSans.variable}`} suppressHydrationWarning>
       <head>
         {/* Applique le thème sombre ET la sidebar repliée AVANT le premier paint
             (anti-FOUC) : sans ce script, un utilisateur en mode sombre voyait un flash
@@ -35,12 +46,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html:
               "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.remove('light');if(!matchMedia('(max-width: 640px)').matches&&(localStorage.getItem('sidebar-collapsed')==='1'||matchMedia('(max-width: 1000px)').matches))document.documentElement.classList.add('sb-collapsed');}catch(e){}",
           }}
-        />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Barlow+Condensed:wght@400;600&display=swap"
-          rel="stylesheet"
         />
       </head>
       <body>{children}</body>

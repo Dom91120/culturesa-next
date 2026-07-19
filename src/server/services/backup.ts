@@ -116,21 +116,15 @@ async function runPgTool(tool: "pg_dump" | "psql", args: string[], stdin?: Buffe
     });
   }
   if (mode === "docker") {
-    // Dans le conteneur : connexion locale (socket), pas de -h.
+    // Dans le conteneur : connexion locale (socket), pas de -h. `-e PGPASSWORD` SANS
+    // valeur (docker lit la variable dans l'environnement du process `docker` qu'on
+    // spawn) : le mot de passe n'apparaît plus dans les arguments, donc plus dans la
+    // liste des process de l'hôte (`ps`) — audit sécurité 2026-07-19. Le mode direct
+    // faisait déjà passer PGPASSWORD par `env`.
     return run(
       "docker",
-      [
-        "exec",
-        "-i",
-        "-e",
-        `PGPASSWORD=${p.password}`,
-        DOCKER_CONTAINER,
-        tool,
-        "-U",
-        p.user,
-        ...args,
-      ],
-      { stdin },
+      ["exec", "-i", "-e", "PGPASSWORD", DOCKER_CONTAINER, tool, "-U", p.user, ...args],
+      { env: { PGPASSWORD: p.password }, stdin },
     );
   }
   throw new Error(

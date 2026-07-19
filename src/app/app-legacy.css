@@ -106,7 +106,8 @@ html.light .sidebar-admin-btn.active {
 }
 
 body {
-  font-family: "Instrument Sans", sans-serif;
+  /* Police auto-hébergée via next/font (cf. layout.tsx) ; le littéral reste en repli. */
+  font-family: var(--font-instrument-sans), "Instrument Sans", sans-serif;
   font-size: 13px;
   background: var(--surface);
   color: var(--text);
