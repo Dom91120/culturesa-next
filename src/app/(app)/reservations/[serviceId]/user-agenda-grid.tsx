@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   useAgendaAutoRefresh,
@@ -439,7 +439,13 @@ function ThemeField({
 // réservations existantes de l'usager ET les sélections en attente (pending add).
 // Les deux sont LE MÊME badge : seules la source des compteurs/thème et les callbacks
 // diffèrent (réservation enregistrée ↔ brouillon). Vert si validé, orange sinon.
-function MineBadge({
+// React.memo (audit perf 2026-07-19) : un changement de brouillon (jauge, thème,
+// ajout/suppression) recrée renderBlock (les 4 maps de brouillon sont en déps) →
+// dayBlockEls recrée les éléments, MAIS ce badge mémoïsé ne se re-rend QUE si SES
+// props changent. Primitives comparées par valeur ; les 5 callbacks sont stabilisés
+// par badge côté parent (cf. badgeCbs) → seul le badge modifié se re-rend, pas les
+// ~50 autres. Sans stabilisation des callbacks, la mémo ne servirait à rien.
+const MineBadge = memo(function MineBadge({
   validated,
   markedRemoval,
   moving = false,
@@ -912,7 +918,21 @@ function MineBadge({
       {!themeInMiddle && themeField}
     </div>
   );
-}
+});
+
+// Callbacks « no-op » stables (badge synthétique en lecture seule) : références
+// constantes → la mémo de MineBadge n'est pas invalidée par des closures recréées.
+const NOOP = () => {};
+
+// Jeu des 5 callbacks interactifs d'un badge « ma réservation » / brouillon, stabilisé
+// par badge (cf. badgeCbs) pour que React.memo(MineBadge) reste efficace.
+type BadgeCbs = {
+  onClose: () => void;
+  onBump: (field: "enfants" | "accompagnants", delta: 1 | -1) => void;
+  onSetCount: (field: "enfants" | "accompagnants", value: number) => void;
+  onSetTheme: (v: string) => void;
+  onDragPointerDown: (e: React.PointerEvent) => void;
+};
 
 // Ligne « N enfant(s) M adulte(s) » de l'info-bulle au survol (port legacy _badgeTitle).
 function participantsLabel(enfants: number, accompagnants: number): string {
@@ -2448,6 +2468,33 @@ export function UserAgendaGrid({
   const blockApiRef = useRef(blockApi);
   blockApiRef.current = blockApi;
 
+  // Cache de callbacks STABLES par badge (clé "bk:<id>" ou "add:<key>") : chaque
+  // wrapper garde une identité CONSTANTE tandis que sa closure interne (holder.fresh)
+  // est rafraîchie à chaque rendu → les props de callback de MineBadge ne changent
+  // jamais de référence, donc React.memo ne re-rend QUE le badge dont les primitives
+  // ont changé (audit perf 2026-07-19). Sans ça, la mémo serait inopérante (closures
+  // recréées). Comportement identique aux anciennes closures inline (mêmes appels).
+  const badgeCbsRef = useRef(new Map<string, { holder: { fresh: BadgeCbs }; cbs: BadgeCbs }>());
+  const badgeCbs = (key: string, fresh: BadgeCbs): BadgeCbs => {
+    let e = badgeCbsRef.current.get(key);
+    if (!e) {
+      const holder = { fresh };
+      e = {
+        holder,
+        cbs: {
+          onClose: () => holder.fresh.onClose(),
+          onBump: (f, d) => holder.fresh.onBump(f, d),
+          onSetCount: (f, v) => holder.fresh.onSetCount(f, v),
+          onSetTheme: (v) => holder.fresh.onSetTheme(v),
+          onDragPointerDown: (ev) => holder.fresh.onDragPointerDown(ev),
+        },
+      };
+      badgeCbsRef.current.set(key, e);
+    }
+    e.holder.fresh = fresh;
+    return e.cbs;
+  };
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: déps maintenues à la main — les handlers d'événements passent par blockApiRef (hors déps), et les helpers appelés AU RENDU (isSlotClosed/myCounts/slotTime/bookingLocked, recréés à chaque rendu) ont leurs entrées RÉELLES listées en primitives (uniqSlotById, recurSlotById, earliestBookable, concernedDatesByKey, pendingUpdates, service, modes…) → renderBlock se recrée quand elles changent, capturant des helpers frais. pendKey/participantsLabel sont purs.
   const renderBlock = useCallback(
     (b: Block, allday: boolean) => {
@@ -2614,10 +2661,10 @@ export function UserAgendaGrid({
                     }\n${participantsLabel(mb.enfants, mb.accompagnants)}`}
                     closeIcon="×"
                     locked
-                    onClose={() => {}}
-                    onBump={() => {}}
-                    onSetCount={() => {}}
-                    onSetTheme={() => {}}
+                    onClose={NOOP}
+                    onBump={NOOP}
+                    onSetCount={NOOP}
+                    onSetTheme={NOOP}
                     draggable={false}
                   />
                 );
@@ -2662,6 +2709,16 @@ export function UserAgendaGrid({
                       : "⏳ Demande en attente de validation";
                 const tipWeek =
                   abMode && (mb.week === "A" || mb.week === "B") ? `\nSemaine ${mb.week}` : "";
+                // Callbacks stabilisés par badge (identité constante, closures fraîches) :
+                // logique IDENTIQUE aux anciennes closures inline, mais mémo-compatibles.
+                const cbs = badgeCbs(`bk:${mb.id}`, {
+                  onClose: () => togglePendingRemoval(mb),
+                  onBump: (f, d) => bumpMyCount(mb, f, d, remaining),
+                  onSetCount: (f, v) => setMyCount(mb, f, v, remaining),
+                  onSetTheme: (v) => setMyTheme(mb, v),
+                  onDragPointerDown: (e) =>
+                    beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e),
+                });
                 return (
                   <MineBadge
                     validated={mb.validated}
@@ -2682,10 +2739,10 @@ export function UserAgendaGrid({
                     )}${tipWeek}`}
                     closeIcon="×"
                     locked={bookingLocked(mb)}
-                    onClose={() => togglePendingRemoval(mb)}
-                    onBump={(f, d) => bumpMyCount(mb, f, d, remaining)}
-                    onSetCount={(f, v) => setMyCount(mb, f, v, remaining)}
-                    onSetTheme={(v) => setMyTheme(mb, v)}
+                    onClose={cbs.onClose}
+                    onBump={cbs.onBump}
+                    onSetCount={cbs.onSetCount}
+                    onSetTheme={cbs.onSetTheme}
                     // Déplaçable par glisser-déposer sauf si VERROUILLÉE (validation
                     // bloquante active) ou déjà marquée pour suppression. Aligné sur le
                     // serveur (moveInTx → assertBookingUnlocked) : une résa validée mais
@@ -2698,9 +2755,7 @@ export function UserAgendaGrid({
                     shortSlot={shortSlot}
                     veryShortSlot={veryShortSlot}
                     dragging={dragItem?.kind === "booking" && dragItem.bookingId === mb.id}
-                    onDragPointerDown={(e) =>
-                      beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e)
-                    }
+                    onDragPointerDown={cbs.onDragPointerDown}
                   />
                 );
               }
@@ -2713,12 +2768,22 @@ export function UserAgendaGrid({
                 );
                 if (!add) return null;
                 const remaining = Math.max(0, b.capacity - b.used);
-                const removeDraft = () =>
-                  setPendingAdds((prev) => prev.filter((a) => a.key !== add.key));
                 // Infobulle (legacy) : horaire + état brouillon + participants + semaine.
                 const tipTime = b.isAllDay ? "Journée entière" : slotTime(b.slotId, isPonctuelCell);
                 const tipWeek =
                   abMode && (add.week === "A" || add.week === "B") ? `\nSemaine ${add.week}` : "";
+                // Callbacks stabilisés par badge de brouillon (cf. badgeCbs).
+                const cbs = badgeCbs(`add:${add.key}`, {
+                  onClose: () => setPendingAdds((prev) => prev.filter((a) => a.key !== add.key)),
+                  onBump: (f, d) => bumpAddCount(add.key, f, d, remaining),
+                  onSetCount: (f, v) => setAddCount(add.key, f, v, remaining),
+                  onSetTheme: (v) =>
+                    setPendingAdds((prev) =>
+                      prev.map((x) => (x.key === add.key ? { ...x, theme: v } : x)),
+                    ),
+                  onDragPointerDown: (e) =>
+                    beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e),
+                });
                 return (
                   <MineBadge
                     validated={false}
@@ -2737,14 +2802,10 @@ export function UserAgendaGrid({
                       add.accompagnants,
                     )}${tipWeek}`}
                     closeIcon="×"
-                    onClose={removeDraft}
-                    onBump={(f, d) => bumpAddCount(add.key, f, d, remaining)}
-                    onSetCount={(f, v) => setAddCount(add.key, f, v, remaining)}
-                    onSetTheme={(v) =>
-                      setPendingAdds((prev) =>
-                        prev.map((x) => (x.key === add.key ? { ...x, theme: v } : x)),
-                      )
-                    }
+                    onClose={cbs.onClose}
+                    onBump={cbs.onBump}
+                    onSetCount={cbs.onSetCount}
+                    onSetTheme={cbs.onSetTheme}
                     // Brouillon : toujours déplaçable (relocalise simplement l'ajout).
                     draggable
                     dragFullSurface={isMobile}
@@ -2753,9 +2814,7 @@ export function UserAgendaGrid({
                     shortSlot={shortSlot}
                     veryShortSlot={veryShortSlot}
                     dragging={dragItem?.kind === "draft" && dragItem.key === add.key}
-                    onDragPointerDown={(e) =>
-                      beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e)
-                    }
+                    onDragPointerDown={cbs.onDragPointerDown}
                   />
                 );
               }
