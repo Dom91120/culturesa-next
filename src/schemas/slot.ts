@@ -63,6 +63,20 @@ export const recurringSlotCreateSchema = z
   })
   .refine(hoursOrdered, hoursOrderedMsg);
 
+// Déplacement / redimensionnement d'un créneau : mêmes bornes horaires que la
+// création (heures vides = journée entière, sinon HH:MM strict et fin > début),
+// sans capacité ni demandeurs (inchangés au déplacement). Les actions de move
+// persistaient jusqu'ici les horaires bruts du client (audit 2026-07-19).
+export const slotMoveTimesSchema = z
+  .object({
+    startTime: time("Heure de début"),
+    endTime: time("Heure de fin"),
+  })
+  .refine(hoursOrdered, hoursOrderedMsg);
+
+// Date de créneau isolée (déplacement d'un ponctuel, lot « multi »).
+export const slotDateSchema = z.string().regex(DATE_RE, "Date invalide (format AAAA-MM-JJ).");
+
 export const uniqueSlotCreateSchema = z
   .object({
     serviceId: stringIdSchema,

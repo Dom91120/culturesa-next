@@ -421,7 +421,13 @@ export async function updateServicePeriod(
         await regenerateRecurringMirrorsForPeriodInTx(tx, serviceId, id);
         return period;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      // Timeout élargi (défaut Prisma 5 s) : la régénération fait O(créneaux) requêtes —
+      // aligné sur copyRecurringWeek, sinon P2028 sur une période chargée.
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 60_000,
+        maxWait: 10_000,
+      },
     );
   } catch (e) {
     if (e instanceof SlotMutationError) throw new PeriodError(e.message);
@@ -429,11 +435,40 @@ export async function updateServicePeriod(
   }
 }
 
-/** Anti-IDOR : la période doit appartenir au service couvert par le guard appelant. */
+/**
+ * Anti-IDOR : la période doit appartenir au service couvert par le guard appelant.
+ * REFUSE si un créneau de la période (récurrent ou miroir) porte une réservation :
+ * la suppression cascadait sinon jusqu'aux réservations (Slot.period puis
+ * Booking.slot en onDelete: Cascade) alors que updateServicePeriod refuse déjà de
+ * rétrécir une période sur une date réservée (décision produit audit 2026-07-14).
+ * Vérif « réservé » + suppression atomiques (transaction sérialisable).
+ */
 export async function deleteServicePeriod(serviceId: string, id: number) {
   const cur = await prisma.period.findUnique({ where: { id }, select: { serviceId: true } });
   if (!cur || cur.serviceId !== serviceId) throw new PeriodError("Période introuvable.");
-  return prisma.period.delete({ where: { id } });
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        // Réservations portées par les créneaux de la période (parents récurrents et
+        // miroirs via slot.periodId) OU rattachées directement (bookings.periodId).
+        const booked = await tx.booking.count({
+          where: { OR: [{ slot: { periodId: id } }, { periodId: id }] },
+        });
+        if (booked > 0) {
+          throw new PeriodError(
+            "Des réservations existent sur cette période — annulez-les d'abord.",
+          );
+        }
+        return tx.period.delete({ where: { id } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      throw new PeriodError("Modification simultanée détectée, réessayez.");
+    }
+    throw e;
+  }
 }
 
 export type ServiceOpeningConfig = {
@@ -505,7 +540,13 @@ export async function saveExerciceOpeningConfig(
           await regenerateRecurringMirrorsForPeriodInTx(tx, serviceId, p.id, syncCache);
         }
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      // Timeout élargi (défaut Prisma 5 s) : régénère TOUTES les périodes de l'exercice —
+      // aligné sur cycleService, sinon P2028 sur un exercice annuel chargé.
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 120_000,
+        maxWait: 10_000,
+      },
     );
   } catch (e) {
     if (e instanceof SlotMutationError) throw new PeriodError(e.message);

@@ -17,6 +17,8 @@ import {
   MAX_CAPACITY,
   MIN_CAPACITY,
   recurringSlotCreateSchema,
+  slotDateSchema,
+  slotMoveTimesSchema,
   uniqueSlotCreateSchema,
 } from "@/schemas/slot";
 import { prisma } from "@/server/db";
@@ -439,13 +441,19 @@ export async function moveRecurringSlotAction(input: {
   ) {
     return { ok: false, error: "Jour invalide." };
   }
+  // Frontière : horaires validés comme à la création (HH:MM strict, fin > début) —
+  // ils étaient persistés bruts (audit 2026-07-19).
+  const times = slotMoveTimesSchema.safeParse(input);
+  if (!times.success) {
+    return { ok: false, error: times.error.issues[0]?.message ?? "Données invalides." };
+  }
   const res = await moveRecurringSlot(
     input.serviceId,
     input.slotId,
     input.fromDayKey as DayKeyT,
     input.toDayKey as DayKeyT,
-    input.startTime,
-    input.endTime,
+    times.data.startTime,
+    times.data.endTime,
   );
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
@@ -460,12 +468,25 @@ export async function moveUniqueSlotAction(input: {
   endTime: string;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
+  // Frontière : date + horaires validés comme à la création — ils étaient persistés
+  // bruts (audit 2026-07-19 ; une date invalide finissait en 500 Prisma).
+  const date = slotDateSchema.safeParse(input.slotDate);
+  const times = slotMoveTimesSchema.safeParse(input);
+  if (!date.success || !times.success) {
+    return {
+      ok: false,
+      error:
+        (date.success ? undefined : date.error.issues[0]?.message) ??
+        (times.success ? undefined : times.error.issues[0]?.message) ??
+        "Données invalides.",
+    };
+  }
   const res = await moveUniqueSlot(
     input.serviceId,
     input.slotId,
-    input.slotDate,
-    input.startTime,
-    input.endTime,
+    date.data,
+    times.data.startTime,
+    times.data.endTime,
   );
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
@@ -554,7 +575,29 @@ export async function updateSlotBatchAction(input: {
   error?: string;
 }> {
   await requireServiceManager(input.serviceId);
-  const { serviceId, slotId, startTime, endTime, refSlotDate } = input;
+  // Frontière : date + horaires validés comme à la création (persistés bruts avant
+  // l'audit 2026-07-19) ; dayDelta borné (décalage d'un geste de drag, jamais plus
+  // d'une semaine en pratique).
+  const refDate = slotDateSchema.safeParse(input.refSlotDate);
+  const parsedTimes = slotMoveTimesSchema.safeParse(input);
+  if (!refDate.success || !parsedTimes.success) {
+    return {
+      ok: false,
+      error:
+        (refDate.success ? undefined : refDate.error.issues[0]?.message) ??
+        (parsedTimes.success ? undefined : parsedTimes.error.issues[0]?.message) ??
+        "Données invalides.",
+    };
+  }
+  if (
+    input.dayDelta != null &&
+    (!Number.isInteger(input.dayDelta) || Math.abs(input.dayDelta) > 31)
+  ) {
+    return { ok: false, error: "Données invalides." };
+  }
+  const { serviceId, slotId } = input;
+  const { startTime, endTime } = parsedTimes.data;
+  const refSlotDate = refDate.data;
   const dayDelta = input.dayDelta ?? 0;
   const ref = await prisma.slot.findFirst({
     where: { id: slotId, serviceId, slotType: "unique" },
@@ -600,13 +643,25 @@ export async function updateSlotBatchAction(input: {
  * antérieur (date + horaires). Chaque restauration repasse par `moveUniqueSlot`
  * (gardes réutilisées ; une occurrence réservée entre-temps est ignorée).
  */
+// Items d'annulation de lot : id + date + horaires validés (frontière), liste bornée
+// (un lot annuel ≈ 36 occurrences ; 400 = marge large, évite un tableau non borné).
+const revertItemsSchema = z
+  .array(
+    z.object({ id: z.string().min(1).max(64), slotDate: slotDateSchema }).and(slotMoveTimesSchema),
+  )
+  .max(400);
+
 export async function revertSlotBatchAction(input: {
   serviceId: string;
   items: BatchUpdatedItem[];
 }): Promise<{ ok: boolean; reverted?: number; error?: string }> {
   await requireServiceManager(input.serviceId);
+  const items = revertItemsSchema.safeParse(input.items);
+  if (!items.success) {
+    return { ok: false, error: items.error.issues[0]?.message ?? "Données invalides." };
+  }
   let reverted = 0;
-  for (const it of input.items) {
+  for (const it of items.data) {
     const res = await moveUniqueSlot(input.serviceId, it.id, it.slotDate, it.startTime, it.endTime);
     if (res.ok) reverted++;
   }
@@ -818,7 +873,7 @@ export async function moveBookingAction(
         const wantType = lk.bookingType === "recurring" ? "recurring" : "unique";
         const target = await tx.slot.findFirst({
           where: { id: slotId, serviceId },
-          select: { slotType: true, periodId: true },
+          select: { slotType: true, periodId: true, weeks: true },
         });
         if (!target || target.slotType !== wantType) {
           throw new BookingError("Ce créneau n'est pas disponible.");
@@ -829,6 +884,14 @@ export async function moveBookingAction(
         // Récurrent → période du créneau cible ; ponctuel → aucune période (NULL),
         // aligné sur le chemin usager.
         const newPeriodId = wantType === "recurring" ? target.periodId : null;
+        // La parité SUIT le créneau cible (Slot.weeks), comme à la création — figée à
+        // l'ancienne valeur, une récurrente "A" déposée sur un créneau "B" gardait sa
+        // parité et syncRecurringChildren supprimait TOUTES ses occurrences (aucun
+        // miroir compatible) : réservation fantôme (audit 2026-07-19).
+        const newWeek =
+          wantType === "recurring" && (target.weeks === "A" || target.weeks === "B")
+            ? target.weeks
+            : "";
         // Anti-surbooking : déplacer vers un créneau complet est refusé (jauge/capacité).
         await assertSlotCapacity(tx, {
           serviceId,
@@ -842,7 +905,7 @@ export async function moveBookingAction(
         await tx.booking.update({
           where: { id: id.data },
           // auto_validate_from réinitialisé à NOW() sur un déplacement (cf. logique d'origine).
-          data: { slotId, periodId: newPeriodId, autoValidateFrom: new Date() },
+          data: { slotId, periodId: newPeriodId, week: newWeek, autoValidateFrom: new Date() },
         });
         const b = await tx.booking.findUnique({
           where: { id: id.data },

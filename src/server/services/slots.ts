@@ -691,12 +691,14 @@ export async function moveUniqueSlot(
   return { ok: true };
 }
 
-// ─── delete (suppression immédiate, fidèle au legacy) ──────────────
-// Supprime des créneaux et tout ce qui en dépend : pour un récurrent, ses
-// miroirs (slot_type=unique avec parentSlotId) + leurs réservations + ses
-// propres réservations. Pour un ponctuel, ses réservations. Refuse si le
-// créneau (ou un de ses miroirs) porte des réservations ? Non : le legacy
-// supprime en cascade — la garde "réservé" est faite côté UI avant l'appel.
+// ─── delete (suppression de créneaux VIDES) ──────────────
+// Supprime des créneaux et leurs miroirs (récurrent : slot_type=unique avec
+// parentSlotId). REFUSE si le créneau ou un de ses miroirs porte la moindre
+// réservation : la garde « réservé » de l'UI ne suffit pas (l'agenda est
+// auto-rafraîchi — une réservation posée entre l'affichage et le clic serait
+// sinon détruite en cascade, sans refus ni e-mail). Vérif « réservé » +
+// suppression dans UNE transaction sérialisable, cohérent avec les autres
+// mutations de créneau (moveRecurringSlot / moveUniqueSlot / régénération).
 export async function deleteSlots(
   serviceId: string,
   ids: string[],
@@ -710,19 +712,39 @@ export async function deleteSlots(
   const ownedIds = owned.map((s) => s.id);
   if (!ownedIds.length) return { ok: true, deleted: 0 };
 
-  await prisma.$transaction(async (tx) => {
-    // Miroirs des récurrents ciblés.
-    const mirrors = await tx.slot.findMany({
-      where: { parentSlotId: { in: ownedIds } },
-      select: { id: true },
-    });
-    const mirrorIds = mirrors.map((m) => m.id);
-    const allSlotIds = [...ownedIds, ...mirrorIds];
-    // Réservations rattachées (récurrentes sur le slot + uniques sur les miroirs).
-    await tx.booking.deleteMany({ where: { slotId: { in: allSlotIds } } });
-    // Miroirs d'abord (pas de FK sur parentSlotId, mais on reste explicite).
-    if (mirrorIds.length) await tx.slot.deleteMany({ where: { id: { in: mirrorIds } } });
-    await tx.slot.deleteMany({ where: { id: { in: ownedIds } } });
-  });
+  let blocked = false;
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        // Miroirs des récurrents ciblés.
+        const mirrors = await tx.slot.findMany({
+          where: { parentSlotId: { in: ownedIds } },
+          select: { id: true },
+        });
+        const mirrorIds = mirrors.map((m) => m.id);
+        const allSlotIds = [...ownedIds, ...mirrorIds];
+        // Réservations rattachées (récurrentes sur le slot + uniques sur les miroirs) :
+        // refus — l'admin doit d'abord les annuler (sinon perte silencieuse en cascade
+        // via Booking.slot onDelete: Cascade).
+        const booked = await tx.booking.count({ where: { slotId: { in: allSlotIds } } });
+        if (booked > 0) {
+          blocked = true;
+          return;
+        }
+        // Miroirs d'abord (pas de FK sur parentSlotId, mais on reste explicite).
+        if (mirrorIds.length) await tx.slot.deleteMany({ where: { id: { in: mirrorIds } } });
+        await tx.slot.deleteMany({ where: { id: { in: ownedIds } } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
+  if (blocked) {
+    return { ok: false, error: "Créneau avec réservation : suppression impossible." };
+  }
   return { ok: true, deleted: ownedIds.length };
 }

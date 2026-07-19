@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import { earliestBookableISO, todayParisISO } from "@/lib/booking-delay";
 import {
   bookingAccompagnantsSchema,
   bookingCreateSchema,
@@ -298,9 +299,10 @@ async function moveInTx(
   userId: string,
   serviceId: string,
   bookingId: number,
+  // `week` (parité annoncée) n'est plus utilisé : la parité de la réservation est
+  // dérivée du créneau cible (Slot.weeks), comme à la création. Conservé pour compat.
   target: { slotId: string; ponctuel: boolean; periodId?: number; week?: string },
 ): Promise<void> {
-  const wk = target.week === "A" || target.week === "B" ? target.week : "";
   const booking = await tx.booking.findFirst({
     where: { id: bookingId, userId, serviceId },
   });
@@ -319,6 +321,11 @@ async function moveInTx(
   if (!slot || slot.serviceId !== serviceId || slot.slotType !== wantType) {
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
+  // La parité de la réservation SUIT le créneau cible (Slot.weeks), comme à la création
+  // (reserveRecurringInTx) — la valeur annoncée par le client n'est plus utilisée : un
+  // "A" forgé sur un créneau toutes-semaines divisait par deux les occurrences
+  // matérialisées (audit 2026-07-19).
+  const slotWeek = !target.ponctuel && (slot.weeks === "A" || slot.weeks === "B") ? slot.weeks : "";
   // Déplacement vers un créneau récurrent → période cible obligatoire (FK bookings.periodId).
   if (!target.ponctuel && !(target.periodId != null && target.periodId > 0)) {
     throw new BookingError("Période requise pour une réservation récurrente.");
@@ -341,13 +348,31 @@ async function moveInTx(
   }
   // Disponibilité de la période CIBLE (colonne « Dispo ») : pas encore ouverte → refus.
   await assertPeriodOpenForUser(tx, target.ponctuel ? slot.periodId : target.periodId);
-  // Vacances scolaires : déplacement vers un créneau PONCTUEL daté en vacances refusé
-  // si l'exercice couvrant la date visée OU le demandeur ferme pendant les vacances
-  // (cohérent avec la création). Date hors de tout exercice = fermée.
-  if (target.ponctuel && slot.slotDate) {
-    const opening = await openingForDate(tx, serviceId, slot.slotDate.toISOString().slice(0, 10));
+  // Déplacement vers un créneau PONCTUEL daté : mêmes gardes de date que la création
+  // (createUniqueBookingInTx) — date passée refusée, délai de réservation re-vérifié
+  // (le move permettait sinon de contourner le délai : créer sur un créneau autorisé
+  // puis glisser vers un créneau encore sous délai, ou vers une date passée — audit
+  // 2026-07-19), vacances scolaires selon exercice ∧ demandeur. Date hors de tout
+  // exercice = fermée.
+  if (target.ponctuel) {
+    if (!slot.slotDate) throw new BookingError("Ce créneau n'est pas disponible.");
+    const slotYmd = slot.slotDate.toISOString().slice(0, 10);
+    if (slotYmd < todayParisISO()) {
+      throw new BookingError("Ce créneau est passé.");
+    }
+    const opening = await openingForDate(tx, serviceId, slotYmd);
     if (!opening) {
       throw new BookingError("Cette date n'est couverte par aucun exercice du service.");
+    }
+    const earliest = earliestBookableISO(
+      slot.service.bookingDelay,
+      opening.activeDays
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean),
+    );
+    if (slotYmd < earliest) {
+      throw new BookingError("Le délai de réservation pour ce créneau n'est pas encore atteint.");
     }
     await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate, opening.openOnSchoolHolidays);
   }
@@ -380,7 +405,7 @@ async function moveInTx(
       slotId: target.slotId,
       // Ponctuel → aucune période (NULL) ; récurrent → période cible (validée plus haut).
       periodId: target.ponctuel ? null : (target.periodId ?? null),
-      week: target.ponctuel ? "" : wk,
+      week: slotWeek,
       validated,
       autoValidateFrom: new Date(),
     },
@@ -396,7 +421,7 @@ async function moveInTx(
       serviceId,
       slotId: target.slotId,
       periodId: target.periodId ?? 0,
-      week: wk,
+      week: slotWeek,
       themeLabel: booking.themeLabel,
       enfants: booking.enfants,
       accompagnants: booking.accompagnants,
@@ -495,8 +520,13 @@ async function updateInTx(
 }
 
 // ── Panier ATOMIQUE : valide tout le brouillon en UNE transaction (tout ou rien) ──
+// Tableaux BORNÉS (audit 2026-07-19) : chaque opération déclenche plusieurs requêtes
+// dans une transaction sérialisable — un brouillon non borné permettait une transaction
+// arbitrairement longue (contention/DoS). Le verrou « une action par cycle » côté UI
+// (guardSingleAction) garde les brouillons légitimes très en deçà de 50.
+const MAX_DRAFT_OPS = 50;
 const draftSchema = z.object({
-  removals: z.array(z.coerce.number().int().positive()).default([]),
+  removals: z.array(z.coerce.number().int().positive()).max(MAX_DRAFT_OPS).default([]),
   updates: z
     .array(
       z.object({
@@ -508,6 +538,7 @@ const draftSchema = z.object({
         theme: bookingThemeSchema.default(""),
       }),
     )
+    .max(MAX_DRAFT_OPS)
     .default([]),
   moves: z
     .array(
@@ -519,6 +550,7 @@ const draftSchema = z.object({
         week: z.string().optional(),
       }),
     )
+    .max(MAX_DRAFT_OPS)
     .default([]),
   adds: z
     .array(
@@ -534,6 +566,7 @@ const draftSchema = z.object({
         accompagnants: bookingAccompagnantsSchema.default(0),
       }),
     )
+    .max(MAX_DRAFT_OPS)
     .default([]),
 });
 
