@@ -20,6 +20,8 @@ export function useDragInteraction<T>(handlers: {
   drag: T | null;
   /** Démarre le drag (à appeler sur mousedown). */
   start: (drag: T) => void;
+  /** Annule le drag en cours SANS finaliser (onUp non appelé). Ex. touche ÉCHAP. */
+  cancel: () => void;
   /** Ref miroir de l'état courant (rarement nécessaire hors du hook). */
   ref: MutableRefObject<T | null>;
 } {
@@ -33,6 +35,9 @@ export function useDragInteraction<T>(handlers: {
     setDrag(v);
   }, []);
   const start = useCallback((d: T) => set(d), [set]);
+  // Annulation : on remet ref ET state à null. Le ref nullifié rend tout `onUp` en
+  // vol inoffensif (`if (cur)` → skip), et le passage à inactif débranche les écouteurs.
+  const cancel = useCallback(() => set(null), [set]);
 
   const active = drag !== null;
   useEffect(() => {
@@ -57,5 +62,5 @@ export function useDragInteraction<T>(handlers: {
     };
   }, [active, set]);
 
-  return { drag, start, ref };
+  return { drag, start, cancel, ref };
 }

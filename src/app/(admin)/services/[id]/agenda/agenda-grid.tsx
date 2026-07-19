@@ -148,6 +148,11 @@ export type Booking = {
 // Bloc = UN créneau un jour donné (modèle partagé, cf. lib/agenda-core).
 type Block = AgendaBlockBase<Booking>;
 
+// Durée d'affichage du bandeau de bilan d'édition de lot avant auto-fermeture (ms),
+// suspendue au survol/focus. Un peu généreuse : l'annulation porte sur des semaines
+// non visibles à l'écran.
+const BATCH_DISMISS_MS = 10000;
+
 type Detail = { booking: Booking } | null;
 type CreateCtx = {
   dayKey: string;
@@ -446,6 +451,9 @@ export function AgendaGrid({
     updated: BatchUpdatedItem[];
     skipped: number;
   } | null>(null);
+  // Auto-fermeture du bandeau de bilan (8 s) : temps écoulé (ms) + pause (survol/focus).
+  const [batchElapsed, setBatchElapsed] = useState(0);
+  const [batchPaused, setBatchPaused] = useState(false);
   // Étiquette de portée affichée pendant un glisser de LOT (compteur « valeur · N
   // créneaux »), positionnée au curseur. Null hors drag de lot.
   const [dragInfo, setDragInfo] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -453,6 +461,53 @@ export function AgendaGrid({
   // + nombre d'occurrences présentes/futures. Stable pendant le geste (le sélecteur ne
   // change pas en cours de drag). Null = geste à portée d'un seul créneau.
   const dragBatchRef = useRef<{ batchId: string; count: number } | null>(null);
+  // Bandeau de bilan : réarme le minuteur à chaque nouvelle édition de lot.
+  useEffect(() => {
+    if (!batchEdit) return;
+    setBatchElapsed(0);
+    setBatchPaused(false);
+  }, [batchEdit]);
+  // Compte à rebours (100 ms), SUSPENDU au survol/focus (batchPaused).
+  useEffect(() => {
+    if (!batchEdit || batchPaused) return;
+    const id = setInterval(() => setBatchElapsed((e) => e + 100), 100);
+    return () => clearInterval(id);
+  }, [batchEdit, batchPaused]);
+  // À échéance (8 s cumulées hors pause) → fermeture du bandeau.
+  useEffect(() => {
+    if (batchEdit && batchElapsed >= BATCH_DISMISS_MS) setBatchEdit(null);
+  }, [batchElapsed, batchEdit]);
+  // ÉCHAP pendant un glisser (dessiner / journée entière / déplacer / redimensionner) →
+  // annule le geste SANS rien créer/déplacer (aperçu abandonné). Écouteur branché
+  // uniquement quand un drag est actif → aucune interférence avec l'ÉCHAP des modales.
+  useEffect(() => {
+    const active = createDrag || allDayDrag || moveDrag || resizeDrag || hResizeDrag;
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      createDragH.cancel();
+      allDayDragH.cancel();
+      moveDragH.cancel();
+      resizeDragH.cancel();
+      hResizeDragH.cancel();
+      setDragInfo(null);
+      dragBatchRef.current = null;
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    createDrag,
+    allDayDrag,
+    moveDrag,
+    resizeDrag,
+    hResizeDrag,
+    createDragH,
+    allDayDragH,
+    moveDragH,
+    resizeDragH,
+    hResizeDragH,
+  ]);
   // Presse-papier « copier / couper une réservation » : la source en attente de collage.
   const [copiedBooking, setCopiedBooking] = useState<{
     id: number;
@@ -3686,7 +3741,13 @@ export function AgendaGrid({
           de masse sur des semaines qu'on ne voit pas). */}
       {batchEdit &&
         createPortal(
+          // Survol/focus → le minuteur d'auto-fermeture se suspend (batchPaused) : le
+          // bandeau ne s'évapore jamais pendant qu'on le lit ou qu'on vise « Annuler ».
           <div
+            onMouseEnter={() => setBatchPaused(true)}
+            onMouseLeave={() => setBatchPaused(false)}
+            onFocusCapture={() => setBatchPaused(true)}
+            onBlurCapture={() => setBatchPaused(false)}
             style={{
               position: "fixed",
               left: "50%",
@@ -3702,6 +3763,7 @@ export function AgendaGrid({
               padding: ".5rem .75rem",
               boxShadow: "0 4px 16px rgba(0,0,0,.2)",
               fontSize: ".8rem",
+              overflow: "hidden",
             }}
           >
             <span>
@@ -3738,6 +3800,21 @@ export function AgendaGrid({
             >
               ×
             </button>
+            {/* Barre de progression : se vide sur BATCH_DISMISS_MS, figée pendant la pause. */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: 0,
+                bottom: 0,
+                height: 2,
+                width: `${Math.max(0, 100 - (batchElapsed / BATCH_DISMISS_MS) * 100)}%`,
+                background: "var(--accent)",
+                opacity: 0.6,
+                transition: "width .1s linear",
+                pointerEvents: "none",
+              }}
+            />
           </div>,
           document.body,
         )}
