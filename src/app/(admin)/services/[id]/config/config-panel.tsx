@@ -1,16 +1,17 @@
 "use client";
 
 // Onglet « Configuration » : réglages globaux + matrice demandeurs (AUTOSAVE) et
-// thèmes (barre de sauvegarde dédiée). Les globaux « Créneaux récurrents » et
-// « Alternance A/B » vivent sur le SERVICE (recurrentMode/semaineAb, persistance
-// immédiate) ; la matrice service × demandeur ne porte plus que validation/thèmes.
+// thèmes (barre de sauvegarde dédiée). Le récurrent et l'alternance Semaine A/B sont
+// désormais toujours disponibles et se pilotent créneau par créneau dans l'agenda
+// (bouton « Semaine A/B ») ; la matrice service × demandeur ne porte plus que
+// validation/thèmes.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Switch } from "@/components/switch";
 import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
-import { setGaugeAccompagnantsAction, setRecurrentModeAction } from "./actions";
+import { setGaugeAccompagnantsAction } from "./actions";
 
 // ── Types & helpers ──────────────────────────────────────────────────────────
 
@@ -31,7 +32,6 @@ type Props = {
   initialThemeMode: ThemeMode;
   initialThemes: string[];
   initialGaugeAccompagnants: boolean;
-  initialRecurrentMode: boolean;
 };
 
 /** Reprojette l'état par-demandeur vers la matrice service × demandeur.
@@ -84,7 +84,6 @@ export function ConfigPanel({
   initialThemeMode,
   initialThemes,
   initialGaugeAccompagnants,
-  initialRecurrentMode,
 }: Props) {
   const counter = useRef(0);
 
@@ -96,14 +95,6 @@ export function ConfigPanel({
     setGaugeAccompagnants(v);
     startGaugeAcc(async () => {
       await setGaugeAccompagnantsAction(serviceId, v);
-    });
-  }
-  const [recurrentMode, setRecurrentMode] = useState(initialRecurrentMode);
-  const [, startRecurrent] = useTransition();
-  function toggleRecurrentMode(v: boolean) {
-    setRecurrentMode(v);
-    startRecurrent(async () => {
-      await setRecurrentModeAction(serviceId, v);
     });
   }
   const [rows, setRows] = useState<DemRow[]>(() =>
@@ -256,14 +247,10 @@ export function ConfigPanel({
             S'appliquent à tout le service. Enregistrement automatique.
           </p>
 
-          <GlobalRow
-            label="Créneaux récurrents"
-            desc="Le service propose des créneaux qui reviennent chaque semaine (création dans l'agenda, mode « Création de créneau »). L'alternance Semaine A/B se règle créneau par créneau via le bouton « Semaine A/B » de l'agenda."
-          >
-            <Switch on={recurrentMode} onChange={toggleRecurrentMode} />
-          </GlobalRow>
-          {/* La jauge s'active désormais PAR CRÉNEAU (icône capsule du mode création
-              de l'agenda, colonne slots.jauge) — plus de bascule globale ici. */}
+          {/* Récurrent (Modèle) et alternance A/B ne sont plus des réglages service : tout
+              service propose des créneaux récurrents, et la parité A/B se choisit créneau par
+              créneau via le bouton « Semaine A/B » de l'agenda. La jauge s'active PAR CRÉNEAU
+              (icône capsule du mode création). */}
           <GlobalRow
             label="Jauge — prise en compte des accompagnants"
             desc="Prendre en compte les accompagnants dans le calcul de la jauge des créneaux qui en ont une."

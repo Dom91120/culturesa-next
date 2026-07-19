@@ -1299,7 +1299,7 @@ export function UserAgendaGrid({
     [mondayStr, coveringPeriod, openingForYmd, schoolHolidays],
   );
 
-  // ── Semaines A/B ── (réglage GLOBAL du service : Service.recurrentMode ∧ semaineAb)
+  // ── Semaines A/B ── (toujours disponible ; la parité est portée par chaque créneau, Slot.weeks)
   const abMode = modes.abMode;
   const realWeekParity: "A" | "B" | null = mondayStr ? slotWeekTag(mondayStr) : null;
   // Semaine effective filtrée = parité de la date affichée (mode A/B seulement).

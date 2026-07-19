@@ -5,7 +5,6 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { isBookingLockedByPointage } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
-import { slotWeekTag } from "@/lib/iso-week";
 import {
   bookingAccompagnantsSchema,
   bookingEnfantsSchema,
@@ -500,7 +499,6 @@ export async function deleteSlotSeriesAction(
       capacity: true,
       jauge: true,
       demandeurs: { select: { demandeurId: true } },
-      service: { select: { recurrentMode: true } },
     },
   });
   if (!ref?.slotDate) return { ok: false, error: "Créneau introuvable." };
@@ -510,9 +508,10 @@ export async function deleteSlotSeriesAction(
     revalidatePath(`/services/${serviceId}/agenda`);
     return res.ok ? { ok: true, deleted: res.deleted } : { ok: false, error: res.error };
   }
-  const abMode = ref.service.recurrentMode;
+  // La « série » = tous les ponctuels autonomes de la période partageant jour de semaine,
+  // horaires, capacité, jauge et demandeurs — TOUTES parités confondues (un multi peut avoir
+  // été créé pour toutes les semaines OU une seule parité, cf. bouton « Semaine A/B »).
   const refDow = ref.slotDate.getUTCDay();
-  const refParity = slotWeekTag(ref.slotDate.toISOString().slice(0, 10));
   const demKey = (rows: { demandeurId: number }[]) =>
     rows
       .map((d) => d.demandeurId)
@@ -536,7 +535,6 @@ export async function deleteSlotSeriesAction(
   const ids = candidates
     .filter((c) => {
       if (!c.slotDate || c.slotDate.getUTCDay() !== refDow) return false;
-      if (abMode && slotWeekTag(c.slotDate.toISOString().slice(0, 10)) !== refParity) return false;
       return demKey(c.demandeurs) === refDem;
     })
     .map((c) => c.id);

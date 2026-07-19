@@ -994,7 +994,9 @@ export function AgendaGrid({
     for (let guard = 0; guard < 120 && monday <= p.dateEnd; guard++) {
       const weekMonday = monday;
       monday = ymd(addDays(monday, 7));
-      if (abMode && realWeekParity && slotWeekTag(weekMonday) !== realWeekParity) continue;
+      // Bouton « Semaine A/B » activé → réplique uniquement sur la parité affichée ;
+      // désactivé → toutes les semaines de la période.
+      if (parityScoped && realWeekParity && slotWeekTag(weekMonday) !== realWeekParity) continue;
       const d = ymd(addDays(weekMonday, off));
       if (d < p.dateStart || d > p.dateEnd) continue;
       const o = openingForYmd(d);
@@ -1192,15 +1194,15 @@ export function AgendaGrid({
     const p = periodCoveringDate(target.slotDate);
     if (!p) return 0;
     const dow = dayKeyFromYmd(target.slotDate);
-    const parity = slotWeekTag(target.slotDate);
     const demKey = (id: string) => [...(slotDemandeurs[id] ?? [])].sort((a, b) => a - b).join(",");
     const refDem = demKey(target.id);
+    // Série = mêmes jour/horaires/capacité/jauge/demandeurs sur la période, TOUTES parités
+    // confondues (aligné sur deleteSlotSeriesAction).
     return uniqueSlots.filter((s) => {
       if (s.parentSlotId || !s.slotDate) return false;
       if (p.dateStart && s.slotDate < p.dateStart) return false;
       if (p.dateEnd && s.slotDate > p.dateEnd) return false;
       if (dayKeyFromYmd(s.slotDate) !== dow) return false;
-      if (abMode && slotWeekTag(s.slotDate) !== parity) return false;
       if (s.startTime !== target.startTime || s.endTime !== target.endTime) return false;
       if ((s.capacity ?? null) !== (target.capacity ?? null) || s.jauge !== target.jauge)
         return false;

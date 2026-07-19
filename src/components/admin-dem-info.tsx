@@ -13,8 +13,8 @@ export type DemInfoRow = {
 
 // Bandeau debug admin (port du legacy `dem-info-*`) : liste des demandeurs du
 // service avec leurs modes (Validation, Thèmes — la jauge est portée par chaque
-// créneau [slots.jauge] ; récurrent et A/B sont GLOBAUX au service
-// [Service.recurrentMode/semaineAb]) et les deux flags d'ouverture (jours fériés /
+// créneau [slots.jauge] ; récurrent et A/B sont toujours disponibles, pilotés
+// créneau par créneau [Slot.weeks]) et les deux flags d'ouverture (jours fériés /
 // vacances scolaires), comme le bandeau debug de la page réservations. Affiché
 // uniquement quand le mode debug est actif (localStorage `rc_debug` / classe
 // `body.debug-mode`), activable depuis Configuration.

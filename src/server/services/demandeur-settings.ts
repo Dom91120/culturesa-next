@@ -7,8 +7,8 @@ import { openingForDate } from "@/server/services/opening";
  * global) activé pour ce service, avec ses 2 modes booléens.
  *   - `validation`  : les réservations passent par une validation.
  *   - `themes`      : la saisie d'un thème est demandée.
- * (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge. Le mode récurrent et
- * l'alternance A/B sont GLOBAUX au service — Service.recurrentMode/semaineAb.)
+ * (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge. Le récurrent et
+ * l'alternance A/B sont toujours disponibles, réglés créneau par créneau — Slot.weeks.)
  */
 export type DemandeurSettingRow = {
   demandeurId: number;

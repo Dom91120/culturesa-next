@@ -20,7 +20,6 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       id: true,
       label: true,
       capacity: true,
-      recurrentMode: true,
       themesMode: true,
       showPreviousExercices: true,
       gaugeAccompagnants: true,
@@ -28,11 +27,11 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   });
   if (!service) notFound();
 
-  // Modes : récurrent et A/B sont GLOBAUX au service (Service.recurrentMode/semaineAb) ;
-  // validation/thèmes sont dérivés de la matrice service × demandeur.
-  // Les lignes (avec libellé) servent aussi au bandeau debug admin.
+  // Modes : récurrent et A/B sont désormais TOUJOURS disponibles (la parité se règle par
+  // créneau) ; validation/thèmes sont dérivés de la matrice service × demandeur. Les lignes
+  // (avec libellé) servent aussi au bandeau debug admin.
   const demRows = await getServiceDemandeurSettingsLabeled(id);
-  const modes = deriveServiceModes(service, demRows);
+  const modes = deriveServiceModes(demRows);
 
   // Champs de période chargés pour les onglets/bornes de l'agenda.
   const periodSelect = {

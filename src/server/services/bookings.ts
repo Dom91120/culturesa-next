@@ -585,7 +585,7 @@ export async function assertBookingUnlocked(
 // ANONYMISÉES (uniquement enfants/validated pour la jauge) + un drapeau `mine`
 // et l'id de la résa propre (pour badge ✅/⏳ et annulation). Les `modes`
 // validation/thèmes sont dérivés du demandeur DE L'USAGER (cf. legacy _userDem) ;
-// récurrent et A/B sont GLOBAUX au service (Service.recurrentMode/semaineAb).
+// récurrent et A/B sont toujours disponibles, réglés créneau par créneau (Slot.weeks).
 // Forme alignée sur le type Booking de l'agenda (pour réutiliser le moteur de
 // rendu), mais ANONYMISÉE : name/demandeur/structure vides, accompagnants 0,
 // theme "", pointage null. `mine` = réservation de l'usager courant.
@@ -780,12 +780,12 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     visibleBookings = bookings.filter((b) => visibleSlotIds.has(b.slotId));
   }
 
-  // Modes : récurrent et A/B sont GLOBAUX au service (Service.recurrentMode/semaineAb) ;
-  // validation/thèmes restent dérivés du demandeur EFFECTIF de l'usager (repli sur
-  // tous si non rattaché).
+  // Modes : récurrent et A/B sont toujours disponibles (réglés créneau par créneau,
+  // Slot.weeks) ; validation/thèmes restent dérivés du demandeur EFFECTIF de l'usager
+  // (repli sur tous si non rattaché).
   const mineSettings =
     effDemandeurId != null ? settings.filter((s) => s.demandeurId === effDemandeurId) : [];
-  const modes = deriveServiceModes(service, mineSettings.length ? mineSettings : settings);
+  const modes = deriveServiceModes(mineSettings.length ? mineSettings : settings);
 
   // Vacances scolaires de la zone configurée : sert à filtrer les dates « prédites »
   // d'un créneau récurrent quand le demandeur de l'usager ferme pendant les vacances
