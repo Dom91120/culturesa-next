@@ -68,6 +68,7 @@ import {
   createRecurringSlotAction,
   createUniqueBookingAction,
   createUniqueSlotAction,
+  createUniqueSlotBatchAction,
   cutBookingAction,
   deleteBookingAdminAction,
   deleteSlotAction,
@@ -1145,30 +1146,24 @@ export function AgendaGrid({
         Promise.all(
           targets.flatMap((dayKey) => {
             const dates = uniqueCreateDates(dayKey);
-            return segments.flatMap(([s, e]) => {
-              // 1 lot « multi » = 1 (jour de semaine, créneau horaire) répliqué sur la
-              // période : un batchId commun partagé par toutes ses dates. Pas de lot si un
-              // seul créneau (multi off, ou période à une seule semaine) → batchId null.
-              const batchId =
-                createKind === "multi" && dates.length > 1 ? crypto.randomUUID() : null;
-              // Portée de parité du lot (Multi A / B / toutes) stockée sur chaque créneau :
-              // = createWeeks (parité affichée si « Semaine A/B » actif, sinon ""). Ponctuel
-              // isolé (hors lot) → "".
-              const batchWeeks = batchId ? createWeeks : "";
-              return dates.map((slotDate) =>
-                createUniqueSlotAction({
-                  serviceId: service.id,
-                  slotDate,
-                  startTime: minToHHMM(s),
-                  endTime: minToHHMM(e),
-                  capacity: createCap,
-                  demandeurIds: createDemIds,
-                  jauge: jaugeMode,
-                  batchId,
-                  weeks: batchWeeks,
-                }),
-              );
-            });
+            // 1 lot « multi » = 1 (jour de semaine, créneau horaire) répliqué sur la
+            // période, créé ATOMIQUEMENT côté serveur (une transaction, batchId généré
+            // serveur — l'ancien Promise.all de N actions pouvait laisser un demi-lot
+            // en base, audit 2026-07-19). Le serveur ne pose batchId/parité que si le
+            // lot compte plusieurs dates (ponctuel isolé → hors lot) ; la parité
+            // transmise = createWeeks (parité affichée si « Semaine A/B » actif).
+            return segments.map(([s, e]) =>
+              createUniqueSlotBatchAction({
+                serviceId: service.id,
+                dates,
+                startTime: minToHHMM(s),
+                endTime: minToHHMM(e),
+                capacity: createCap,
+                demandeurIds: createDemIds,
+                jauge: jaugeMode,
+                weeks: createWeeks,
+              }),
+            );
           }),
         ),
       );

@@ -63,6 +63,27 @@ export const recurringSlotCreateSchema = z
   })
   .refine(hoursOrdered, hoursOrderedMsg);
 
+// Création d'un LOT de créneaux ponctuels (« Création multiple » : un même couple
+// {jour de semaine, horaire} répliqué sur les semaines de la période). Le batchId
+// n'est PAS accepté du client : il est généré CÔTÉ SERVEUR (un batchId forgé
+// permettait de rattacher des créneaux à un lot existant — audit 2026-07-19), et le
+// lot entier est créé dans une seule transaction (atomicité, cf. addUniqueSlotBatch).
+export const uniqueSlotBatchCreateSchema = z
+  .object({
+    serviceId: stringIdSchema,
+    // ≤ 200 dates : une période fait au plus ~53 semaines, marge large incluse.
+    dates: z.array(z.string().regex(DATE_RE, "Date invalide (format AAAA-MM-JJ).")).min(1).max(200),
+    startTime: time("Heure de début"),
+    endTime: time("Heure de fin"),
+    capacity,
+    demandeurIds,
+    jauge,
+    // Portée de parité du lot ("A" | "B" | "" = toutes) — appliquée seulement si le
+    // lot compte plusieurs dates (normalizeWeeks côté service).
+    weeks: z.string().max(8).optional(),
+  })
+  .refine(hoursOrdered, hoursOrderedMsg);
+
 // Déplacement / redimensionnement d'un créneau : mêmes bornes horaires que la
 // création (heures vides = journée entière, sinon HH:MM strict et fin > début),
 // sans capacité ni demandeurs (inchangés au déplacement). Les actions de move

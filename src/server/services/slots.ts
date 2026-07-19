@@ -14,6 +14,22 @@ import {
  *  réservation existante). Message destiné à l'admin. */
 export class SlotMutationError extends Error {}
 
+/**
+ * Mappe une erreur de mutation de créneau vers `{ ok:false, error }` : message métier
+ * (SlotMutationError), conflit de sérialisation (P2034), sinon erreur LOGGÉE côté
+ * serveur et message générique — un message Prisma brut (contraintes, colonnes) ne
+ * remonte plus à l'UI et l'erreur inattendue n'est plus avalée sans trace (audit
+ * 2026-07-19, aligné sur le pattern mapBookingError de bookings.ts).
+ */
+function mapSlotError(e: unknown, context: string): { ok: false; error: string } {
+  if (e instanceof SlotMutationError) return { ok: false, error: e.message };
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+    return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
+  }
+  console.error(`[slots] ${context}`, e);
+  return { ok: false, error: "Échec de l'enregistrement du créneau." };
+}
+
 // Helpers de l'agenda admin (mode « Création de créneau ») : ajout/copie/déplacement/
 // suppression de créneaux + génération de leurs miroirs. L'API « upsert en masse »
 // de l'ancien onglet Créneaux (saveRecurringSlots/saveUniqueSlots, getCreneauxData,
@@ -72,8 +88,10 @@ function normalizeDemandeurIds(demandeurIds: number[] | undefined): number[] {
 }
 
 /** Id de la période du service couvrant une date « YYYY-MM-DD », sinon null. Source
- *  unique du rattachement d'un créneau ponctuel (création ET déplacement) — findFirst,
- *  sans départage si deux périodes se chevauchent (cf. audit orderBy). */
+ *  unique du rattachement d'un créneau ponctuel (création ET déplacement). Départage
+ *  DÉTERMINISTE par id croissant si deux périodes (d'exercices différents) se
+ *  chevauchent — un findFirst sans orderBy dépendait du plan d'exécution (audit
+ *  2026-07-19), même règle que loadPeriodResolver. */
 async function periodIdCoveringDate(serviceId: string, slotDate: string): Promise<number | null> {
   const period = await prisma.period.findFirst({
     where: {
@@ -82,8 +100,33 @@ async function periodIdCoveringDate(serviceId: string, slotDate: string): Promis
       dateEnd: { gte: fromISO(slotDate) },
     },
     select: { id: true },
+    orderBy: { id: "asc" },
   });
   return period?.id ?? null;
+}
+
+/**
+ * Résolveur de rattachement date → période pour les opérations de LOT : charge les
+ * périodes datées du service en UNE requête et renvoie `date « YYYY-MM-DD » →
+ * periodId couvrant (null si aucune)`. Même règle que periodIdCoveringDate, départage
+ * déterministe par id croissant.
+ */
+async function loadPeriodResolver(
+  db: Prisma.TransactionClient,
+  serviceId: string,
+): Promise<(dateStr: string) => number | null> {
+  const periods = await db.period.findMany({
+    where: { serviceId, dateStart: { not: null }, dateEnd: { not: null } },
+    select: { id: true, dateStart: true, dateEnd: true },
+    orderBy: { id: "asc" },
+  });
+  return (dateStr: string) => {
+    const d = fromISO(dateStr);
+    for (const p of periods) {
+      if (p.dateStart && p.dateEnd && p.dateStart <= d && d <= p.dateEnd) return p.id;
+    }
+    return null;
+  };
 }
 
 // ─── Mirror generation (ported from api/slots.php save_recurring) ───
@@ -370,7 +413,7 @@ export async function addRecurringSlot(
       if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+    return mapSlotError(e, "addRecurringSlot");
   }
   return { ok: true, id: slId };
 }
@@ -487,7 +530,7 @@ export async function copyRecurringWeek(
       { timeout: 60_000, maxWait: 10_000 },
     );
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+    return mapSlotError(e, "copyRecurringWeek");
   }
   return { ok: true, created };
 }
@@ -545,9 +588,94 @@ export async function addUniqueSlot(
       }
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+    return mapSlotError(e, "addUniqueSlot");
   }
   return { ok: true, id };
+}
+
+/**
+ * Crée un LOT de créneaux ponctuels (« Création multiple » : un même couple
+ * {jour, horaire} répliqué sur les semaines de la période) en UNE transaction :
+ * un créneau par date couverte par une période du service (les dates hors période
+ * sont ignorées et comptées dans `skipped`), demandeurs autorisés posés dans la
+ * même transaction, batchId GÉNÉRÉ CÔTÉ SERVEUR quand le lot compte plusieurs
+ * dates. Remplace le Promise.all client de N addUniqueSlot (audit 2026-07-19 :
+ * demi-lot possible en cas d'échec à mi-course + batchId forgé côté client).
+ */
+export async function addUniqueSlotBatch(
+  serviceId: string,
+  input: {
+    dates: string[];
+    startTime: string;
+    endTime: string;
+    capacity: number;
+    demandeurIds?: number[];
+    jauge?: boolean;
+    // Portée de parité du lot ("A" | "B" | "" = toutes) — même sens que Slot.weeks.
+    weeks?: string;
+  },
+): Promise<{ ok: true; created: number; skipped: number } | { ok: false; error: string }> {
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { id: true },
+  });
+  if (!service) return { ok: false, error: "Service introuvable" };
+  const dates = [...new Set(input.dates)];
+  const demandeurIds = normalizeDemandeurIds(input.demandeurIds);
+  // Règles de lot alignées sur l'ancien orchestrateur client : batchId et parité
+  // seulement si le lot compte plusieurs dates (un ponctuel isolé reste hors lot).
+  const isBatch = dates.length > 1;
+  const batchId = isBatch ? crypto.randomUUID() : null;
+  const weeks = isBatch ? normalizeWeeks(input.weeks) : "";
+  let created = 0;
+  let skipped = 0;
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        created = 0;
+        skipped = 0; // ré-entrant si la transaction est rejouée
+        const periodFor = await loadPeriodResolver(tx, serviceId);
+        const rows: Prisma.SlotCreateManyInput[] = [];
+        for (const d of dates) {
+          const periodId = periodFor(d);
+          if (periodId == null) {
+            skipped++;
+            continue;
+          }
+          rows.push({
+            id: newRecurId(),
+            serviceId,
+            slotType: "unique",
+            startTime: input.startTime,
+            endTime: input.endTime,
+            slotDate: fromISO(d),
+            capacity: input.capacity,
+            periodId,
+            jauge: input.jauge ?? false,
+            batchId,
+            weeks,
+          });
+        }
+        if (rows.length) {
+          await tx.slot.createMany({ data: rows });
+          // Demandeurs autorisés dans la même transaction (cf. addUniqueSlot) : un
+          // échec annule tout le lot au lieu de l'ouvrir à tous.
+          if (demandeurIds.length) {
+            await tx.slotDemandeur.createMany({
+              data: rows.flatMap((r) =>
+                demandeurIds.map((demandeurId) => ({ slotId: r.id as string, demandeurId })),
+              ),
+            });
+          }
+        }
+        created = rows.length;
+      },
+      { timeout: 60_000, maxWait: 10_000 },
+    );
+  } catch (e) {
+    return mapSlotError(e, "addUniqueSlotBatch");
+  }
+  return { ok: true, created, skipped };
 }
 
 // ─── Déplacement d'UN créneau vide depuis l'agenda (mode « Création ») ──────────
@@ -632,10 +760,7 @@ export async function moveRecurringSlot(
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
-    }
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+    return mapSlotError(e, "moveRecurringSlot");
   }
   if (blocked) {
     return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
@@ -676,10 +801,7 @@ export async function moveUniqueSlot(
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
-    }
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+    return mapSlotError(e, "moveUniqueSlot");
   }
   if (blocked) {
     return { ok: false, error: "Créneau avec réservation : déplacement impossible." };
@@ -719,20 +841,8 @@ export async function moveUniqueSlotBatch(
           distinct: ["slotId"],
         });
         const booked = new Set(bookedRows.map((b) => b.slotId));
-        // Périodes du service chargées UNE fois : rattachement recalculé en mémoire
-        // (même règle que periodIdCoveringDate ; départage déterministe par id croissant).
-        const periods = await tx.period.findMany({
-          where: { serviceId, dateStart: { not: null }, dateEnd: { not: null } },
-          select: { id: true, dateStart: true, dateEnd: true },
-          orderBy: { id: "asc" },
-        });
-        const periodFor = (dateStr: string): number | null => {
-          const d = fromISO(dateStr);
-          for (const p of periods) {
-            if (p.dateStart && p.dateEnd && p.dateStart <= d && d <= p.dateEnd) return p.id;
-          }
-          return null;
-        };
+        // Rattachement date → période recalculé en mémoire (une requête, cf. resolver).
+        const periodFor = await loadPeriodResolver(tx, serviceId);
         for (const it of items) {
           const slot = ownedById.get(it.id);
           if (!slot || slot.parentSlotId || booked.has(it.id)) continue;
@@ -757,10 +867,7 @@ export async function moveUniqueSlotBatch(
       },
     );
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
-    }
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+    return mapSlotError(e, "moveUniqueSlotBatch");
   }
   return { ok: true, movedIds };
 }
@@ -812,10 +919,7 @@ export async function deleteSlots(
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
-    }
-    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+    return mapSlotError(e, "deleteSlots");
   }
   if (blocked) {
     return { ok: false, error: "Créneau avec réservation : suppression impossible." };

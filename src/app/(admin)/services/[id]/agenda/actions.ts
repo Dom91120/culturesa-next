@@ -19,6 +19,7 @@ import {
   recurringSlotCreateSchema,
   slotDateSchema,
   slotMoveTimesSchema,
+  uniqueSlotBatchCreateSchema,
   uniqueSlotCreateSchema,
 } from "@/schemas/slot";
 import { prisma } from "@/server/db";
@@ -42,6 +43,7 @@ import {
 import {
   addRecurringSlot,
   addUniqueSlot,
+  addUniqueSlotBatch,
   copyRecurringWeek,
   deleteSlots,
   moveRecurringSlot,
@@ -448,6 +450,42 @@ export async function createUniqueSlotAction(input: {
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
+/**
+ * Crée un LOT de créneaux ponctuels (« Création multiple ») : toutes les dates en UNE
+ * transaction, batchId généré côté serveur (cf. addUniqueSlotBatch — l'orchestration
+ * client par Promise.all pouvait laisser un demi-lot en base, audit 2026-07-19).
+ */
+export async function createUniqueSlotBatchAction(input: {
+  serviceId: string;
+  dates: string[];
+  startTime: string;
+  endTime: string;
+  capacity: number;
+  demandeurIds?: number[];
+  jauge?: boolean;
+  weeks?: string;
+}): Promise<{ ok: boolean; error?: string; created?: number; skipped?: number }> {
+  await requireServiceManager(input.serviceId);
+  const parsed = uniqueSlotBatchCreateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+  }
+  const d = parsed.data;
+  const res = await addUniqueSlotBatch(d.serviceId, {
+    dates: d.dates,
+    startTime: d.startTime,
+    endTime: d.endTime,
+    capacity: d.capacity,
+    demandeurIds: d.demandeurIds,
+    jauge: d.jauge,
+    weeks: d.weeks,
+  });
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return res.ok
+    ? { ok: true, created: res.created, skipped: res.skipped }
+    : { ok: false, error: res.error };
 }
 
 /** Déplace un créneau récurrent vide (jour + horaires) depuis l'agenda. */

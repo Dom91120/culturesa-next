@@ -9,6 +9,11 @@ import { buildMirrorRows, loadMirrorContext, newRecurId } from "@/server/service
 // Types
 // =====================================================================================
 
+/** Erreur métier de bascule d'exercice (message destiné à l'admin) — distinguée des
+ *  erreurs techniques : l'action ne relaie que ces messages, les autres sont loggées
+ *  et génériques (audit 2026-07-19, cf. B2). */
+export class CycleError extends Error {}
+
 export type CycleOptions = {
   recreatePeriods: boolean;
   recreateSlots: boolean;
@@ -146,7 +151,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
   return prisma.$transaction(
     async (tx) => {
       const service = await tx.service.findUnique({ where: { id: serviceId } });
-      if (!service) throw new Error("Service introuvable.");
+      if (!service) throw new CycleError("Service introuvable.");
 
       // 1. exercice COURANT = le plus récent du service (date de début la plus tardive,
       // nulls en dernier, puis id). C'est lui qu'on reconduit : depuis la simplification
@@ -165,7 +170,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         orderBy: [{ dateStart: { sort: "asc", nulls: "last" } }, { id: "asc" }],
       });
       if (actives.length === 0) {
-        throw new Error("Aucune période active à reconduire.");
+        throw new CycleError("Aucune période active à reconduire.");
       }
 
       // 2. snapshot des créneaux récurrents actifs par période active — UNE requête

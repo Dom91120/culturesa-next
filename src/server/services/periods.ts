@@ -336,21 +336,26 @@ export async function createServicePeriod(
   input: CreateServicePeriodInput,
 ): Promise<PeriodRow> {
   await validatePeriodWithinExercice(serviceId, input.exerciceId, input.dateStart, input.dateEnd);
-  const period = await prisma.period.create({
-    data: {
-      serviceId,
-      exerciceId: input.exerciceId,
-      label: input.label,
-      etiquette: input.etiquette,
-      dateStart: input.dateStart,
-      dateEnd: input.dateEnd,
-      disponibilite: input.disponibilite,
-      color: input.color,
-    },
-    select: PERIOD_SELECT,
+  // Create + peuplement de period_holidays dans UNE transaction : sans quoi un échec du
+  // refresh laissait une période avec une table de fériés vide → les miroirs créés
+  // ensuite « fuient » les jours fériés (audit 2026-07-19, cf. doc de refreshPeriodHolidays).
+  return prisma.$transaction(async (tx) => {
+    const period = await tx.period.create({
+      data: {
+        serviceId,
+        exerciceId: input.exerciceId,
+        label: input.label,
+        etiquette: input.etiquette,
+        dateStart: input.dateStart,
+        dateEnd: input.dateEnd,
+        disponibilite: input.disponibilite,
+        color: input.color,
+      },
+      select: PERIOD_SELECT,
+    });
+    await refreshPeriodHolidays(period.id, tx);
+    return period;
   });
-  await refreshPeriodHolidays(period.id);
-  return period;
 }
 
 export type UpdateServicePeriodInput = {

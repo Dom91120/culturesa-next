@@ -5,7 +5,12 @@ import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { stringIdSchema } from "@/schemas/config";
 import { requireServiceManager } from "@/server/guards";
-import { cycleService, setShowPreviousExercices, undoCycle } from "@/server/services/exercice";
+import {
+  CycleError,
+  cycleService,
+  setShowPreviousExercices,
+  undoCycle,
+} from "@/server/services/exercice";
 
 /** Variante d'ActionState renvoyant les compteurs du cycle. */
 export type CycleActionState =
@@ -35,7 +40,9 @@ export async function setShowPreviousExercicesAction(
     revalidate(parsed.data.serviceId);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Échec de l'enregistrement." };
+    if (err instanceof CycleError) return { ok: false, error: err.message };
+    console.error("[exercice] setShowPreviousExercices", err);
+    return { ok: false, error: "Échec de l'enregistrement." };
   }
 }
 
@@ -63,7 +70,9 @@ export async function cycleAction(
     revalidate(parsed.data.serviceId);
     return { ok: true, created: res.created, slotsCreated: res.slotsCreated };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Échec du cycle." };
+    if (err instanceof CycleError) return { ok: false, error: err.message };
+    console.error("[exercice] cycleService", err);
+    return { ok: false, error: "Échec du cycle." };
   }
 }
 
@@ -80,6 +89,8 @@ export async function undoCycleAction(serviceId: string): Promise<ActionState> {
     revalidate(parsed.data.serviceId);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Échec de l'annulation." };
+    if (err instanceof CycleError) return { ok: false, error: err.message };
+    console.error("[exercice] undoCycle", err);
+    return { ok: false, error: "Échec de l'annulation." };
   }
 }
