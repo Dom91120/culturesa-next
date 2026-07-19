@@ -32,6 +32,7 @@ import {
   BookingError,
   effectiveOpenOnSchoolHolidays,
   mapBookingError,
+  resolveEffectiveDemandeurId,
 } from "@/server/services/bookings";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
 import {
@@ -45,6 +46,7 @@ import {
   deleteSlots,
   moveRecurringSlot,
   moveUniqueSlot,
+  moveUniqueSlotBatch,
 } from "@/server/services/slots";
 
 // Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
@@ -325,8 +327,21 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
   }[]
 > {
   await requireServiceManager(serviceId);
+  // Moindre privilège (audit 2026-07-19) : seuls les usagers dont le demandeur EFFECTIF
+  // est accepté par CE service (matrice demandeurs) sont proposés — un gestionnaire ne
+  // voyait sinon l'annuaire complet de la collectivité. Les comptes SANS demandeur
+  // effectif restent proposés (cohérent avec userCanAccessService) ; les comptes
+  // anonymisés sont exclus.
+  const accepted = new Set(
+    (
+      await prisma.serviceDemandeurSettings.findMany({
+        where: { serviceId },
+        select: { demandeurId: true },
+      })
+    ).map((r) => r.demandeurId),
+  );
   const users = await prisma.user.findMany({
-    where: { role: "utilisateur" },
+    where: { role: "utilisateur", anonymizedAt: null },
     orderBy: [{ nom: "asc" }, { prenom: "asc" }],
     select: {
       id: true,
@@ -334,24 +349,34 @@ export async function listAgendaUsersAction(serviceId: string): Promise<
       prenom: true,
       enfants: true,
       accompagnants: true,
+      demandeurId: true,
       demandeur: { select: { label: true, openOnSchoolHolidays: true } },
       structure: {
-        select: { label: true, demandeur: { select: { openOnSchoolHolidays: true } } },
+        select: {
+          label: true,
+          demandeurId: true,
+          demandeur: { select: { openOnSchoolHolidays: true } },
+        },
       },
     },
   });
-  return users.map((u) => ({
-    id: u.id,
-    label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
-    demandeur: u.demandeur?.label ?? "",
-    structure: u.structure?.label ?? "",
-    // Politique vacances scolaires du demandeur EFFECTIF (direct, sinon structure ; false =
-    // fermé → occurrences exclues).
-    openOnSchoolHolidays: effectiveOpenOnSchoolHolidays(u),
-    // Profil (préremplit Enfant/Adulte dans la modale de création à la sélection).
-    enfants: u.enfants,
-    accompagnants: u.accompagnants,
-  }));
+  return users
+    .filter((u) => {
+      const demId = resolveEffectiveDemandeurId(u);
+      return demId == null || accepted.has(demId);
+    })
+    .map((u) => ({
+      id: u.id,
+      label: `${u.nom} ${u.prenom}`.trim() + (u.demandeur ? ` — ${u.demandeur.label}` : ""),
+      demandeur: u.demandeur?.label ?? "",
+      structure: u.structure?.label ?? "",
+      // Politique vacances scolaires du demandeur EFFECTIF (direct, sinon structure ; false =
+      // fermé → occurrences exclues).
+      openOnSchoolHolidays: effectiveOpenOnSchoolHolidays(u),
+      // Profil (préremplit Enfant/Adulte dans la modale de création à la sélection).
+      enfants: u.enfants,
+      accompagnants: u.accompagnants,
+    }));
 }
 
 /** Crée un créneau récurrent (vue Modèle de période). */
@@ -616,24 +641,35 @@ export async function updateSlotBatchAction(input: {
     select: { id: true, slotDate: true, startTime: true, endTime: true },
     orderBy: { slotDate: "asc" },
   });
-  const updated: BatchUpdatedItem[] = [];
-  let skipped = 0;
-  for (const s of siblings) {
-    if (!s.slotDate) {
-      skipped++;
-      continue;
-    }
-    const prev: BatchUpdatedItem = {
+  // Tout le lot en UNE transaction sérialisable (audit perf 2026-07-19 — l'ancienne
+  // boucle ouvrait une transaction PAR occurrence : ~2-5 s par geste sur un lot
+  // annuel, et un crash à mi-boucle laissait un demi-lot déplacé). Les occurrences
+  // réservées/hors période restent ignorées une à une (comptées dans `skipped`).
+  const candidates = siblings.filter(
+    (s): s is (typeof siblings)[number] & { slotDate: Date } => s.slotDate != null,
+  );
+  const prevOf = (s: (typeof candidates)[number]): BatchUpdatedItem => ({
+    id: s.id,
+    slotDate: shiftYmd(s.slotDate, 0),
+    startTime: s.startTime,
+    endTime: s.endTime,
+  });
+  const res = await moveUniqueSlotBatch(
+    serviceId,
+    candidates.map((s) => ({
       id: s.id,
-      slotDate: shiftYmd(s.slotDate, 0),
-      startTime: s.startTime,
-      endTime: s.endTime,
-    };
-    const newDate = dayDelta ? shiftYmd(s.slotDate, dayDelta) : prev.slotDate;
-    const res = await moveUniqueSlot(serviceId, s.id, newDate, startTime, endTime);
-    if (res.ok) updated.push(prev);
-    else skipped++;
+      slotDate: dayDelta ? shiftYmd(s.slotDate, dayDelta) : shiftYmd(s.slotDate, 0),
+      startTime,
+      endTime,
+    })),
+  );
+  if (!res.ok) {
+    revalidatePath(`/services/${serviceId}/agenda`);
+    return { ok: false, error: res.error };
   }
+  const moved = new Set(res.movedIds);
+  const updated = candidates.filter((s) => moved.has(s.id)).map(prevOf);
+  const skipped = siblings.length - updated.length;
   revalidatePath(`/services/${serviceId}/agenda`);
   return { ok: true, updated, skipped };
 }
@@ -660,13 +696,12 @@ export async function revertSlotBatchAction(input: {
   if (!items.success) {
     return { ok: false, error: items.error.issues[0]?.message ?? "Données invalides." };
   }
-  let reverted = 0;
-  for (const it of items.data) {
-    const res = await moveUniqueSlot(input.serviceId, it.id, it.slotDate, it.startTime, it.endTime);
-    if (res.ok) reverted++;
-  }
+  // Toute l'annulation en UNE transaction sérialisable (cf. updateSlotBatchAction) ;
+  // une occurrence réservée entre-temps reste ignorée.
+  const res = await moveUniqueSlotBatch(input.serviceId, items.data);
   revalidatePath(`/services/${input.serviceId}/agenda`);
-  return { ok: true, reverted };
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, reverted: res.movedIds.length };
 }
 
 /**

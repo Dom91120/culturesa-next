@@ -47,7 +47,10 @@ export async function assertNotLastActiveAdmin(
  *
  * Remplace les données personnelles identifiantes par des valeurs neutres,
  * dissocie le compte de ses référentiels (demandeur/structure), supprime les
- * sessions (déconnexion immédiate) et journalise l'opération dans `RgpdLog`.
+ * sessions (déconnexion immédiate) ET les comptes d'authentification (mot de
+ * passe) — sans quoi l'ancien titulaire pouvait se reconnecter avec l'e-mail
+ * anonymisé prévisible `anonyme-<id>@…` et son mot de passe conservé (audit
+ * 2026-07-19) — puis journalise l'opération dans `RgpdLog`.
  *
  * Les réservations ne sont PAS supprimées : l'historique métier est conservé,
  * mais rattaché à un compte désormais non identifiable.
@@ -88,6 +91,9 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
 
     // Déconnexion : on révoque toutes les sessions actives.
     await tx.session.deleteMany({ where: { userId } });
+    // Verrouillage : suppression des comptes d'authentification (identifiants/mot de
+    // passe) — le compte anonymisé ne doit plus être connectable.
+    await tx.account.deleteMany({ where: { userId } });
 
     await tx.rgpdLog.create({
       data: {

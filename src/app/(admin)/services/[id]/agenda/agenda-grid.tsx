@@ -451,9 +451,11 @@ export function AgendaGrid({
     updated: BatchUpdatedItem[];
     skipped: number;
   } | null>(null);
-  // Auto-fermeture du bandeau de bilan (8 s) : temps écoulé (ms) + pause (survol/focus).
-  const [batchElapsed, setBatchElapsed] = useState(0);
+  // Auto-fermeture du bandeau de bilan : pause (survol/focus), solde restant (ref) et
+  // séquence de remontage de la barre de progression (animation CSS relancée par lot).
   const [batchPaused, setBatchPaused] = useState(false);
+  const [batchSeq, setBatchSeq] = useState(0);
+  const batchRemainRef = useRef(BATCH_DISMISS_MS);
   // Étiquette de portée affichée pendant un glisser de LOT (compteur « valeur · N
   // créneaux »), positionnée au curseur. Null hors drag de lot.
   const [dragInfo, setDragInfo] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -461,22 +463,29 @@ export function AgendaGrid({
   // + nombre d'occurrences présentes/futures. Stable pendant le geste (le sélecteur ne
   // change pas en cours de drag). Null = geste à portée d'un seul créneau.
   const dragBatchRef = useRef<{ batchId: string; count: number } | null>(null);
-  // Bandeau de bilan : réarme le minuteur à chaque nouvelle édition de lot.
+  // Bandeau de bilan : réarme le minuteur à chaque nouvelle édition de lot. batchSeq
+  // force le REMONTAGE de la barre de progression (l'animation CSS repart de 100 %)
+  // si un 2e lot arrive pendant que le bandeau est encore ouvert.
   useEffect(() => {
     if (!batchEdit) return;
-    setBatchElapsed(0);
+    batchRemainRef.current = BATCH_DISMISS_MS;
     setBatchPaused(false);
+    setBatchSeq((s) => s + 1);
   }, [batchEdit]);
-  // Compte à rebours (100 ms), SUSPENDU au survol/focus (batchPaused).
+  // Auto-fermeture par UN timeout, SUSPENDU au survol/focus (batchPaused) : le cleanup
+  // décompte le temps couru du solde (batchRemainRef), la reprise repart du solde.
+  // (Audit perf 2026-07-19 : l'ancien compteur setInterval(100 ms) re-rendait tout le
+  // composant ~10×/s pendant le décompte ; la barre est désormais animée en CSS pur —
+  // keyframes batch-dismiss — avec play-state suspendu de concert.)
   useEffect(() => {
     if (!batchEdit || batchPaused) return;
-    const id = setInterval(() => setBatchElapsed((e) => e + 100), 100);
-    return () => clearInterval(id);
+    const startedAt = Date.now();
+    const id = setTimeout(() => setBatchEdit(null), batchRemainRef.current);
+    return () => {
+      clearTimeout(id);
+      batchRemainRef.current = Math.max(0, batchRemainRef.current - (Date.now() - startedAt));
+    };
   }, [batchEdit, batchPaused]);
-  // À échéance (8 s cumulées hors pause) → fermeture du bandeau.
-  useEffect(() => {
-    if (batchEdit && batchElapsed >= BATCH_DISMISS_MS) setBatchEdit(null);
-  }, [batchElapsed, batchEdit]);
   // ÉCHAP pendant un glisser (dessiner / journée entière / déplacer / redimensionner) →
   // annule le geste SANS rien créer/déplacer (aperçu abandonné). Écouteur branché
   // uniquement quand un drag est actif → aucune interférence avec l'ÉCHAP des modales.
@@ -1747,8 +1756,11 @@ export function AgendaGrid({
   // Semaine réelle, le badge d'un récurrent est l'OCCURRENCE (enfant) → ces gestes portent
   // sur toute la récurrente, donc sur la réservation PARENTE. Ponctuel, ou récurrent en
   // Modèle (bk = parent) : la réservation elle-même. Le POINTAGE, lui, reste par occurrence.
+  // Index id → réservation mémoïsé (audit perf 2026-07-19) : le bookings.find O(B) était
+  // appelé PAR BADGE au rendu des blocs → O(badges × réservations) à chaque recalcul.
+  const bookingById = useMemo(() => new Map(bookings.map((b) => [b.id, b])), [bookings]);
   const actionBooking = (bk: Booking): Booking =>
-    bk.parentBookingId != null ? (bookings.find((b) => b.id === bk.parentBookingId) ?? bk) : bk;
+    bk.parentBookingId != null ? (bookingById.get(bk.parentBookingId) ?? bk) : bk;
 
   function onBlockQuickAction(bk: Booking): boolean {
     if (validation) {
@@ -3800,19 +3812,24 @@ export function AgendaGrid({
             >
               ×
             </button>
-            {/* Barre de progression : se vide sur BATCH_DISMISS_MS, figée pendant la pause. */}
+            {/* Barre de progression : se vide sur BATCH_DISMISS_MS en animation CSS pure
+                (keyframes batch-dismiss, transform compositor — zéro re-render), figée
+                pendant la pause via play-state. key=batchSeq → repart de 100 % par lot. */}
             <div
+              key={batchSeq}
               aria-hidden="true"
               style={{
                 position: "absolute",
                 left: 0,
                 bottom: 0,
                 height: 2,
-                width: `${Math.max(0, 100 - (batchElapsed / BATCH_DISMISS_MS) * 100)}%`,
+                width: "100%",
                 background: "var(--accent)",
                 opacity: 0.6,
-                transition: "width .1s linear",
                 pointerEvents: "none",
+                transformOrigin: "left",
+                animation: `batch-dismiss ${BATCH_DISMISS_MS}ms linear forwards`,
+                animationPlayState: batchPaused ? "paused" : "running",
               }}
             />
           </div>,

@@ -132,6 +132,15 @@ export const auth = betterAuth({
         if (!Number.isInteger(demandeurId) || demandeurId < 1) {
           throw new APIError("BAD_REQUEST", { message: "Choisissez une catégorie." });
         }
+        // Existence vérifiée : un id inexistant (sans structure) partait sinon en
+        // violation de FK à l'insert → 500 au lieu d'un 400 propre (audit 2026-07-19).
+        const demandeur = await prisma.demandeur.findUnique({
+          where: { id: demandeurId },
+          select: { id: true },
+        });
+        if (!demandeur) {
+          throw new APIError("BAD_REQUEST", { message: "Choisissez une catégorie." });
+        }
         const structures = await prisma.structure.findMany({
           where: { demandeurId },
           select: { id: true },

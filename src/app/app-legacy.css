@@ -2170,6 +2170,16 @@ textarea.theme-pending:focus::placeholder {
     width: 100%;
   }
 }
+/* Barre du bandeau de bilan de lot (agenda admin) : se vide sur la durée
+   d'auto-fermeture, en transform (compositor, zéro re-render) — cf. agenda-grid.tsx. */
+@keyframes batch-dismiss {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
 
 /* ── Agenda hebdomadaire (vue graphique type Google Agenda) ────────── */
 /* Onglets periode plus compacts dans l'agenda (scope au seul conteneur agenda). */

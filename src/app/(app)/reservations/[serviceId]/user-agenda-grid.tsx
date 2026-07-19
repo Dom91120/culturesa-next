@@ -1061,12 +1061,19 @@ export function UserAgendaGrid({
   const [hideNoSlotPref, setHideNoSlotPref] = useState(false);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
-  // Glisser-déplacer (pointer events, cf. usePointerDrag) : élément en cours de drag + clé
-  // "dayKey|slotId" du créneau survolé (drop target en surbrillance) + position du curseur
-  // pour l'aperçu flottant (ghost). Remplace l'ancien drag HTML5 (inopérant au doigt).
+  // Glisser-déplacer (pointer events, cf. usePointerDrag) : élément en cours de drag.
+  // Remplace l'ancien drag HTML5 (inopérant au doigt). Le suivi du curseur (ghost) et la
+  // surbrillance de la cible sont pilotés en DOM DIRECT via refs (audit perf 2026-07-19) :
+  // un setState par pixel/cellule re-rendait tout le composant à chaque pointermove.
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
-  const [dropKey, setDropKey] = useState<string | null>(null);
+  // Position de MONTAGE du ghost (posée au 1er pointermove uniquement) ; les déplacements
+  // suivants écrivent left/top directement sur l'élément (dragGhostElRef), sans re-render.
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const dragGhostElRef = useRef<HTMLDivElement | null>(null);
+  // Cellule cible de dépôt courante : classe .slot-user-drop-target posée/retirée en DOM
+  // direct (l'ancien état dropKey invalidait renderBlock → re-render de toute la grille à
+  // chaque changement de cellule survolée).
+  const dropTargetElRef = useRef<HTMLElement | null>(null);
   // Aperçu de drag (ghost) = clone HTML du badge source, capturé au pointerdown, pour
   // retrouver l'ancien rendu « badge entier qui suit le pointeur » (et non un libellé texte).
   const dragGhostRef = useRef<{ html: string; width: number; height: number } | null>(null);
@@ -1960,18 +1967,21 @@ export function UserAgendaGrid({
   function canDropItem(item: DragItem, b: Block): boolean {
     return !b.full && !isSlotClosed(b) && item.ponctuel === uniqueIdSet.has(b.slotId);
   }
-  // Variante liée à l'état courant (pour la surbrillance au rendu).
-  function canDropOn(b: Block): boolean {
-    return dragItem != null && canDropItem(dragItem, b);
+  // Cellule (élément .agenda-block, porteur de data-slotid/data-daykey) sous le point
+  // écran donné. Sert au hit-test du drag « pointer events » (plus d'onDrop natif).
+  function cellAtPoint(x: number, y: number): HTMLElement | null {
+    return document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-slotid]") ?? null;
   }
-  // Créneau (Block) sous le point écran donné, via les data-slotid/data-daykey des cellules.
-  // Sert au hit-test du drag « pointer events » (il n'y a plus d'événement onDrop natif).
-  function blockAtPoint(x: number, y: number): Block | null {
-    const cell = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-slotid]");
-    const slotId = cell?.dataset.slotid;
+  // Créneau (Block) correspondant à une cellule du hit-test.
+  function blockFromCell(cell: HTMLElement): Block | null {
+    const slotId = cell.dataset.slotid;
     if (!slotId) return null;
-    const dayKey = cell?.dataset.daykey ?? "";
+    const dayKey = cell.dataset.daykey ?? "";
     return blocksByDay[dayKey]?.find((bl) => bl.slotId === slotId) ?? null;
+  }
+  function blockAtPoint(x: number, y: number): Block | null {
+    const cell = cellAtPoint(x, y);
+    return cell ? blockFromCell(cell) : null;
   }
   // Dépôt sur un créneau : relocalise le brouillon, ou enregistre/annule un déplacement.
   function dropOnBlock(item: DragItem, b: Block) {
@@ -2076,31 +2086,52 @@ export function UserAgendaGrid({
     [],
   );
 
+  // Surbrillance de la cellule cible en DOM direct (aucun re-render pendant le drag).
+  // `isConnected` re-pose la classe si un re-render concurrent (auto-refresh) a
+  // remplacé/réécrit l'élément pendant le drag.
+  function setDropTargetEl(el: HTMLElement | null) {
+    const prev = dropTargetElRef.current;
+    if (prev === el && (el == null || el.isConnected)) return;
+    if (prev) prev.classList.remove("slot-user-drop-target");
+    if (el) el.classList.add("slot-user-drop-target");
+    dropTargetElRef.current = el;
+  }
+
   // Drag « pointer events » (souris + tactile) : activation au-delà du seuil → on mémorise
   // l'item ; à chaque déplacement on suit le curseur (ghost), on surligne le créneau cible
   // et on gère le défilement au bord (mobile) ; au relâché on dépose sur le créneau sous le
-  // pointeur (sinon annulation).
+  // pointeur (sinon annulation). PERF (audit 2026-07-19) : le suivi du pointeur écrit
+  // left/top directement sur le ghost et la surbrillance passe par classList — l'ancien
+  // setState par pointermove ré-exécutait tout le composant (~2 600 l.) à chaque pixel.
   const pointerDrag = usePointerDrag<DragItem>({
     onActivate: (item) => setDragItem(item),
     onMove: (item, e) => {
-      setDragPos({ x: e.clientX, y: e.clientY });
+      const ghost = dragGhostElRef.current;
+      if (ghost) {
+        ghost.style.left = `${e.clientX}px`;
+        ghost.style.top = `${e.clientY}px`;
+      } else {
+        // 1er déplacement : monte le ghost à cette position (unique setState du suivi).
+        setDragPos({ x: e.clientX, y: e.clientY });
+      }
       handleEdgePaging(e.clientX);
-      const b = blockAtPoint(e.clientX, e.clientY);
-      setDropKey(b && canDropItem(item, b) ? `${b.dayKey}|${b.slotId}` : null);
+      const cell = cellAtPoint(e.clientX, e.clientY);
+      const b = cell ? blockFromCell(cell) : null;
+      setDropTargetEl(b && canDropItem(item, b) ? cell : null);
     },
     onDrop: (item, e) => {
       stopEdgePaging();
       const b = blockAtPoint(e.clientX, e.clientY);
       if (b && canDropItem(item, b)) dropOnBlock(item, b);
       setDragItem(null);
-      setDropKey(null);
+      setDropTargetEl(null);
       setDragPos(null);
       dragGhostRef.current = null;
     },
     onCancel: () => {
       stopEdgePaging();
       setDragItem(null);
-      setDropKey(null);
+      setDropTargetEl(null);
       setDragPos(null);
       dragGhostRef.current = null;
     },
@@ -2417,7 +2448,7 @@ export function UserAgendaGrid({
   const blockApiRef = useRef(blockApi);
   blockApiRef.current = blockApi;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: déps maintenues à la main — les handlers d'événements passent par blockApiRef (hors déps), et les helpers appelés AU RENDU (isSlotClosed/canDropOn/myCounts/slotTime/bookingLocked, recréés à chaque rendu) ont leurs entrées RÉELLES listées en primitives (uniqSlotById, recurSlotById, earliestBookable, concernedDatesByKey, pendingUpdates, service, modes…) → renderBlock se recrée quand elles changent, capturant des helpers frais. pendKey/participantsLabel sont purs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: déps maintenues à la main — les handlers d'événements passent par blockApiRef (hors déps), et les helpers appelés AU RENDU (isSlotClosed/myCounts/slotTime/bookingLocked, recréés à chaque rendu) ont leurs entrées RÉELLES listées en primitives (uniqSlotById, recurSlotById, earliestBookable, concernedDatesByKey, pendingUpdates, service, modes…) → renderBlock se recrée quand elles changent, capturant des helpers frais. pendKey/participantsLabel sont purs.
   const renderBlock = useCallback(
     (b: Block, allday: boolean) => {
       const {
@@ -2464,9 +2495,9 @@ export function UserAgendaGrid({
           // 2 couleurs fixes, sans variation selon le remplissage/jauge : vert pour
           // les ponctuels autonomes, jaune (défaut .agenda-block) pour les récurrents
           // et leurs miroirs (cf. légende Récurrent/Ponctuel).
-          className={`agenda-block${allday ? " is-allday" : ""}${
-            dropKey === `${b.dayKey}|${b.slotId}` && canDropOn(b) ? " slot-user-drop-target" : ""
-          }`}
+          // (La classe .slot-user-drop-target est posée en DOM direct pendant le drag,
+          // cf. setDropTargetEl — plus de dépendance de rendu à la cellule survolée.)
+          className={`agenda-block${allday ? " is-allday" : ""}`}
           style={{
             ...posStyle,
             // Centrage vertical des badges dans le créneau (inline = priorité
@@ -2838,7 +2869,6 @@ export function UserAgendaGrid({
       mapMinToY,
       gridStartMin,
       gridEndMin,
-      dropKey,
       effectivePeriodId,
       modes,
       pendingRemovals,
@@ -2908,6 +2938,11 @@ export function UserAgendaGrid({
         createPortal(
           <div
             className="user-drag-ghost"
+            // Position mise à jour en DOM direct par onMove (cf. usePointerDrag) : la ref
+            // est la cible des écritures left/top, dragPos ne sert qu'au montage.
+            ref={(el) => {
+              dragGhostElRef.current = el;
+            }}
             style={{
               position: "fixed",
               left: dragPos.x,

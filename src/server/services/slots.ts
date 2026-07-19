@@ -691,6 +691,84 @@ export async function moveUniqueSlot(
   return { ok: true };
 }
 
+/**
+ * Déplace/redimensionne en UNE transaction sérialisable un LOT de créneaux ponctuels
+ * VIDES (édition et annulation de lot « multi »). Chaque occurrence réservée, miroir,
+ * inconnue ou sans période couvrante est IGNORÉE (non bloquante), les autres sont
+ * mises à jour ; l'ensemble est atomique (un échec annule tout le lot — l'ancienne
+ * boucle « une transaction par occurrence » pouvait laisser un demi-lot en base et
+ * coûtait ~150 requêtes/36 transactions pour un lot annuel, audit 2026-07-19).
+ * Renvoie les ids effectivement déplacés.
+ */
+export async function moveUniqueSlotBatch(
+  serviceId: string,
+  items: { id: string; slotDate: string; startTime: string; endTime: string }[],
+): Promise<{ ok: true; movedIds: string[] } | { ok: false; error: string }> {
+  if (!items.length) return { ok: true, movedIds: [] };
+  const movedIds: string[] = [];
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        movedIds.length = 0; // ré-entrant si la transaction est rejouée
+        const ids = items.map((it) => it.id);
+        const owned = await tx.slot.findMany({
+          where: { id: { in: ids }, serviceId, slotType: "unique" },
+          select: { id: true, parentSlotId: true },
+        });
+        const ownedById = new Map(owned.map((s) => [s.id, s]));
+        // Occurrences réservées → ignorées (même garde que moveUniqueSlot, en un findMany).
+        const bookedRows = await tx.booking.findMany({
+          where: { slotId: { in: ids } },
+          select: { slotId: true },
+          distinct: ["slotId"],
+        });
+        const booked = new Set(bookedRows.map((b) => b.slotId));
+        // Périodes du service chargées UNE fois : rattachement recalculé en mémoire
+        // (même règle que periodIdCoveringDate ; départage déterministe par id croissant).
+        const periods = await tx.period.findMany({
+          where: { serviceId, dateStart: { not: null }, dateEnd: { not: null } },
+          select: { id: true, dateStart: true, dateEnd: true },
+          orderBy: { id: "asc" },
+        });
+        const periodFor = (dateStr: string): number | null => {
+          const d = fromISO(dateStr);
+          for (const p of periods) {
+            if (p.dateStart && p.dateEnd && p.dateStart <= d && d <= p.dateEnd) return p.id;
+          }
+          return null;
+        };
+        for (const it of items) {
+          const slot = ownedById.get(it.id);
+          if (!slot || slot.parentSlotId || booked.has(it.id)) continue;
+          const periodId = periodFor(it.slotDate);
+          if (periodId == null) continue;
+          await tx.slot.update({
+            where: { id: it.id },
+            data: {
+              startTime: it.startTime,
+              endTime: it.endTime,
+              slotDate: fromISO(it.slotDate),
+              periodId,
+            },
+          });
+          movedIds.push(it.id);
+        }
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 60_000,
+        maxWait: 10_000,
+      },
+    );
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Réservation simultanée détectée, merci de réessayer." };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur" };
+  }
+  return { ok: true, movedIds };
+}
+
 // ─── delete (suppression de créneaux VIDES) ──────────────
 // Supprime des créneaux et leurs miroirs (récurrent : slot_type=unique avec
 // parentSlotId). REFUSE si le créneau ou un de ses miroirs porte la moindre
