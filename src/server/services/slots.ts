@@ -1,4 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
+import { parseWeeks } from "@/lib/agenda-core";
 import { mirrorDates } from "@/lib/mirror-dates";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
@@ -32,13 +33,8 @@ function fromISO(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00Z`);
 }
 
-function parseWeeks(weeks: string | null | undefined): string[] {
-  if (!weeks) return ["A", "B"];
-  return String(weeks)
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+// (parseWeeks : source unique lib/agenda-core — la copie locale divergeait sur les
+// valeurs sales, pas d'uppercase ni de repli « toutes semaines » ; audit 2026-07-19.)
 
 /** Id d'un nouveau créneau récurrent — exporté : la bascule d'exercice clone les
  * créneaux avec la même convention (audit 2026-07-17, littéral dupliqué). */
