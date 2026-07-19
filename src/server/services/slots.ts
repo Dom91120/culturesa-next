@@ -507,6 +507,9 @@ export async function addUniqueSlot(
     demandeurIds?: number[];
     // « A une jauge » : mode jauge de l'agenda au moment de la création.
     jauge?: boolean;
+    // Identifiant de lot « multi » (créneaux répliqués en un geste) : commun à toute
+    // la série, null pour un ponctuel isolé.
+    batchId?: string | null;
   },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
@@ -530,6 +533,7 @@ export async function addUniqueSlot(
           capacity: input.capacity,
           periodId,
           jauge: input.jauge ?? false,
+          batchId: input.batchId ?? null,
         },
       });
       // Demandeurs autorisés posés dans la même transaction (cf. addRecurringSlot) :

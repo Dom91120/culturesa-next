@@ -396,6 +396,8 @@ export async function createUniqueSlotAction(input: {
   demandeurIds?: number[];
   // « A une jauge » : mode jauge de l'agenda au moment de la création.
   jauge?: boolean;
+  // Lot « multi » : identifiant partagé par les créneaux d'un même geste répliqué.
+  batchId?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   // Validation de la frontière : date (AAAA-MM-JJ), horaires (HH:MM, fin > début),
@@ -412,6 +414,7 @@ export async function createUniqueSlotAction(input: {
     capacity: d.capacity,
     demandeurIds: d.demandeurIds,
     jauge: d.jauge,
+    batchId: d.batchId ?? null,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };
@@ -477,12 +480,10 @@ export async function deleteSlotAction(
 }
 
 /**
- * Supprime un créneau ponctuel ET tous ses JUMEAUX de la période (« Création
- * multiple ») : les ponctuels AUTONOMES de la même période partageant jour de
- * semaine, horaires, capacité, jauge et demandeurs autorisés. La parité A/B du
- * créneau de référence est respectée quand le service est en mode A/B (on ne
- * supprime que les semaines de même parité). La correspondance est recalculée
- * CÔTÉ SERVEUR depuis le créneau de référence (la liste client peut être périmée).
+ * Supprime un créneau ponctuel ET tout son LOT « multi » : tous les créneaux
+ * partageant son `batchId` (créneaux répliqués en un seul geste de « Création
+ * multiple »). Le lot est résolu CÔTÉ SERVEUR depuis le créneau de référence (la
+ * liste client peut être périmée). Créneau sans `batchId` → suppression simple.
  */
 export async function deleteSlotSeriesAction(
   serviceId: string,
@@ -490,55 +491,22 @@ export async function deleteSlotSeriesAction(
 ): Promise<{ ok: boolean; deleted?: number; error?: string }> {
   await requireServiceManager(serviceId);
   const ref = await prisma.slot.findFirst({
-    where: { id: slotId, serviceId, slotType: "unique", parentSlotId: null },
-    select: {
-      slotDate: true,
-      periodId: true,
-      startTime: true,
-      endTime: true,
-      capacity: true,
-      jauge: true,
-      demandeurs: { select: { demandeurId: true } },
-    },
+    where: { id: slotId, serviceId, slotType: "unique" },
+    select: { batchId: true },
   });
-  if (!ref?.slotDate) return { ok: false, error: "Créneau introuvable." };
-  // Sans période de rattachement, la « série » n'est pas définissable → suppression simple.
-  if (ref.periodId == null) {
+  if (!ref) return { ok: false, error: "Créneau introuvable." };
+  // Hors lot → suppression du seul créneau de référence.
+  if (!ref.batchId) {
     const res = await deleteSlots(serviceId, [slotId]);
     revalidatePath(`/services/${serviceId}/agenda`);
     return res.ok ? { ok: true, deleted: res.deleted } : { ok: false, error: res.error };
   }
-  // La « série » = tous les ponctuels autonomes de la période partageant jour de semaine,
-  // horaires, capacité, jauge et demandeurs — TOUTES parités confondues (un multi peut avoir
-  // été créé pour toutes les semaines OU une seule parité, cf. bouton « Semaine A/B »).
-  const refDow = ref.slotDate.getUTCDay();
-  const demKey = (rows: { demandeurId: number }[]) =>
-    rows
-      .map((d) => d.demandeurId)
-      .sort((a, b) => a - b)
-      .join(",");
-  const refDem = demKey(ref.demandeurs);
-  const candidates = await prisma.slot.findMany({
-    where: {
-      serviceId,
-      slotType: "unique",
-      parentSlotId: null,
-      periodId: ref.periodId,
-      startTime: ref.startTime,
-      endTime: ref.endTime,
-      capacity: ref.capacity,
-      jauge: ref.jauge,
-      slotDate: { not: null },
-    },
-    select: { id: true, slotDate: true, demandeurs: { select: { demandeurId: true } } },
+  const batch = await prisma.slot.findMany({
+    where: { serviceId, batchId: ref.batchId },
+    select: { id: true },
   });
-  const ids = candidates
-    .filter((c) => {
-      if (!c.slotDate || c.slotDate.getUTCDay() !== refDow) return false;
-      return demKey(c.demandeurs) === refDem;
-    })
-    .map((c) => c.id);
-  if (!ids.includes(slotId)) ids.push(slotId); // le créneau de référence part dans tous les cas
+  const ids = batch.map((s) => s.id);
+  if (!ids.includes(slotId)) ids.push(slotId);
   const res = await deleteSlots(serviceId, ids);
   revalidatePath(`/services/${serviceId}/agenda`);
   return res.ok ? { ok: true, deleted: res.deleted } : { ok: false, error: res.error };

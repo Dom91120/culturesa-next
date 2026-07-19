@@ -253,6 +253,10 @@ model Slot {
   capacity     Int?
   periodId     Int?
   parentSlotId String?
+  // Lot de créneaux ponctuels créés en un seul geste « multi » (même jour de semaine
+  // répliqué sur la période) : identifiant commun (null hors multi). Permet la
+  // suppression / l'édition « toute la série » de façon fiable, indépendamment de l'UI.
+  batchId      String?
   weeks        String?
   // « A une jauge » : posé À LA CRÉATION selon le mode jauge de l'agenda admin
   // (icône capsule) ; les miroirs héritent du récurrent parent.
@@ -271,6 +275,7 @@ model Slot {
   @@index([serviceId])
   @@index([parentSlotId])
   @@index([periodId])
+  @@index([batchId])
   // Cron de rappels (filtre slotDate, quotidien sur tous les slots) et plage de
   // dates des éditions.
   @@index([slotDate])

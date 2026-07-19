@@ -110,6 +110,9 @@ export type UniqueSlot = {
   capacity: number | null;
   slotDate: string;
   parentSlotId: string | null;
+  // Lot « multi » : identifiant partagé par les créneaux d'un même geste de création
+  // répliquée (null hors multi). Permet « supprimer / modifier toute la série ».
+  batchId: string | null;
   // « A une jauge » (cf. Slot.jauge ; les miroirs portent la valeur du parent).
   jauge: boolean;
   // Période du créneau (optionnel : fourni à l'agenda USAGER pour le contrôle

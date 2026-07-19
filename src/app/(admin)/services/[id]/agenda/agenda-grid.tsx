@@ -657,6 +657,13 @@ export function AgendaGrid({
     return m;
   }, [slots, modes.abMode]);
 
+  // Ids des créneaux ponctuels appartenant à un lot « multi » (batchId non nul) : sert
+  // au badge « Multi » affiché en mode création multi (repère de portée du drag/série).
+  const batchSlotIds = useMemo(
+    () => new Set(uniqueSlots.filter((s) => s.batchId).map((s) => s.id)),
+    [uniqueSlots],
+  );
+
   // ── Pause méridienne (port legacy renderAgendaWeekly) ───────────────────────
   // Zone entre morningEnd et afternoonStart. Si > 30 min, on COMPACTE : on ne garde
   // que 2 quarts visuels (30 min) — les quarts au-delà de lunchStart+30 sont sautés.
@@ -1055,9 +1062,15 @@ export function AgendaGrid({
       if (!mondayStr) return;
       runResults(
         Promise.all(
-          targets.flatMap((dayKey) =>
-            uniqueCreateDates(dayKey).flatMap((slotDate) =>
-              segments.map(([s, e]) =>
+          targets.flatMap((dayKey) => {
+            const dates = uniqueCreateDates(dayKey);
+            return segments.flatMap(([s, e]) => {
+              // 1 lot « multi » = 1 (jour de semaine, créneau horaire) répliqué sur la
+              // période : un batchId commun partagé par toutes ses dates. Pas de lot si un
+              // seul créneau (multi off, ou période à une seule semaine) → batchId null.
+              const batchId =
+                createKind === "multi" && dates.length > 1 ? crypto.randomUUID() : null;
+              return dates.map((slotDate) =>
                 createUniqueSlotAction({
                   serviceId: service.id,
                   slotDate,
@@ -1066,10 +1079,11 @@ export function AgendaGrid({
                   capacity: createCap,
                   demandeurIds: createDemIds,
                   jauge: jaugeMode,
+                  batchId,
                 }),
-              ),
-            ),
-          ),
+              );
+            });
+          }),
         ),
       );
     }
@@ -1183,31 +1197,13 @@ export function AgendaGrid({
     setSlotDeleteTarget(null);
   }
 
-  // Jumeaux du créneau ponctuel `target` sur sa période (affichage de la modale de
-  // suppression, créneau ponctuel « Multi ») : ponctuels AUTONOMES au même jour de
-  // semaine, mêmes horaires/capacité/jauge/demandeurs — même parité A/B en mode A/B.
-  // Le décompte client sert à l'AFFICHAGE ; la série effective est recalculée côté
-  // serveur (deleteSlotSeriesAction).
+  // Taille du LOT « multi » du créneau `target` (créneaux partageant son batchId).
+  // 0 si le créneau n'appartient à aucun lot. Le décompte client sert à l'AFFICHAGE ;
+  // la série effective est recalculée côté serveur (deleteSlotSeriesAction).
   function countSlotSeries(targetId: string): number {
-    const target = uniqueSlots.find((s) => s.id === targetId && !s.parentSlotId) ?? null;
-    if (!target?.slotDate) return 0;
-    const p = periodCoveringDate(target.slotDate);
-    if (!p) return 0;
-    const dow = dayKeyFromYmd(target.slotDate);
-    const demKey = (id: string) => [...(slotDemandeurs[id] ?? [])].sort((a, b) => a - b).join(",");
-    const refDem = demKey(target.id);
-    // Série = mêmes jour/horaires/capacité/jauge/demandeurs sur la période, TOUTES parités
-    // confondues (aligné sur deleteSlotSeriesAction).
-    return uniqueSlots.filter((s) => {
-      if (s.parentSlotId || !s.slotDate) return false;
-      if (p.dateStart && s.slotDate < p.dateStart) return false;
-      if (p.dateEnd && s.slotDate > p.dateEnd) return false;
-      if (dayKeyFromYmd(s.slotDate) !== dow) return false;
-      if (s.startTime !== target.startTime || s.endTime !== target.endTime) return false;
-      if ((s.capacity ?? null) !== (target.capacity ?? null) || s.jauge !== target.jauge)
-        return false;
-      return demKey(s.id) === refDem;
-    }).length;
+    const target = uniqueSlots.find((s) => s.id === targetId) ?? null;
+    if (!target?.batchId) return 0;
+    return uniqueSlots.filter((s) => s.batchId === target.batchId).length;
   }
 
   // Le créneau `b` peut-il recevoir un collage ? (= mêmes règles que cellCreatable :
@@ -2018,6 +2014,30 @@ export function AgendaGrid({
               {blockParity}
             </span>
           )}
+          {/* Badge « Multi » (coin haut-gauche) : marque un créneau appartenant à un lot
+              (batchId), affiché en mode création multi — repère de portée du geste (drag /
+              suppression de série). Décoratif (pointerEvents none), laisse passer les clics. */}
+          {creationMode && createKind === "multi" && batchSlotIds.has(b.slotId) && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: 1,
+                left: 3,
+                fontSize: ".5rem",
+                fontWeight: 700,
+                lineHeight: 1,
+                padding: "1px 3px",
+                borderRadius: "calc(var(--rad-sm) - 3px)",
+                background: "color-mix(in srgb, var(--slot-uniq-color) 30%, transparent)",
+                color: "var(--text)",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            >
+              Multi
+            </span>
+          )}
           {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
           vide. Curseur ns-resize au survol ; le mousedown amorce le glisser-étirer
           (stopPropagation → n'amorce ni déplacer ni créer). Récurrent en Semaine réelle
@@ -2325,6 +2345,8 @@ export function AgendaGrid({
       pointageMode,
       recurringSlotsWithBookings,
       slotParityById,
+      createKind,
+      batchSlotIds,
     ],
   );
 
@@ -3443,7 +3465,9 @@ export function AgendaGrid({
             uniqueSlots.find((s) => s.id === slotDeleteTarget) ??
             null;
           const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
-          const seriesCount = createKind === "multi" ? countSlotSeries(slotDeleteTarget) : 0;
+          // Choix « ce créneau / toute la série » dès que le créneau appartient à un lot
+          // (batchId) — indépendant du sélecteur de type courant.
+          const seriesCount = countSlotSeries(slotDeleteTarget);
           return (
             <SlotDeleteModal
               timePart={timePart}

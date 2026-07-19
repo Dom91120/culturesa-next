@@ -125,6 +125,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
           capacity: true,
           slotDate: true,
           parentSlotId: true,
+          batchId: true,
           jauge: true,
         },
       }),
@@ -259,6 +260,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     capacity: s.capacity,
     slotDate: toDateInput(s.slotDate),
     parentSlotId: s.parentSlotId,
+    batchId: s.batchId ?? null,
     jauge: s.jauge,
   }));
 

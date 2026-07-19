@@ -72,5 +72,8 @@ export const uniqueSlotCreateSchema = z
     capacity,
     demandeurIds,
     jauge,
+    // Lot « multi » : identifiant partagé par les créneaux d'un même geste de création
+    // répliquée (null/absent = ponctuel isolé).
+    batchId: z.string().min(1).max(64).nullish(),
   })
   .refine(hoursOrdered, hoursOrderedMsg);
