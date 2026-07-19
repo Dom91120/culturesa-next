@@ -2050,6 +2050,8 @@ export function AgendaGrid({
         creationMode && createKind === "multi" && batchSlotIds.has(b.slotId)
           ? (uniqueSlots.find((u) => u.id === b.slotId)?.weeks ?? "")
           : "";
+      // Créneau de 15 min : bloc trop court pour la lettre A/B à 1.2rem → on la réduit.
+      const abFontSize = !allday && b.endMin - b.startMin <= 15 ? "0.8rem" : "1.2rem";
       // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
       const gaugeForCell = b.jauge;
       const cellFull = b.used >= b.capacity;
@@ -2195,8 +2197,7 @@ export function AgendaGrid({
                 justifyContent: "center",
                 color: "#ffee24",
                 fontWeight: 800,
-                fontSize: "1.2rem",
-                opacity: 0.55,
+                fontSize: abFontSize,
                 pointerEvents: "none",
                 zIndex: 0,
               }}
@@ -2239,8 +2240,7 @@ export function AgendaGrid({
                 justifyContent: "center",
                 color: "var(--slot-uniq-color)",
                 fontWeight: 800,
-                fontSize: "1.2rem",
-                opacity: 0.55,
+                fontSize: abFontSize,
                 pointerEvents: "none",
                 zIndex: 0,
               }}

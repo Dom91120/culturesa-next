@@ -28,8 +28,9 @@
      doit rester celui calculé pour fond clair). */
   --badge-text: #1a1f2e;
   /* Couleur des créneaux ponctuels (agenda-block.is-uniq, csm-slot-block.is-uniq,
-     légende) : bleu #9999ff (fond = color-mix 25%, bordure = couleur pleine). */
-  --slot-uniq-color: #9999bb;
+     légende, badge « Multi » + lettre A/B) : gris-bleu (fond = color-mix 30%, bordure
+     = couleur pleine). */
+  --slot-uniq-color: #8080a0;
   /* Fond de la sidebar en mode sombre. En mode clair, redéfini dans html.light
      (cf. plus bas) à une teinte différente. */
   --sidebar-bg: #121520;
@@ -2359,7 +2360,7 @@ textarea.theme-pending:focus::placeholder {
   --agenda-block-color: #ffee24;
   --block-color: var(--agenda-block-color);
   border-radius: var(--rad-sm);
-  background: color-mix(in srgb, var(--block-color) 25%, transparent);
+  background: color-mix(in srgb, var(--block-color) 30%, transparent);
   border-left: 2px dashed var(--block-color, var(--accent));
   border-top: 2px dashed var(--block-color);
   padding: 3px 7px;
@@ -2389,7 +2390,7 @@ textarea.theme-pending:focus::placeholder {
 }
 .agenda-block.is-uniq {
   --agenda-block-color: var(--slot-uniq-color);
-  background: color-mix(in srgb, var(--slot-uniq-color) 25%, transparent);
+  background: color-mix(in srgb, var(--slot-uniq-color) 30%, transparent);
 }
 
 /* Légende récurrent / ponctuel affichée en haut à gauche de l'agenda en mode semaine réelle */
@@ -2414,13 +2415,13 @@ textarea.theme-pending:focus::placeholder {
   width: 30px;
   height: 20px;
   border-radius: var(--rad-sm);
-  background: color-mix(in srgb, var(--legend-color) 25%, transparent);
+  background: color-mix(in srgb, var(--legend-color) 30%, transparent);
   border-left: 2px dashed var(--legend-color);
   border-top: 2px dashed var(--legend-color);
 }
 .agenda-legend-swatch.is-uniq {
   --legend-color: var(--slot-uniq-color);
-  background: color-mix(in srgb, var(--legend-color) 25%, transparent);
+  background: color-mix(in srgb, var(--legend-color) 30%, transparent);
 }
 /* Compteur places/jauge colle en bas-gauche du bloc (position absolue).
    Sorti du flux pour ne pas reserver de hauteur dans le flex column : les
