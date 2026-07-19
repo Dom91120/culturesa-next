@@ -247,10 +247,15 @@ export async function saveSlotConfigAction(input: {
     return { ok: false, error: "Capacité invalide." };
   }
   const ids = [...new Set(demandeurIds.filter((d) => Number.isInteger(d) && d > 0))];
+  // Anti-IDOR + message « introuvable » réel (pré-contrôle hors tx pour que le catch
+  // ci-dessous ne serve qu'aux erreurs inattendues, loggées et non avalées — audit B2).
+  const exists = await prisma.slot.findFirst({
+    where: { id: slotId, serviceId },
+    select: { id: true },
+  });
+  if (!exists) return { ok: false, error: "Créneau introuvable." };
   try {
     await prisma.$transaction(async (tx) => {
-      const slot = await tx.slot.findFirst({ where: { id: slotId, serviceId } });
-      if (!slot) throw new Error("Créneau introuvable");
       await tx.slot.update({ where: { id: slotId }, data: { capacity, jauge } });
       // Miroirs d'un récurrent : la jauge suit le parent (cf. addRecurringSlot).
       await tx.slot.updateMany({ where: { parentSlotId: slotId }, data: { jauge } });
@@ -261,7 +266,8 @@ export async function saveSlotConfigAction(input: {
         });
       }
     });
-  } catch {
+  } catch (e) {
+    console.error("[agenda] saveSlotConfig", e);
     return { ok: false, error: "Échec de l'enregistrement." };
   }
   revalidatePath(`/services/${serviceId}/agenda`);

@@ -65,6 +65,10 @@ export async function exerciceForDate(
       dateEnd: { gte: date },
     },
     select: { id: true, ...EXERCICE_OPENING_SELECT },
+    // Départage DÉTERMINISTE par id croissant si deux exercices se chevauchent
+    // (un findFirst sans orderBy dépendait du plan d'exécution — audit 2026-07-19,
+    // même correctif que periodIdCoveringDate).
+    orderBy: { id: "asc" },
   });
 }
 
