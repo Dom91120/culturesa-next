@@ -2190,6 +2190,11 @@ textarea.theme-pending:focus::placeholder {
   transform: scale(0.8);
   transform-origin: center;
 }
+/* Les 3 cases à cocher de la barre d'agenda : case↔libellé resserré, texte resserré. */
+#tab-content-agenda .planning-option {
+  gap: 0.1rem;
+  letter-spacing: -0.2px;
+}
 
 .agenda-mode-toggles-wrap {
   display: flex;

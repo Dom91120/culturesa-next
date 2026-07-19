@@ -2098,6 +2098,9 @@ export function AgendaGrid({
                 type="button"
                 className="planning-name-tag-close"
                 data-tip="Supprimer ce créneau"
+                // Créneau de 15 min : bloc trop court, la croix (top:1px) chevauche la
+                // poignée de redimensionnement basse → on la remonte pour la rendre cliquable.
+                style={!allday && b.endMin - b.startMin <= 15 ? { top: -5 } : undefined}
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
@@ -2358,9 +2361,8 @@ export function AgendaGrid({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: ".75rem",
           flexWrap: "wrap",
-          marginBottom: ".5rem",
+          marginBottom: ".4rem",
         }}
       >
         <div className="panel-title" style={{ marginBottom: 0 }}>
@@ -2439,7 +2441,7 @@ export function AgendaGrid({
             </button>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
           {/* Hors création : cases à cocher (masquer horaires / validation / pointage),
               à gauche du bouton Imprimer. */}
           {!creationMode && (
@@ -2455,7 +2457,14 @@ export function AgendaGrid({
                   onChange={(e) => setHideEmpty(e.target.checked)}
                 />
               </label>
-              <div style={{ display: "flex", gap: ".6rem", alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  alignSelf: "stretch",
+                  justifyContent: "space-between",
+                }}
+              >
                 <label className="planning-option">
                   Mode validation
                   <input
@@ -2696,7 +2705,7 @@ export function AgendaGrid({
           {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B). Les cases à cocher
               (masquer horaires / validation / pointage) sont dans l'en-tête. */}
           {creationMode && (
-            <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
               {/* Sélecteur du type de créneau à créer : récurrent / ponctuel unique /
                   ponctuel répliqué. L'état "rec" n'est proposé qu'avec un mode récurrent. */}
               <div style={{ display: "inline-flex", alignItems: "center" }}>
@@ -3147,6 +3156,7 @@ export function AgendaGrid({
             justifyContent: "space-between",
             gap: "1rem",
             flexWrap: "wrap",
+            marginTop: ".1rem",
           }}
         >
           {/* flex:1 + minWidth:0 → l'astuce absorbe le rétrécissement en passant à la
