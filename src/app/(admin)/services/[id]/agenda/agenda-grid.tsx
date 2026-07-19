@@ -60,6 +60,7 @@ import { printHtmlDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
+import type { BatchUpdatedItem } from "./actions";
 import {
   copyBookingAction,
   copyWeekSlotsAction,
@@ -76,9 +77,11 @@ import {
   moveBookingAction,
   moveRecurringSlotAction,
   moveUniqueSlotAction,
+  revertSlotBatchAction,
   setBookingPointageAction,
   setBookingValidatedAction,
   setServiceDefaultCapacityAction,
+  updateSlotBatchAction,
 } from "./actions";
 import { CopyWeekConfirmModal, SlotDeleteModal } from "./agenda-confirm-modals";
 import { badgeTitle } from "./agenda-format";
@@ -436,6 +439,20 @@ export function AgendaGrid({
   const [copyConfirm, setCopyConfirm] = useState<{ from: "A" | "B"; to: "A" | "B" } | null>(null);
   // Confirmation de suppression d'un créneau vide (modale dédiée au lieu de window.confirm).
   const [slotDeleteTarget, setSlotDeleteTarget] = useState<string | null>(null);
+  // Bilan d'une édition de LOT « multi » (redimension/déplacement en mode multi) :
+  // alimente le bandeau « N créneaux modifiés — Annuler ». `updated` = état ANTÉRIEUR
+  // des occurrences (pour l'annulation via revertSlotBatchAction).
+  const [batchEdit, setBatchEdit] = useState<{
+    updated: BatchUpdatedItem[];
+    skipped: number;
+  } | null>(null);
+  // Étiquette de portée affichée pendant un glisser de LOT (compteur « valeur · N
+  // créneaux »), positionnée au curseur. Null hors drag de lot.
+  const [dragInfo, setDragInfo] = useState<{ x: number; y: number; text: string } | null>(null);
+  // Portée « lot » capturée AU DÉBUT d'un glisser (resize/move) en mode multi : batchId
+  // + nombre d'occurrences présentes/futures. Stable pendant le geste (le sélecteur ne
+  // change pas en cours de drag). Null = geste à portée d'un seul créneau.
+  const dragBatchRef = useRef<{ batchId: string; count: number } | null>(null);
   // Presse-papier « copier / couper une réservation » : la source en attente de collage.
   const [copiedBooking, setCopiedBooking] = useState<{
     id: number;
@@ -1206,6 +1223,50 @@ export function AgendaGrid({
     return uniqueSlots.filter((s) => s.batchId === target.batchId).length;
   }
 
+  // Portée « lot » d'un créneau ponctuel : son batchId + le nombre d'occurrences À VENIR
+  // (présent + futur, le passé n'étant pas réécrit ; `todayYmd` défini plus haut est une
+  // date NOMINALE — le serveur fait foi via todayParisISO). Null si pas en lot.
+  function batchScopeOf(slotId: string): { batchId: string; count: number } | null {
+    const s = uniqueSlots.find((u) => u.id === slotId);
+    if (!s?.batchId) return null;
+    const count = uniqueSlots.filter(
+      (u) => u.batchId === s.batchId && u.slotDate >= todayYmd,
+    ).length;
+    return { batchId: s.batchId, count };
+  }
+
+  // Applique une édition de LOT et alimente le bandeau de bilan (toast si erreur).
+  function runBatchResult(
+    p: Promise<{
+      ok: boolean;
+      updated?: BatchUpdatedItem[];
+      skipped?: number;
+      error?: string;
+    }>,
+  ) {
+    setDetail(null);
+    startTransition(async () => {
+      const res = await p;
+      if (!res.ok) {
+        showWarnToast(res.error ?? "Action impossible.");
+        return;
+      }
+      setBatchEdit({ updated: res.updated ?? [], skipped: res.skipped ?? 0 });
+      router.refresh();
+    });
+  }
+
+  // Annule la dernière édition de LOT : restaure chaque occurrence à son état antérieur.
+  function undoBatchEdit() {
+    if (!batchEdit || batchEdit.updated.length === 0) {
+      setBatchEdit(null);
+      return;
+    }
+    const items = batchEdit.updated;
+    setBatchEdit(null);
+    runResult(revertSlotBatchAction({ serviceId: service.id, items }));
+  }
+
   // Le créneau `b` peut-il recevoir un collage ? (= mêmes règles que cellCreatable :
   // non complet, période active pour un récurrent — récurrent en Semaine réelle inclus.)
   function isCellPasteable(b: Block): boolean {
@@ -1316,6 +1377,8 @@ export function AgendaGrid({
       curMin: b.startMin,
       curDay: b.dayKey,
     };
+    // Portée « lot » (mode multi + créneau en lot) capturée pour toute la durée du geste.
+    dragBatchRef.current = createKind === "multi" ? batchScopeOf(b.slotId) : null;
     moveDragH.start(md);
   }
 
@@ -1332,15 +1395,33 @@ export function AgendaGrid({
     const endTime = minToHHMM(endMin);
     if (md.isUnique) {
       if (!mondayStr) return;
-      runResult(
-        moveUniqueSlotAction({
-          serviceId: service.id,
-          slotId: md.slotId,
-          slotDate: ymd(addDays(mondayStr, DAY_OFFSET[md.curDay] ?? 0)),
-          startTime,
-          endTime,
-        }),
-      );
+      const slotDate = ymd(addDays(mondayStr, DAY_OFFSET[md.curDay] ?? 0));
+      const batch = dragBatchRef.current;
+      // Mode multi + créneau en lot → déplacement de TOUT le lot (portée sélecteur) :
+      // même décalage de jour (dayDelta) + mêmes horaires appliqués à chaque occurrence.
+      if (batch && batch.count > 0) {
+        const dayDelta = (DAY_OFFSET[md.curDay] ?? 0) - (DAY_OFFSET[md.fromDay] ?? 0);
+        runBatchResult(
+          updateSlotBatchAction({
+            serviceId: service.id,
+            slotId: md.slotId,
+            startTime,
+            endTime,
+            refSlotDate: slotDate,
+            dayDelta,
+          }),
+        );
+      } else {
+        runResult(
+          moveUniqueSlotAction({
+            serviceId: service.id,
+            slotId: md.slotId,
+            slotDate,
+            startTime,
+            endTime,
+          }),
+        );
+      }
     } else {
       runResult(
         moveRecurringSlotAction({
@@ -1365,7 +1446,18 @@ export function AgendaGrid({
       ?.closest<HTMLElement>("[data-daykey]");
     const dk = colEl?.dataset.daykey;
     const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : md.curDay;
-    return q !== md.curMin || curDay !== md.curDay ? { ...md, curMin: q, curDay } : null;
+    const changed = q !== md.curMin || curDay !== md.curDay;
+    // Compteur de portée « valeur · N créneaux » pendant un glisser de LOT.
+    if (changed && dragBatchRef.current) {
+      const s = minToHHMM(q);
+      const en = minToHHMM(q + md.durationMin);
+      setDragInfo({
+        x: e.clientX,
+        y: e.clientY,
+        text: `${s}–${en} · ${dragBatchRef.current.count} créneaux`,
+      });
+    }
+    return changed ? { ...md, curMin: q, curDay } : null;
   }
   // Relâché : on ne déplace que si jour ou début a changé. Si déplacé, on marque le
   // coup pour que le clic résiduel n'ouvre pas la modale de config.
@@ -1374,6 +1466,8 @@ export function AgendaGrid({
       finalizeMove(md);
       justMovedRef.current = true;
     }
+    setDragInfo(null);
+    dragBatchRef.current = null;
   }
 
   // ── Mode création : glisser-REDIMENSIONNER un créneau vide par un bord ───────
@@ -1401,6 +1495,8 @@ export function AgendaGrid({
       curStart: b.startMin,
       curEnd: b.endMin,
     };
+    // Portée « lot » (mode multi + créneau en lot) capturée pour toute la durée du geste.
+    dragBatchRef.current = createKind === "multi" ? batchScopeOf(b.slotId) : null;
     resizeDragH.start(rd);
   }
 
@@ -1411,15 +1507,32 @@ export function AgendaGrid({
     const endTime = minToHHMM(rd.curEnd);
     if (rd.isUnique) {
       if (!mondayStr) return;
-      runResult(
-        moveUniqueSlotAction({
-          serviceId: service.id,
-          slotId: rd.slotId,
-          slotDate: ymd(addDays(mondayStr, DAY_OFFSET[rd.dayKey] ?? 0)),
-          startTime,
-          endTime,
-        }),
-      );
+      const slotDate = ymd(addDays(mondayStr, DAY_OFFSET[rd.dayKey] ?? 0));
+      const batch = dragBatchRef.current;
+      // Mode multi + créneau en lot → redimensionne TOUT le lot (mêmes horaires, dates
+      // inchangées : dayDelta = 0).
+      if (batch && batch.count > 0) {
+        runBatchResult(
+          updateSlotBatchAction({
+            serviceId: service.id,
+            slotId: rd.slotId,
+            startTime,
+            endTime,
+            refSlotDate: slotDate,
+            dayDelta: 0,
+          }),
+        );
+      } else {
+        runResult(
+          moveUniqueSlotAction({
+            serviceId: service.id,
+            slotId: rd.slotId,
+            slotDate,
+            startTime,
+            endTime,
+          }),
+        );
+      }
     } else {
       runResult(
         moveRecurringSlotAction({
@@ -1448,10 +1561,21 @@ export function AgendaGrid({
       curStart = rd.fixedMin;
       curEnd = Math.min(gridEndMin, Math.max(q + 15, rd.fixedMin + 15));
     }
-    return curStart !== rd.curStart || curEnd !== rd.curEnd ? { ...rd, curStart, curEnd } : null;
+    const changed = curStart !== rd.curStart || curEnd !== rd.curEnd;
+    // Compteur de portée « valeur · N créneaux » pendant un redimensionnement de LOT.
+    if (changed && dragBatchRef.current) {
+      setDragInfo({
+        x: e.clientX,
+        y: e.clientY,
+        text: `${minToHHMM(curStart)}–${minToHHMM(curEnd)} · ${dragBatchRef.current.count} créneaux`,
+      });
+    }
+    return changed ? { ...rd, curStart, curEnd } : null;
   }
   function resizeDragUp(rd: ResizeDrag) {
     if (rd.curStart !== rd.origStart || rd.curEnd !== rd.origEnd) finalizeResize(rd);
+    setDragInfo(null);
+    dragBatchRef.current = null;
   }
 
   // ── Mode création : glisser-ÉTENDRE un créneau vide latéralement (gauche/droite) ──
@@ -3489,6 +3613,91 @@ export function AgendaGrid({
           onConfirm={confirmCopyWeek}
         />
       )}
+
+      {/* Compteur de portée pendant un glisser de LOT (« valeur · N créneaux »), au curseur. */}
+      {dragInfo &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: dragInfo.x + 14,
+              top: dragInfo.y + 14,
+              zIndex: 60,
+              pointerEvents: "none",
+              background: "var(--text)",
+              color: "var(--surface)",
+              fontSize: ".72rem",
+              fontWeight: 600,
+              padding: "3px 8px",
+              borderRadius: "var(--rad-sm)",
+              whiteSpace: "nowrap",
+              boxShadow: "0 2px 8px rgba(0,0,0,.25)",
+            }}
+          >
+            {dragInfo.text}
+          </div>,
+          document.body,
+        )}
+
+      {/* Bandeau de bilan d'une édition de LOT + Annuler (le seul filet contre une modif
+          de masse sur des semaines qu'on ne voit pas). */}
+      {batchEdit &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: "50%",
+              bottom: 24,
+              transform: "translateX(-50%)",
+              zIndex: 60,
+              display: "flex",
+              alignItems: "center",
+              gap: ".75rem",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--rad)",
+              padding: ".5rem .75rem",
+              boxShadow: "0 4px 16px rgba(0,0,0,.2)",
+              fontSize: ".8rem",
+            }}
+          >
+            <span>
+              {batchEdit.updated.length} créneau{batchEdit.updated.length > 1 ? "x" : ""} modifié
+              {batchEdit.updated.length > 1 ? "s" : ""}
+              {batchEdit.skipped > 0
+                ? ` (${batchEdit.skipped} ignoré${batchEdit.skipped > 1 ? "s" : ""} — réservé${
+                    batchEdit.skipped > 1 ? "s" : ""
+                  })`
+                : ""}
+            </span>
+            {batchEdit.updated.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: ".2rem .5rem" }}
+                onClick={undoBatchEdit}
+              >
+                Annuler
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Fermer"
+              onClick={() => setBatchEdit(null)}
+              style={{
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                color: "var(--muted)",
+                fontSize: "1rem",
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </div>,
+          document.body,
+        )}
 
       {/* Menu contextuel (clic droit) : Copier une réservation / Coller sur un créneau. */}
       {ctxMenu &&

@@ -512,6 +512,105 @@ export async function deleteSlotSeriesAction(
   return res.ok ? { ok: true, deleted: res.deleted } : { ok: false, error: res.error };
 }
 
+// Décale une date (Date @db.Date = minuit UTC) de `days` jours, en AAAA-MM-JJ.
+function shiftYmd(date: Date, days: number): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Un créneau du lot modifié, avec son état ANTÉRIEUR (pour l'annulation). */
+export type BatchUpdatedItem = {
+  id: string;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+};
+
+/**
+ * Applique un redimensionnement / déplacement à TOUT le lot « multi » d'un créneau
+ * (créneaux partageant son `batchId`), sur les occurrences PRÉSENTES ET FUTURES
+ * uniquement (on ne réécrit pas le passé). `dayDelta` = décalage de jour (0 pour un
+ * redimensionnement ou un déplacement même-jour). Chaque occurrence passe par
+ * `moveUniqueSlot` (gardes réservation/période réutilisées) : une occurrence réservée
+ * ou hors période est IGNORÉE (comptée dans `skipped`). Renvoie l'état ANTÉRIEUR des
+ * occurrences modifiées pour permettre l'annulation. Créneau sans lot → repli sur le
+ * seul créneau (déplacement simple à la date du geste).
+ */
+export async function updateSlotBatchAction(input: {
+  serviceId: string;
+  slotId: string;
+  startTime: string;
+  endTime: string;
+  // Date du créneau de référence (geste courant), pour le repli hors-lot.
+  refSlotDate: string;
+  dayDelta?: number;
+}): Promise<{
+  ok: boolean;
+  updated?: BatchUpdatedItem[];
+  skipped?: number;
+  error?: string;
+}> {
+  await requireServiceManager(input.serviceId);
+  const { serviceId, slotId, startTime, endTime, refSlotDate } = input;
+  const dayDelta = input.dayDelta ?? 0;
+  const ref = await prisma.slot.findFirst({
+    where: { id: slotId, serviceId, slotType: "unique" },
+    select: { batchId: true },
+  });
+  if (!ref) return { ok: false, error: "Créneau introuvable." };
+  // Hors lot → déplacement du seul créneau à la date du geste (parité avec l'unitaire).
+  if (!ref.batchId) {
+    const res = await moveUniqueSlot(serviceId, slotId, refSlotDate, startTime, endTime);
+    revalidatePath(`/services/${serviceId}/agenda`);
+    return res.ok ? { ok: true, updated: [], skipped: 0 } : { ok: false, error: res.error };
+  }
+  const todayDate = new Date(`${todayParisISO()}T00:00:00.000Z`);
+  const siblings = await prisma.slot.findMany({
+    where: { serviceId, batchId: ref.batchId, slotDate: { gte: todayDate } },
+    select: { id: true, slotDate: true, startTime: true, endTime: true },
+    orderBy: { slotDate: "asc" },
+  });
+  const updated: BatchUpdatedItem[] = [];
+  let skipped = 0;
+  for (const s of siblings) {
+    if (!s.slotDate) {
+      skipped++;
+      continue;
+    }
+    const prev: BatchUpdatedItem = {
+      id: s.id,
+      slotDate: shiftYmd(s.slotDate, 0),
+      startTime: s.startTime,
+      endTime: s.endTime,
+    };
+    const newDate = dayDelta ? shiftYmd(s.slotDate, dayDelta) : prev.slotDate;
+    const res = await moveUniqueSlot(serviceId, s.id, newDate, startTime, endTime);
+    if (res.ok) updated.push(prev);
+    else skipped++;
+  }
+  revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true, updated, skipped };
+}
+
+/**
+ * Annulation d'un `updateSlotBatchAction` : restaure chaque occurrence à son état
+ * antérieur (date + horaires). Chaque restauration repasse par `moveUniqueSlot`
+ * (gardes réutilisées ; une occurrence réservée entre-temps est ignorée).
+ */
+export async function revertSlotBatchAction(input: {
+  serviceId: string;
+  items: BatchUpdatedItem[];
+}): Promise<{ ok: boolean; reverted?: number; error?: string }> {
+  await requireServiceManager(input.serviceId);
+  let reverted = 0;
+  for (const it of input.items) {
+    const res = await moveUniqueSlot(input.serviceId, it.id, it.slotDate, it.startTime, it.endTime);
+    if (res.ok) reverted++;
+  }
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return { ok: true, reverted };
+}
+
 /**
  * Supprime une réservation depuis l'agenda + notifie l'usager par e-mail.
  * Le mail informe que la réservation « a été supprimée » (si elle était validée) ou
