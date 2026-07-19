@@ -510,6 +510,9 @@ export async function addUniqueSlot(
     // Identifiant de lot « multi » (créneaux répliqués en un geste) : commun à toute
     // la série, null pour un ponctuel isolé.
     batchId?: string | null;
+    // Portée de parité du lot « multi » ("A"|"B"|"" = toutes) — même sens que Slot.weeks
+    // des récurrents. Normalisé ; vide pour un ponctuel isolé.
+    weeks?: string;
   },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
@@ -534,6 +537,7 @@ export async function addUniqueSlot(
           periodId,
           jauge: input.jauge ?? false,
           batchId: input.batchId ?? null,
+          weeks: normalizeWeeks(input.weeks),
         },
       });
       // Demandeurs autorisés posés dans la même transaction (cf. addRecurringSlot) :

@@ -398,6 +398,8 @@ export async function createUniqueSlotAction(input: {
   jauge?: boolean;
   // Lot « multi » : identifiant partagé par les créneaux d'un même geste répliqué.
   batchId?: string | null;
+  // Portée de parité du lot « multi » ("A"|"B"|"" = toutes).
+  weeks?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   // Validation de la frontière : date (AAAA-MM-JJ), horaires (HH:MM, fin > début),
@@ -415,6 +417,7 @@ export async function createUniqueSlotAction(input: {
     demandeurIds: d.demandeurIds,
     jauge: d.jauge,
     batchId: d.batchId ?? null,
+    weeks: d.weeks,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };

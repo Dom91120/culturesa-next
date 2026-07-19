@@ -75,5 +75,9 @@ export const uniqueSlotCreateSchema = z
     // Lot « multi » : identifiant partagé par les créneaux d'un même geste de création
     // répliquée (null/absent = ponctuel isolé).
     batchId: z.string().min(1).max(64).nullish(),
+    // Portée de parité du LOT « multi » (semaines sur lesquelles la série a été répliquée) :
+    // "A" | "B" | "" (toutes). normalizeWeeks ramène toute autre valeur à "". Vide pour un
+    // ponctuel isolé. Même sens que Slot.weeks des récurrents (portée de parité).
+    weeks: z.string().max(8).optional(),
   })
   .refine(hoursOrdered, hoursOrderedMsg);

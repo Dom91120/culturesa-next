@@ -1087,6 +1087,10 @@ export function AgendaGrid({
               // seul créneau (multi off, ou période à une seule semaine) → batchId null.
               const batchId =
                 createKind === "multi" && dates.length > 1 ? crypto.randomUUID() : null;
+              // Portée de parité du lot (Multi A / B / toutes) stockée sur chaque créneau :
+              // = createWeeks (parité affichée si « Semaine A/B » actif, sinon ""). Ponctuel
+              // isolé (hors lot) → "".
+              const batchWeeks = batchId ? createWeeks : "";
               return dates.map((slotDate) =>
                 createUniqueSlotAction({
                   serviceId: service.id,
@@ -1097,6 +1101,7 @@ export function AgendaGrid({
                   demandeurIds: createDemIds,
                   jauge: jaugeMode,
                   batchId,
+                  weeks: batchWeeks,
                 }),
               );
             });
@@ -1984,6 +1989,12 @@ export function AgendaGrid({
         : recurringSlotsWithBookings.has(b.slotId);
       // Parité d'un créneau récurrent limité à une seule semaine (A/B) → lettre au centre.
       const blockParity = isPonctuelCell ? undefined : slotParityById.get(b.slotId);
+      // Portée de parité d'un créneau MULTI ponctuel (mode multi) : "A" | "B" | "" (toutes),
+      // lue sur Slot.weeks (posée à la création). Distingue Multi A / Multi B / Multi (toutes).
+      const multiWeeks =
+        creationMode && createKind === "multi" && batchSlotIds.has(b.slotId)
+          ? (uniqueSlots.find((u) => u.id === b.slotId)?.weeks ?? "")
+          : "";
       // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
       const gaugeForCell = b.jauge;
       const cellFull = b.used >= b.capacity;
@@ -2138,9 +2149,9 @@ export function AgendaGrid({
               {blockParity}
             </span>
           )}
-          {/* Badge « Multi » (coin haut-gauche) : marque un créneau appartenant à un lot
-              (batchId), affiché en mode création multi — repère de portée du geste (drag /
-              suppression de série). Décoratif (pointerEvents none), laisse passer les clics. */}
+          {/* Repère « Multi » (coin haut-gauche) : créneau appartenant à un lot (batchId),
+              affiché en mode création multi. Couleur du contour pointillé gris-bleu du
+              ponctuel (--slot-uniq-color), sans fond. Décoratif (pointerEvents none). */}
           {creationMode && createKind === "multi" && batchSlotIds.has(b.slotId) && (
             <span
               aria-hidden="true"
@@ -2148,18 +2159,38 @@ export function AgendaGrid({
                 position: "absolute",
                 top: 1,
                 left: 3,
-                fontSize: ".5rem",
+                fontSize: ".65rem",
                 fontWeight: 700,
                 lineHeight: 1,
-                padding: "1px 3px",
-                borderRadius: "calc(var(--rad-sm) - 3px)",
-                background: "color-mix(in srgb, var(--slot-uniq-color) 30%, transparent)",
-                color: "var(--text)",
+                color: "var(--slot-uniq-color)",
                 pointerEvents: "none",
                 zIndex: 1,
               }}
             >
               Multi
+            </span>
+          )}
+          {/* Multi ponctuel : lettre A/B au centre = PORTÉE du lot (Slot.weeks) → Multi A ou
+              Multi B ; rien pour « Multi (toutes) » (weeks ""). Gris-bleu du ponctuel.
+              Décorative (derrière les badges), n'intercepte pas les clics. */}
+          {(multiWeeks === "A" || multiWeeks === "B") && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--slot-uniq-color)",
+                fontWeight: 800,
+                fontSize: "1.2rem",
+                opacity: 0.55,
+                pointerEvents: "none",
+                zIndex: 0,
+              }}
+            >
+              {multiWeeks}
             </span>
           )}
           {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
@@ -2501,7 +2532,19 @@ export function AgendaGrid({
 
   return (
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
-    <div id="tab-content-agenda" onMouseMove={onAgendaTip} onMouseLeave={clearTip}>
+    // Pendant un glisser (créer / déplacer / redimensionner), on la supprime : elle n'a
+    // pas de sens en plein geste et masquerait le compteur de portée du lot.
+    <div
+      id="tab-content-agenda"
+      onMouseMove={(e) => {
+        if (createDrag || moveDrag || resizeDrag) {
+          clearTip();
+          return;
+        }
+        onAgendaTip(e);
+      }}
+      onMouseLeave={clearTip}
+    >
       <div
         style={{
           display: "flex",
