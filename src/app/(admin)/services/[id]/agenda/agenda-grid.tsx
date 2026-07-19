@@ -2022,6 +2022,16 @@ export function AgendaGrid({
   // laissés ouverts par la passe 051f820.
   const dragSourceSlotId = moveDrag?.slotId ?? resizeDrag?.slotId ?? null;
 
+  // draggingId / copiedBooking mirrorés en refs (audit perf 2026-07-19) : les handlers
+  // de drop/coller des cellules les lisent AU MOMENT de l'événement via ces refs → ils
+  // restent frais SANS que ces états transitoires soient en déps de renderBlock (sinon
+  // chaque start/end de glisser et chaque copier/couper re-rendait les ~100 blocs).
+  // L'atténuation visuelle du badge glissé/coupé est posée en DOM direct (cf. data-bkid).
+  const draggingIdRef = useRef(draggingId);
+  draggingIdRef.current = draggingId;
+  const copiedBookingRef = useRef(copiedBooking);
+  copiedBookingRef.current = copiedBooking;
+
   const renderBlock = useCallback(
     (b: Block, allday: boolean) => {
       const {
@@ -2138,7 +2148,7 @@ export function AgendaGrid({
             if (creationMode) return;
             e.preventDefault();
             clearTip(); // ferme l'info-bulle
-            if (!copiedBooking) return;
+            if (!copiedBookingRef.current) return;
             setCtxMenu({ x: e.clientX, y: e.clientY, kind: "cell", block: b });
           }}
           onClick={(e) => {
@@ -2167,8 +2177,9 @@ export function AgendaGrid({
             openCreate(b.dayKey, b.slotId);
           }}
           onDragOver={(e) => {
-            if (draggingId == null) return;
-            const dragged = bookings.find((bk) => bk.id === draggingId);
+            const dg = draggingIdRef.current;
+            if (dg == null) return;
+            const dragged = bookings.find((bk) => bk.id === dg);
             if (!dragged) return;
             // Cible valide = MÊME type que la source (récurrent↔récurrent ou
             // ponctuel↔ponctuel). Récurrent en Semaine réelle inclus (déplace la parente).
@@ -2178,8 +2189,8 @@ export function AgendaGrid({
             // Le créneau est la cible de drop : déplace la résa glissée ici.
             e.preventDefault();
             e.stopPropagation();
-            if (draggingId == null) return;
-            const id = draggingId;
+            const id = draggingIdRef.current;
+            if (id == null) return;
             const dragged = bookings.find((bk) => bk.id === id);
             setDraggingId(null);
             if (!dragged) return;
@@ -2426,17 +2437,18 @@ export function AgendaGrid({
                   // biome-ignore lint/a11y/useKeyWithClickEvents: badge (clic = valider/pointer/éditer)
                   <div
                     key={bk.id}
+                    // data-bkid : cible de l'atténuation « en cours de glisser / couper »,
+                    // posée en DOM DIRECT (cf. effet dimBadges) — l'ancien calcul d'opacité
+                    // dans le rendu mettait draggingId/copiedBooking en déps de renderBlock →
+                    // un glisser (start/end) ou un copier/couper re-rendait les ~100 blocs
+                    // (audit perf 2026-07-19).
+                    data-bkid={bk.id}
                     className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${locked ? " is-locked" : ""}`}
                     // Déplaçable (récurrent en Semaine réelle inclus : déplace la parente).
                     draggable={!locked}
                     style={{
                       ...badgeStyle(bk.validated),
                       position: "relative",
-                      opacity:
-                        draggingId === bk.id ||
-                        (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
-                          ? 0.4
-                          : 1,
                       cursor: quickActive ? "pointer" : locked ? "default" : "grab",
                       // L'ombre portée (box-shadow 2px 2px 4px) déborde sous le badge sans
                       // occuper de hauteur en flux : on réserve l'extent de l'ombre (offset 2
@@ -2553,8 +2565,6 @@ export function AgendaGrid({
       gridStartMin,
       gridEndMin,
       dragSourceSlotId,
-      copiedBooking,
-      draggingId,
       bookings,
       uniqueSlots,
       service,
@@ -2591,6 +2601,34 @@ export function AgendaGrid({
     }
     return { timed, allday };
   }, [days, isDayDisabled, blocksByDay, renderBlock, hideEmpty]);
+
+  // Atténuation « en cours de glisser / couper » posée en DOM DIRECT (cf. data-bkid) :
+  // la réservation glissée (HTML5, transitoire) ou coupée (jusqu'au collage) passe à
+  // opacity .4 sans que draggingId/copiedBooking soient en déps de renderBlock — sinon
+  // chaque start/end de glisser et chaque copier/couper re-rendait les ~100 blocs.
+  // Réappliqué après un re-rendu légitime des blocs (dayBlockEls en dép) — un refresh
+  // de données recrée les badges à opacity 1, l'effet ré-atténue celui qui l'est.
+  const dimmedBadgeElsRef = useRef<HTMLElement[]>([]);
+  useEffect(() => {
+    // Lecture réelle de dayBlockEls : le nombre de colonnes rendues n'a pas d'effet, mais
+    // le référencer relie l'effet au re-rendu des blocs (un refresh de données pendant une
+    // « coupe » recrée les badges à opacity 1 → il faut ré-atténuer le badge coupé). Le
+    // glisser HTML5, lui, suspend l'auto-refresh (cf. condition draggingId).
+    void dayBlockEls.timed.size;
+    for (const el of dimmedBadgeElsRef.current) el.style.opacity = "1";
+    dimmedBadgeElsRef.current = [];
+    const ids = new Set<number>();
+    if (draggingId != null) ids.add(draggingId);
+    if (copiedBooking?.mode === "cut") ids.add(copiedBooking.id);
+    for (const id of ids) {
+      // bk.id est unique par badge (occurrence datée) → un seul élément par id.
+      const el = document.querySelector<HTMLElement>(`.planning-name-tag[data-bkid="${id}"]`);
+      if (el) {
+        el.style.opacity = "0.4";
+        dimmedBadgeElsRef.current.push(el);
+      }
+    }
+  }, [draggingId, copiedBooking, dayBlockEls]);
 
   return (
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
