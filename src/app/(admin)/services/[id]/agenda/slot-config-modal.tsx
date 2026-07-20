@@ -69,12 +69,16 @@ export function SlotConfigModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div className="modal-title">
-        Configuration du créneau{title}
-        {isLot && (
-          <span style={{ color: "var(--slot-uniq-color)", fontWeight: 600 }}>
-            {" · "}
-            {batchCount} créneaux
-          </span>
+        {isLot ? (
+          <>
+            Configuration des{" "}
+            <span style={{ color: "var(--slot-uniq-color)", fontWeight: 600 }}>
+              {batchCount} créneaux
+            </span>
+            {title}
+          </>
+        ) : (
+          <>Configuration du créneau{title}</>
         )}
       </div>
       {isLot && (
