@@ -620,9 +620,9 @@ export type BatchUpdatedItem = {
 
 /**
  * Applique un redimensionnement / déplacement à TOUT le lot « multi » d'un créneau
- * (créneaux partageant son `batchId`). `dayDelta` = décalage de jour : 0 = redimensionnement
- * pur (horaires seuls) → tout le lot, passé compris ; != 0 = déplacement de jour → occurrences
- * présentes et futures uniquement (le passé n'est pas re-daté). Chaque occurrence passe par
+ * (créneaux partageant son `batchId`), sur l'ENSEMBLE des occurrences (passé compris — le
+ * geste redéfinit la série entière ; les occurrences réservées sont protégées, cf. plus bas).
+ * `dayDelta` = décalage de jour (0 pour un redimensionnement ou un même-jour). Chaque occurrence passe par
  * `moveUniqueSlot` (gardes réservation/période réutilisées) : une occurrence réservée
  * ou hors période est IGNORÉE (comptée dans `skipped`). Renvoie l'état ANTÉRIEUR des
  * occurrences modifiées pour permettre l'annulation. Créneau sans lot → repli sur le
@@ -678,18 +678,14 @@ export async function updateSlotBatchAction(input: {
     revalidatePath(`/services/${serviceId}/agenda`);
     return res.ok ? { ok: true, updated: [], skipped: 0 } : { ok: false, error: res.error };
   }
-  // Redimensionnement PUR (dayDelta 0 : seuls les horaires changent) → TOUT le lot, passé
-  // compris (on redéfinit la durée du créneau ; les occurrences réservées restent ignorées
-  // par moveUniqueSlot). Déplacement de JOUR (dayDelta != 0) → présent + futur seulement,
-  // on ne réécrit pas les dates passées (audit 2026-07-20 : le compte affiché tombait à 0
-  // et le lot n'était pas redimensionné sur une période passée).
-  const todayDate = new Date(`${todayParisISO()}T00:00:00.000Z`);
+  // Redimensionnement / déplacement appliqué à TOUT le lot, passé compris : le geste
+  // redéfinit le créneau (durée ou jour) pour l'ensemble de la série, de façon cohérente
+  // (sinon le lot se scinderait — passé à l'ancienne place, futur à la nouvelle). Les
+  // occurrences réservées restent IGNORÉES par moveUniqueSlot (le passé « réel » est donc
+  // protégé). Audit 2026-07-20 : le décompte à venir tombait à 0 sur une période passée et
+  // rien n'était modifié.
   const siblings = await prisma.slot.findMany({
-    where: {
-      serviceId,
-      batchId: ref.batchId,
-      ...(dayDelta !== 0 ? { slotDate: { gte: todayDate } } : {}),
-    },
+    where: { serviceId, batchId: ref.batchId },
     select: { id: true, slotDate: true, startTime: true, endTime: true },
     orderBy: { slotDate: "asc" },
   });

@@ -1120,6 +1120,7 @@ export function AgendaGrid({
   // simple = 1 quart, 1 colonne). Récurrent en Modèle de période (période + jour +
   // semaine A/B active), ponctuel daté en Semaine réelle. Capacité = service.capacity.
   function finalizeCreate(cd: CreateDrag) {
+    setDragInfo(null); // ferme l'indicateur de portée du glisser-créer
     const rawStart = Math.min(cd.startMin, cd.curMin);
     const rawEnd = Math.min(gridEndMin, Math.max(cd.startMin, cd.curMin) + 15);
     if (rawEnd <= rawStart) return;
@@ -1185,6 +1186,19 @@ export function AgendaGrid({
   // Suivi du glisser-créer (onMove) : quart courant + colonne (jour) survolée pour la
   // sélection horizontale multi-colonnes. Renvoie l'état suivant si l'un a changé,
   // sinon null. Le relâché (onUp) = finalizeCreate. (cf. useDragInteraction.)
+  // Nombre de créneaux qu'un glisser-créer produira : jours couverts × segments hors pause
+  // × dates par jour (1 en simple, N en « Création multiple »). Pour l'indicateur de portée.
+  function createDragCount(cd: CreateDrag): number {
+    const rawStart = Math.min(cd.startMin, cd.curMin);
+    const rawEnd = Math.min(gridEndMin, Math.max(cd.startMin, cd.curMin) + 15);
+    if (rawEnd <= rawStart) return 0;
+    const segments = lunchSplitSegments(rawStart, rawEnd).filter(([s, en]) => en > s);
+    const targets = draggedDays(cd);
+    if (!targets.length || !segments.length) return 0;
+    if (createKind === "rec") return targets.length * segments.length;
+    return targets.reduce((sum, day) => sum + segments.length * uniqueCreateDates(day).length, 0);
+  }
+
   function createDragMove(cd: CreateDrag, e: MouseEvent): CreateDrag | null {
     const q = quarterAtY(cd.colTop, e.clientY);
     const colEl = document
@@ -1192,7 +1206,12 @@ export function AgendaGrid({
       ?.closest<HTMLElement>("[data-daykey]");
     const dk = colEl?.dataset.daykey;
     const curDay = dk && days.includes(dk) ? dk : cd.curDay;
-    return q !== cd.curMin || curDay !== cd.curDay ? { ...cd, curMin: q, curDay } : null;
+    if (q === cd.curMin && curDay === cd.curDay) return null;
+    const next = { ...cd, curMin: q, curDay };
+    // Indicateur de portée « N créneaux » (sans horaires) pendant la création.
+    const n = createDragCount(next);
+    setDragInfo({ x: e.clientX, y: e.clientY, text: `${n} créneau${n > 1 ? "x" : ""}` });
+    return next;
   }
 
   // ── Mode création : créneau « journée entière » (bande dédiée) ───────────────
@@ -1477,9 +1496,9 @@ export function AgendaGrid({
       if (!mondayStr) return;
       const slotDate = ymd(addDays(mondayStr, DAY_OFFSET[md.curDay] ?? 0));
       const batch = dragBatchRef.current;
-      // Mode multi + créneau en lot → déplacement de TOUT le lot (portée sélecteur) :
-      // même décalage de jour (dayDelta) + mêmes horaires appliqués à chaque occurrence.
-      if (batch && batch.count > 0) {
+      // Créneau en lot → déplacement de TOUT le lot (même décalage de jour + horaires
+      // appliqués à chaque occurrence). On teste « est-ce un lot » (audit 2026-07-20).
+      if (batch) {
         const dayDelta = (DAY_OFFSET[md.curDay] ?? 0) - (DAY_OFFSET[md.fromDay] ?? 0);
         runBatchResult(
           updateSlotBatchAction({
@@ -1527,15 +1546,10 @@ export function AgendaGrid({
     const dk = colEl?.dataset.daykey;
     const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : md.curDay;
     const changed = q !== md.curMin || curDay !== md.curDay;
-    // Compteur de portée « valeur · N créneaux » pendant un glisser de LOT.
+    // Portée du déplacement de LOT : nombre TOTAL de créneaux du lot (sans horaires).
     if (changed && dragBatchRef.current) {
-      const s = minToHHMM(q);
-      const en = minToHHMM(q + md.durationMin);
-      setDragInfo({
-        x: e.clientX,
-        y: e.clientY,
-        text: `${s}–${en} · ${dragBatchRef.current.count} créneaux`,
-      });
+      const n = countSlotSeries(md.slotId);
+      setDragInfo({ x: e.clientX, y: e.clientY, text: `${n} créneau${n > 1 ? "x" : ""}` });
     }
     return changed ? { ...md, curMin: q, curDay } : null;
   }
@@ -1769,16 +1783,38 @@ export function AgendaGrid({
 
   // Suivi du glisser-étendre latéral : seule la colonne (jour) survolée compte. onUp
   // ne finalise (un créneau par jour couvert) que si le jour a changé. (cf. useDragInteraction.)
+  // Nombre de créneaux qu'une extension aux jours voisins produira (jours voisins couverts
+  // × dates par jour selon le TYPE du créneau source — cf. finalizeHResize). Pour l'indicateur.
+  function hResizeDragCount(hd: HResizeDrag): number {
+    const targets = daysSpan(hd.fromDay, hd.curDay).filter((d) => d !== hd.fromDay);
+    if (!targets.length) return 0;
+    if (!hd.isUnique) return targets.length; // récurrent : 1 par jour voisin
+    const src = uniqueSlots.find((s) => s.id === hd.slotId);
+    const srcWeeks = src?.weeks === "A" || src?.weeks === "B" ? src.weeks : "";
+    const parity: "A" | "B" | null = srcWeeks === "" ? null : srcWeeks;
+    const replicate = !!src?.batchId;
+    return targets.reduce(
+      (sum, day) => sum + uniqueCreateDates(day, { parity, replicate }).length,
+      0,
+    );
+  }
+
   function hResizeDragMove(hd: HResizeDrag, e: MouseEvent): HResizeDrag | null {
     const colEl = document
       .elementFromPoint(e.clientX, e.clientY)
       ?.closest<HTMLElement>("[data-daykey]");
     const dk = colEl?.dataset.daykey;
     const curDay = dk && days.includes(dk) && !isDayDisabled(dk) ? dk : hd.curDay;
-    return curDay !== hd.curDay ? { ...hd, curDay } : null;
+    if (curDay === hd.curDay) return null;
+    const next = { ...hd, curDay };
+    // Indicateur de portée « N créneaux » (sans horaires) pendant l'extension.
+    const n = hResizeDragCount(next);
+    setDragInfo({ x: e.clientX, y: e.clientY, text: `${n} créneau${n > 1 ? "x" : ""}` });
+    return next;
   }
   function hResizeDragUp(hd: HResizeDrag) {
     if (hd.curDay !== hd.fromDay) finalizeHResize(hd);
+    setDragInfo(null);
   }
 
   // Parents récurrents ayant AU MOINS un enfant/miroir pointé — précalculé une fois par
