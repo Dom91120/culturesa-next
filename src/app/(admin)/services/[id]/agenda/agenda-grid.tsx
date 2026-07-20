@@ -1066,25 +1066,37 @@ export function AgendaGrid({
   }
 
   // Dates de création d'un ponctuel (Semaine réelle) pour une colonne : la date de la
-  // semaine affichée, ou — « Création multiple » — le même jour de CHAQUE semaine de la
-  // période active. Filtres alignés sur la génération des miroirs / isDayDisabled :
-  // parité A/B de la semaine affichée (mode A/B), jour actif de l'exercice couvrant,
-  // fériés et vacances scolaires fermés sautés.
-  function uniqueCreateDates(dayKey: string): string[] {
+  // semaine affichée, ou — réplication sur la période — le même jour de CHAQUE semaine.
+  // Filtres alignés sur la génération des miroirs / isDayDisabled : parité A/B, jour actif
+  // de l'exercice couvrant, fériés et vacances scolaires fermés sautés.
+  // `override` : force la parité (`parity`) et la réplication (`replicate`) — utilisé par
+  // l'ÉLARGISSEMENT, qui doit suivre le type du créneau SOURCE, pas le mode A/B courant.
+  // Sans override : parité = semaine affichée (si « Semaine A/B » actif), réplication =
+  // mode « Création multiple ».
+  function uniqueCreateDates(
+    dayKey: string,
+    override?: { parity: "A" | "B" | null; replicate: boolean },
+  ): string[] {
     if (!mondayStr) return [];
     const off = DAY_OFFSET[dayKey] ?? 0;
     const single = ymd(addDays(mondayStr, off));
     const p = coveringPeriod;
-    if (createKind !== "multi" || !p?.dateStart || !p.dateEnd) return [single];
+    const replicate = override ? override.replicate : createKind === "multi";
+    if (!replicate || !p?.dateStart || !p.dateEnd) return [single];
+    // Parité effective : celle imposée (élargissement) ou celle de la semaine affichée.
+    const parity = override
+      ? override.parity
+      : parityScoped && realWeekParity
+        ? realWeekParity
+        : null;
     const dates: string[] = [];
     let monday = ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`)));
     // ≤ 120 itérations : garde-fou large (une période ≈ 53 semaines au plus).
     for (let guard = 0; guard < 120 && monday <= p.dateEnd; guard++) {
       const weekMonday = monday;
       monday = ymd(addDays(monday, 7));
-      // Bouton « Semaine A/B » activé → réplique uniquement sur la parité affichée ;
-      // désactivé → toutes les semaines de la période.
-      if (parityScoped && realWeekParity && slotWeekTag(weekMonday) !== realWeekParity) continue;
+      // Filtre de parité : uniquement la parité voulue (A/B) ; null = toutes les semaines.
+      if (parity && slotWeekTag(weekMonday) !== parity) continue;
       const d = ymd(addDays(weekMonday, off));
       if (d < p.dateStart || d > p.dateEnd) continue;
       const o = openingForYmd(d);
@@ -1675,29 +1687,38 @@ export function AgendaGrid({
     const endTime = minToHHMM(hd.endMin);
     if (hd.isUnique) {
       if (!mondayStr) return;
-      // 1 lot « multi » par jour couvert (répliqué sur la période) créé ATOMIQUEMENT
-      // côté serveur (batchId généré serveur) — même correctif que la création
-      // horaire / journée entière : sans batch, la réplication horizontale en mode
-      // multi posait des créneaux SANS batchId, donc non liés en lot.
+      // Le créneau élargi hérite du TYPE (parité A/B/toutes) du créneau SOURCE, PAS du
+      // mode A/B courant (audit 2026-07-20). Source = lot « multi » (batchId) → on
+      // réplique sur sa parité ; source isolée → un seul créneau ce jour-là.
+      const src = uniqueSlots.find((s) => s.id === hd.slotId);
+      const srcWeeks: "A" | "B" | "" = src?.weeks === "A" || src?.weeks === "B" ? src.weeks : "";
+      const parity: "A" | "B" | null = srcWeeks === "" ? null : srcWeeks;
+      const replicate = !!src?.batchId;
+      // 1 lot « multi » par jour couvert créé ATOMIQUEMENT côté serveur (batchId généré
+      // serveur ; le serveur ne pose batchId/parité que si plusieurs dates).
       runResults(
         Promise.all(
           targets.map((dayKey) =>
             createUniqueSlotBatchAction({
               serviceId: service.id,
-              dates: uniqueCreateDates(dayKey),
+              dates: uniqueCreateDates(dayKey, { parity, replicate }),
               startTime,
               endTime,
               capacity: createCap,
               demandeurIds: createDemIds,
               jauge: jaugeMode,
-              weeks: createWeeks,
+              weeks: srcWeeks,
             }),
           ),
         ),
       );
     } else {
       if (effectivePeriodId == null || effectivePeriodId <= 0) return;
-      const weeks = createWeeks;
+      // Le créneau récurrent élargi hérite de la parité du créneau SOURCE (Slot.weeks),
+      // PAS du mode A/B courant (audit 2026-07-20) — le serveur régénère les miroirs sur
+      // la bonne parité à partir de ce `weeks`.
+      const src = slots.find((s) => s.id === hd.slotId);
+      const weeks: "A" | "B" | "" = src?.weeks === "A" || src?.weeks === "B" ? src.weeks : "";
       runResults(
         Promise.all(
           targets.map((dayKey) =>
