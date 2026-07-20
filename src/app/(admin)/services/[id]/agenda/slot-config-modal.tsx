@@ -14,6 +14,7 @@ export function SlotConfigModal({
   serviceId,
   slotId,
   title,
+  batchCount,
   initialCapacity,
   initialJauge,
   initialDemIds,
@@ -25,6 +26,8 @@ export function SlotConfigModal({
   slotId: string;
   // Suffixe de titre, ex. « · 9:00–10:30 » (ou "" si le créneau est introuvable).
   title: string;
+  // Taille du lot « multiple » (> 1) : la config s'applique à tout le lot ; absent/≤1 sinon.
+  batchCount?: number;
   initialCapacity: string;
   // « A une jauge » du créneau (slots.jauge) — modifiable ici, propagé aux miroirs.
   initialJauge: boolean;
@@ -33,6 +36,7 @@ export function SlotConfigModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const isLot = (batchCount ?? 0) > 1;
   const [capValue, setCapValue] = useState(initialCapacity);
   const [jauge, setJauge] = useState(initialJauge);
   const [capDemIds, setCapDemIds] = useState<number[]>(initialDemIds);
@@ -64,7 +68,20 @@ export function SlotConfigModal({
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="modal-title">Configuration du créneau{title}</div>
+      <div className="modal-title">
+        Configuration du créneau{title}
+        {isLot && (
+          <span style={{ color: "var(--slot-uniq-color)", fontWeight: 600 }}>
+            {" · "}
+            {batchCount} créneaux
+          </span>
+        )}
+      </div>
+      {isLot && (
+        <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: "0 0 .4rem" }}>
+          Cette configuration s'applique à l'ensemble des {batchCount} créneaux du lot.
+        </p>
+      )}
       {/* Capacité (colonne fixe 10rem) et Jauge (le reste) côte à côte. L'icône
           capsule (18×36) EST la bascule de la jauge : un clic la fait passer
           d'activée (couleur) à inactivée (grisée). Propagé aux miroirs pour un

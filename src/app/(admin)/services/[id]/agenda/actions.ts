@@ -228,8 +228,8 @@ export async function setBookingPointageAction(
  * son mode jauge et la liste des demandeurs autorisés (vide = ouvert à tous).
  * Remplace l'ensemble des SlotDemandeur du créneau. Fonctionne pour les créneaux
  * récurrents comme ponctuels ; la jauge d'un récurrent est PROPAGÉE à ses miroirs
- * (ils portent la valeur du parent — la règle de capacité des réservations
- * ponctuelles se joue sur le miroir).
+ * (ils portent la valeur du parent). Un créneau ponctuel « multiple » (batchId) →
+ * la configuration s'applique à TOUT le lot (tous les créneaux jumeaux de la période).
  */
 export async function saveSlotConfigAction(input: {
   serviceId: string;
@@ -249,20 +249,32 @@ export async function saveSlotConfigAction(input: {
   const ids = [...new Set(demandeurIds.filter((d) => Number.isInteger(d) && d > 0))];
   // Anti-IDOR + message « introuvable » réel (pré-contrôle hors tx pour que le catch
   // ci-dessous ne serve qu'aux erreurs inattendues, loggées et non avalées — audit B2).
-  const exists = await prisma.slot.findFirst({
+  const ref = await prisma.slot.findFirst({
     where: { id: slotId, serviceId },
-    select: { id: true },
+    select: { id: true, batchId: true },
   });
-  if (!exists) return { ok: false, error: "Créneau introuvable." };
+  if (!ref) return { ok: false, error: "Créneau introuvable." };
+  // Créneau ponctuel « multi » (batchId) → la config s'applique à TOUT le lot ; sinon au
+  // seul créneau (récurrent : + propagation jauge à ses miroirs).
+  const targetIds = ref.batchId
+    ? (
+        await prisma.slot.findMany({
+          where: { serviceId, batchId: ref.batchId },
+          select: { id: true },
+        })
+      ).map((s) => s.id)
+    : [slotId];
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.slot.update({ where: { id: slotId }, data: { capacity, jauge } });
+      await tx.slot.updateMany({ where: { id: { in: targetIds } }, data: { capacity, jauge } });
       // Miroirs d'un récurrent : la jauge suit le parent (cf. addRecurringSlot).
-      await tx.slot.updateMany({ where: { parentSlotId: slotId }, data: { jauge } });
-      await tx.slotDemandeur.deleteMany({ where: { slotId } });
+      await tx.slot.updateMany({ where: { parentSlotId: { in: targetIds } }, data: { jauge } });
+      await tx.slotDemandeur.deleteMany({ where: { slotId: { in: targetIds } } });
       if (ids.length > 0) {
         await tx.slotDemandeur.createMany({
-          data: ids.map((demandeurId) => ({ slotId, demandeurId })),
+          data: targetIds.flatMap((sid) =>
+            ids.map((demandeurId) => ({ slotId: sid, demandeurId })),
+          ),
         });
       }
     });

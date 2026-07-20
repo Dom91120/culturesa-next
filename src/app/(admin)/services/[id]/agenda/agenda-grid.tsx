@@ -2061,10 +2061,13 @@ export function AgendaGrid({
     demandeurs?: string[];
     jauge?: boolean;
     recurInfo?: { period: string; dayHours: string };
+    batchCount?: number;
   } => {
     const slot = slots.find((s) => s.id === slotId);
     const block = blocksByDay[dayKey]?.find((bl) => bl.slotId === slotId);
     const capacity = block?.capacity ?? slot?.capacity ?? service.capacity;
+    // Taille du lot « multi » d'un créneau ponctuel (0 = pas un lot ; > 1 → affichée).
+    const batchCount = countSlotSeries(slotId) || undefined;
     // État de la jauge DU créneau (slots.jauge) : bloc affiché, sinon récurrent,
     // sinon ponctuel/miroir.
     const jauge =
@@ -2077,10 +2080,10 @@ export function AgendaGrid({
           dayHours: `${DAY_NAMES[slot.slotDay ?? ""] ?? slot.slotDay ?? ""} · ${slot.startTime}–${slot.endTime}`,
         }
       : undefined;
-    if (!serviceDemandeurs.length) return { capacity, jauge, recurInfo };
+    if (!serviceDemandeurs.length) return { capacity, jauge, recurInfo, batchCount };
     const ids = slotDemandeurs[slotId] ?? [];
     const demandeurs = serviceDemandeurs.filter((d) => ids.includes(d.id)).map((d) => d.label);
-    return { capacity, demandeurs, jauge, recurInfo };
+    return { capacity, demandeurs, jauge, recurInfo, batchCount };
   };
 
   // Handlers de renderBlock via un ref STABLE : réassignés à chaque rendu (toujours
@@ -3803,6 +3806,8 @@ export function AgendaGrid({
               serviceId={service.id}
               slotId={capModal.slotId}
               title={slot ? ` · ${slot.startTime}–${slot.endTime}` : ""}
+              // Lot « multi » (ponctuel avec batchId) → la config s'applique à tout le lot.
+              batchCount={countSlotSeries(capModal.slotId)}
               initialCapacity={String(slot?.capacity ?? service.capacity)}
               initialJauge={slot?.jauge ?? false}
               initialDemIds={slotDemandeurs[capModal.slotId] ?? []}

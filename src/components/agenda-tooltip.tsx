@@ -20,6 +20,8 @@ export type AgendaTip =
       // « A une jauge » du créneau (slots.jauge) — absent = ligne masquée.
       jauge?: boolean;
       recurInfo?: { period: string; dayHours: string };
+      // Taille du lot « multiple » (> 1) d'un créneau ponctuel — absent/≤1 = ligne masquée.
+      batchCount?: number;
     }
   | null;
 
@@ -46,6 +48,7 @@ export function useAgendaTooltip(opts: {
     demandeurs?: string[];
     jauge?: boolean;
     recurInfo?: { period: string; dayHours: string };
+    batchCount?: number;
   };
   // Quand true, aucune info-bulle (ex. saisie de thème en cours côté usager).
   suppressed?: () => boolean;
@@ -94,7 +97,13 @@ export function useAgendaTooltip(opts: {
       if (slotId && dayKey) {
         const dates = opts.getDates(slotId, dayKey);
         const meta = opts.getMeta?.(slotId, dayKey) ?? {};
-        if (dates.length || meta.capacity != null || meta.demandeurs != null || meta.recurInfo) {
+        if (
+          dates.length ||
+          meta.capacity != null ||
+          meta.demandeurs != null ||
+          meta.recurInfo ||
+          meta.batchCount != null
+        ) {
           key = `d:${slotId}|${dayKey}`;
           next = {
             dates,
@@ -102,6 +111,7 @@ export function useAgendaTooltip(opts: {
             demandeurs: meta.demandeurs,
             jauge: meta.jauge,
             recurInfo: meta.recurInfo,
+            batchCount: meta.batchCount,
           };
         }
       }
@@ -202,6 +212,11 @@ export function AgendaTooltip({
           {typeof tip.jauge === "boolean" && (
             <div>
               <span style={{ fontWeight: 600 }}>Jauge :</span> {tip.jauge ? "active" : "inactive"}
+            </div>
+          )}
+          {typeof tip.batchCount === "number" && tip.batchCount > 1 && (
+            <div>
+              <span style={{ fontWeight: 600 }}>Lot :</span> {tip.batchCount} créneaux
             </div>
           )}
         </>
