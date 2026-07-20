@@ -63,8 +63,10 @@ export type SyncRecurringCache = {
   // Plages de vacances (zone unique de l'app), remplies au premier besoin.
   schoolRanges?: { dateStart: string; dateEnd: string }[];
   exerciceIdByPeriod: Map<number, number | null>;
-  openingByExercice: Map<number, { activeDays: string; openOnSchoolHolidays: boolean } | null>;
-  delayByService: Map<string, number>;
+  openingByExercice: Map<
+    number,
+    { activeDays: string; openOnSchoolHolidays: boolean; bookingDelay: number } | null
+  >;
   openSchoolByUser: Map<string, boolean>;
   // Miroirs par couple slot parent | période (partagés entre parents du même créneau).
   mirrorsBySlotPeriod: Map<string, { id: string; slotDate: Date | null }[]>;
@@ -74,7 +76,6 @@ export function createSyncRecurringCache(): SyncRecurringCache {
   return {
     exerciceIdByPeriod: new Map(),
     openingByExercice: new Map(),
-    delayByService: new Map(),
     openSchoolByUser: new Map(),
     mirrorsBySlotPeriod: new Map(),
   };
@@ -125,7 +126,11 @@ export async function syncRecurringChildren(
     exerciceId = period?.exerciceId ?? null;
     cache?.exerciceIdByPeriod.set(parent.periodId, exerciceId);
   }
-  let opening: { activeDays: string; openOnSchoolHolidays: boolean } | null = null;
+  let opening: {
+    activeDays: string;
+    openOnSchoolHolidays: boolean;
+    bookingDelay: number;
+  } | null = null;
   if (exerciceId != null) {
     const cached = cache?.openingByExercice.get(exerciceId);
     if (cached !== undefined) {
@@ -155,25 +160,17 @@ export async function syncRecurringChildren(
   const inSchool = (d: string) => isInSchoolHolidayRange(d, schoolRanges);
 
   // Délai de réservation : on ne CRÉE pas d'enfant pour une occurrence antérieure à
-  // aujourd'hui + le délai du service (cf. lib/booking-delay). On ne SUPPRIME jamais
-  // un enfant déjà créé pour ce motif (préserve l'historique / le pointage des séances
-  // passées) — seules les occurrences devenues invalides (semaine/fériés/vacances) le sont.
+  // aujourd'hui + le délai (cf. lib/booking-delay). On ne SUPPRIME jamais un enfant déjà
+  // créé pour ce motif (préserve l'historique / le pointage des séances passées) — seules
+  // les occurrences devenues invalides (semaine/fériés/vacances) le sont.
   let cutoff = opts?.cutoffISO;
   if (!cutoff) {
-    let delay = cache?.delayByService.get(parent.serviceId);
-    if (delay === undefined) {
-      const svc = await tx.service.findUnique({
-        where: { id: parent.serviceId },
-        select: { bookingDelay: true },
-      });
-      delay = svc?.bookingDelay ?? 0;
-      cache?.delayByService.set(parent.serviceId, delay);
-    }
-    // Jours ouvrés du délai = ceux de l'exercice de la période réservée (décision
-    // produit). Période sans exercice → rien n'est matérialisable (cutoff infini).
+    // Délai ET jours ouvrés = ceux de l'EXERCICE de la période réservée (décision produit,
+    // délai désormais porté par l'exercice). Période sans exercice → rien n'est
+    // matérialisable (cutoff infini).
     cutoff = opening
       ? earliestBookableISO(
-          delay,
+          opening.bookingDelay,
           opening.activeDays
             .split(",")
             .map((s) => s.trim())

@@ -12,6 +12,8 @@ import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
 import { setGaugeAccompagnantsAction } from "./actions";
+import { GlobalRow } from "./global-row";
+import { ServiceValidationSettings } from "./service-validation-settings";
 
 // ── Types & helpers ──────────────────────────────────────────────────────────
 
@@ -32,6 +34,13 @@ type Props = {
   initialThemeMode: ThemeMode;
   initialThemes: string[];
   initialGaugeAccompagnants: boolean;
+  // Réglages « Validation & auto-validation » (service-globaux), édités ici.
+  validationBloquante: boolean;
+  autoValidationDelay: number;
+  mgrNoticeMode: string;
+  mgrNoticeIntervalHours: number;
+  mgrNoticeHour: number;
+  mgrNoticeWeekday: string;
 };
 
 /** Reprojette l'état par-demandeur vers la matrice service × demandeur.
@@ -84,6 +93,12 @@ export function ConfigPanel({
   initialThemeMode,
   initialThemes,
   initialGaugeAccompagnants,
+  validationBloquante,
+  autoValidationDelay,
+  mgrNoticeMode,
+  mgrNoticeIntervalHours,
+  mgrNoticeHour,
+  mgrNoticeWeekday,
 }: Props) {
   const counter = useRef(0);
 
@@ -215,15 +230,28 @@ export function ConfigPanel({
 
   return (
     <section className="panel">
-      {/* En-tête du panel conteneur : statut autosave (Globaux + Demandeurs) à droite. */}
+      {/* En-tête du panel conteneur : titre à gauche, statut autosave (Globaux + Demandeurs)
+          à droite. */}
       <div
         style={{
           display: "flex",
-          justifyContent: "flex-end",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "1rem",
           minHeight: 18,
-          marginBottom: ".75rem",
+          // Mêmes espacements haut/bas que l'en-tête « Exercice » (onglet Périodes).
+          margin: ".75rem 0 1.75rem",
         }}
       >
+        <div>
+          <div className="panel-title" style={{ marginBottom: ".15rem" }}>
+            <span className="dot" style={{ background: "var(--warn)" }} />
+            Configuration du service
+          </div>
+          <p style={{ fontSize: ".75rem", color: "var(--muted)", margin: 0 }}>
+            Réglages s'appliquant à tout le service.
+          </p>
+        </div>
         <span
           style={{
             fontSize: ".72rem",
@@ -239,18 +267,28 @@ export function ConfigPanel({
       <div style={{ display: "flex", flexDirection: "column", gap: ".85rem" }}>
         {/* ─ Réglages globaux (autosave) ─ */}
         <section style={SUB_PANEL}>
+          {/* marginBottom réduite : la 1re ligne (GlobalRow) ajoute .75rem de padding haut ;
+              on compense pour aligner l'écart sur celui de « Demandeurs » / « Thèmes ». */}
           <div className="panel-title" style={{ marginBottom: ".25rem" }}>
-            <span className="dot" style={{ background: "var(--warn)" }} />
-            Paramètres globaux du service
+            <span className="dot" style={{ background: "var(--accent)" }} />
+            Paramètres globaux
           </div>
-          <p style={{ fontSize: ".75rem", color: "var(--muted)", margin: "0 0 1rem" }}>
-            S'appliquent à tout le service. Enregistrement automatique.
-          </p>
+
+          {/* Validation & auto-validation (verrou, auto-validation, notification gestionnaires). */}
+          <ServiceValidationSettings
+            serviceId={serviceId}
+            validationBloquante={validationBloquante}
+            autoValidationDelay={autoValidationDelay}
+            mgrNoticeMode={mgrNoticeMode}
+            mgrNoticeIntervalHours={mgrNoticeIntervalHours}
+            mgrNoticeHour={mgrNoticeHour}
+            mgrNoticeWeekday={mgrNoticeWeekday}
+          />
 
           {/* Récurrent (Modèle) et alternance A/B ne sont plus des réglages service : tout
               service propose des créneaux récurrents, et la parité A/B se choisit créneau par
               créneau via le bouton « Semaine A/B » de l'agenda. La jauge s'active PAR CRÉNEAU
-              (icône capsule du mode création). */}
+              (icône capsule du mode création). Dernière ligne du bloc → pas de bordure basse. */}
           <GlobalRow
             label="Jauge — prise en compte des accompagnants"
             desc="Prendre en compte les accompagnants dans le calcul de la jauge des créneaux qui en ont une."
@@ -264,7 +302,7 @@ export function ConfigPanel({
         <section style={SUB_PANEL}>
           <div className="panel-title" style={{ justifyContent: "space-between" }}>
             <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
-              <span className="dot" style={{ background: "var(--warn)" }} />
+              <span className="dot" style={{ background: "var(--accent)" }} />
               Demandeurs
             </span>
             <button
@@ -389,7 +427,7 @@ export function ConfigPanel({
         <section style={SUB_PANEL}>
           <div className="panel-title" style={{ justifyContent: "space-between" }}>
             <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
-              <span className="dot" style={{ background: "var(--warn)" }} />
+              <span className="dot" style={{ background: "var(--accent)" }} />
               Thèmes
             </span>
             {themeMode === "liste" && (
@@ -577,35 +615,5 @@ export function ConfigPanel({
         }
       </style>
     </section>
-  );
-}
-
-function GlobalRow({
-  label,
-  desc,
-  last,
-  children,
-}: {
-  label: string;
-  desc: string;
-  last?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "1rem",
-        padding: ".75rem 0",
-        borderBottom: last ? "none" : "1px solid var(--border)",
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: ".85rem", fontWeight: 600, color: "var(--text)" }}>{label}</div>
-        <div style={{ fontSize: ".74rem", color: "var(--muted)", marginTop: ".15rem" }}>{desc}</div>
-      </div>
-      {children}
-    </div>
   );
 }

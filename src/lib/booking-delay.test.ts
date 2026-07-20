@@ -17,7 +17,7 @@ describe("todayParisISO — « aujourd'hui » = date calendaire à PARIS", () =>
   });
 });
 
-describe("earliestBookableISO — encodage legacy de service.bookingDelay", () => {
+describe("earliestBookableISO — encodage legacy de exercice.bookingDelay", () => {
   it("0 → aujourd'hui", () => {
     expect(earliestBookableISO(0, WEEKDAYS, NOW)).toBe("2026-07-15");
   });

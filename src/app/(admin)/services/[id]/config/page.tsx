@@ -33,6 +33,12 @@ export default async function ConfigPage({ params }: { params: Promise<{ id: str
         initialThemeMode={themesData.mode}
         initialThemes={themesData.themes}
         initialGaugeAccompagnants={service.gaugeAccompagnants}
+        validationBloquante={service.validationBloquante}
+        autoValidationDelay={service.autoValidationDelay}
+        mgrNoticeMode={service.mgrNoticeMode}
+        mgrNoticeIntervalHours={service.mgrNoticeIntervalHours}
+        mgrNoticeHour={service.mgrNoticeHour}
+        mgrNoticeWeekday={service.mgrNoticeWeekday}
       />
     </div>
   );

@@ -14,7 +14,8 @@ import type { Prisma } from "@/generated/prisma/client";
  *     la date de départ, avec repli DEFAULT_OPENING (sinon les échéances gèleraient).
  */
 
-/** Réglages d'ouverture effectifs (ceux d'un exercice). */
+/** Réglages d'ouverture effectifs (ceux d'un exercice) + délai de réservation, tous
+ *  portés par l'exercice et résolus par la date. */
 export type OpeningConfig = {
   morningStart: string;
   morningEnd: string;
@@ -23,6 +24,8 @@ export type OpeningConfig = {
   activeDays: string; // CSV « lun,mar,… »
   openOnHolidays: boolean;
   openOnSchoolHolidays: boolean;
+  // Délai limite de réservation (encodage legacy, cf. lib/booking-delay).
+  bookingDelay: number;
 };
 
 /** Défauts applicatifs (création d'exercice, repli du temps ouvré). Alignés sur
@@ -35,6 +38,7 @@ export const DEFAULT_OPENING: OpeningConfig = {
   activeDays: "lun,mar,mer,jeu,ven",
   openOnHolidays: false,
   openOnSchoolHolidays: false,
+  bookingDelay: 0,
 };
 
 /** Sélection Prisma des réglages d'ouverture d'un exercice. */
@@ -46,6 +50,7 @@ export const EXERCICE_OPENING_SELECT = {
   activeDays: true,
   openOnHolidays: true,
   openOnSchoolHolidays: true,
+  bookingDelay: true,
 } as const;
 
 /**

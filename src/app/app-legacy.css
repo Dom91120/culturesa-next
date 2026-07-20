@@ -1303,7 +1303,7 @@ textarea.theme-pending:focus::placeholder {
   padding-bottom: 0.18rem;
 }
 .periods-table td {
-  padding: 0.12rem 0.25rem;
+  padding: 0.12rem 0.4rem;
   /* Lignes de données légèrement plus petites que le texte courant (13px → 12px). */
   font-size: 0.75rem;
   text-align: center;
@@ -1353,16 +1353,6 @@ textarea.theme-pending:focus::placeholder {
   border: 1px solid var(--border);
   vertical-align: middle;
 }
-#periods-row {
-  /* Flex-wrap : « Plages horaires » s'affiche à droite du tableau des périodes et bascule
-     AUTOMATIQUEMENT dessous quand la largeur disponible ne suffit plus (pas de breakpoint
-     fixe). align-items:flex-start aligne les deux colonnes en haut. */
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem 6rem;
-  margin-bottom: 1.5rem;
-}
 /* Titre + navigation exercice (« Exercice ◀ … ▶ ») du panneau Périodes. */
 .pr-head {
   display: flex;
@@ -1377,34 +1367,8 @@ textarea.theme-pending:focus::placeholder {
 .pr-head .ex-nav-label {
   line-height: 1;
 }
-.pr-head > .pr-title {
-  margin-bottom: 0;
-}
 .pr-head > .periode-nav {
   margin: 0;
-}
-/* Colonne gauche : tableau des périodes + bouton « Ajouter » empilés. */
-#periods-row > .pr-left {
-  min-width: 0;
-}
-/* Barre « Ajouter une période » + actions de sélection : sous le tableau, DANS la colonne
-   gauche (largeur du tableau) — ne s'étend pas sous « Plages horaires ». */
-#periods-row > .pr-left > .pr-add {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-/* « Plages horaires » (+ « Jours d'ouverture » dessous) : à droite du tableau, bascule
-   dessous quand la place manque. Base 300px + grow : sans base explicite, la ligne des
-   jours d'ouverture (large en max-content) forçait la bascule systématique sous le
-   tableau ; ici elle replie en plusieurs lignes dans la colonne. */
-#periods-row > .pr-hours {
-  min-width: 0; /* autorise le rétrécissement (sinon min-width:auto = contenu → pas de wrap) */
-  flex: 1 1 240px;
-}
-#periods-row > .pr-hours .defaults-row {
-  margin: 0.5rem 0 0;
 }
 
 /* Barre de navigation entre exercices : ◀ label ▶ — réutilisée par périodes, planning rec et planning ponctuel */
@@ -1489,22 +1453,6 @@ textarea.theme-pending:focus::placeholder {
 }
 
 /* ── Panel Périodes : responsive ─────────────────────────── */
-/* Tableau scrollable horizontalement si son contenu déborde */
-#periods-row .pr-editor {
-  overflow-x: auto;
-  max-width: 100%;
-}
-
-/* Au-delà de 1100px : on relâche un peu le gap pour ne pas trop écarter sidebar et tableau */
-@media (max-width: 1100px) {
-  #periods-row {
-    column-gap: 2.5rem;
-  }
-}
-
-/* L'empilement « Plages horaires » sous le tableau est désormais géré automatiquement par
-   le flex-wrap de #periods-row (plus de breakpoint grid dédié). */
-
 /* Sous 600px (mobile) : table plus compacte, libellé flexible */
 @media (max-width: 600px) {
   .periods-table th,

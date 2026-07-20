@@ -159,7 +159,6 @@ Activité réservable. PK = id applicatif (`svc_00N`).
 | duration | entier | 60 | durée créneau (min) |
 | capacity | entier | 1 | capacité par défaut |
 | icon | texte? | | icône |
-| bookingDelay | entier | 0 | délai mini de réservation (min) |
 | showPreviousExercices | booléen | false | afficher les exercices passés |
 | semaineAb | booléen | false | alternance A/B activée |
 | themesMode | `ThemesMode` | libre | saisie du thème |
@@ -194,9 +193,9 @@ Créneau. **1 slot = 1 jour.** Récurrent (modèle) **ou** unique/miroir (daté)
 Index : `serviceId`, `parentSlotId`, `periodId`, `(slotDate, state)`.
 
 #### `Exercice` → `exercice`
-Année/cycle de fonctionnement d'un service. Porte les réglages d'ouverture et les
-maximums de réservation (le service ne les porte plus) ; une date hors de tout
-exercice est FERMÉE.
+Année/cycle de fonctionnement d'un service. Porte les réglages d'ouverture, les
+maximums de réservation et le délai limite de réservation (le service ne les porte
+plus) ; une date hors de tout exercice est FERMÉE.
 
 | Colonne | Type | Défaut | Clé | Description |
 |---|---|---|---|---|
@@ -212,6 +211,7 @@ exercice est FERMÉE.
 | visibleToUsers | booléen | false | | « Affiché aux utilisateurs » — UNIQUE exercice du service accessible côté usager |
 | maxReservations | entier | 1 | | quota usager sur l'EXERCICE (« par an ») |
 | maxReservationsPeriod | entier | 1 | | quota usager par période |
+| bookingDelay | entier | 0 | | délai limite de réservation (encodage legacy : <0 jours ouvrés, ≥1000 calendaire) |
 | createdAt | horodatage | now() | | |
 
 Relation : `periods`. Index `serviceId`.

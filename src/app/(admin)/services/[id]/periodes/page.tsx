@@ -1,9 +1,7 @@
 import { notFound } from "next/navigation";
-import { todayParisISO } from "@/lib/booking-delay";
 import { listServicePeriods, parseActiveDays } from "@/server/services/periods";
 import { getService } from "@/server/services/services";
 import { ParamsSubnav } from "../params-subnav";
-import { ReservationsPanel } from "../reservations/reservations-panel";
 import { PeriodesPanel } from "./periodes-panel";
 
 /** Date (colonne @db.Date) → « YYYY-MM-DD » en UTC ; null → "". */
@@ -40,6 +38,8 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
     // Maximums de réservation par usager (par période / sur l'exercice).
     maxReservations: e.maxReservations,
     maxReservationsPeriod: e.maxReservationsPeriod,
+    // Délai limite de réservation (porté par l'exercice).
+    bookingDelay: e.bookingDelay,
     // Réglages d'ouverture DE l'exercice (unique porteur, cf. opening.ts).
     opening: {
       activeDays: parseActiveDays(e.activeDays),
@@ -52,33 +52,16 @@ export default async function PeriodesPage({ params }: { params: Promise<{ id: s
     },
   }));
 
-  // Exercice EN COURS = celui dont l'intervalle [dateStart, dateEnd] contient la date
-  // du jour (affiché à droite du titre du panneau Réservations). Aucun si hors plage.
-  const today = todayParisISO();
-  const currentExercice =
-    uiExercices.find((e) => e.dateStart && e.dateEnd && e.dateStart <= today && today <= e.dateEnd)
-      ?.label ?? null;
-
   return (
     <div>
       <ParamsSubnav serviceId={id} />
+      {/* Panneau unique « Périodes et réservations » : exercices, plages horaires, jours
+          d'ouverture, périodes, réservations maxi et délais avant réservation, empilés. */}
       <PeriodesPanel
         serviceId={id}
         initialPeriods={initialPeriods}
         exercices={uiExercices}
         showPreviousExercices={service.showPreviousExercices}
-      />
-      {/* Panneau « Réservations » déplacé sous les périodes (onglet « Périodes et réservations »). */}
-      <ReservationsPanel
-        serviceId={id}
-        exerciceLabel={currentExercice}
-        bookingDelay={service.bookingDelay}
-        autoValidationDelay={service.autoValidationDelay}
-        validationBloquante={service.validationBloquante}
-        mgrNoticeMode={service.mgrNoticeMode}
-        mgrNoticeIntervalHours={service.mgrNoticeIntervalHours}
-        mgrNoticeHour={service.mgrNoticeHour}
-        mgrNoticeWeekday={service.mgrNoticeWeekday}
       />
     </div>
   );

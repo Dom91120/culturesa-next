@@ -12,6 +12,7 @@ import {
   deleteExercice,
   deleteServicePeriod,
   PeriodError,
+  saveExerciceBookingDelay,
   saveExerciceMaxima,
   saveExerciceOpeningConfig,
   setExerciceVisibleToUsers,
@@ -260,6 +261,35 @@ export async function saveExerciceMaximaAction(
   const { serviceId, exerciceId, maxReservations, maxReservationsPeriod } = parsed.data;
   try {
     await saveExerciceMaxima(serviceId, exerciceId, { maxReservations, maxReservationsPeriod });
+  } catch (e) {
+    if (e instanceof PeriodError) return { ok: false, error: e.message };
+    return { ok: false, error: "Échec de l'enregistrement." };
+  }
+  revalidatePath(`/services/${serviceId}/periodes`);
+  return { ok: true };
+}
+
+const bookingDelaySchema = z.object({
+  serviceId: stringIdSchema,
+  exerciceId: z.number().int().positive(),
+  // Encodage legacy permissif : <0 (jours ouvrés), 0, ou ≥1000 (calendaire).
+  bookingDelay: z.coerce.number().int(),
+});
+
+export type SaveExerciceBookingDelayInput = z.input<typeof bookingDelaySchema>;
+
+/** Délai limite de réservation de l'exercice (déplacé du service). */
+export async function saveExerciceBookingDelayAction(
+  input: SaveExerciceBookingDelayInput,
+): Promise<ActionState> {
+  await requireServiceManager(input.serviceId);
+  const parsed = bookingDelaySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Valeurs invalides." };
+  }
+  const { serviceId, exerciceId, bookingDelay } = parsed.data;
+  try {
+    await saveExerciceBookingDelay(serviceId, exerciceId, bookingDelay);
   } catch (e) {
     if (e instanceof PeriodError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de l'enregistrement." };

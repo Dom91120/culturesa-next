@@ -477,9 +477,10 @@ export async function createUniqueBookingInTx(
   if (!opening) {
     throw new BookingError("Cette date n'est couverte par aucun exercice du service.");
   }
-  // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai.
+  // Délai de réservation : la date du créneau doit être ≥ aujourd'hui + délai. Le délai
+  // est porté par l'EXERCICE couvrant la date (résolu par openingForDate).
   const earliest = earliestBookableISO(
-    slot.service.bookingDelay,
+    opening.bookingDelay,
     opening.activeDays
       .split(",")
       .map((d) => d.trim())
@@ -653,9 +654,14 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
   const [visibleExo, exoCount] = await Promise.all([
     prisma.exercice.findFirst({
       where: { serviceId, visibleToUsers: true },
-      // Maximums de réservation : portés par l'exercice (affichés dans le bandeau
-      // « Vous pouvez réserver … » de la grille usager).
-      select: { id: true, maxReservations: true, maxReservationsPeriod: true },
+      // Maximums de réservation + délai limite : portés par l'exercice (affichés / appliqués
+      // pour l'exercice VISIBLE côté usager).
+      select: {
+        id: true,
+        maxReservations: true,
+        maxReservationsPeriod: true,
+        bookingDelay: true,
+      },
     }),
     prisma.exercice.count({ where: { serviceId } }),
   ]);
@@ -839,7 +845,8 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
     service: {
       id: service.id,
       label: service.label,
-      bookingDelay: service.bookingDelay,
+      // Délai limite de réservation de l'exercice VISIBLE (le seul réservable côté usager).
+      bookingDelay: visibleExo?.bookingDelay ?? 0,
       capacity: service.capacity,
       themesMode: service.themesMode,
       // Maximums de l'exercice VISIBLE (portés par l'exercice ; le DTO garde les

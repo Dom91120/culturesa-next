@@ -210,6 +210,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
               dateEnd: true,
               maxReservations: true,
               maxReservationsPeriod: true,
+              // bookingDelay est déjà dans EXERCICE_OPENING_SELECT (porté par l'exercice).
               ...EXERCICE_OPENING_SELECT,
             },
           })
@@ -243,6 +244,8 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
             activeDays: currentExo.activeDays,
             openOnHolidays: currentExo.openOnHolidays,
             openOnSchoolHolidays: currentExo.openOnSchoolHolidays,
+            // Délai limite de réservation REPRIS de l'exercice reconduit.
+            bookingDelay: currentExo.bookingDelay,
           }
         : DEFAULT_OPENING;
       const newExo = await tx.exercice.create({

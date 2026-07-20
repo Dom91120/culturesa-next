@@ -81,6 +81,8 @@ export type ExerciceRow = {
   // Maximums de réservation PAR USAGER (par période / sur l'exercice « par an »).
   maxReservations: number;
   maxReservationsPeriod: number;
+  // Délai limite de réservation (encodage legacy, cf. lib/booking-delay).
+  bookingDelay: number;
 };
 
 const EXERCICE_SELECT = {
@@ -99,6 +101,7 @@ const EXERCICE_SELECT = {
   visibleToUsers: true,
   maxReservations: true,
   maxReservationsPeriod: true,
+  bookingDelay: true,
 } as const;
 
 /** Exercices d'un service (triés par date de début, nulls en dernier, puis libellé). */
@@ -575,12 +578,34 @@ export async function saveExerciceMaxima(
       select: { serviceId: true },
     }),
   );
+  // Règle : « par an » ≤ « par période » × nombre de périodes de l'exercice. Filet de
+  // sécurité serveur (l'UI borne déjà) — vrai aussi si les périodes ont changé depuis.
+  const perPeriod = Math.max(1, maxima.maxReservationsPeriod);
+  let perYear = Math.max(1, maxima.maxReservations);
+  const nbPeriods = await prisma.period.count({ where: { exerciceId } });
+  if (nbPeriods > 0) perYear = Math.min(perYear, perPeriod * nbPeriods);
   await prisma.exercice.update({
     where: { id: exerciceId },
-    data: {
-      maxReservations: Math.max(1, maxima.maxReservations),
-      maxReservationsPeriod: Math.max(1, maxima.maxReservationsPeriod),
-    },
+    data: { maxReservations: perYear, maxReservationsPeriod: perPeriod },
+  });
+}
+
+/** Délai limite de réservation d'un exercice (encodage legacy conservé tel quel). */
+export async function saveExerciceBookingDelay(
+  serviceId: string,
+  exerciceId: number,
+  bookingDelay: number,
+): Promise<void> {
+  assertExerciceOwned(
+    serviceId,
+    await prisma.exercice.findUnique({
+      where: { id: exerciceId },
+      select: { serviceId: true },
+    }),
+  );
+  await prisma.exercice.update({
+    where: { id: exerciceId },
+    data: { bookingDelay: Math.trunc(bookingDelay) },
   });
 }
 

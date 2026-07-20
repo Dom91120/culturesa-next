@@ -365,7 +365,8 @@ async function moveInTx(
       throw new BookingError("Cette date n'est couverte par aucun exercice du service.");
     }
     const earliest = earliestBookableISO(
-      slot.service.bookingDelay,
+      // Délai porté par l'exercice couvrant la date (openingForDate).
+      opening.bookingDelay,
       opening.activeDays
         .split(",")
         .map((d) => d.trim())

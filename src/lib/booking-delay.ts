@@ -1,10 +1,10 @@
 // Délai de réservation : date la plus proche réservable, à partir de
-// `service.bookingDelay` (encodage legacy) et des jours actifs du service.
+// `exercice.bookingDelay` (encodage legacy) et des jours actifs de l'exercice.
 //   bookingDelay === 0            → aujourd'hui
 //   0 < bookingDelay < 1000       → aujourd'hui (encodage minutes legacy, ignoré ici)
 //   bookingDelay >= 1000          → aujourd'hui + (bookingDelay − 1000) jours CALENDAIRES
 //   bookingDelay < 0              → aujourd'hui + |bookingDelay| jours OUVRÉS
-//                                    (jours = jours actifs du service)
+//                                    (jours = jours actifs de l'exercice)
 // « Aujourd'hui » = date calendaire à Paris. Tout est en chaînes ISO (YYYY-MM-DD)
 // pour rester aligné sur les `slot.slotDate` (@db.Date).
 

@@ -25,7 +25,7 @@ import { getMailTemplate } from "@/server/services/mail-templates";
 
 export type NoticeMode = "none" | "hours" | "daily" | "weekly";
 // Jours : alias de la source unique DAYS (schemas/config). Réexporté car consommé
-// par reservations/actions.ts via z.enum(WEEKDAYS) (audit duplication D2).
+// par config/actions.ts (notification gestionnaires) via z.enum(WEEKDAYS).
 export const WEEKDAYS = DAYS;
 export type Weekday = (typeof DAYS)[number];
 

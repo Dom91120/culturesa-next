@@ -173,7 +173,7 @@ model Verification {
 model Service {
   id                    String     @id
   label                 String
-  validationBloquante   Boolean    @default(false)
+  validationBloquante   Boolean    @default(true)
   // (Les maximums de réservation — par période, par an — vivent sur CHAQUE
   // EXERCICE, comme les réglages d'ouverture.)
   position              Int        @default(0)
@@ -186,7 +186,7 @@ model Service {
   duration              Int        @default(60)
   capacity              Int        @default(1)
   icon                  String?
-  bookingDelay          Int        @default(0)
+  // (Le « délai limite de réservation » est désormais porté PAR EXERCICE, cf. Exercice.)
   showPreviousExercices Boolean    @default(false)
   // Le service propose des créneaux RÉCURRENTS (vue « Modèle de période » de
   // l'agenda admin). Réglage GLOBAL du service — l'ex-colonne « Mode »
@@ -314,6 +314,10 @@ model Exercice {
   // l'exercice entier (« par an » — nommage legacy conservé).
   maxReservations       Int @default(1)
   maxReservationsPeriod Int @default(1)
+
+  // Délai limite de réservation PAR EXERCICE (déplacé du service). Encodage legacy :
+  // 0 = aucun délai, <0 = jours ouvrés, ≥1000 = jours calendaires (cf. lib/booking-delay).
+  bookingDelay Int @default(0)
 
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   periods Period[]
