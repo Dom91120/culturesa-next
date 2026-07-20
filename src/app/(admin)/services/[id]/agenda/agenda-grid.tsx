@@ -1040,6 +1040,53 @@ export function AgendaGrid({
     return segs;
   }
 
+  // Aperçu MUTUALISÉ d'un créneau en cours de création/redimensionnement : DÉCOUPÉ en 1 ou
+  // 2 blocs au passage de la pause méridienne (lunchSplitSegments), exactement comme le
+  // résultat final (finalizeCreate / finalizeResize). `dashed` = « à créer » (pointillé,
+  // création) vs plein (redimensionnement). Chaque segment affiche son horaire.
+  function renderDragPreviewSegments(args: {
+    startMin: number;
+    endMin: number;
+    color: string;
+    dashed: boolean;
+    bgPct: number;
+    zIndex: number;
+    className: string;
+  }): React.ReactNode[] {
+    return lunchSplitSegments(args.startMin, args.endMin)
+      .filter(([a, b]) => b > a)
+      .map(([segS, segE]) => {
+        const top = mapMinToY(segS);
+        const h = mapMinToY(segE) - top;
+        return (
+          <div
+            key={segS}
+            className={args.className}
+            style={{
+              position: "absolute",
+              left: 2,
+              right: 2,
+              top,
+              height: Math.max(2, h),
+              background: `color-mix(in srgb, ${args.color} ${args.bgPct}%, transparent)`,
+              border: args.dashed ? `1px dashed ${args.color}` : `2px solid ${args.color}`,
+              borderRadius: 6,
+              pointerEvents: "none",
+              zIndex: args.zIndex,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: ".62rem",
+              fontWeight: 700,
+              color: args.color,
+            }}
+          >
+            {minToHHMM(segS)}–{minToHHMM(segE)}
+          </div>
+        );
+      });
+  }
+
   // mousedown sur une colonne en mode création : démarre un glisser-créer, mais
   // seulement sur une zone VIDE (pas sur un bloc existant).
   function onCreateMouseDown(e: React.MouseEvent, dayKey: string) {
@@ -3390,38 +3437,15 @@ export function AgendaGrid({
                     // Couleur de l'aperçu = celle du créneau créé : jaune récurrent (#ffee24,
                     // cf. .agenda-block) / gris-bleu ponctuel (--slot-uniq-color, .is-uniq).
                     const drawColor = createKind === "rec" ? "#ffee24" : "var(--slot-uniq-color)";
-                    return lunchSplitSegments(s, e2)
-                      .filter(([a, b]) => b > a)
-                      .map(([segS, segE]) => {
-                        const top = mapMinToY(segS);
-                        const h = mapMinToY(segE) - top;
-                        return (
-                          <div
-                            key={segS}
-                            className="agenda-create-preview"
-                            style={{
-                              position: "absolute",
-                              left: 2,
-                              right: 2,
-                              top,
-                              height: Math.max(2, h),
-                              background: `color-mix(in srgb, ${drawColor} 22%, transparent)`,
-                              border: `1px dashed ${drawColor}`,
-                              borderRadius: 6,
-                              pointerEvents: "none",
-                              zIndex: 3,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: ".62rem",
-                              fontWeight: 700,
-                              color: drawColor,
-                            }}
-                          >
-                            {minToHHMM(segS)}–{minToHHMM(segE)}
-                          </div>
-                        );
-                      });
+                    return renderDragPreviewSegments({
+                      startMin: s,
+                      endMin: e2,
+                      color: drawColor,
+                      dashed: true,
+                      bgPct: 22,
+                      zIndex: 3,
+                      className: "agenda-create-preview",
+                    });
                   })()}
                 {/* Aperçu du créneau en cours de déplacement (glisser-déplacer). */}
                 {moveDrag &&
@@ -3458,38 +3482,21 @@ export function AgendaGrid({
                       </div>
                     );
                   })()}
-                {/* Aperçu du créneau en cours de redimensionnement (glisser-étirer). */}
+                {/* Aperçu du créneau en cours de redimensionnement (glisser-étirer) :
+                    DÉCOUPÉ en 2 au passage de la pause, comme la création (code mutualisé). */}
                 {resizeDrag &&
                   resizeDrag.dayKey === d &&
                   (() => {
-                    const top = mapMinToY(resizeDrag.curStart);
-                    const h = mapMinToY(resizeDrag.curEnd) - top;
                     const rColor = resizeDrag.isUnique ? "var(--slot-uniq-color)" : "#ffee24";
-                    return (
-                      <div
-                        className="agenda-resize-preview"
-                        style={{
-                          position: "absolute",
-                          left: 2,
-                          right: 2,
-                          top,
-                          height: Math.max(2, h),
-                          background: `color-mix(in srgb, ${rColor} 28%, transparent)`,
-                          border: `2px solid ${rColor}`,
-                          borderRadius: 6,
-                          pointerEvents: "none",
-                          zIndex: 4,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: ".62rem",
-                          fontWeight: 700,
-                          color: rColor,
-                        }}
-                      >
-                        {minToHHMM(resizeDrag.curStart)}–{minToHHMM(resizeDrag.curEnd)}
-                      </div>
-                    );
+                    return renderDragPreviewSegments({
+                      startMin: resizeDrag.curStart,
+                      endMin: resizeDrag.curEnd,
+                      color: rColor,
+                      dashed: false,
+                      bgPct: 28,
+                      zIndex: 4,
+                      className: "agenda-resize-preview",
+                    });
                   })()}
                 {/* Aperçu des créneaux générés en étendant latéralement (un par colonne
                   couverte, hormis la source). Pointillé = à créer, comme le glisser-créer. */}
