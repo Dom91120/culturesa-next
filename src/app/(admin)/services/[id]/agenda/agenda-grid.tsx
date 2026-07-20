@@ -1588,7 +1588,10 @@ export function AgendaGrid({
       if (!mondayStr) return;
       const slotDate = ymd(addDays(mondayStr, DAY_OFFSET[rd.dayKey] ?? 0));
       const batch = dragBatchRef.current;
-      if (batch && batch.count > 0) {
+      // Créneau en lot → redimensionne TOUT le lot (dayDelta 0 → passé compris côté
+      // serveur). On teste « est-ce un lot » (batch non nul), pas son décompte à venir
+      // (nul sur une période passée) — audit 2026-07-20.
+      if (batch) {
         runBatchResult(
           updateSlotBatchAction({
             serviceId: service.id,
@@ -1663,12 +1666,15 @@ export function AgendaGrid({
       curEnd = Math.min(gridEndMin, Math.max(q + 15, rd.fixedMin + 15));
     }
     const changed = curStart !== rd.curStart || curEnd !== rd.curEnd;
-    // Compteur de portée « valeur · N créneaux » pendant un redimensionnement de LOT.
+    // Portée du redimensionnement de LOT : nombre de créneaux du lot (taille TOTALE, pas
+    // le décompte « à venir » qui tombait à 0 sur une période passée). Sans les horaires
+    // (retirés — audit 2026-07-20).
     if (changed && dragBatchRef.current) {
+      const n = countSlotSeries(rd.slotId);
       setDragInfo({
         x: e.clientX,
         y: e.clientY,
-        text: `${minToHHMM(curStart)}–${minToHHMM(curEnd)} · ${dragBatchRef.current.count} créneaux`,
+        text: `${n} créneau${n > 1 ? "x" : ""}`,
       });
     }
     return changed ? { ...rd, curStart, curEnd } : null;
