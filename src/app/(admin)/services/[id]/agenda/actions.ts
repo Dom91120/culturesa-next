@@ -42,6 +42,7 @@ import {
 import {
   addRecurringSlot,
   addUniqueSlotBatch,
+  copyPonctuelWeek,
   copyRecurringWeek,
   deleteSlots,
   moveRecurringSlot,
@@ -273,8 +274,11 @@ export async function saveSlotConfigAction(input: {
 }
 
 /**
- * Mode création (agenda, A/B) : copie les créneaux récurrents d'une semaine vers
- * l'autre (même période). Non destructif (cf. copyRecurringWeek).
+ * Mode création (agenda, A/B) : copie d'une semaine A/B vers l'autre (même période)
+ * LES CRÉNEAUX RÉCURRENTS (copyRecurringWeek) ET les LOTS « ponctuels multiples »
+ * (copyPonctuelWeek). Non destructif. Les deux copies sont des transactions distinctes
+ * mais additives et idempotentes (anti-doublon) : un échec de la seconde laisse la
+ * première appliquée, un nouvel appel ne recopie pas ce qui existe déjà.
  */
 export async function copyWeekSlotsAction(input: {
   serviceId: string;
@@ -283,14 +287,20 @@ export async function copyWeekSlotsAction(input: {
   toWeek: "A" | "B";
 }): Promise<{ ok: boolean; error?: string; created?: number }> {
   await requireServiceManager(input.serviceId);
-  const res = await copyRecurringWeek(
+  const rec = await copyRecurringWeek(
     input.serviceId,
     input.periodId,
     input.fromWeek,
     input.toWeek,
   );
+  if (!rec.ok) {
+    revalidatePath(`/services/${input.serviceId}/agenda`);
+    return { ok: false, error: rec.error };
+  }
+  const pon = await copyPonctuelWeek(input.serviceId, input.periodId, input.fromWeek, input.toWeek);
   revalidatePath(`/services/${input.serviceId}/agenda`);
-  return res.ok ? { ok: true, created: res.created } : { ok: false, error: res.error };
+  if (!pon.ok) return { ok: false, error: pon.error };
+  return { ok: true, created: rec.created + pon.created };
 }
 
 // ─── Mode « Création de créneau » (agenda) ───────────────────────────────────

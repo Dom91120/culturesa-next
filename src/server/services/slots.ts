@@ -1,8 +1,10 @@
 import { Prisma } from "@/generated/prisma/client";
 import { parseWeeks } from "@/lib/agenda-core";
 import { mirrorDates } from "@/lib/mirror-dates";
+import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { openingForExercice } from "@/server/services/opening";
 import {
   createSyncRecurringCache,
@@ -531,6 +533,156 @@ export async function copyRecurringWeek(
     );
   } catch (e) {
     return mapSlotError(e, "copyRecurringWeek");
+  }
+  return { ok: true, created };
+}
+
+// Jour de semaine (getUTCDay 0=dim..6=sam) → clé de jour. Les @db.Date sont à minuit UTC.
+const DOW_TO_DAY: DayKey[] = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+
+/**
+ * Pendant ponctuel de copyRecurringWeek : copie les LOTS « ponctuels multiples » d'une
+ * semaine A/B vers l'autre (même période). Pour chaque lot (batchId) de parité `fromWeek`,
+ * crée sur `toWeek` un lot équivalent (même jour de semaine, horaires, capacité, jauge,
+ * demandeurs) aux dates de l'AUTRE parité — filtrées EXACTEMENT comme à la création
+ * multiple (jour actif de l'exercice, fériés, vacances scolaires : cf. uniqueCreateDates
+ * côté agenda). Saute les dates déjà occupées par un ponctuel de même horaire (anti-doublon).
+ * Ne supprime rien.
+ */
+export async function copyPonctuelWeek(
+  serviceId: string,
+  periodId: number,
+  fromWeek: "A" | "B",
+  toWeek: "A" | "B",
+): Promise<{ ok: true; created: number } | { ok: false; error: string }> {
+  if (fromWeek === toWeek) return { ok: false, error: "Semaines identiques" };
+  const period = await prisma.period.findFirst({
+    where: { id: periodId, serviceId },
+    select: { id: true, dateStart: true, dateEnd: true, exerciceId: true },
+  });
+  if (!period?.dateStart || !period?.dateEnd) {
+    return { ok: false, error: "Période introuvable ou sans dates" };
+  }
+  // Contexte de génération (bornes, jours actifs, fériés) + politique vacances scolaires,
+  // pour reproduire le filtrage de la création multiple.
+  const ctx = await loadMirrorContext(prisma, {
+    id: period.id,
+    dateStart: period.dateStart,
+    dateEnd: period.dateEnd,
+    exerciceId: period.exerciceId,
+  });
+  const opening = await openingForExercice(prisma, period.exerciceId);
+  const openOnSchool = opening?.openOnSchoolHolidays ?? false;
+  const schoolRanges = openOnSchool
+    ? []
+    : await loadSchoolHolidayRanges(prisma, await getSchoolZone());
+
+  // Lots ponctuels source (batchId, parité fromWeek) — un représentant par batchId
+  // (tous les créneaux d'un lot partagent jour/horaire/capacité/jauge/demandeurs).
+  const src = await prisma.slot.findMany({
+    where: {
+      serviceId,
+      periodId,
+      slotType: "unique",
+      weeks: fromWeek,
+      batchId: { not: null },
+      parentSlotId: null,
+    },
+    select: {
+      id: true,
+      batchId: true,
+      startTime: true,
+      endTime: true,
+      slotDate: true,
+      capacity: true,
+      jauge: true,
+    },
+    orderBy: { slotDate: "asc" },
+  });
+  const lots = new Map<string, (typeof src)[number]>();
+  for (const s of src) if (s.batchId && !lots.has(s.batchId)) lots.set(s.batchId, s);
+  if (lots.size === 0) return { ok: true, created: 0 };
+
+  // Anti-doublon : (date|début|fin) déjà occupés par un ponctuel de la période (toutes
+  // parités confondues) → on ne recrée pas par-dessus.
+  const existing = await prisma.slot.findMany({
+    where: { serviceId, periodId, slotType: "unique" },
+    select: { slotDate: true, startTime: true, endTime: true },
+  });
+  const occupied = new Set(
+    existing
+      .filter((e) => e.slotDate)
+      .map((e) => `${toISO(e.slotDate as Date)}|${e.startTime}|${e.endTime}`),
+  );
+
+  // Demandeurs autorisés des représentants (recopiés à l'identique).
+  const demRows = await prisma.slotDemandeur.findMany({
+    where: { slotId: { in: [...lots.values()].map((l) => l.id) } },
+    select: { slotId: true, demandeurId: true },
+  });
+  const demBySlot = new Map<string, number[]>();
+  for (const r of demRows) {
+    const l = demBySlot.get(r.slotId) ?? [];
+    l.push(r.demandeurId);
+    demBySlot.set(r.slotId, l);
+  }
+
+  let created = 0;
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        created = 0; // ré-entrant si la transaction est rejouée
+        for (const repr of lots.values()) {
+          if (!repr.slotDate) continue;
+          const slotDay = DOW_TO_DAY[repr.slotDate.getUTCDay()];
+          // Dates cibles = même jour, parité opposée, filtrées comme à la création.
+          const dates = mirrorDates({
+            startDate: ctx.startDate,
+            endDate: ctx.endDate,
+            slotDay,
+            activeDays: ctx.activeDays,
+            allowedWeeks: [toWeek],
+            holidaySet: ctx.holidaySet,
+            openOnHolidays: ctx.openOnHolidays,
+          })
+            .filter((d) => openOnSchool || !isInSchoolHolidayRange(d, schoolRanges))
+            .filter((d) => !occupied.has(`${d}|${repr.startTime}|${repr.endTime}`));
+          if (!dates.length) continue;
+          // batchId/parité seulement si plusieurs dates (cf. addUniqueSlotBatch).
+          const isBatch = dates.length > 1;
+          const newBatchId = isBatch ? crypto.randomUUID() : null;
+          const weeks = isBatch ? normalizeWeeks(toWeek) : "";
+          const rows: Prisma.SlotCreateManyInput[] = dates.map((d) => ({
+            id: newRecurId(),
+            serviceId,
+            slotType: "unique",
+            startTime: repr.startTime,
+            endTime: repr.endTime,
+            slotDate: fromISO(d),
+            capacity: repr.capacity,
+            periodId,
+            jauge: repr.jauge,
+            batchId: newBatchId,
+            weeks,
+          }));
+          await tx.slot.createMany({ data: rows });
+          const dems = demBySlot.get(repr.id);
+          if (dems?.length) {
+            await tx.slotDemandeur.createMany({
+              data: rows.flatMap((r) =>
+                dems.map((demandeurId) => ({ slotId: r.id as string, demandeurId })),
+              ),
+            });
+          }
+          // Marque ces dates comme occupées (deux lots source de même horaire → pas de doublon).
+          for (const d of dates) occupied.add(`${d}|${repr.startTime}|${repr.endTime}`);
+          created += rows.length;
+        }
+      },
+      { timeout: 60_000, maxWait: 10_000 },
+    );
+  } catch (e) {
+    return mapSlotError(e, "copyPonctuelWeek");
   }
   return { ok: true, created };
 }
