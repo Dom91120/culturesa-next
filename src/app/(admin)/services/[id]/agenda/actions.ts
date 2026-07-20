@@ -42,6 +42,7 @@ import {
 import {
   addRecurringSlot,
   addUniqueSlotBatch,
+  cloneSlotAtTimes,
   copyPonctuelWeek,
   copyRecurringWeek,
   deleteSlots,
@@ -463,6 +464,33 @@ export async function createUniqueSlotBatchAction(input: {
   return res.ok
     ? { ok: true, created: res.created, skipped: res.skipped }
     : { ok: false, error: res.error };
+}
+
+/**
+ * Clone un créneau existant à de nouveaux horaires (mêmes jour/date(s), type, parité,
+ * capacité, jauge, demandeurs). Utilisé pour le découpage d'un redimensionnement qui
+ * traverse la pause méridienne (le segment ancré reste sur le créneau d'origine, l'autre
+ * segment devient ce clone — cf. cloneSlotAtTimes).
+ */
+export async function cloneSlotAtTimesAction(input: {
+  serviceId: string;
+  slotId: string;
+  startTime: string;
+  endTime: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireServiceManager(input.serviceId);
+  const times = slotMoveTimesSchema.safeParse(input);
+  if (!times.success) {
+    return { ok: false, error: times.error.issues[0]?.message ?? "Données invalides." };
+  }
+  const res = await cloneSlotAtTimes(
+    input.serviceId,
+    input.slotId,
+    times.data.startTime,
+    times.data.endTime,
+  );
+  revalidatePath(`/services/${input.serviceId}/agenda`);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
 /** Déplace un créneau récurrent vide (jour + horaires) depuis l'agenda. */

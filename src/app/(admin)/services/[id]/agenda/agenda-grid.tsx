@@ -62,6 +62,7 @@ import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
 import type { BatchUpdatedItem } from "./actions";
 import {
+  cloneSlotAtTimesAction,
   copyBookingAction,
   copyWeekSlotsAction,
   createRecurringBookingAction,
@@ -1579,17 +1580,14 @@ export function AgendaGrid({
     resizeDragH.start(rd);
   }
 
-  // Au relâché : applique les nouveaux horaires (même jour/date) via les actions de
-  // déplacement. Récurrent → jour identique ; ponctuel → même date.
-  function finalizeResize(rd: ResizeDrag) {
-    const startTime = minToHHMM(rd.curStart);
-    const endTime = minToHHMM(rd.curEnd);
+  // Applique de nouveaux horaires au créneau redimensionné (jour/date inchangés), via les
+  // actions de déplacement. Récurrent → jour identique ; ponctuel → même date ; lot « multi »
+  // → tout le lot (dates inchangées, dayDelta = 0).
+  function applyResizeTimes(rd: ResizeDrag, startTime: string, endTime: string) {
     if (rd.isUnique) {
       if (!mondayStr) return;
       const slotDate = ymd(addDays(mondayStr, DAY_OFFSET[rd.dayKey] ?? 0));
       const batch = dragBatchRef.current;
-      // Mode multi + créneau en lot → redimensionne TOUT le lot (mêmes horaires, dates
-      // inchangées : dayDelta = 0).
       if (batch && batch.count > 0) {
         runBatchResult(
           updateSlotBatchAction({
@@ -1624,6 +1622,30 @@ export function AgendaGrid({
         }),
       );
     }
+  }
+
+  // Au relâché : applique les nouveaux horaires. Si le redimensionnement TRAVERSE la pause
+  // méridienne, on DÉCOUPE en 2 comme le fait la création : le créneau d'origine conserve le
+  // segment ancré à son bord FIXE (bord haut saisi → bas fixe → segment après-midi ; bord bas
+  // saisi → haut fixe → segment matin), l'autre segment devient un CLONE (même type, parité,
+  // capacité, jauge, demandeurs — cf. cloneSlotAtTimesAction).
+  function finalizeResize(rd: ResizeDrag) {
+    const segments = lunchSplitSegments(rd.curStart, rd.curEnd).filter(([s, e]) => e > s);
+    if (!segments.length) return;
+    const keepIdx = rd.edge === "top" ? segments.length - 1 : 0;
+    const [keepStart, keepEnd] = segments[keepIdx];
+    applyResizeTimes(rd, minToHHMM(keepStart), minToHHMM(keepEnd));
+    segments.forEach(([s, e], i) => {
+      if (i === keepIdx) return;
+      runResult(
+        cloneSlotAtTimesAction({
+          serviceId: service.id,
+          slotId: rd.slotId,
+          startTime: minToHHMM(s),
+          endTime: minToHHMM(e),
+        }),
+      );
+    });
   }
 
   // Suivi du glisser-redimensionner : le bord opposé reste fixe (fixedMin), on étire

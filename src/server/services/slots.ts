@@ -774,6 +774,89 @@ export async function addUniqueSlotBatch(
   return { ok: true, created, skipped };
 }
 
+/**
+ * Clone un créneau EXISTANT à de NOUVEAUX horaires, en conservant TOUT le reste : type,
+ * jour/date(s), parité, capacité, jauge et DEMANDEURS autorisés. Sert au découpage d'un
+ * redimensionnement qui traverse la pause méridienne (le créneau d'origine est réduit au
+ * segment ancré, ce clone porte l'autre segment — comme la CRÉATION génère 2 créneaux).
+ *   - récurrent → nouveau récurrent (+ miroirs) ;
+ *   - ponctuel isolé → un créneau à la même date ;
+ *   - lot « multi » → nouveau lot aux MÊMES dates que le lot source.
+ * Réutilise addRecurringSlot / addUniqueSlotBatch (donc leurs gardes et leur atomicité).
+ */
+export async function cloneSlotAtTimes(
+  serviceId: string,
+  slotId: string,
+  startTime: string,
+  endTime: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { capacity: true },
+  });
+  if (!service) return { ok: false, error: "Service introuvable" };
+  const slot = await prisma.slot.findFirst({
+    where: { id: slotId, serviceId },
+    select: {
+      slotType: true,
+      slotDay: true,
+      weeks: true,
+      capacity: true,
+      jauge: true,
+      periodId: true,
+      slotDate: true,
+      batchId: true,
+    },
+  });
+  if (!slot) return { ok: false, error: "Créneau introuvable" };
+  const demandeurIds = (
+    await prisma.slotDemandeur.findMany({ where: { slotId }, select: { demandeurId: true } })
+  ).map((d) => d.demandeurId);
+  const capacity = slot.capacity ?? service.capacity;
+  const jauge = slot.jauge;
+
+  if (slot.slotType === "recurring") {
+    if (!slot.slotDay || slot.periodId == null) {
+      return { ok: false, error: "Créneau récurrent incomplet" };
+    }
+    const res = await addRecurringSlot(serviceId, slot.periodId, {
+      startTime,
+      endTime,
+      weeks: normalizeWeeks(slot.weeks),
+      dayKey: slot.slotDay as DayKey,
+      capacity,
+      demandeurIds,
+      jauge,
+    });
+    return res.ok ? { ok: true } : { ok: false, error: res.error };
+  }
+  // Ponctuel : lot « multi » → mêmes dates que le lot ; isolé → sa seule date.
+  let dates: string[];
+  let weeks: string;
+  if (slot.batchId) {
+    const lot = await prisma.slot.findMany({
+      where: { serviceId, batchId: slot.batchId, slotType: "unique" },
+      select: { slotDate: true },
+    });
+    dates = [...new Set(lot.filter((s) => s.slotDate).map((s) => toISO(s.slotDate as Date)))];
+    weeks = normalizeWeeks(slot.weeks);
+  } else {
+    if (!slot.slotDate) return { ok: false, error: "Créneau ponctuel sans date" };
+    dates = [toISO(slot.slotDate)];
+    weeks = "";
+  }
+  const res = await addUniqueSlotBatch(serviceId, {
+    dates,
+    startTime,
+    endTime,
+    capacity,
+    demandeurIds,
+    jauge,
+    weeks,
+  });
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
+
 // ─── Déplacement d'UN créneau vide depuis l'agenda (mode « Création ») ──────────
 // Refusé s'il porte la moindre réservation (créneau OU miroirs). Récurrent : maj
 // horaires + jour (déplace la capacité du jour, régénère les miroirs). Ponctuel :
