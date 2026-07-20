@@ -3113,8 +3113,10 @@ export function AgendaGrid({
                         opacity: active ? 1 : 0.5,
                       }}
                     >
-                      {/* Multi → « Multi » dans la pastille. Récurrent + mode Semaine A/B
-                          activé → la parité (A/B) affichée en jaune #ffee24 dans la pastille. */}
+                      {/* Multi → « Multi » dans la pastille, dans la couleur de la bordure
+                          pointillée du créneau ponctuel (--legend-color = --slot-uniq-color
+                          pour is-uniq). Récurrent + Semaine A/B activé → la parité (A/B) en
+                          jaune #ffee24 (couleur de la bordure récurrente). */}
                       <span
                         className={`agenda-legend-swatch ${k.swatch}`}
                         style={{
@@ -3128,8 +3130,11 @@ export function AgendaGrid({
                           color: "var(--text)",
                         }}
                       >
-                        {k.multi &&
-                          (parityScoped && realWeekParity ? `Multi ${realWeekParity}` : "Multi")}
+                        {k.multi && (
+                          <span style={{ color: "var(--legend-color)" }}>
+                            {parityScoped && realWeekParity ? `Multi ${realWeekParity}` : "Multi"}
+                          </span>
+                        )}
                         {k.kind === "rec" && parityScoped && realWeekParity && (
                           <span style={{ color: "#ffee24", fontSize: ".6rem" }}>
                             {realWeekParity}
