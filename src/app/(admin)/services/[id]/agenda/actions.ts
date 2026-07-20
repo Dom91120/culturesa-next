@@ -20,7 +20,6 @@ import {
   slotDateSchema,
   slotMoveTimesSchema,
   uniqueSlotBatchCreateSchema,
-  uniqueSlotCreateSchema,
 } from "@/schemas/slot";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
@@ -42,7 +41,6 @@ import {
 } from "@/server/services/recurring-children";
 import {
   addRecurringSlot,
-  addUniqueSlot,
   addUniqueSlotBatch,
   copyRecurringWeek,
   deleteSlots,
@@ -416,43 +414,6 @@ export async function createRecurringSlotAction(input: {
     capacity: d.capacity,
     demandeurIds: d.demandeurIds,
     jauge: d.jauge,
-  });
-  revalidatePath(`/services/${input.serviceId}/agenda`);
-  return res.ok ? { ok: true } : { ok: false, error: res.error };
-}
-
-/** Crée un créneau ponctuel daté (vue Semaine réelle). */
-export async function createUniqueSlotAction(input: {
-  serviceId: string;
-  slotDate: string;
-  startTime: string;
-  endTime: string;
-  capacity: number;
-  demandeurIds?: number[];
-  // « A une jauge » : mode jauge de l'agenda au moment de la création.
-  jauge?: boolean;
-  // Lot « multi » : identifiant partagé par les créneaux d'un même geste répliqué.
-  batchId?: string | null;
-  // Portée de parité du lot « multi » ("A"|"B"|"" = toutes).
-  weeks?: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  await requireServiceManager(input.serviceId);
-  // Validation de la frontière : date (AAAA-MM-JJ), horaires (HH:MM, fin > début),
-  // capacité (entier ≥ 1) et identifiants — avant toute écriture en base.
-  const parsed = uniqueSlotCreateSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
-  }
-  const d = parsed.data;
-  const res = await addUniqueSlot(d.serviceId, {
-    slotDate: d.slotDate,
-    startTime: d.startTime,
-    endTime: d.endTime,
-    capacity: d.capacity,
-    demandeurIds: d.demandeurIds,
-    jauge: d.jauge,
-    batchId: d.batchId ?? null,
-    weeks: d.weeks,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };

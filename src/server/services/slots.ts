@@ -535,72 +535,16 @@ export async function copyRecurringWeek(
   return { ok: true, created };
 }
 
-/** Ajoute un créneau PONCTUEL daté (période résolue depuis la date). */
-export async function addUniqueSlot(
-  serviceId: string,
-  input: {
-    slotDate: string;
-    startTime: string;
-    endTime: string;
-    capacity: number;
-    demandeurIds?: number[];
-    // « A une jauge » : mode jauge de l'agenda au moment de la création.
-    jauge?: boolean;
-    // Identifiant de lot « multi » (créneaux répliqués en un geste) : commun à toute
-    // la série, null pour un ponctuel isolé.
-    batchId?: string | null;
-    // Portée de parité du lot « multi » ("A"|"B"|"" = toutes) — même sens que Slot.weeks
-    // des récurrents. Normalisé ; vide pour un ponctuel isolé.
-    weeks?: string;
-  },
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
-  if (!service) return { ok: false, error: "Service introuvable" };
-  const periodId = await periodIdCoveringDate(serviceId, input.slotDate);
-  if (periodId == null) {
-    return { ok: false, error: `Aucune période ne couvre la date ${input.slotDate}` };
-  }
-  const id = newRecurId();
-  const demandeurIds = normalizeDemandeurIds(input.demandeurIds);
-  try {
-    await prisma.$transaction(async (tx) => {
-      await tx.slot.create({
-        data: {
-          id,
-          serviceId,
-          slotType: "unique",
-          startTime: input.startTime,
-          endTime: input.endTime,
-          slotDate: fromISO(input.slotDate),
-          capacity: input.capacity,
-          periodId,
-          jauge: input.jauge ?? false,
-          batchId: input.batchId ?? null,
-          weeks: normalizeWeeks(input.weeks),
-        },
-      });
-      // Demandeurs autorisés posés dans la même transaction (cf. addRecurringSlot) :
-      // un échec ici annule la création du créneau au lieu de l'ouvrir à tous.
-      if (demandeurIds.length > 0) {
-        await tx.slotDemandeur.createMany({
-          data: demandeurIds.map((demandeurId) => ({ slotId: id, demandeurId })),
-        });
-      }
-    });
-  } catch (e) {
-    return mapSlotError(e, "addUniqueSlot");
-  }
-  return { ok: true, id };
-}
-
 /**
  * Crée un LOT de créneaux ponctuels (« Création multiple » : un même couple
  * {jour, horaire} répliqué sur les semaines de la période) en UNE transaction :
  * un créneau par date couverte par une période du service (les dates hors période
  * sont ignorées et comptées dans `skipped`), demandeurs autorisés posés dans la
  * même transaction, batchId GÉNÉRÉ CÔTÉ SERVEUR quand le lot compte plusieurs
- * dates. Remplace le Promise.all client de N addUniqueSlot (audit 2026-07-19 :
- * demi-lot possible en cas d'échec à mi-course + batchId forgé côté client).
+ * dates. Remplace l'ancien Promise.all client de N créations unitaires (audit
+ * 2026-07-19 : demi-lot possible en cas d'échec à mi-course + batchId forgé client)
+ * — SEUL chemin de création ponctuelle depuis l'agenda (horaire, journée entière,
+ * réplication horizontale), un ponctuel isolé étant un lot d'une seule date.
  */
 export async function addUniqueSlotBatch(
   serviceId: string,
@@ -658,7 +602,7 @@ export async function addUniqueSlotBatch(
         }
         if (rows.length) {
           await tx.slot.createMany({ data: rows });
-          // Demandeurs autorisés dans la même transaction (cf. addUniqueSlot) : un
+          // Demandeurs autorisés dans la même transaction (cf. addRecurringSlot) : un
           // échec annule tout le lot au lieu de l'ouvrir à tous.
           if (demandeurIds.length) {
             await tx.slotDemandeur.createMany({

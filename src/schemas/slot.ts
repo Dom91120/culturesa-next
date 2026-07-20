@@ -5,7 +5,7 @@ import { DAYS, stringIdSchema } from "./config";
  * Validation de la CRÉATION de créneaux depuis l'agenda (mode « Création de créneau »).
  * Frontière de confiance : les server actions reçoivent des entrées non fiables, le
  * typage TS ne protège pas. On borne ici horaires, capacité et identifiants AVANT toute
- * écriture (cf. addRecurringSlot / addUniqueSlot).
+ * écriture (cf. addRecurringSlot / addUniqueSlotBatch).
  */
 
 // Heure « HH:MM » 24 h, zéro-paddée → la comparaison lexicographique start < end est sûre.
@@ -97,22 +97,3 @@ export const slotMoveTimesSchema = z
 
 // Date de créneau isolée (déplacement d'un ponctuel, lot « multi »).
 export const slotDateSchema = z.string().regex(DATE_RE, "Date invalide (format AAAA-MM-JJ).");
-
-export const uniqueSlotCreateSchema = z
-  .object({
-    serviceId: stringIdSchema,
-    slotDate: z.string().regex(DATE_RE, "Date invalide (format AAAA-MM-JJ)."),
-    startTime: time("Heure de début"),
-    endTime: time("Heure de fin"),
-    capacity,
-    demandeurIds,
-    jauge,
-    // Lot « multi » : identifiant partagé par les créneaux d'un même geste de création
-    // répliquée (null/absent = ponctuel isolé).
-    batchId: z.string().min(1).max(64).nullish(),
-    // Portée de parité du LOT « multi » (semaines sur lesquelles la série a été répliquée) :
-    // "A" | "B" | "" (toutes). normalizeWeeks ramène toute autre valeur à "". Vide pour un
-    // ponctuel isolé. Même sens que Slot.weeks des récurrents (portée de parité).
-    weeks: z.string().max(8).optional(),
-  })
-  .refine(hoursOrdered, hoursOrderedMsg);

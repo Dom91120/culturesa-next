@@ -67,7 +67,6 @@ import {
   createRecurringBookingAction,
   createRecurringSlotAction,
   createUniqueBookingAction,
-  createUniqueSlotAction,
   createUniqueSlotBatchAction,
   cutBookingAction,
   deleteBookingAdminAction,
@@ -1224,20 +1223,24 @@ export function AgendaGrid({
       );
     } else {
       if (!mondayStr) return;
+      // 1 lot « multi » par jour (journée entière, horaires vides) répliqué sur la
+      // période, créé ATOMIQUEMENT côté serveur (batchId généré serveur) — comme le
+      // chemin horaire. Sans ça, la création multiple « journée entière » posait des
+      // créneaux SANS batchId : ils n'étaient pas liés en lot (bug antérieur à l'audit
+      // 2026-07-19, rendu visible par le passage du chemin horaire au batch serveur).
       runResults(
         Promise.all(
-          targets.flatMap((dayKey) =>
-            uniqueCreateDates(dayKey).map((slotDate) =>
-              createUniqueSlotAction({
-                serviceId: service.id,
-                slotDate,
-                startTime: "",
-                endTime: "",
-                capacity: createCap,
-                demandeurIds: createDemIds,
-                jauge: jaugeMode,
-              }),
-            ),
+          targets.map((dayKey) =>
+            createUniqueSlotBatchAction({
+              serviceId: service.id,
+              dates: uniqueCreateDates(dayKey),
+              startTime: "",
+              endTime: "",
+              capacity: createCap,
+              demandeurIds: createDemIds,
+              jauge: jaugeMode,
+              weeks: createWeeks,
+            }),
           ),
         ),
       );
@@ -1672,20 +1675,23 @@ export function AgendaGrid({
     const endTime = minToHHMM(hd.endMin);
     if (hd.isUnique) {
       if (!mondayStr) return;
+      // 1 lot « multi » par jour couvert (répliqué sur la période) créé ATOMIQUEMENT
+      // côté serveur (batchId généré serveur) — même correctif que la création
+      // horaire / journée entière : sans batch, la réplication horizontale en mode
+      // multi posait des créneaux SANS batchId, donc non liés en lot.
       runResults(
         Promise.all(
-          targets.flatMap((dayKey) =>
-            uniqueCreateDates(dayKey).map((slotDate) =>
-              createUniqueSlotAction({
-                serviceId: service.id,
-                slotDate,
-                startTime,
-                endTime,
-                capacity: createCap,
-                demandeurIds: createDemIds,
-                jauge: jaugeMode,
-              }),
-            ),
+          targets.map((dayKey) =>
+            createUniqueSlotBatchAction({
+              serviceId: service.id,
+              dates: uniqueCreateDates(dayKey),
+              startTime,
+              endTime,
+              capacity: createCap,
+              demandeurIds: createDemIds,
+              jauge: jaugeMode,
+              weeks: createWeeks,
+            }),
           ),
         ),
       );
