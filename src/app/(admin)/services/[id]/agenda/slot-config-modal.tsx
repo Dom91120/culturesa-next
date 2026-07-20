@@ -15,6 +15,7 @@ export function SlotConfigModal({
   slotId,
   title,
   batchCount,
+  applyToLot = false,
   initialCapacity,
   initialJauge,
   initialDemIds,
@@ -26,8 +27,11 @@ export function SlotConfigModal({
   slotId: string;
   // Suffixe de titre, ex. « · 9:00–10:30 » (ou "" si le créneau est introuvable).
   title: string;
-  // Taille du lot « multiple » (> 1) : la config s'applique à tout le lot ; absent/≤1 sinon.
+  // Taille du lot « multiple » du créneau (> 1 = lot).
   batchCount?: number;
+  // Mode « Création multiple » : la config vise tout le lot. Sinon (ponctuel/récurrent) →
+  // le seul créneau, même s'il appartient à un lot (le SCOPE suit le mode courant).
+  applyToLot?: boolean;
   initialCapacity: string;
   // « A une jauge » du créneau (slots.jauge) — modifiable ici, propagé aux miroirs.
   initialJauge: boolean;
@@ -36,7 +40,7 @@ export function SlotConfigModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const isLot = (batchCount ?? 0) > 1;
+  const isLot = applyToLot && (batchCount ?? 0) > 1;
   const [capValue, setCapValue] = useState(initialCapacity);
   const [jauge, setJauge] = useState(initialJauge);
   const [capDemIds, setCapDemIds] = useState<number[]>(initialDemIds);
@@ -57,6 +61,7 @@ export function SlotConfigModal({
         capacity,
         jauge,
         demandeurIds: capDemIds,
+        wholeLot: isLot,
       });
       if (res && !res.ok) {
         setCapError(res.error ?? "Échec de l'enregistrement.");

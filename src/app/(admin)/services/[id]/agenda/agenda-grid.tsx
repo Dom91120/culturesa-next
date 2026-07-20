@@ -3813,8 +3813,10 @@ export function AgendaGrid({
               serviceId={service.id}
               slotId={capModal.slotId}
               title={slot ? ` · ${slot.startTime}–${slot.endTime}` : ""}
-              // Lot « multi » (ponctuel avec batchId) → la config s'applique à tout le lot.
               batchCount={countSlotSeries(capModal.slotId)}
+              // Le SCOPE suit le mode courant : « Création multiple » → tout le lot ;
+              // ponctuel/récurrent → le seul créneau (même s'il appartient à un lot).
+              applyToLot={createKind === "multi"}
               initialCapacity={String(slot?.capacity ?? service.capacity)}
               initialJauge={slot?.jauge ?? false}
               initialDemIds={slotDemandeurs[capModal.slotId] ?? []}

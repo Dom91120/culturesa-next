@@ -237,6 +237,9 @@ export async function saveSlotConfigAction(input: {
   capacity: number;
   jauge: boolean;
   demandeurIds: number[];
+  // true (mode « Création multiple ») → la config s'applique à tout le lot ; false/absent
+  // (ponctuel/récurrent) → au seul créneau. Le SCOPE suit le mode courant, pas le batchId.
+  wholeLot?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   const { serviceId, slotId, capacity, demandeurIds } = input;
@@ -254,16 +257,17 @@ export async function saveSlotConfigAction(input: {
     select: { id: true, batchId: true },
   });
   if (!ref) return { ok: false, error: "Créneau introuvable." };
-  // Créneau ponctuel « multi » (batchId) → la config s'applique à TOUT le lot ; sinon au
-  // seul créneau (récurrent : + propagation jauge à ses miroirs).
-  const targetIds = ref.batchId
-    ? (
-        await prisma.slot.findMany({
-          where: { serviceId, batchId: ref.batchId },
-          select: { id: true },
-        })
-      ).map((s) => s.id)
-    : [slotId];
+  // Mode « Création multiple » (wholeLot) + créneau en lot (batchId) → la config s'applique
+  // à TOUT le lot ; sinon au seul créneau (récurrent : + propagation jauge à ses miroirs).
+  const targetIds =
+    input.wholeLot && ref.batchId
+      ? (
+          await prisma.slot.findMany({
+            where: { serviceId, batchId: ref.batchId },
+            select: { id: true },
+          })
+        ).map((s) => s.id)
+      : [slotId];
   try {
     await prisma.$transaction(async (tx) => {
       await tx.slot.updateMany({ where: { id: { in: targetIds } }, data: { capacity, jauge } });
