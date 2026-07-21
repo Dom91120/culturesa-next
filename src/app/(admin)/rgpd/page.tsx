@@ -70,6 +70,12 @@ export default async function RgpdAdminPage() {
 
   return (
     <div>
+      <img
+        src="/RGPD.png"
+        alt="Logo RGPD"
+        style={{ display: "block", height: 100, width: "auto", margin: "1.5rem 0" }}
+      />
+
       <InactivityScan rows={scanRows} retentionYears={retentionYears} graceDays={graceDays} />
 
       <AuditLog entries={auditEntries} />

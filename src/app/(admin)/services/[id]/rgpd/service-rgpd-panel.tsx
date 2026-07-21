@@ -72,21 +72,31 @@ export function ServiceRgpdPanel({
 
   return (
     <div className="panel">
+      <img
+        src="/RGPD.png"
+        alt="Logo RGPD"
+        style={{ display: "block", height: 100, width: "auto", margin: ".5rem 0 1.5rem" }}
+      />
+
       <p
         style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          marginBottom: "1rem",
+          fontSize: ".82rem",
+          color: "var(--text)",
+          marginBottom: "1.25rem",
           lineHeight: 1.5,
+          textAlign: "justify",
         }}
       >
-        <strong style={{ color: "var(--text)" }}>🗑️ Effacer</strong> vide les champs nom, prénom,
-        e-mail et téléphone, et verrouille le compte. L&apos;enregistrement est conservé pour
-        préserver les statistiques (réservations passées notamment).
+        Cet écran vous permet d&apos;exercer les droits RGPD des utilisateurs de ce service. Pour
+        chaque personne, deux actions sont possibles :{" "}
+        <strong style={{ marginRight: ".3em" }}>exporter</strong> ses données personnelles afin de
+        les lui transmettre, par exemple lorsqu&apos;elle en fait la demande (droit d&apos;accès) ;
+        ou <strong style={{ marginRight: ".3em" }}>effacer</strong> ses informations nominatives en
+        anonymisant son compte, de façon irréversible (droit à l&apos;effacement).
         <br />
-        <strong style={{ color: "var(--text)" }}>📥 Exporter</strong> ouvre une vue des données
-        personnelles (profil + historique des réservations) — droit d&apos;accès RGPD (article 15).
-        Téléchargement JSON.
+        <br />
+        Utilisez la recherche pour retrouver un utilisateur, puis lancez l&apos;action
+        correspondante depuis sa ligne dans le tableau ci-dessous.
       </p>
 
       <div
@@ -95,12 +105,19 @@ export function ServiceRgpdPanel({
           alignItems: "center",
           gap: "1rem",
           flexWrap: "wrap",
-          marginBottom: ".75rem",
+          marginBottom: ".5rem",
         }}
       >
         <label
           htmlFor="rgpd-service-search"
-          style={{ fontSize: ".75rem", margin: 0, color: "var(--muted)" }}
+          style={{
+            fontSize: ".75rem",
+            margin: 0,
+            color: "var(--muted)",
+            display: "flex",
+            alignItems: "center",
+            alignSelf: "stretch",
+          }}
         >
           Liste des utilisateurs du service
         </label>
@@ -244,6 +261,23 @@ export function ServiceRgpdPanel({
           </div>
         </>
       )}
+
+      <p
+        style={{
+          fontSize: ".78rem",
+          color: "var(--muted)",
+          marginTop: "1.25rem",
+          lineHeight: 1.5,
+        }}
+      >
+        <strong style={{ color: "var(--text)", marginRight: ".3em" }}>🗑️ Effacer</strong> vide les
+        champs nom, prénom, e-mail et téléphone, et verrouille le compte. L&apos;enregistrement est
+        conservé pour préserver les statistiques (réservations passées notamment).
+        <br />
+        <strong style={{ color: "var(--text)", marginRight: ".3em" }}>📥 Exporter</strong> ouvre une
+        vue des données personnelles (profil + historique des réservations) — droit d&apos;accès
+        RGPD (article 15). Téléchargement JSON.
+      </p>
     </div>
   );
 }

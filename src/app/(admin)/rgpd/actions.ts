@@ -10,14 +10,14 @@ import { anonymizeInactive, markDeletionNotice } from "@/server/services/rgpd";
 /** État enrichi d'un compteur (comme `imported` dans configuration/actions.ts). */
 type CountResult = ActionState & { count?: number };
 
-const yearsSchema = z.coerce.number().int().min(0).max(50);
+const yearsSchema = z.coerce.number().int().min(0).max(3);
 const graceSchema = z.coerce.number().int().min(1).max(365);
 
 /** Enregistre la durée de rétention RGPD (clé app_config `rgpd.retentionYears`). */
 export async function setRetentionYearsAction(years: number): Promise<ActionState> {
   await requireRole("administrateur");
   const parsed = yearsSchema.safeParse(years);
-  if (!parsed.success) return { ok: false, error: "Valeur invalide (0–50)." };
+  if (!parsed.success) return { ok: false, error: "Valeur invalide (0–3)." };
   await setConfig("rgpd.retentionYears", String(parsed.data));
   revalidatePath("/rgpd");
   return { ok: true };

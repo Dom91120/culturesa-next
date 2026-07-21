@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { INPUT_CHROME } from "@/components/ui-styles";
 import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import {
@@ -136,24 +136,38 @@ export function InactivityScan({
   const from = current * PAGE_SIZE;
   const pageRows = rows.slice(from, from + PAGE_SIZE);
 
+  // Persistance différée (debounce) : la classification/les compteurs sont recalculés
+  // localement (useMemo sur rows + threshold), donc l'UI répond immédiatement à la frappe.
+  // Le réglage n'est écrit en base (config lue par le cron / au prochain chargement) qu'après
+  // une courte pause — inutile d'appeler une server action + router.refresh à chaque touche.
+  const yearsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const graceSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (yearsSaveRef.current) clearTimeout(yearsSaveRef.current);
+      if (graceSaveRef.current) clearTimeout(graceSaveRef.current);
+    },
+    [],
+  );
+
   function onYearsChange(raw: string) {
     const v = Number.parseInt(raw, 10);
-    if (!Number.isFinite(v) || v < 0 || v > 50) return;
+    if (!Number.isFinite(v) || v < 0 || v > 3) return;
     setYears(v);
-    startTransition(async () => {
-      await setRetentionYearsAction(v);
-      router.refresh();
-    });
+    if (yearsSaveRef.current) clearTimeout(yearsSaveRef.current);
+    yearsSaveRef.current = setTimeout(() => {
+      setRetentionYearsAction(v).catch(() => {});
+    }, 500);
   }
 
   function onGraceChange(raw: string) {
     const v = Number.parseInt(raw, 10);
     if (!Number.isFinite(v) || v < 1 || v > 365) return;
     setGrace(v);
-    startTransition(async () => {
-      await setGraceDaysAction(v);
-      router.refresh();
-    });
+    if (graceSaveRef.current) clearTimeout(graceSaveRef.current);
+    graceSaveRef.current = setTimeout(() => {
+      setGraceDaysAction(v).catch(() => {});
+    }, 500);
   }
 
   function refresh() {
@@ -224,75 +238,95 @@ export function InactivityScan({
         seuil défini ci-dessous.
       </p>
 
-      {/* Barre de contrôles : seuil + actions */}
+      {/* Barre de contrôles : seuil + actions. La rangée ne s'enroule PAS (nowrap) : quand
+          la place manque, les libellés s'empilent dans leur propre groupe et les boutons
+          restent groupés à droite (jamais rejetés sous les libellés). */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           gap: "1rem",
-          flexWrap: "wrap",
           marginBottom: ".75rem",
         }}
       >
-        <label
+        <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: ".5rem",
-            fontSize: ".78rem",
-            color: "var(--muted)",
+            gap: "1rem",
+            flexWrap: "wrap",
+            minWidth: 0,
           }}
         >
-          Seuil d&apos;inactivité
-          <input
-            type="number"
-            min={0}
-            max={50}
-            value={years}
-            onChange={(e) => onYearsChange(e.target.value)}
-            disabled={pending}
+          <label
             style={{
-              width: 60,
-              fontSize: ".78rem",
-              padding: ".2rem .4rem",
-              ...INPUT_CHROME,
+              display: "flex",
+              alignItems: "center",
+              gap: ".4rem",
+              fontSize: ".65rem",
+              color: "var(--muted)",
+              whiteSpace: "nowrap",
             }}
-          />
-          années
-        </label>
-        <label
+          >
+            Seuil d&apos;inactivité
+            <input
+              type="number"
+              min={0}
+              max={3}
+              value={years}
+              onChange={(e) => onYearsChange(e.target.value)}
+              style={{
+                width: 36,
+                fontSize: ".7rem",
+                padding: ".15rem .35rem",
+                ...INPUT_CHROME,
+              }}
+            />
+            an{years > 1 ? "s" : ""}
+          </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: ".4rem",
+              fontSize: ".65rem",
+              color: "var(--muted)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Délai de grâce
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={grace}
+              onChange={(e) => onGraceChange(e.target.value)}
+              style={{
+                width: 44,
+                fontSize: ".7rem",
+                padding: ".15rem .35rem",
+                ...INPUT_CHROME,
+              }}
+            />
+            jour{grace > 1 ? "s" : ""}
+          </label>
+        </div>
+        <div
           style={{
+            marginLeft: "auto",
+            minWidth: 0,
             display: "flex",
-            alignItems: "center",
-            gap: ".5rem",
-            fontSize: ".78rem",
-            color: "var(--muted)",
+            gap: ".4rem",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
           }}
         >
-          Délai de grâce
-          <input
-            type="number"
-            min={1}
-            max={365}
-            value={grace}
-            onChange={(e) => onGraceChange(e.target.value)}
-            disabled={pending}
-            style={{
-              width: 60,
-              fontSize: ".78rem",
-              padding: ".2rem .4rem",
-              ...INPUT_CHROME,
-            }}
-          />
-          jours
-        </label>
-        <div style={{ marginLeft: "auto", display: "flex", gap: ".4rem", flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn btn-ghost"
             onClick={refresh}
             disabled={pending}
-            style={{ padding: ".25rem .7rem", fontSize: ".72rem" }}
+            style={{ padding: ".15rem .55rem", fontSize: ".7rem" }}
           >
             🔄 Rafraîchir
           </button>
@@ -302,8 +336,8 @@ export function InactivityScan({
             onClick={sendNotices}
             disabled={pending || needNoticeCount === 0}
             style={{
-              padding: ".25rem .7rem",
-              fontSize: ".72rem",
+              padding: ".15rem .55rem",
+              fontSize: ".7rem",
               borderColor: "rgba(232,164,90,.4)",
               color: "#e8a45a",
               opacity: needNoticeCount === 0 ? 0.4 : 1,
@@ -322,8 +356,8 @@ export function InactivityScan({
                 : undefined
             }
             style={{
-              padding: ".25rem .7rem",
-              fontSize: ".72rem",
+              padding: ".15rem .55rem",
+              fontSize: ".7rem",
               borderColor: "rgba(224,107,107,.4)",
               color: "var(--danger)",
               opacity: canAnonymizeCount === 0 ? 0.4 : 1,

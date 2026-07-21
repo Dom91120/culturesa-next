@@ -111,7 +111,13 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
         Journal d&apos;audit RGPD
       </div>
       <p
-        style={{ fontSize: ".78rem", color: "var(--muted)", marginBottom: "1rem", lineHeight: 1.5 }}
+        style={{
+          fontSize: ".78rem",
+          color: "var(--muted)",
+          marginBottom: "1rem",
+          lineHeight: 1.5,
+          textAlign: "justify",
+        }}
       >
         Trace toutes les actions RGPD effectuées sur l&apos;application (anonymisations, exports,
         etc.). Cette journalisation est requise par le principe de redevabilité (RGPD art. 5.2) — ne
@@ -127,16 +133,13 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
           marginBottom: ".5rem",
         }}
       >
-        <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>
-          {total} entrée{total > 1 ? "s" : ""}
-        </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: ".4rem" }}>
           <button
             type="button"
             className="btn btn-ghost"
             onClick={refresh}
             disabled={pending}
-            style={{ padding: ".25rem .7rem", fontSize: ".72rem" }}
+            style={{ padding: ".15rem .55rem", fontSize: ".7rem" }}
           >
             🔄 Rafraîchir
           </button>
@@ -145,109 +148,86 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
             className="btn btn-ghost"
             onClick={exportCsv}
             disabled={total === 0}
-            style={{ padding: ".25rem .7rem", fontSize: ".72rem" }}
+            style={{ padding: ".15rem .55rem", fontSize: ".7rem" }}
           >
             📥 Export CSV
           </button>
         </div>
       </div>
 
-      <div style={{ maxHeight: 500, overflowY: "auto" }}>
-        {total === 0 ? (
-          <div
-            style={{
-              fontSize: ".78rem",
-              color: "var(--muted)",
-              fontStyle: "italic",
-              padding: ".5rem",
-            }}
-          >
-            Aucune action RGPD journalisée pour le moment.
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".78rem" }}>
+      {total === 0 ? (
+        <div
+          style={{
+            fontSize: ".78rem",
+            color: "var(--muted)",
+            fontStyle: "italic",
+            padding: ".5rem",
+          }}
+        >
+          Aucune action RGPD journalisée pour le moment.
+        </div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table zebra">
             <thead>
-              <tr style={{ textAlign: "left" }}>
-                <th style={{ padding: ".4rem .5rem", borderBottom: "1px solid var(--border)" }}>
-                  Date
-                </th>
-                <th style={{ padding: ".4rem .5rem", borderBottom: "1px solid var(--border)" }}>
-                  Action
-                </th>
-                <th style={{ padding: ".4rem .5rem", borderBottom: "1px solid var(--border)" }}>
-                  Cible
-                </th>
-                <th style={{ padding: ".4rem .5rem", borderBottom: "1px solid var(--border)" }}>
-                  Acteur
-                </th>
-                <th style={{ padding: ".4rem .5rem", borderBottom: "1px solid var(--border)" }}>
-                  IP
-                </th>
+              <tr>
+                <th style={{ textAlign: "center" }}>Date</th>
+                <th style={{ textAlign: "center" }}>Action</th>
+                <th style={{ textAlign: "center" }}>Cible</th>
+                <th style={{ textAlign: "center" }}>Acteur</th>
+                <th style={{ textAlign: "center" }}>IP</th>
               </tr>
             </thead>
             <tbody>
               {pageRows.map((e) => (
                 <tr key={e.id}>
-                  <td
-                    style={{ padding: ".2rem .5rem", color: "var(--muted)", whiteSpace: "nowrap" }}
-                  >
-                    {e.dateLabel}
-                  </td>
-                  <td style={{ padding: ".2rem .5rem" }}>{actionLabel(e.action)}</td>
-                  <td style={{ padding: ".2rem .5rem" }}>
+                  <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{e.dateLabel}</td>
+                  <td>{actionLabel(e.action)}</td>
+                  <td>
                     <PartyCell party={e.target} anonTag />
                   </td>
-                  <td style={{ padding: ".2rem .5rem" }}>
+                  <td>
                     <PartyCell party={e.actor} anonTag={false} />
                   </td>
-                  <td
-                    style={{
-                      padding: ".2rem .5rem",
-                      color: "var(--muted)",
-                      fontFamily: "monospace",
-                      fontSize: ".7rem",
-                    }}
-                  >
+                  <td style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: ".7rem" }}>
                     {e.ip || "—"}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
       {total > 0 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: ".5rem",
-            marginTop: ".6rem",
-          }}
-        >
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
-            disabled={current === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-          >
-            ‹
-          </button>
-          <span style={{ fontSize: ".7rem", color: "var(--muted)" }}>
-            {current + 1} / {totalPages}
+        <div style={{ display: "flex", alignItems: "center", marginTop: ".6rem" }}>
+          <span style={{ flex: 1, fontSize: ".72rem", color: "var(--muted)" }}>
+            {total} entrée{total > 1 ? "s" : ""}
           </span>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
-            disabled={current >= totalPages - 1}
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-          >
-            ›
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
+              disabled={current === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              ‹
+            </button>
+            <span style={{ fontSize: ".7rem", color: "var(--muted)" }}>
+              {current + 1} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
+              disabled={current >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            >
+              ›
+            </button>
+          </div>
+          <span style={{ flex: 1 }} />
         </div>
       )}
     </div>

@@ -12,7 +12,7 @@ export const DEFAULT_GRACE_DAYS = 30;
 /** Clé app_config du délai de grâce RGPD. */
 const GRACE_DAYS_KEY = "rgpd.graceDays";
 /** Durée de rétention par défaut (années) si la config est absente. */
-export const DEFAULT_RETENTION_YEARS = 2;
+export const DEFAULT_RETENTION_YEARS = 3;
 /** Clé app_config de la durée de rétention RGPD. */
 const RETENTION_YEARS_KEY = "rgpd.retentionYears";
 
@@ -364,11 +364,11 @@ export async function isUserInServicesRgpdScope(
   return setting != null;
 }
 
-/** Lit la durée de rétention configurée (années), bornée 0–50, défaut 2. */
+/** Lit la durée de rétention configurée (années), bornée 0–3, défaut 3. */
 export async function getRetentionYears(): Promise<number> {
   const cfg = await getConfigMany([RETENTION_YEARS_KEY]);
   const v = Number.parseInt(cfg[RETENTION_YEARS_KEY] ?? "", 10);
-  if (!Number.isFinite(v) || v < 0 || v > 50) return DEFAULT_RETENTION_YEARS;
+  if (!Number.isFinite(v) || v < 0 || v > 3) return DEFAULT_RETENTION_YEARS;
   return v;
 }
 
