@@ -1,9 +1,9 @@
 import { ConnectedShell } from "@/components/connected-shell";
 import { UserShell } from "@/components/user-shell";
 import type { Role } from "@/generated/prisma/client";
-import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { listBookableServices } from "@/server/services/bookings";
+import { listServicesForCurrentAdmin } from "@/server/services/services";
 
 // « Mon compte » est accessible à TOUS les utilisateurs connectés (pas seulement aux
 // gestionnaires) : la route vit donc hors du groupe (admin). On choisit ici le shell
@@ -15,10 +15,10 @@ export default async function MonCompteLayout({ children }: { children: React.Re
   const user = { name: session.user.name ?? "", email: session.user.email };
 
   if (role === "gestionnaire" || role === "administrateur") {
-    const services = await prisma.service.findMany({
-      orderBy: [{ position: "asc" }, { label: "asc" }],
-      select: { id: true, label: true, icon: true },
-    });
+    // Périmètre par rôle : un gestionnaire ne voit QUE ses services gérés (ServiceManager),
+    // un administrateur les voit tous. (Auparavant : findMany sans filtre → un gestionnaire
+    // voyait les onglets de tous les services depuis « Mon compte ».)
+    const services = await listServicesForCurrentAdmin();
     return (
       <ConnectedShell user={user} services={services} isAdmin={role === "administrateur"}>
         {children}
