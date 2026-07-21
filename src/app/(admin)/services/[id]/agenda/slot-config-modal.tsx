@@ -14,6 +14,7 @@ export function SlotConfigModal({
   serviceId,
   slotId,
   title,
+  heading,
   batchCount,
   applyToLot = false,
   initialCapacity,
@@ -25,8 +26,11 @@ export function SlotConfigModal({
 }: {
   serviceId: string;
   slotId: string;
-  // Suffixe de titre, ex. « · 9:00–10:30 » (ou "" si le créneau est introuvable).
+  // Suffixe de titre du mode LOT, ex. « · 9:00–10:30 » (ou "" si créneau introuvable).
   title: string;
+  // Titre complet d'un créneau SEUL (récurrent/ponctuel), ex.
+  // « Créneau récurrent · Semaine A · Mercredi · 09:00–10:00 ».
+  heading: string;
   // Taille du lot « multiple » du créneau (> 1 = lot).
   batchCount?: number;
   // Mode « Création multiple » : la config vise tout le lot. Sinon (ponctuel/récurrent) →
@@ -74,9 +78,7 @@ export function SlotConfigModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div className="modal-title">
-        {isLot
-          ? `Configuration des ${batchCount} créneaux${title}`
-          : `Configuration du créneau${title}`}
+        {isLot ? `Configuration des ${batchCount} créneaux${title}` : heading}
       </div>
       {isLot && (
         <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: "0 0 .4rem" }}>

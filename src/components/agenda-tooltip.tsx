@@ -19,9 +19,12 @@ export type AgendaTip =
       demandeurs?: string[];
       // « A une jauge » du créneau (slots.jauge) — absent = ligne masquée.
       jauge?: boolean;
-      recurInfo?: { period: string; dayHours: string };
+      recurInfo?: { period: string; week: string; dayHours: string };
       // Taille du lot « multiple » (> 1) d'un créneau ponctuel — absent/≤1 = ligne masquée.
       batchCount?: number;
+      // Cadence du lot « multi » ponctuel : « Semaine A » / « Semaine B » / « Toutes »
+      // (affichée « Multi - <cadence> » à la place du décompte de créneaux).
+      multiCadence?: string;
       // Cadence d'un créneau récurrent (côté usager) : « Semaine A » / « Semaine B » /
       // « Toutes les semaines », affichée AU-DESSUS des « Journées concernées ».
       weekLabel?: string;
@@ -50,8 +53,9 @@ export function useAgendaTooltip(opts: {
     capacity?: number | null;
     demandeurs?: string[];
     jauge?: boolean;
-    recurInfo?: { period: string; dayHours: string };
+    recurInfo?: { period: string; week: string; dayHours: string };
     batchCount?: number;
+    multiCadence?: string;
     weekLabel?: string;
   };
   // Quand true, aucune info-bulle (ex. saisie de thème en cours côté usager).
@@ -117,6 +121,7 @@ export function useAgendaTooltip(opts: {
             jauge: meta.jauge,
             recurInfo: meta.recurInfo,
             batchCount: meta.batchCount,
+            multiCadence: meta.multiCadence,
             weekLabel: meta.weekLabel,
           };
         }
@@ -180,7 +185,14 @@ export function AgendaTooltip({
               {tip.recurInfo.period && (
                 <div style={{ fontWeight: 600, marginBottom: 2 }}>{tip.recurInfo.period}</div>
               )}
-              <div style={{ textTransform: "capitalize" }}>{tip.recurInfo.dayHours}</div>
+              {/* Pas de text-transform : DAY_NAMES est déjà bien casé et « capitalize »
+                  transformerait « Toutes les semaines » en « Toutes Les Semaines ». */}
+              <div>
+                {tip.recurInfo.week && (
+                  <span style={{ fontWeight: 600 }}>{tip.recurInfo.week} : </span>
+                )}
+                {tip.recurInfo.dayHours}
+              </div>
             </div>
           ) : (
             tip.dates.length > 0 && (
@@ -223,7 +235,10 @@ export function AgendaTooltip({
           )}
           {typeof tip.batchCount === "number" && tip.batchCount > 1 && (
             <div>
-              <span style={{ fontWeight: 600 }}>Lot :</span> {tip.batchCount} créneaux
+              <span style={{ fontWeight: 600 }}>
+                Multi - {tip.multiCadence ? `${tip.multiCadence} :` : ""}
+              </span>{" "}
+              {tip.batchCount} créneaux
             </div>
           )}
         </>

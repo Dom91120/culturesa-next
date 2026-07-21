@@ -2107,30 +2107,48 @@ export function AgendaGrid({
     capacity?: number | null;
     demandeurs?: string[];
     jauge?: boolean;
-    recurInfo?: { period: string; dayHours: string };
+    recurInfo?: { period: string; week: string; dayHours: string };
     batchCount?: number;
+    multiCadence?: string;
   } => {
     const slot = slots.find((s) => s.id === slotId);
     const block = blocksByDay[dayKey]?.find((bl) => bl.slotId === slotId);
     const capacity = block?.capacity ?? slot?.capacity ?? service.capacity;
     // Taille du lot « multi » d'un créneau ponctuel (0 = pas un lot ; > 1 → affichée).
-    const batchCount = countSlotSeries(slotId) || undefined;
+    // Affichée UNIQUEMENT en mode « Création multiple » (comme le reste de l'UI de lot) :
+    // hors de ce mode, on ne mentionne pas « Lot : n créneaux » au survol.
+    const batchCount =
+      creationMode && createKind === "multi" ? countSlotSeries(slotId) || undefined : undefined;
+    // Cadence du lot « multi » (portée de parité posée sur Slot.weeks) : « Semaine A »,
+    // « Semaine B » ou « Toutes » — affichée « Multi - <cadence> » à la place du décompte.
+    let multiCadence: string | undefined;
+    if (batchCount) {
+      const w = uniqueSlots.find((u) => u.id === slotId)?.weeks ?? "";
+      multiCadence = w === "A" ? "Semaine A" : w === "B" ? "Semaine B" : "Toutes les semaines";
+    }
     // État de la jauge DU créneau (slots.jauge) : bloc affiché, sinon récurrent,
     // sinon ponctuel/miroir.
     const jauge =
       block?.jauge ?? slot?.jauge ?? uniqueSlots.find((u) => u.id === slotId)?.jauge ?? false;
-    // Résumé récurrent affiché dans l'info-bulle : période active + jour/heures du
-    // créneau PARENT (remplace la liste des dates côté admin).
-    const recurInfo = slot
-      ? {
-          period: periods.find((p) => p.id === effectivePeriodId)?.label ?? "",
-          dayHours: `${DAY_NAMES[slot.slotDay ?? ""] ?? slot.slotDay ?? ""} · ${slot.startTime}–${slot.endTime}`,
-        }
-      : undefined;
-    if (!serviceDemandeurs.length) return { capacity, jauge, recurInfo, batchCount };
+    // Résumé récurrent affiché dans l'info-bulle : période active + cadence (Semaine A/B
+    // ou Toutes les semaines) + jour/heures du créneau PARENT (remplace la liste des dates
+    // côté admin).
+    let recurInfo: { period: string; week: string; dayHours: string } | undefined;
+    if (slot) {
+      const w = parseWeeks(slot.weeks);
+      const cadence = abMode && w.length === 1 ? `Semaine ${w[0]}` : "Toutes les semaines";
+      const dayName = DAY_NAMES[slot.slotDay ?? ""] ?? slot.slotDay ?? "";
+      recurInfo = {
+        period: periods.find((p) => p.id === effectivePeriodId)?.label ?? "",
+        // `week` = cadence (affichée en gras, suivie de « : ») ; `dayHours` = jour · heures.
+        week: cadence,
+        dayHours: `${dayName} · ${slot.startTime}–${slot.endTime}`,
+      };
+    }
+    if (!serviceDemandeurs.length) return { capacity, jauge, recurInfo, batchCount, multiCadence };
     const ids = slotDemandeurs[slotId] ?? [];
     const demandeurs = serviceDemandeurs.filter((d) => ids.includes(d.id)).map((d) => d.label);
-    return { capacity, demandeurs, jauge, recurInfo, batchCount };
+    return { capacity, demandeurs, jauge, recurInfo, batchCount, multiCadence };
   };
 
   // Handlers de renderBlock via un ref STABLE : réassignés à chaque rendu (toujours
@@ -2210,6 +2228,11 @@ export function AgendaGrid({
           : "";
       // Créneau de 15 min : bloc trop court pour la lettre A/B à 1.2rem → on la réduit.
       const abFontSize = !allday && b.endMin - b.startMin <= 15 ? "0.8rem" : "1.2rem";
+      // Libellé de cadence au centre d'un créneau RÉCURRENT : sa parité (A/B) si le service
+      // alterne et que le créneau est mono-parité ; sinon « Toutes » (toutes semaines).
+      const blockCadence = isPonctuelCell
+        ? undefined
+        : (blockParity ?? (modes.abMode ? "Toutes" : undefined));
       // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
       const gaugeForCell = b.jauge;
       const cellFull = b.used >= b.capacity;
@@ -2342,10 +2365,10 @@ export function AgendaGrid({
             runResult(moveBookingAction(actionBooking(dragged).id, service.id, b.slotId));
           }}
         >
-          {/* Créneau récurrent limité à une semaine A/B : lettre au centre, dans la couleur
-              du contour pointillé du créneau (jaune récurrent). Décorative (derrière les
-              badges), n'intercepte pas les clics. */}
-          {blockParity && (
+          {/* Créneau récurrent : cadence au centre — parité A/B (mono-parité) ou « Toutes »
+              (toutes semaines) — dans la couleur du contour pointillé (jaune récurrent).
+              Décorative (derrière les badges), n'intercepte pas les clics. */}
+          {blockCadence && (
             <span
               aria-hidden="true"
               style={{
@@ -2354,14 +2377,17 @@ export function AgendaGrid({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#ffee24",
+                color: "#ffdc00",
                 fontWeight: 800,
-                fontSize: abFontSize,
+                // « Toutes » (multi-lettres) plus petit que la lettre A/B pour tenir.
+                fontSize: blockCadence.length > 1 ? "1rem" : abFontSize,
+                overflow: "hidden",
+                whiteSpace: "nowrap",
                 pointerEvents: "none",
                 zIndex: 0,
               }}
             >
-              {blockParity}
+              {blockCadence}
             </span>
           )}
           {/* Repère « Multi » (coin haut-gauche) : créneau appartenant à un lot (batchId),
@@ -2374,7 +2400,7 @@ export function AgendaGrid({
                 position: "absolute",
                 top: 1,
                 left: 3,
-                fontSize: ".65rem",
+                fontSize: "0.7rem",
                 fontWeight: 700,
                 lineHeight: 1,
                 color: "var(--slot-uniq-color)",
@@ -3166,7 +3192,7 @@ export function AgendaGrid({
                       {/* Multi → « Multi » dans la pastille, dans la couleur de la bordure
                           pointillée du créneau ponctuel (--legend-color = --slot-uniq-color
                           pour is-uniq). Récurrent + Semaine A/B activé → la parité (A/B) en
-                          jaune #ffee24 (couleur de la bordure récurrente). */}
+                          jaune #ffdc00 (couleur de la bordure récurrente). */}
                       <span
                         className={`agenda-legend-swatch ${k.swatch}`}
                         style={{
@@ -3186,7 +3212,7 @@ export function AgendaGrid({
                           </span>
                         )}
                         {k.kind === "rec" && parityScoped && realWeekParity && (
-                          <span style={{ color: "#ffee24", fontSize: ".6rem" }}>
+                          <span style={{ color: "#ffdc00", fontSize: ".6rem" }}>
                             {realWeekParity}
                           </span>
                         )}
@@ -3313,9 +3339,9 @@ export function AgendaGrid({
                   const inAllDayDrag =
                     allDayDrag != null &&
                     daysSpan(allDayDrag.startDay, allDayDrag.curDay).includes(d);
-                  // Couleur de l'aperçu = celle du créneau créé : jaune récurrent (#ffee24,
+                  // Couleur de l'aperçu = celle du créneau créé : jaune récurrent (#ffdc00,
                   // cf. .agenda-block) / gris-bleu ponctuel (--slot-uniq-color, .is-uniq).
-                  const drawColor = createKind === "rec" ? "#ffee24" : "var(--slot-uniq-color)";
+                  const drawColor = createKind === "rec" ? "#ffdc00" : "var(--slot-uniq-color)";
                   return (
                     <div
                       key={`ad-${d}`}
@@ -3434,9 +3460,9 @@ export function AgendaGrid({
                       gridEndMin,
                       Math.max(createDrag.startMin, createDrag.curMin) + 15,
                     );
-                    // Couleur de l'aperçu = celle du créneau créé : jaune récurrent (#ffee24,
+                    // Couleur de l'aperçu = celle du créneau créé : jaune récurrent (#ffdc00,
                     // cf. .agenda-block) / gris-bleu ponctuel (--slot-uniq-color, .is-uniq).
-                    const drawColor = createKind === "rec" ? "#ffee24" : "var(--slot-uniq-color)";
+                    const drawColor = createKind === "rec" ? "#ffdc00" : "var(--slot-uniq-color)";
                     return renderDragPreviewSegments({
                       startMin: s,
                       endMin: e2,
@@ -3455,7 +3481,7 @@ export function AgendaGrid({
                     const e2 = Math.min(gridEndMin, s + moveDrag.durationMin);
                     const top = mapMinToY(s);
                     const h = mapMinToY(e2) - top;
-                    const moveColor = moveDrag.isUnique ? "var(--slot-uniq-color)" : "#ffee24";
+                    const moveColor = moveDrag.isUnique ? "var(--slot-uniq-color)" : "#ffdc00";
                     return (
                       <div
                         className="agenda-move-preview"
@@ -3487,7 +3513,7 @@ export function AgendaGrid({
                 {resizeDrag &&
                   resizeDrag.dayKey === d &&
                   (() => {
-                    const rColor = resizeDrag.isUnique ? "var(--slot-uniq-color)" : "#ffee24";
+                    const rColor = resizeDrag.isUnique ? "var(--slot-uniq-color)" : "#ffdc00";
                     return renderDragPreviewSegments({
                       startMin: resizeDrag.curStart,
                       endMin: resizeDrag.curEnd,
@@ -3506,7 +3532,7 @@ export function AgendaGrid({
                   (() => {
                     const top = mapMinToY(hResizeDrag.startMin);
                     const h = mapMinToY(hResizeDrag.endMin) - top;
-                    const rColor = hResizeDrag.isUnique ? "var(--slot-uniq-color)" : "#ffee24";
+                    const rColor = hResizeDrag.isUnique ? "var(--slot-uniq-color)" : "#ffdc00";
                     return (
                       <div
                         className="agenda-hresize-preview"
@@ -3803,16 +3829,35 @@ export function AgendaGrid({
       {/* Mode création : modale de configuration d'un créneau (capacité + demandeurs). */}
       {capModal &&
         (() => {
-          const slot =
-            slots.find((s) => s.id === capModal.slotId) ??
-            uniqueSlots.find((s) => s.id === capModal.slotId) ??
-            null;
+          // Créneau récurrent (dans `slots`) OU ponctuel (dans `uniqueSlots`) — recherchés
+          // séparément pour préserver leur type (slotDay vs slotDate).
+          const recurSlot = slots.find((s) => s.id === capModal.slotId);
+          const uniqSlot = uniqueSlots.find((s) => s.id === capModal.slotId);
+          const slot = recurSlot ?? uniqSlot ?? null;
+          const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
+          // Titre complet du créneau seul :
+          //  • récurrent → « Créneau récurrent · <cadence> · <Jour> · <h–h> »
+          //  • ponctuel  → « Créneau ponctuel · <Jour> <JJ/MM/AAAA> · <h–h> »
+          let heading = "Configuration du créneau";
+          if (recurSlot) {
+            const w = parseWeeks(recurSlot.weeks);
+            const cadence = abMode && w.length === 1 ? `Semaine ${w[0]}` : "Toutes les semaines";
+            const dayName = DAY_NAMES[recurSlot.slotDay ?? ""] ?? "";
+            heading = ["Créneau récurrent", cadence, dayName, timePart].filter(Boolean).join(" · ");
+          } else if (uniqSlot) {
+            const sd = uniqSlot.slotDate ?? "";
+            const dayName = sd ? (DAY_NAMES[dayKeyFromYmd(sd)] ?? "") : "";
+            const dateStr = sd ? new Date(`${sd}T12:00:00`).toLocaleDateString("fr-FR") : "";
+            const dayDate = [dayName, dateStr].filter(Boolean).join(" ");
+            heading = ["Créneau ponctuel", dayDate, timePart].filter(Boolean).join(" · ");
+          }
           return (
             <SlotConfigModal
               key={capModal.slotId}
               serviceId={service.id}
               slotId={capModal.slotId}
-              title={slot ? ` · ${slot.startTime}–${slot.endTime}` : ""}
+              title={slot ? ` · ${timePart}` : ""}
+              heading={heading}
               batchCount={countSlotSeries(capModal.slotId)}
               // Le SCOPE suit le mode courant : « Création multiple » → tout le lot ;
               // ponctuel/récurrent → le seul créneau (même s'il appartient à un lot).

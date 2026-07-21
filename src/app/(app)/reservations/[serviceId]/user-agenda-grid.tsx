@@ -2594,6 +2594,41 @@ export function UserAgendaGrid({
             togglePendingAdd(b.slotId, b.dayKey, ponctuel);
           }}
         >
+          {/* Repère de cadence des créneaux RÉCURRENTS : « Semaine A / Semaine B / Toutes »
+              (abrégé). Filigrane en ARRIÈRE-PLAN (centré, sous le contenu), couleur = bordure
+              jaune du créneau (--block-color). Décoratif (aria-hidden, pointerEvents none). */}
+          {(() => {
+            const s = recurSlotById.get(b.slotId);
+            if (!s) return null;
+            const w = parseWeeks(s.weeks);
+            const label = abMode && w.length === 1 ? `Semaine ${w[0]}` : "Toutes";
+            return (
+              <span
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  top: 1,
+                  left: 3,
+                  // Une seule ligne, bornée à droite + overflow hidden : le libellé ne
+                  // déborde pas et ne passe pas à la ligne — la partie qui dépasse est
+                  // simplement rognée (pas d'ellipse).
+                  right: 3,
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  color: "var(--block-color)",
+                  pointerEvents: "none",
+                  // Derrière les autres éléments du créneau (contenu en zIndex 1) mais
+                  // devant le bloc lui-même (fond/bordure).
+                  zIndex: 0,
+                }}
+              >
+                {label}
+              </span>
+            );
+          })()}
           {/* Badges centrés via le parent .agenda-block (justify-content:center).
           Le chips ne grandit pas pour que le centrage opère ; la jauge est
           sortie du flux (position absolue en bas). */}
@@ -2617,6 +2652,9 @@ export function UserAgendaGrid({
               justifyContent: "center",
               gap: 2,
               containerType: "size",
+              // Au-dessus du filigrane de cadence (en arrière-plan, zIndex 0).
+              position: "relative",
+              zIndex: 1,
             }}
           >
             {(() => {

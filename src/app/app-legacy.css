@@ -1868,7 +1868,7 @@ textarea.theme-pending:focus::placeholder {
   position: relative;
   /* Couleur par défaut : jaune (récurrent / miroir). Surcharge en vert lime via .is-uniq.
      DOIT rester synchrone avec .agenda-block et la légende (.agenda-legend-swatch). */
-  --agenda-block-color: #ffee24;
+  --agenda-block-color: #ffdc00;
   --slot-color: var(--agenda-block-color);
   border-left: 2px dashed var(--slot-color, var(--accent));
   border-top: 2px dashed var(--slot-color, var(--accent));
@@ -2316,7 +2316,7 @@ textarea.theme-pending:focus::placeholder {
   /* left & width sont injectés inline (layout multi-colonnes pour chevauchements) */
   /* Couleur fixe pour tous les creneaux de l'agenda, quelle que soit la periode.
      DOIT rester synchrone avec .csm-slot-block et la légende (.agenda-legend-swatch). */
-  --agenda-block-color: #ffee24;
+  --agenda-block-color: #ffdc00;
   --block-color: var(--agenda-block-color);
   border-radius: var(--rad-sm);
   background: color-mix(in srgb, var(--block-color) 30%, transparent);
@@ -2369,7 +2369,7 @@ textarea.theme-pending:focus::placeholder {
   /* Même jaune que la bordure des créneaux récurrents : DOIT suivre la valeur de
      --agenda-block-color (posée sur les blocs, .csm-slot-block et .agenda-block —
      non héritable ici). */
-  --legend-color: #ffee24;
+  --legend-color: #ffdc00;
   display: inline-block;
   width: 30px;
   height: 20px;
