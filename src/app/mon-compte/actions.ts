@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
-import { nomSchema, prenomSchema, telSchema } from "@/schemas/user";
+import {
+  nomSchema,
+  PROFILE_MIN_ACCOMPAGNANTS_MSG,
+  PROFILE_MIN_ENFANTS_MSG,
+  prenomSchema,
+  profileCountOk,
+  telSchema,
+} from "@/schemas/user";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { rateLimit } from "@/server/rate-limit";
@@ -30,15 +37,37 @@ export async function updateProfileAction(
   });
   if (!parsed.success) return { ok: false, error: "Données invalides." };
 
-  await prisma.user.update({
+  const data = {
+    prenom: parsed.data.prenom,
+    nom: parsed.data.nom,
+    tel: parsed.data.tel,
+    name: `${parsed.data.prenom} ${parsed.data.nom}`.trim(),
+  } as {
+    prenom: string;
+    nom: string;
+    tel: string;
+    name: string;
+    enfants?: number;
+    accompagnants?: number;
+  };
+
+  // Nb enfants / accompagnants : éditables seulement pour les comptes « utilisateur »
+  // (invariant ≥ 1, partagé avec l'inscription et l'admin). Le rôle fait foi en base :
+  // on ignore ces champs pour un gestionnaire/administrateur, même s'ils sont postés.
+  const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    data: {
-      prenom: parsed.data.prenom,
-      nom: parsed.data.nom,
-      tel: parsed.data.tel,
-      name: `${parsed.data.prenom} ${parsed.data.nom}`.trim(),
-    },
+    select: { role: true },
   });
+  if (dbUser?.role === "utilisateur") {
+    const enfants = Number(formData.get("enfants"));
+    const accompagnants = Number(formData.get("accompagnants"));
+    if (!profileCountOk(enfants)) return { ok: false, error: PROFILE_MIN_ENFANTS_MSG };
+    if (!profileCountOk(accompagnants)) return { ok: false, error: PROFILE_MIN_ACCOMPAGNANTS_MSG };
+    data.enfants = enfants;
+    data.accompagnants = accompagnants;
+  }
+
+  await prisma.user.update({ where: { id: session.user.id }, data });
   revalidatePath("/mon-compte");
   return { ok: true };
 }
