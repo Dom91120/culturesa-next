@@ -70,7 +70,7 @@ type Props = {
 // Réglages affichés quand le service n'a AUCUN exercice (blocs masqués de toute
 // façon — valeurs de confort pour initialiser les états React).
 const NO_EXERCICE_OPENING: Opening = {
-  activeDays: [],
+  activeDays: ["lun", "mar", "mer", "jeu", "ven"],
   openOnHolidays: false,
   openOnSchoolHolidays: false,
   morningStart: "09:00",
@@ -89,6 +89,14 @@ const DAYS: { key: string; label: string; full: string }[] = [
   { key: "sam", label: "Sam", full: "Samedi" },
   { key: "dim", label: "Dim", full: "Dimanche" },
 ];
+
+// Jours de semaine toujours ouverts : cases cochées et verrouillées (non décochables).
+// Seuls le samedi et le dimanche restent optionnels.
+const LOCKED_DAYS = ["lun", "mar", "mer", "jeu", "ven"];
+// Garantit que les jours verrouillés sont toujours présents dans la valeur persistée,
+// en préservant l'ordre de DAYS (les week-ends éventuels conservés).
+const withLockedDays = (days: string[]): string[] =>
+  DAYS.map((d) => d.key).filter((k) => LOCKED_DAYS.includes(k) || days.includes(k));
 
 // « Délai limite de réservation » (porté par l'exercice) : délai minimum avant une séance.
 // Négatif = jours ouvrés, ≥1000 = calendaire (encodage legacy, cf. lib/booking-delay).
@@ -645,7 +653,9 @@ export function PeriodesPanel({
         serviceId,
         // Réglages écrits sur l'exercice affiché (unique porteur).
         exerciceId: currentExerciceId,
-        activeDays: (overrides.activeDays ?? activeDays) as (
+        // Les jours de semaine sont toujours ouverts (cases verrouillées) : on force leur
+        // présence dans la valeur persistée, quel que soit l'état côté client.
+        activeDays: withLockedDays(overrides.activeDays ?? activeDays) as (
           | "lun"
           | "mar"
           | "mer"
@@ -968,29 +978,36 @@ export function PeriodesPanel({
                 <div
                   style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}
                 >
-                  {DAYS.map((d) => (
-                    <label
-                      key={d.key}
-                      title={d.full}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: ".3rem",
-                        cursor: "pointer",
-                        fontSize: ".62rem",
-                        fontWeight: 500,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        className="admin-cb"
-                        checked={activeDays.includes(d.key)}
-                        onChange={() => toggleDay(d.key)}
-                        style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-                      />
-                      {d.full}
-                    </label>
-                  ))}
+                  {DAYS.map((d) => {
+                    // Jours de semaine : toujours cochés et verrouillés (non décochables).
+                    const locked = LOCKED_DAYS.includes(d.key);
+                    return (
+                      <label
+                        key={d.key}
+                        title={locked ? `${d.full} (toujours ouvert)` : d.full}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: ".3rem",
+                          cursor: locked ? "default" : "pointer",
+                          fontSize: ".62rem",
+                          fontWeight: 500,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="admin-cb"
+                          checked={locked || activeDays.includes(d.key)}
+                          disabled={locked}
+                          onChange={() => {
+                            if (!locked) toggleDay(d.key);
+                          }}
+                          style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
+                        />
+                        {d.full}
+                      </label>
+                    );
+                  })}
                   {/* Séparateur : jours de semaine ↔ fériés / vacances. */}
                   <span
                     style={{
