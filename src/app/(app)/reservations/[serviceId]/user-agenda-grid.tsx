@@ -1124,6 +1124,22 @@ export function UserAgendaGrid({
   // dans un hook partagé. Suspendue pendant la saisie d'un thème.
   const { tip, tipRef, onAgendaTip, clearTip } = useAgendaTooltip({
     getDates: (slotId, dayKey) => concernedDatesForBlock(slotId, dayKey),
+    // Cadence du créneau récurrent survolé (au-dessus des « Journées concernées ») :
+    // « Semaine A » / « Semaine B » quand le service alterne A/B et que le créneau ne
+    // porte qu'une parité ; sinon « Toutes les semaines ». Les ponctuels (absents de
+    // `slots`) n'ont pas de cadence.
+    getMeta: (slotId) => {
+      const s = slots.find((sl) => sl.id === slotId);
+      if (!s) return {};
+      const weeks = parseWeeks(s.weeks);
+      const weekLabel =
+        modes.abMode && weeks.length === 1
+          ? weeks[0] === "A"
+            ? "Semaines A"
+            : "Semaines B"
+          : "Toutes les semaines";
+      return { weekLabel };
+    },
     suppressed: () => isThemeBeingEdited(),
   });
 
@@ -2387,8 +2403,11 @@ export function UserAgendaGrid({
       // Délai de réservation : occurrences ≥ aujourd'hui + délai seulement (jours
       // ouvrés de l'exercice couvrant la date).
       if (d < earliestFor(d)) continue;
-      // Convention UNIQUE de l'app : semaine ISO IMPAIRE = A, paire = B (lib/iso-week).
-      if (abMode && effectiveWeek != null && slotWeekTag(d) !== effectiveWeek) continue;
+      // NB : PAS de filtre par parité de la semaine AFFICHÉE ici. Les miroirs encodent
+      // déjà la cadence réelle du créneau (récurrent « toutes les semaines » → un miroir
+      // par semaine ; « Semaines A »/« B » → un miroir sur deux). Filtrer par la semaine
+      // A/B courante réduisait de moitié les dates d'un créneau hebdomadaire (affichage
+      // « tous les 15 jours » à tort) et rendait l'info-bulle dépendante de la semaine vue.
       // Vacances scolaires exclues si l'exercice (∧ demandeur) ferme alors.
       if (!openingForYmd(d).openOnSchoolHolidays && inSchoolHolidayRange(d, schoolHolidays ?? []))
         continue;
@@ -2399,7 +2418,7 @@ export function UserAgendaGrid({
     }
     for (const arr of m.values()) arr.sort();
     return m;
-  }, [uniqueSlots, earliestFor, abMode, effectiveWeek, openingForYmd, schoolHolidays]);
+  }, [uniqueSlots, earliestFor, openingForYmd, schoolHolidays]);
 
   // Dates concrètes couvertes par un créneau récurrent un jour donné (cf. memo ci-dessus).
   // Port _predictedDatesForCurrentUser. Ponctuel autonome : sa seule date.

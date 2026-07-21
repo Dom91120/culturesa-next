@@ -22,6 +22,9 @@ export type AgendaTip =
       recurInfo?: { period: string; dayHours: string };
       // Taille du lot « multiple » (> 1) d'un créneau ponctuel — absent/≤1 = ligne masquée.
       batchCount?: number;
+      // Cadence d'un créneau récurrent (côté usager) : « Semaine A » / « Semaine B » /
+      // « Toutes les semaines », affichée AU-DESSUS des « Journées concernées ».
+      weekLabel?: string;
     }
   | null;
 
@@ -49,6 +52,7 @@ export function useAgendaTooltip(opts: {
     jauge?: boolean;
     recurInfo?: { period: string; dayHours: string };
     batchCount?: number;
+    weekLabel?: string;
   };
   // Quand true, aucune info-bulle (ex. saisie de thème en cours côté usager).
   suppressed?: () => boolean;
@@ -102,7 +106,8 @@ export function useAgendaTooltip(opts: {
           meta.capacity != null ||
           meta.demandeurs != null ||
           meta.recurInfo ||
-          meta.batchCount != null
+          meta.batchCount != null ||
+          meta.weekLabel != null
         ) {
           key = `d:${slotId}|${dayKey}`;
           next = {
@@ -112,6 +117,7 @@ export function useAgendaTooltip(opts: {
             jauge: meta.jauge,
             recurInfo: meta.recurInfo,
             batchCount: meta.batchCount,
+            weekLabel: meta.weekLabel,
           };
         }
       }
@@ -180,7 +186,8 @@ export function AgendaTooltip({
             tip.dates.length > 0 && (
               <div style={{ marginBottom: 4 }}>
                 <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                  {tip.dates.length > 1 ? "Journées concernées :" : "Journée concernée :"}
+                  {tip.dates.length > 1 ? "Journées concernées" : "Journée concernée"}
+                  {tip.weekLabel ? ` (${tip.weekLabel})` : ""} :
                 </div>
                 {/* Colonnes adaptées au contenu : autant que de dates (4 max), chacune à la
                     largeur de son texte — l'info-bulle d'un ponctuel (1 date) reste compacte. */}
