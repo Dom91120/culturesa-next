@@ -46,6 +46,20 @@ const ROLE_META: Record<Role, { cls: string; label: string }> = {
 
 const PAGE_SIZE = 20;
 
+// ── Largeurs de colonnes (cf. <colgroup> du tableau) ──
+// Les colonnes d'appoint sont calées en pixels sur leurs contrôles, PADDING DE CELLULE
+// COMPRIS (`.admin-table td` : 0.6rem de chaque côté, soit ~19 px) ; Identité, E-mail et
+// Structure / Service se partagent à parts égales tout ce qui reste.
+const COL_CHECK = 36; // case à cocher 15 px + son padding propre (.col-check)
+const COL_TEL = 116; // « 06 12 34 56 78 » à 0.75rem
+const COL_ROLE = 108; // pastille « GESTIONNAIRE » (0.5rem, majuscules espacées)
+const COL_RGPD = 92; // boutons 📥 et 🗑️ côte à côte
+const COL_TEXT = `calc((100% - ${COL_CHECK + COL_TEL + COL_ROLE + COL_RGPD}px) / 3)`;
+
+// Colonnes d'appoint : la troncature ne les concerne pas — sans ça, elles héritent de
+// l'ellipse de `.admin-table td` et affichent « … » dès qu'un contrôle frôle le bord.
+const NO_ELLIPSIS = { overflow: "visible", textOverflow: "clip" } as const;
+
 // Recherche accent-insensible (réimplémente _normSearch du legacy).
 function normSearch(s: string): string {
   return s
@@ -242,11 +256,23 @@ export function UsersTable({
       </div>
 
       <div className="admin-table-wrap">
-        <table className="admin-table zebra">
+        {/* `table-layout: fixed` : sans lui les largeurs du <colgroup> ne sont que des
+            indications, la répartition suivant le contenu. */}
+        <table className="admin-table zebra" style={{ tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: COL_CHECK }} />
+            <col style={{ width: COL_TEXT }} />
+            <col style={{ width: COL_TEXT }} />
+            <col style={{ width: COL_TEL }} />
+            <col style={{ width: COL_TEXT }} />
+            <col style={{ width: COL_ROLE }} />
+            <col style={{ width: COL_RGPD }} />
+          </colgroup>
           <thead>
             <tr>
               <th className="col-check" />
-              <SortTh label="Identité" sk="nom" minWidth={160} sortKey={sortKey} onSort={sortBy} />
+              {/* (Plus de minWidth : les largeurs viennent du <colgroup>.) */}
+              <SortTh label="Identité" sk="nom" sortKey={sortKey} onSort={sortBy} />
               <SortTh label="E-mail" sk="email" sortKey={sortKey} onSort={sortBy} />
               <th style={{ textAlign: "center" }}>Téléphone</th>
               <th style={{ textAlign: "center" }}>Structure / Service</th>
@@ -268,9 +294,15 @@ export function UsersTable({
               const rowClasses = [roleBreak ? "role-break" : "", checked ? "row-checked" : ""]
                 .filter(Boolean)
                 .join(" ");
+              // Compte anonymisé : contenus estompés. Restent pleinement actives la case
+              // à cocher (barre d'actions : modification, suppression d'un compte vide)
+              // et l'exportation RGPD ; la corbeille, elle, est désactivée d'elle-même.
+              const dim: React.CSSProperties | undefined = u.anonymized
+                ? { opacity: 0.45 }
+                : undefined;
               return (
                 <tr key={u.id} className={rowClasses || undefined}>
-                  <td className="col-check">
+                  <td className="col-check" style={NO_ELLIPSIS}>
                     <input
                       type="checkbox"
                       className="admin-cb"
@@ -278,18 +310,31 @@ export function UsersTable({
                       onChange={() => toggleRow(u.id)}
                     />
                   </td>
-                  <td>{`${u.nom} ${u.prenom}`.trim() || "—"}</td>
-                  <td style={{ color: "var(--muted)" }}>{u.email}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{formatTel(u.tel)}</td>
-                  {/* nowrap + maxWidth : ellipse au lieu de replier sur 2 lignes (hauteur
-                      de ligne constante) ; libellé complet en infobulle. */}
-                  <td style={{ whiteSpace: "nowrap", maxWidth: 220 }} title={affiliation(u)}>
+                  {/* nowrap : ellipse au lieu de replier sur 2 lignes (hauteur de ligne
+                      constante) ; valeur complète en infobulle. La troncature elle-même
+                      vient de `.admin-table td` (overflow + text-overflow). */}
+                  <td
+                    style={{ whiteSpace: "nowrap", ...dim }}
+                    title={`${u.nom} ${u.prenom}`.trim()}
+                  >
+                    {`${u.nom} ${u.prenom}`.trim() || "—"}
+                  </td>
+                  <td
+                    style={{ color: "var(--muted)", whiteSpace: "nowrap", ...dim }}
+                    title={u.email}
+                  >
+                    {u.email}
+                  </td>
+                  <td style={{ whiteSpace: "nowrap", ...NO_ELLIPSIS, ...dim }}>
+                    {formatTel(u.tel)}
+                  </td>
+                  <td style={{ whiteSpace: "nowrap", ...dim }} title={affiliation(u)}>
                     {affiliation(u)}
                   </td>
-                  <td>
+                  <td style={{ ...NO_ELLIPSIS, ...dim }}>
                     <span className={`role-pill ${meta.cls}`}>{meta.label}</span>
                   </td>
-                  <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                  <td style={{ textAlign: "center", whiteSpace: "nowrap", ...NO_ELLIPSIS }}>
                     <a
                       className="btn btn-ghost"
                       href={`/rgpd/export?userId=${u.id}`}
