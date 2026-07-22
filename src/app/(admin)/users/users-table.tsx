@@ -56,6 +56,18 @@ const COL_ROLE = 108; // pastille « GESTIONNAIRE » (0.5rem, majuscules espacé
 const COL_RGPD = 92; // boutons 📥 et 🗑️ côte à côte
 const COL_TEXT = `calc((100% - ${COL_CHECK + COL_TEL + COL_ROLE + COL_RGPD}px) / 3)`;
 
+// Barre d'actions sous le tableau : gabarit commun des 4 boutons (rembourrage
+// horizontal resserré pour que le groupe reste compact face à la pagination).
+// `nowrap` + `flexShrink: 0` : à l'étroit, le libellé ne se replie pas sur deux lignes
+// (le bouton garderait sa largeur mais doublerait de hauteur) — le groupe déborde
+// plutôt vers la pagination.
+const ACTION_BTN_STYLE = {
+  fontSize: ".68rem",
+  padding: ".2rem .45rem",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+} as const;
+
 // Colonnes d'appoint : la troncature ne les concerne pas — sans ça, elles héritent de
 // l'ellipse de `.admin-table td` et affichent « … » dès qu'un contrôle frôle le bord.
 const NO_ELLIPSIS = { overflow: "visible", textOverflow: "clip" } as const;
@@ -403,8 +415,8 @@ export function UsersTable({
       </div>
 
       <div style={{ marginTop: ".5rem", display: "flex", alignItems: "center", gap: ".75rem" }}>
-        {/* Compteur + barre d'actions à gauche, dans un bloc extensible : associé au
-            ressort de même poids à droite, il centre la pagination sur la largeur. */}
+        {/* Bloc de gauche : compteur de lignes, ou « 1 sélectionné » à sa place. De même
+            poids que la barre d'actions à droite, il centre la pagination sur la largeur. */}
         <div
           style={{
             flex: 1,
@@ -414,95 +426,17 @@ export function UsersTable({
             gap: ".75rem",
           }}
         >
-          {/* Compteur masqué quand une ligne est cochée : laisse la place à la barre d'actions. */}
-          {!selected && (
+          {selected ? (
+            <span style={{ fontSize: ".82rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+              1 sélectionné
+            </span>
+          ) : (
             <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
               {total === 0
                 ? "0 compte"
                 : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
             </span>
           )}
-          <div
-            style={{
-              visibility: selected ? "visible" : "hidden",
-              display: "flex",
-              alignItems: "center",
-              gap: ".75rem",
-              flex: 1,
-            }}
-          >
-            <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>1 sélectionné</span>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={editSelected}
-              style={{
-                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                color: "var(--accent)",
-                fontSize: ".68rem",
-                padding: ".25rem .65rem",
-              }}
-            >
-              ✏️ Modifier
-            </button>
-            {!selected?.anonymized && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => selected && setAnonymizeTarget(selected)}
-                disabled={pending}
-                style={{
-                  ...GHOST_DANGER_STYLE,
-                  fontSize: ".68rem",
-                  padding: ".25rem .65rem",
-                }}
-                title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
-              >
-                🗑️ Anonymiser
-              </button>
-            )}
-            {selected?.bookingCount === 0 && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => selected && setDeleteTarget(selected)}
-                disabled={pending}
-                style={{
-                  ...GHOST_DANGER_STYLE,
-                  fontSize: ".68rem",
-                  padding: ".25rem .65rem",
-                }}
-                title="Compte sans réservation : suppression physique de la base (test, spam)"
-              >
-                🗑️ Supprimer définitivement
-              </button>
-            )}
-            {selected && !selected.emailVerified && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={resendConfirmation}
-                disabled={pending}
-                style={{
-                  borderColor: "rgba(232,164,90,.4)",
-                  color: "var(--warn)",
-                  fontSize: ".68rem",
-                  padding: ".25rem .65rem",
-                }}
-              >
-                🖅 Renvoyer le mail de confirmation
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={clearSelection}
-              style={{ fontSize: ".68rem", padding: ".25rem .65rem" }}
-              title="Désélectionner le compte"
-            >
-              Annuler
-            </button>
-          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
           <button
@@ -527,8 +461,81 @@ export function UsersTable({
             ›
           </button>
         </div>
-        {/* Ressort symétrique du bloc de gauche → pagination centrée. */}
-        <span style={{ flex: 1 }} />
+        {/* Barre d'actions : après la pagination, alignée à droite. Rendue en
+            `visibility: hidden` hors sélection (et non démontée) — elle réserve ainsi sa
+            hauteur, plus grande que celle du compteur, et la ligne ne saute pas.
+            Ressort symétrique du bloc de gauche → pagination centrée. */}
+        <div
+          style={{
+            visibility: selected ? "visible" : "hidden",
+            flex: 1,
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: ".75rem",
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={editSelected}
+            style={{
+              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+              color: "var(--accent)",
+              ...ACTION_BTN_STYLE,
+            }}
+          >
+            ✏️ Modifier
+          </button>
+          {!selected?.anonymized && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => selected && setAnonymizeTarget(selected)}
+              disabled={pending}
+              style={{ ...GHOST_DANGER_STYLE, ...ACTION_BTN_STYLE }}
+              title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
+            >
+              🗑️ Anonymiser
+            </button>
+          )}
+          {selected?.bookingCount === 0 && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => selected && setDeleteTarget(selected)}
+              disabled={pending}
+              style={{ ...GHOST_DANGER_STYLE, ...ACTION_BTN_STYLE }}
+              title="Compte sans réservation : suppression physique de la base (test, spam)"
+            >
+              🗑️ Supprimer définitivement
+            </button>
+          )}
+          {selected && !selected.emailVerified && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={resendConfirmation}
+              disabled={pending}
+              style={{
+                borderColor: "rgba(232,164,90,.4)",
+                color: "var(--warn)",
+                ...ACTION_BTN_STYLE,
+              }}
+            >
+              🖅 Renvoyer le mail de confirmation
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={clearSelection}
+            style={ACTION_BTN_STYLE}
+            title="Désélectionner le compte"
+          >
+            Annuler
+          </button>
+        </div>
       </div>
 
       {anonymizeTarget && (
