@@ -23,7 +23,7 @@ export function AnonymizeUserModal({
   return (
     <ModalOverlay onClose={onCancel} boxStyle={{ maxWidth: 460 }}>
       <div className="modal-title" style={{ color: "var(--warn)" }}>
-        🛡️ Anonymiser le compte
+        🗑️ Anonymiser le compte
       </div>
       <p style={{ fontSize: ".85rem", lineHeight: 1.5, marginBottom: ".4rem" }}>
         Vous êtes sur le point d&apos;anonymiser <strong>{name || email}</strong>
@@ -64,7 +64,7 @@ export function AnonymizeUserModal({
           disabled={pending}
           style={{ background: "var(--warn)", border: "none", color: "var(--text)" }}
         >
-          🛡️ Anonymiser
+          🗑️ Anonymiser
         </button>
       </div>
     </ModalOverlay>

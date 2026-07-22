@@ -46,14 +46,16 @@ export async function assertNotLastActiveAdmin(
  * Anonymisation RGPD d'un compte (≠ suppression).
  *
  * Remplace les données personnelles identifiantes par des valeurs neutres,
- * dissocie le compte de ses référentiels (demandeur/structure), supprime les
+ * dissocie le compte de sa structure, supprime les
  * sessions (déconnexion immédiate) ET les comptes d'authentification (mot de
  * passe) — sans quoi l'ancien titulaire pouvait se reconnecter avec l'e-mail
  * anonymisé prévisible `anonyme-<id>@…` et son mot de passe conservé (audit
  * 2026-07-19) — puis journalise l'opération dans `RgpdLog`.
  *
  * Les réservations ne sont PAS supprimées : l'historique métier est conservé,
- * mais rattaché à un compte désormais non identifiable.
+ * mais rattaché à un compte désormais non identifiable. La CATÉGORIE
+ * (`demandeurId`) est également conservée : ce n'est pas une donnée personnelle
+ * et elle reste nécessaire à la lecture des statistiques par type de demandeur.
  *
  * Idempotent : si le compte est déjà anonymisé (`anonymizedAt` non null), no-op.
  */
@@ -82,7 +84,7 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
         niveau: "",
         enfants: 0,
         accompagnants: 0,
-        demandeurId: null,
+        // `demandeurId` (catégorie) VOLONTAIREMENT conservé — cf. en-tête.
         structureId: null,
         rgpdOk: false,
         anonymizedAt: now,

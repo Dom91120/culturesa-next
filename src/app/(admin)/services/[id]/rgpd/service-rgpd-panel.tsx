@@ -199,7 +199,7 @@ export function ServiceRgpdPanel({
                           className="btn btn-ghost"
                           onClick={() => anonymizeOne(u.id, fullName)}
                           disabled={pending}
-                          title="Anonymiser"
+                          title="Anonymiser ce compte (RGPD)"
                           style={{
                             padding: ".05rem .5rem",
                             fontSize: ".72rem",

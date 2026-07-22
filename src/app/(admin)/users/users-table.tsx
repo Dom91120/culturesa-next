@@ -302,21 +302,20 @@ export function UsersTable({
                         textDecoration: "none",
                         marginRight: ".2rem",
                       }}
-                      title="Exporter les données RGPD"
+                      title="Exporter (RGPD art. 15)"
                     >
                       📥
                     </a>
-                    {u.anonymized ? (
-                      <span
-                        style={{ fontSize: ".62rem", color: "var(--muted)", fontStyle: "italic" }}
-                        title="Compte déjà anonymisé"
-                      >
-                        anonymisé
-                      </span>
-                    ) : (
+                    {/* Compte déjà anonymisé : même bouton, désactivé (l'info-bulle est
+                        portée par le <span>, un bouton désactivé ne reçoit pas le survol). */}
+                    <span
+                      style={{ display: "inline-block" }}
+                      title={u.anonymized ? "Anonymisé" : "Anonymiser ce compte (RGPD)"}
+                    >
                       <button
                         type="button"
                         className="btn btn-ghost"
+                        disabled={u.anonymized}
                         onClick={(e) => {
                           e.stopPropagation();
                           setAnonymizeTarget(u);
@@ -327,11 +326,10 @@ export function UsersTable({
                           borderColor: "rgba(224,107,107,.4)",
                           color: "var(--danger)",
                         }}
-                        title="Anonymiser ce compte (RGPD)"
                       >
-                        🛡️
+                        🗑️
                       </button>
-                    )}
+                    </span>
                   </td>
                 </tr>
               );
@@ -404,7 +402,7 @@ export function UsersTable({
               }}
               title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
             >
-              🛡️ Anonymiser
+              🗑️ Anonymiser
             </button>
           )}
           {selected?.bookingCount === 0 && (
