@@ -11,7 +11,11 @@ import { z } from "zod";
 
 // ── Identité (plafonds alignés : 100 / 100 / 30) ──
 export const prenomSchema = z.string().trim().max(100);
-export const nomSchema = z.string().trim().max(100);
+// Convention « NOM Prénom » : le nom de famille est normalisé en MAJUSCULES au
+// point d'entrée commun (inscription, admin, « Mon compte »), les champs de
+// saisie se contentant de refléter la règle à la frappe. `.toUpperCase()` reste
+// un ZodString : `nomSchema.min(1, …)` chaîne toujours côté création admin.
+export const nomSchema = z.string().trim().toUpperCase().max(100);
 export const telSchema = z.string().trim().max(30);
 
 // ── Invariant « compte utilisateur » : au moins 1 enfant ET 1 accompagnant ──

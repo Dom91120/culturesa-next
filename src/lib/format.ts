@@ -41,6 +41,23 @@ export const DATETIME_FMT_FR = new Intl.DateTimeFormat("fr-FR", {
 });
 
 /**
+ * Saisie d'un NOM de famille : forcée en majuscules à la frappe (convention
+ * « NOM Prénom » de l'application). Posée en `onInput` sur un champ NON contrôlé
+ * (inscription, mon compte) ; un champ contrôlé passe simplement sa valeur par
+ * `toUpperCase()` dans son `onChange`. La position du curseur est restaurée —
+ * la casse ne change pas la longueur, une saisie au milieu du mot reste possible.
+ */
+export function upperCaseOnInput(e: React.FormEvent<HTMLInputElement>): void {
+  const el = e.currentTarget;
+  const upper = el.value.toUpperCase();
+  if (upper === el.value) return;
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  el.value = upper;
+  if (start !== null && end !== null) el.setSelectionRange(start, end);
+}
+
+/**
  * Formate un numéro de téléphone FR en groupes de 2 chiffres : "06 12 34 56 78".
  * Renvoie "—" si vide, ou la valeur brute si ce n'est pas un 10 chiffres.
  * (Réimplémente formatTel du legacy public/js/app.js.)

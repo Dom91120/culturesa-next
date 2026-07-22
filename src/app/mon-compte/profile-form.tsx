@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { initialActionState } from "@/lib/action-state";
+import { upperCaseOnInput } from "@/lib/format";
 import { updateProfileAction } from "./actions";
 
 type Role = "utilisateur" | "gestionnaire" | "administrateur";
@@ -65,7 +66,14 @@ export function ProfileForm({ profile }: { profile: Profile }) {
         <div className="form-grid">
           <div className="field">
             <label htmlFor="p-nom">Nom</label>
-            <input id="p-nom" name="nom" defaultValue={profile.nom} placeholder="Dupont" />
+            {/* Convention « NOM Prénom » : saisie forcée en majuscules. */}
+            <input
+              id="p-nom"
+              name="nom"
+              defaultValue={profile.nom}
+              placeholder="DUPONT"
+              onInput={upperCaseOnInput}
+            />
           </div>
           <div className="field">
             <label htmlFor="p-prenom">Prénom</label>

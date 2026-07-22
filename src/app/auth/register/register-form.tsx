@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PrivacyPolicyModal } from "@/components/privacy-policy-modal";
 import { signUp } from "@/lib/auth-client";
+import { upperCaseOnInput } from "@/lib/format";
 import { PWD_RULES } from "@/lib/password";
 import { useFormSubmit } from "@/lib/use-form-submit";
 import {
@@ -75,7 +76,9 @@ export function RegisterForm({
   // FormData et renvoie un message d'erreur (string) ou rien (succès → navigation).
   const submit = onSubmit(async (form) => {
     const prenom = String(form.get("prenom")).trim();
-    const nom = String(form.get("nom")).trim();
+    // Filet de l'auto-majuscule du champ (remplissage automatique, collage) :
+    // l'inscription publique passe par Better Auth, pas par `nomSchema`.
+    const nom = String(form.get("nom")).trim().toUpperCase();
     const email = String(form.get("email")).trim();
     const password2 = String(form.get("password2"));
     const enfants = Number(form.get("enfants"));
@@ -146,7 +149,15 @@ export function RegisterForm({
             <label htmlFor="c-nom">
               Nom <span className="required-star">*</span>
             </label>
-            <input id="c-nom" name="nom" type="text" required placeholder="Dupont" />
+            {/* Convention « NOM Prénom » : saisie forcée en majuscules. */}
+            <input
+              id="c-nom"
+              name="nom"
+              type="text"
+              required
+              placeholder="DUPONT"
+              onInput={upperCaseOnInput}
+            />
           </div>
           <div className="field">
             <label htmlFor="c-prenom">

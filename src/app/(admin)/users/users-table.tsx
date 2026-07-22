@@ -358,94 +358,106 @@ export function UsersTable({
       </div>
 
       <div style={{ marginTop: ".5rem", display: "flex", alignItems: "center", gap: ".75rem" }}>
-        {/* Compteur masqué quand une ligne est cochée : laisse la place à la barre d'actions. */}
-        {!selected && (
-          <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-            {total === 0
-              ? "0 compte"
-              : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
-          </span>
-        )}
+        {/* Compteur + barre d'actions à gauche, dans un bloc extensible : associé au
+            ressort de même poids à droite, il centre la pagination sur la largeur. */}
         <div
           style={{
-            visibility: selected ? "visible" : "hidden",
+            flex: 1,
+            minWidth: 0,
             display: "flex",
             alignItems: "center",
             gap: ".75rem",
-            flex: 1,
           }}
         >
-          <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>1 sélectionné</span>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={editSelected}
+          {/* Compteur masqué quand une ligne est cochée : laisse la place à la barre d'actions. */}
+          {!selected && (
+            <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+              {total === 0
+                ? "0 compte"
+                : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
+            </span>
+          )}
+          <div
             style={{
-              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-              color: "var(--accent)",
-              fontSize: ".68rem",
-              padding: ".25rem .65rem",
+              visibility: selected ? "visible" : "hidden",
+              display: "flex",
+              alignItems: "center",
+              gap: ".75rem",
+              flex: 1,
             }}
           >
-            ✏️ Modifier
-          </button>
-          {!selected?.anonymized && (
+            <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>1 sélectionné</span>
             <button
               type="button"
               className="btn btn-ghost"
-              onClick={() => selected && setAnonymizeTarget(selected)}
-              disabled={pending}
+              onClick={editSelected}
               style={{
-                ...GHOST_DANGER_STYLE,
-                fontSize: ".68rem",
-                padding: ".25rem .65rem",
-              }}
-              title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
-            >
-              🗑️ Anonymiser
-            </button>
-          )}
-          {selected?.bookingCount === 0 && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => selected && setDeleteTarget(selected)}
-              disabled={pending}
-              style={{
-                ...GHOST_DANGER_STYLE,
-                fontSize: ".68rem",
-                padding: ".25rem .65rem",
-              }}
-              title="Compte sans réservation : suppression physique de la base (test, spam)"
-            >
-              🗑️ Supprimer définitivement
-            </button>
-          )}
-          {selected && !selected.emailVerified && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={resendConfirmation}
-              disabled={pending}
-              style={{
-                borderColor: "rgba(232,164,90,.4)",
-                color: "var(--warn)",
+                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                color: "var(--accent)",
                 fontSize: ".68rem",
                 padding: ".25rem .65rem",
               }}
             >
-              🖅 Renvoyer le mail de confirmation
+              ✏️ Modifier
             </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={clearSelection}
-            style={{ fontSize: ".68rem", padding: ".25rem .65rem" }}
-            title="Désélectionner le compte"
-          >
-            Annuler
-          </button>
+            {!selected?.anonymized && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => selected && setAnonymizeTarget(selected)}
+                disabled={pending}
+                style={{
+                  ...GHOST_DANGER_STYLE,
+                  fontSize: ".68rem",
+                  padding: ".25rem .65rem",
+                }}
+                title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
+              >
+                🗑️ Anonymiser
+              </button>
+            )}
+            {selected?.bookingCount === 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => selected && setDeleteTarget(selected)}
+                disabled={pending}
+                style={{
+                  ...GHOST_DANGER_STYLE,
+                  fontSize: ".68rem",
+                  padding: ".25rem .65rem",
+                }}
+                title="Compte sans réservation : suppression physique de la base (test, spam)"
+              >
+                🗑️ Supprimer définitivement
+              </button>
+            )}
+            {selected && !selected.emailVerified && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={resendConfirmation}
+                disabled={pending}
+                style={{
+                  borderColor: "rgba(232,164,90,.4)",
+                  color: "var(--warn)",
+                  fontSize: ".68rem",
+                  padding: ".25rem .65rem",
+                }}
+              >
+                🖅 Renvoyer le mail de confirmation
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={clearSelection}
+              style={{ fontSize: ".68rem", padding: ".25rem .65rem" }}
+              title="Désélectionner le compte"
+            >
+              Annuler
+            </button>
+          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
           <button
@@ -470,6 +482,8 @@ export function UsersTable({
             ›
           </button>
         </div>
+        {/* Ressort symétrique du bloc de gauche → pagination centrée. */}
+        <span style={{ flex: 1 }} />
       </div>
 
       {anonymizeTarget && (

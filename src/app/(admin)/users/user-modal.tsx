@@ -185,7 +185,8 @@ export function UserModal({
             value={nom}
             placeholder="Nom"
             autoComplete="off"
-            onChange={(e) => setNom(e.target.value)}
+            // Convention « NOM Prénom » : le nom est stocké en majuscules.
+            onChange={(e) => setNom(e.target.value.toUpperCase())}
           />
         </div>
         <div className="field">
