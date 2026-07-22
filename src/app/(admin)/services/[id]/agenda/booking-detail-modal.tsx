@@ -27,6 +27,11 @@ const FIELD_TITLE_STYLE: React.CSSProperties = {
  * - Thème : champ libre (themesMode "libre") ou <select> (themesMode "liste").
  * - Verrou : une réservation pointée n'est pas modifiable (édition désactivée),
  *   mais les actions secondaires (pointage / suppression) restent accessibles.
+ * - `canEdit` / `editBookingId` : l'édition des participants et du thème est découplée du
+ *   mode consultation (`readOnly`). Pour une réservation RÉCURRENTE non validée, la fiche
+ *   reste en consultation (actions de gestion masquées) mais les compteurs sont modifiables
+ *   et l'enregistrement cible la réservation PARENTE (`editBookingId`), qui propage aux
+ *   occurrences.
  */
 export function BookingDetailModal({
   booking,
@@ -40,6 +45,9 @@ export function BookingDetailModal({
   slotStart,
   slotEnd,
   readOnly,
+  canEdit,
+  editBookingId,
+  notice,
   onClose,
   onSaved,
   run,
@@ -55,6 +63,12 @@ export function BookingDetailModal({
   slotStart: string;
   slotEnd: string;
   readOnly: boolean;
+  // Participants + thème modifiables (indépendant de `readOnly`).
+  canEdit: boolean;
+  // Réservation cible de l'enregistrement (la PARENTE pour une occurrence récurrente).
+  editBookingId: number;
+  // Bandeau explicatif (portée récurrente, consultation…) — le verrou pointage prime.
+  notice: string | null;
   onClose: () => void;
   onSaved: () => void;
   // Exécuteur d'action du parent (contrat { ok, error } : un échec affiche un toast).
@@ -68,6 +82,8 @@ export function BookingDetailModal({
   const [saving, setSaving] = useState(false);
 
   const locked = booking.pointage != null;
+  // Édition effective des participants / du thème.
+  const editable = canEdit && !locked;
   // Le champ thème n'apparaît que si le service est en mode thèmes (liste) OU si la
   // réservation a déjà un thème non vide (rester fidèle au legacy sans le masquer à tort).
   const showTheme = themesMode === "liste" || booking.theme.trim() !== "";
@@ -88,12 +104,12 @@ export function BookingDetailModal({
   }
 
   function save() {
-    if (!dirty || locked) return;
+    if (!dirty || !editable) return;
     setSaving(true);
     setError(null);
     startTransition(async () => {
       const res = await updateBookingDetailAction({
-        bookingId: booking.id,
+        bookingId: editBookingId,
         serviceId,
         enfants: Number(enfants) || 0,
         accompagnants: Number(accompagnants) || 0,
@@ -148,16 +164,10 @@ export function BookingDetailModal({
         </span>
       </div>
 
-      {readOnly ? (
+      {(locked || notice) && (
         <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".2rem 0 .6rem" }}>
-          Consultation — réservation récurrente (édition en vue « Modèle de période »).
+          {locked ? "Réservation pointée — édition verrouillée." : notice}
         </p>
-      ) : (
-        locked && (
-          <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".2rem 0 .6rem" }}>
-            Réservation pointée — édition verrouillée.
-          </p>
-        )
       )}
 
       <div className="form-grid">
@@ -190,7 +200,7 @@ export function BookingDetailModal({
                 min={0}
                 max={99}
                 value={enfants}
-                disabled={locked || readOnly}
+                disabled={!editable}
                 onChange={(e) => setEnfants(e.target.value)}
               />
               <span className="pcm-counter-name">{plural(nEnf, "Enfant", "Enfants")}</span>
@@ -205,7 +215,7 @@ export function BookingDetailModal({
                 min={0}
                 max={99}
                 value={accompagnants}
-                disabled={locked || readOnly}
+                disabled={!editable}
                 onChange={(e) => setAccompagnants(e.target.value)}
               />
               <span className="pcm-counter-name">{plural(nAcc, "Adulte", "Adultes")}</span>
@@ -219,7 +229,7 @@ export function BookingDetailModal({
               <select
                 id="bdet-theme"
                 value={theme}
-                disabled={locked || readOnly}
+                disabled={!editable}
                 onChange={(e) => setTheme(e.target.value)}
               >
                 <option value="">— aucun —</option>
@@ -233,7 +243,7 @@ export function BookingDetailModal({
               <input
                 id="bdet-theme"
                 value={theme}
-                disabled={locked || readOnly}
+                disabled={!editable}
                 onChange={(e) => setTheme(e.target.value)}
                 placeholder="(optionnel)"
               />
@@ -249,9 +259,9 @@ export function BookingDetailModal({
         </p>
       )}
 
-      {!readOnly && (
+      {editable && (
         <div className="btn-row">
-          {dirty && !locked && (
+          {dirty && (
             <button type="button" className="btn btn-ghost" onClick={reset}>
               Annuler
             </button>
@@ -259,7 +269,7 @@ export function BookingDetailModal({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={!dirty || locked || saving}
+            disabled={!dirty || saving}
             onClick={save}
           >
             💾 Enregistrer

@@ -199,7 +199,7 @@ export function ServiceRgpdPanel({
                           className="btn btn-ghost"
                           onClick={() => anonymizeOne(u.id, fullName)}
                           disabled={pending}
-                          title="Effacer (anonymiser)"
+                          title="Anonymiser"
                           style={{
                             padding: ".05rem .5rem",
                             fontSize: ".72rem",
@@ -270,7 +270,7 @@ export function ServiceRgpdPanel({
           lineHeight: 1.5,
         }}
       >
-        <strong style={{ color: "var(--text)", marginRight: ".3em" }}>🗑️ Effacer</strong> vide les
+        <strong style={{ color: "var(--text)", marginRight: ".3em" }}>🗑️ Anonymiser</strong> vide les
         champs nom, prénom, e-mail et téléphone, et verrouille le compte. L&apos;enregistrement est
         conservé pour préserver les statistiques (réservations passées notamment).
         <br />

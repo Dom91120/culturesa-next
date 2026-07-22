@@ -3723,10 +3723,28 @@ export function AgendaGrid({
                 .filter((d): d is string => !!d)
                 .sort()
             : [];
-          // Lecture seule si la fiche pointe une réservation récurrente PARENTE (édition via
-          // ses occurrences), ou si elle est verrouillée par un pointage (pointée / parent à
-          // miroir pointé) → ni édition, ni suppression, ni validation depuis la fiche.
+          // Lecture seule si la fiche pointe une réservation récurrente PARENTE (les actions
+          // de gestion passent par les occurrences), ou si elle est verrouillée par un
+          // pointage (pointée / parent à miroir pointé) → ni suppression, ni validation.
           const readOnly = !!recurSlot || lockedByPointage(bk);
+          // Récurrent : la fiche peut porter la PARENTE (vue Modèle) ou une occurrence
+          // miroir (vue Semaine réelle) — dans les deux cas l'édition cible la parente,
+          // qui propage aux occurrences.
+          const parentBk = actionBooking(bk);
+          const isRecurring = !!recurSlot || bk.parentBookingId != null;
+          // Participants / thème : modifiables tant que la réservation n'est pas validée
+          // (récurrent), sinon comme avant (tout sauf verrou pointage).
+          const canEdit = isRecurring
+            ? !parentBk.validated && !lockedByPointage(parentBk)
+            : !readOnly;
+          const editBookingId = isRecurring ? parentBk.id : bk.id;
+          const notice = !isRecurring
+            ? null
+            : canEdit
+              ? "Réservation récurrente — les participants et le thème s'appliquent à toutes les occurrences."
+              : parentBk.validated
+                ? "Réservation récurrente validée — dévalidez-la pour modifier les participants."
+                : "Consultation — réservation récurrente.";
           return (
             <BookingDetailModal
               booking={bk}
@@ -3740,6 +3758,9 @@ export function AgendaGrid({
               slotStart={slot?.startTime ?? ""}
               slotEnd={slot?.endTime ?? ""}
               readOnly={readOnly}
+              canEdit={canEdit}
+              editBookingId={editBookingId}
+              notice={notice}
               onClose={() => setDetail(null)}
               onSaved={() => {
                 setDetail(null);
