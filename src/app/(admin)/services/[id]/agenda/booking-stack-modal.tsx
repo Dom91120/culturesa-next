@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { ModalOverlay, PointagePill } from "@/components/agenda-shared";
 import { type AgendaBlockBase, badgeStyle, DAY_NAMES, toMinutes } from "@/lib/agenda-core";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
@@ -74,6 +75,43 @@ export function BookingStackModal({
   onDragEndBooking: () => void;
   onClose: () => void;
 }) {
+  // ── Glisser-déplacer d'un badge vers la grille ──
+  // La pile RESTE affichée tant que le glissé survole sa boîte ; quand le pointeur en
+  // SORT, elle est MASQUÉE (visibility) et non démontée : la grille derrière devient
+  // cible de dépôt (un élément hidden ne capte plus rien), mais le badge SOURCE reste
+  // monté — condition pour que son dragend tire TOUJOURS, y compris sur une annulation
+  // (Échap, dépôt hors cible, voire hors fenêtre). Démonter la modale à la sortie
+  // laissait l'estompage draggingId en place sur ces annulations, dragend ne tirant
+  // jamais sur un nœud retiré du DOM. La fermeture réelle n'a lieu qu'au dragend.
+  // Sortie détectée par un écouteur document `dragover` (il tire en continu pendant un
+  // drag HTML5) comparant le pointeur au rect du <dialog> — plus robuste qu'un comptage
+  // dragenter/dragleave, sensible aux éléments enfants.
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    if (!dragActive) return;
+    const dialog = boxRef.current?.closest("dialog");
+    if (!dialog) return;
+    // Constante rétrécie (non nullable) pour la closure — évite le non-null assertion.
+    const box = dialog;
+    function onDocDragOver(e: DragEvent) {
+      const r = box.getBoundingClientRect();
+      const outside =
+        e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      if (outside) setHidden(true);
+    }
+    document.addEventListener("dragover", onDocDragOver);
+    return () => document.removeEventListener("dragover", onDocDragOver);
+  }, [dragActive]);
+  // Masquage posé sur l'OVERLAY (le parent de la boîte, rendu par ModalOverlay) en DOM
+  // direct — même approche que dimBadges côté grille : le composant ne contrôle pas cet
+  // élément. visibility (≠ display) : la boîte garde son rect, encore lu par l'écouteur.
+  useEffect(() => {
+    const overlay = boxRef.current?.closest<HTMLElement>(".modal-overlay");
+    if (overlay) overlay.style.visibility = hidden ? "hidden" : "";
+  }, [hidden]);
+
   // Récurrent affiché en Semaine réelle : la gestion des RÉSERVATIONS (valider / supprimer
   // / déplacer / copier / pointer) y est autorisée — les gestes portent sur la réservation
   // parente, résolue côté grille via les callbacks.
@@ -118,6 +156,7 @@ export function BookingStackModal({
         ×
       </button>
       <div
+        ref={boxRef}
         style={{
           display: "flex",
           alignItems: "center",
@@ -228,14 +267,10 @@ export function BookingStackModal({
         >
           <div className="cell-stack-list">
             {[...block.bookings]
-              // Tri des badges par demandeur (puis structure, puis nom) pour
-              // regrouper visuellement les réservations d'un même demandeur.
-              .sort(
-                (a, b) =>
-                  a.demandeur.localeCompare(b.demandeur, "fr", { sensitivity: "base" }) ||
-                  a.structure.localeCompare(b.structure, "fr", { sensitivity: "base" }) ||
-                  a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
-              )
+              // Tri des badges par date de DÉPÔT (créées en premier en haut) — ISO 8601,
+              // comparable en chaîne. Départage par id : deux réservations peuvent
+              // partager la même date, un coller reprenant celle de sa source.
+              .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)
               .map((bk) => (
                 // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
                 <div
@@ -259,14 +294,27 @@ export function BookingStackModal({
                     lockedByPointage(bk)
                       ? undefined
                       : (e) => {
-                          // On amorce le drag, PUIS le parent ferme la pile au tick
-                          // suivant pour libérer la grille comme cible de dépôt
-                          // (port legacy _onDragStartFromStackModal).
+                          // On amorce le drag ; la pile reste ouverte et ne se fermera
+                          // qu'à la SORTIE de la boîte (cf. effet dragActive plus haut),
+                          // libérant alors la grille comme cible de dépôt.
                           e.stopPropagation();
+                          setDragActive(true);
                           onDragStartBooking(bk);
                         }
                   }
-                  onDragEnd={lockedByPointage(bk) ? undefined : () => onDragEndBooking()}
+                  onDragEnd={
+                    lockedByPointage(bk)
+                      ? undefined
+                      : () => {
+                          // Tire TOUJOURS (la source reste montée, la pile n'étant que
+                          // masquée) : lève l'estompage, puis — si le glissé était sorti
+                          // de la boîte (dépôt sur la grille, Échap, dépôt hors cible) —
+                          // ferme la pile pour de bon.
+                          setDragActive(false);
+                          onDragEndBooking();
+                          if (hidden) onClose();
+                        }
+                  }
                   onClick={() => {
                     // Action rapide (valider = parente, pointer = occurrence) si un mode est
                     // actif ; sinon la modale détail s'empile par-dessus (fermeture y ramène).

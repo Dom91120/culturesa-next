@@ -145,6 +145,8 @@ export type Booking = {
   email: string;
   demandeur: string;
   structure: string;
+  // Date de dépôt ISO (vide sur un enfant côté payload, réhydratée depuis la parente).
+  createdAt: string;
 };
 // UserOpt (usager de la modale de création) : type déménagé dans
 // booking-create-modal.tsx, réimporté ici pour le chargement à la demande.
@@ -308,6 +310,7 @@ export function AgendaGrid({
               email: parent.email,
               demandeur: parent.demandeur,
               structure: parent.structure,
+              createdAt: parent.createdAt,
             }
           : {}),
         dayKey: recurDay.get(b.slotId) ?? uniqDay.get(b.slotId) ?? "",
@@ -3711,10 +3714,12 @@ export function AgendaGrid({
             setCtxMenu({ x, y, kind: "booking", booking: bk });
           }}
           onDragStartBooking={(bk) => {
-            // On amorce le drag, PUIS on ferme la pile au tick suivant pour libérer
-            // la grille comme cible de dépôt (port legacy _onDragStartFromStackModal).
+            // On amorce le drag ; la pile se MASQUE d'elle-même quand le glissé sort de
+            // sa boîte (libérant la grille comme cible de dépôt) et ne se ferme (onClose)
+            // qu'au dragend — la source restant montée, dragend tire toujours et
+            // onDragEndBooking lève l'estompage même sur une annulation (Échap, dépôt
+            // hors cible). Cf. l'effet dragActive de BookingStackModal.
             setDraggingId(bk.id);
-            setTimeout(() => setStackKey(null), 0);
           }}
           onDragEndBooking={() => setDraggingId(null)}
           onClose={() => setStackKey(null)}
