@@ -201,6 +201,20 @@ model Service {
   // true par défaut = comportement historique (enfants + accompagnants).
   gaugeAccompagnants    Boolean    @default(true)
 
+  // Réglages du mode « Création de créneau » de l'agenda, mémorisés d'une visite à
+  // l'autre. Comme `capacity`, ce sont des défauts DU SERVICE (partagés par ses
+  // gestionnaires), pas des préférences de poste.
+  //   createKind         : sélecteur de type de créneau ("rec" | "uniq" | "multi").
+  //   createParityScoped : sélecteur Semaine A/B (sans effet hors service A/B).
+  //   createJauge        : mode jauge des créneaux créés.
+  //   createDemandeurIds : demandeurs autorisés par défaut (vide = ouvert à tous).
+  //     Pas de FK possible sur un tableau : la liste est filtrée contre le
+  //     référentiel à la lecture, un demandeur supprimé n'y laisse qu'un id mort.
+  createKind            String     @default("uniq")
+  createParityScoped    Boolean    @default(false)
+  createJauge           Boolean    @default(false)
+  createDemandeurIds    Int[]      @default([])
+
   // Délai d'auto-validation en minutes SIGNÉES (cf. services/auto-validate.ts).
   //   0 = jamais ; négatif = N minutes OUVRÉES (jours actifs ∩ plages) ;
   //   positif = N minutes calendaires après `booking.autoValidateFrom`.

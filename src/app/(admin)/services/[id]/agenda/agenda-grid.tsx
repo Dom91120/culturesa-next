@@ -81,6 +81,7 @@ import {
   revertSlotBatchAction,
   setBookingPointageAction,
   setBookingValidatedAction,
+  setServiceCreatePrefsAction,
   setServiceDefaultCapacityAction,
   updateSlotBatchAction,
 } from "./actions";
@@ -90,6 +91,7 @@ import { BookingCreateModal, type UserOpt } from "./booking-create-modal";
 import { BookingDeleteModal } from "./booking-delete-modal";
 import { BookingDetailModal } from "./booking-detail-modal";
 import { BookingStackModal } from "./booking-stack-modal";
+import { asCreateKind, type CreateKind, sanitizeDemIds } from "./create-prefs";
 import { DefaultDemandeursModal } from "./default-demandeurs-modal";
 import { SlotConfigModal } from "./slot-config-modal";
 
@@ -101,6 +103,11 @@ type Service = {
   capacity: number;
   themesMode: "libre" | "liste";
   gaugeAccompagnants: boolean;
+  // Réglages mémorisés du mode création (cf. create-prefs.ts).
+  createKind: string;
+  createParityScoped: boolean;
+  createJauge: boolean;
+  createDemandeurIds: number[];
 };
 type Period = {
   id: number;
@@ -209,7 +216,7 @@ type HResizeDrag = {
 // remplace l'ancienne case « Création multiple ». L'icône reprend les pastilles de
 // légende (is-rec = récurrent jaune, is-uniq = ponctuel vert). L'état « rec » n'est
 // proposé que si le service a un mode récurrent (cf. modes.recurringMode).
-type CreateKind = "rec" | "uniq" | "multi";
+// (Le type vit dans create-prefs.ts, qui mémorise ce sélecteur d'une visite à l'autre.)
 const CREATE_KINDS: {
   kind: CreateKind;
   swatch: string;
@@ -332,14 +339,19 @@ export function AgendaGrid({
   // CHAQUE semaine de la période active (même parité A/B en mode A/B), dates fermées
   // sautées — cf. uniqueCreateDates. En « Modèle de période » la création est toujours
   // récurrente (le sélecteur est masqué). Défaut "uniq" (comportement historique).
-  const [createKind, setCreateKind] = useState<CreateKind>("uniq");
-  // Mode « Semaine A/B » (service A/B, bouton A/B de l'en-tête, OFF par défaut) : quand il
-  // est activé, les créneaux RÉCURRENTS créés sont limités à la parité de la semaine
-  // affichée (weeks = "A"/"B") ; désactivé = toutes les semaines (weeks = "").
-  const [parityScoped, setParityScoped] = useState(false);
-  // Mode « Jauge » (icône capsule, OFF par défaut) : les créneaux créés portent
-  // jauge = ce mode au moment de la création (colonne slots.jauge).
-  const [jaugeMode, setJaugeMode] = useState(false);
+  // Les 4 réglages ci-dessous sont MÉMORISÉS sur le service (cf. create-prefs.ts) :
+  // ils s'initialisent depuis les props serveur — d'où l'absence d'effet de relecture,
+  // qui désaccorderait l'hydratation — et sont réenregistrés à chaque changement.
+  const [createKind, setCreateKind] = useState<CreateKind>(() =>
+    asCreateKind(service.createKind, modes.recurringMode),
+  );
+  // Mode « Semaine A/B » (service A/B, bouton A/B de l'en-tête) : quand il est activé,
+  // les créneaux RÉCURRENTS créés sont limités à la parité de la semaine affichée
+  // (weeks = "A"/"B") ; désactivé = toutes les semaines (weeks = "").
+  const [parityScoped, setParityScoped] = useState(service.createParityScoped);
+  // Mode « Jauge » (icône capsule) : les créneaux créés portent jauge = ce mode au
+  // moment de la création (colonne slots.jauge).
+  const [jaugeMode, setJaugeMode] = useState(service.createJauge);
   // Capacité appliquée aux créneaux créés en mode création (champ remplaçant la
   // légende). Capacité par défaut UNIQUE du service, autosauvegardée.
   const [capStr, setCapStr] = useState(String(service.capacity));
@@ -378,8 +390,36 @@ export function AgendaGrid({
     }, 500);
   }
   // Demandeurs autorisés par défaut appliqués aux créneaux créés (vide = ouvert à tous).
-  const [createDemIds, setCreateDemIds] = useState<number[]>([]);
+  // Mémorisés eux aussi ; les ids d'un demandeur retiré du service depuis sont écartés.
+  const [createDemIds, setCreateDemIds] = useState<number[]>(() =>
+    sanitizeDemIds(
+      service.createDemandeurIds,
+      serviceDemandeurs.map((d) => d.id),
+    ),
+  );
   const [createDemModal, setCreateDemModal] = useState(false);
+
+  // ── Mémorisation des réglages du mode création (cf. create-prefs.ts) ──
+  // Un seul effet, d'ÉCRITURE : l'état initial vient déjà des props serveur. Le verrou
+  // retient son premier passage, qui réenregistrerait inutilement les valeurs relues
+  // (et écraserait un assainissement — « rec » retombé sur « uniq » — avant même que le
+  // gestionnaire n'ait touché à quoi que ce soit).
+  const prefsMounted = useRef(false);
+  useEffect(() => {
+    if (!prefsMounted.current) {
+      prefsMounted.current = true;
+      return;
+    }
+    startTransition(async () => {
+      await setServiceCreatePrefsAction({
+        serviceId: service.id,
+        createKind,
+        createParityScoped: parityScoped,
+        createJauge: jaugeMode,
+        createDemandeurIds: createDemIds,
+      });
+    });
+  }, [service.id, createKind, parityScoped, jaugeMode, createDemIds]);
   // Glisser-créer en cours : top des colonnes (commun), quart de départ/courant (en
   // minutes, snappés), et jour de départ/courant (le glissé horizontal sélectionne
   // toutes les colonnes entre startDay et curDay → un créneau par colonne au relâché).

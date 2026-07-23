@@ -344,6 +344,42 @@ export async function setServiceDefaultCapacityAction(input: {
 }
 
 /**
+ * Mode création (agenda) : mémorise les réglages du panneau — type de créneau, portée
+ * Semaine A/B, jauge et demandeurs autorisés par défaut — pour que le gestionnaire les
+ * retrouve à sa prochaine visite. Défauts DU SERVICE, comme la capacité.
+ *
+ * Pas de `revalidatePath` : ces valeurs ne sont lues qu'au montage de la grille, et
+ * l'agenda est une page lourde qu'un simple basculement de bouton n'a pas à recharger.
+ * Les ids de demandeurs sont restreints à ceux configurés pour le service (un id
+ * arbitraire créerait des créneaux ouverts à un demandeur étranger au service).
+ */
+export async function setServiceCreatePrefsAction(input: {
+  serviceId: string;
+  createKind: string;
+  createParityScoped: boolean;
+  createJauge: boolean;
+  createDemandeurIds: number[];
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireServiceManager(input.serviceId);
+  const kind = ["rec", "uniq", "multi"].includes(input.createKind) ? input.createKind : "uniq";
+  const configured = await prisma.serviceDemandeurSettings.findMany({
+    where: { serviceId: input.serviceId },
+    select: { demandeurId: true },
+  });
+  const allowed = new Set(configured.map((r) => r.demandeurId));
+  await prisma.service.update({
+    where: { id: input.serviceId },
+    data: {
+      createKind: kind,
+      createParityScoped: input.createParityScoped,
+      createJauge: input.createJauge,
+      createDemandeurIds: input.createDemandeurIds.filter((id) => allowed.has(id)),
+    },
+  });
+  return { ok: true };
+}
+
+/**
  * Liste des usagers proposés dans la modale de création de réservation. Chargée À LA
  * DEMANDE (ouverture de la modale) : auparavant TOUS les comptes étaient chargés par
  * la page agenda et re-fetchés à chaque tick d'auto-rafraîchissement (audit perf).

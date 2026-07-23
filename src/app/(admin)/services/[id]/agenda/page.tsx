@@ -23,6 +23,11 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       themesMode: true,
       showPreviousExercices: true,
       gaugeAccompagnants: true,
+      // Réglages mémorisés du mode « Création de créneau » (cf. agenda/create-prefs.ts).
+      createKind: true,
+      createParityScoped: true,
+      createJauge: true,
+      createDemandeurIds: true,
     },
   });
   if (!service) notFound();
