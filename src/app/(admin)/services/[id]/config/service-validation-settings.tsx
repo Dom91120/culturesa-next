@@ -162,9 +162,9 @@ export function ServiceValidationSettings(props: Props) {
     }, 700);
   }
 
-  // Auto-validation sur « Jamais » (délai 0) → aucune séance auto-validée, donc le digest
-  // n'a pas d'objet : on grise et on verrouille le bloc de notification des gestionnaires.
-  const autoOff = autoValidationDelay === 0;
+  // (La notification des gestionnaires ne dépend PLUS de l'auto-validation : elle porte
+  // aussi le récapitulatif des nouvelles réservations, qui a un objet même quand
+  // l'auto-validation est sur « Jamais ». Le bloc reste donc toujours actif.)
 
   return (
     <>
@@ -202,16 +202,15 @@ export function ServiceValidationSettings(props: Props) {
         </select>
       </GlobalRow>
 
-      {/* Auto-validation : notification des gestionnaires — radios à droite, comme les
-          contrôles au-dessus. Le libellé reste en haut (align start), mais la 1re option est
-          descendue sur la « ligne de contrôle » — là où les Switch se centrent (≈ moitié de
-          la ligne desc) — pour que « Aucune » soit à la même hauteur que les interrupteurs
-          des rangées précédentes. Grisé quand l'auto-validation est sur « Jamais ». */}
+      {/* Notification des gestionnaires — radios à droite, comme les contrôles au-dessus.
+          Le libellé reste en haut (align start), mais la 1re option est descendue sur la
+          « ligne de contrôle » — là où les Switch se centrent (≈ moitié de la ligne desc) —
+          pour que « Aucune » soit à la même hauteur que les interrupteurs des rangées
+          précédentes. */}
       <GlobalRow
-        label="Auto-validation : notification des gestionnaires"
-        desc="Fréquence du récapitulatif des demandes auto-validées envoyé aux gestionnaires."
+        label="Notification des gestionnaires"
+        desc="Fréquence de notification des gestionnaires."
         align="start"
-        disabled={autoOff}
       >
         <div
           style={{
@@ -219,7 +218,6 @@ export function ServiceValidationSettings(props: Props) {
             flexDirection: "column",
             gap: ".45rem",
             paddingTop: ".5rem",
-            opacity: autoOff ? 0.45 : 1,
           }}
         >
           <label style={radioRow}>
@@ -227,7 +225,6 @@ export function ServiceValidationSettings(props: Props) {
               type="radio"
               name="mgr-notice"
               checked={mgrMode === "none"}
-              disabled={autoOff}
               onChange={() => {
                 setMgrMode("none");
                 save({ mgrNoticeMode: "none" });
@@ -242,7 +239,6 @@ export function ServiceValidationSettings(props: Props) {
               type="radio"
               name="mgr-notice"
               checked={mgrMode === "hours"}
-              disabled={autoOff}
               onChange={() => {
                 setMgrMode("hours");
                 save({ mgrNoticeMode: "hours" });
@@ -257,7 +253,7 @@ export function ServiceValidationSettings(props: Props) {
               min={60}
               max={168 * 60}
               maxLength={6}
-              disabled={autoOff || mgrMode !== "hours"}
+              disabled={mgrMode !== "hours"}
               onChange={(v) => {
                 const h = hourOf(v, 1, 168);
                 setMgrInterval(h);
@@ -273,7 +269,6 @@ export function ServiceValidationSettings(props: Props) {
               type="radio"
               name="mgr-notice"
               checked={mgrMode === "daily"}
-              disabled={autoOff}
               onChange={() => {
                 setMgrMode("daily");
                 save({ mgrNoticeMode: "daily" });
@@ -287,7 +282,7 @@ export function ServiceValidationSettings(props: Props) {
               step={60}
               min={0}
               max={23 * 60}
-              disabled={autoOff || mgrMode !== "daily"}
+              disabled={mgrMode !== "daily"}
               onChange={(v) => {
                 const h = hourOf(v, 0, 23);
                 setMgrHour(h);
@@ -302,7 +297,6 @@ export function ServiceValidationSettings(props: Props) {
               type="radio"
               name="mgr-notice"
               checked={mgrMode === "weekly"}
-              disabled={autoOff}
               onChange={() => {
                 setMgrMode("weekly");
                 save({ mgrNoticeMode: "weekly" });
@@ -312,7 +306,7 @@ export function ServiceValidationSettings(props: Props) {
             Hebdomadaire le
             <select
               value={mgrWeekday}
-              disabled={autoOff || mgrMode !== "weekly"}
+              disabled={mgrMode !== "weekly"}
               onChange={(e) => {
                 setMgrWeekday(e.target.value);
                 setMgrMode("weekly");
@@ -333,7 +327,7 @@ export function ServiceValidationSettings(props: Props) {
               step={60}
               min={0}
               max={23 * 60}
-              disabled={autoOff || mgrMode !== "weekly"}
+              disabled={mgrMode !== "weekly"}
               onChange={(v) => {
                 const h = hourOf(v, 0, 23);
                 setMgrHour(h);
