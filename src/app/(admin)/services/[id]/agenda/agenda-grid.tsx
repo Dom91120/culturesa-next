@@ -2592,13 +2592,19 @@ export function AgendaGrid({
                   setStackKey({ slotId: b.slotId, dayKey: b.dayKey });
                 }}
               >
-                {(
-                  [
-                    ...(b.bookings[2] ? [{ bk: b.bookings[2], cls: "stack-back2" }] : []),
-                    ...(b.bookings[1] ? [{ bk: b.bookings[1], cls: "stack-back" }] : []),
-                    { bk: b.bookings[0], cls: "stack-front" },
-                  ] as { bk: Booking; cls: string }[]
-                ).map(({ bk, cls }) => (
+                {((): { bk: Booking; cls: string }[] => {
+                  // Badges de la pile triés par date de DÉPÔT, la plus récente DEVANT
+                  // (départage id : un coller reprend la date de sa source). Rendu du
+                  // plus profond au plus proche (back2 → front).
+                  const recent = [...b.bookings].sort(
+                    (x, y) => y.createdAt.localeCompare(x.createdAt) || y.id - x.id,
+                  );
+                  return [
+                    ...(recent[2] ? [{ bk: recent[2], cls: "stack-back2" }] : []),
+                    ...(recent[1] ? [{ bk: recent[1], cls: "stack-back" }] : []),
+                    { bk: recent[0], cls: "stack-front" },
+                  ];
+                })().map(({ bk, cls }) => (
                   <div key={bk.id} className={cls}>
                     <div
                       className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}`}
