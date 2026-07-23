@@ -21,9 +21,10 @@ import {
 } from "@/server/services/mail-templates";
 import type { KindData } from "./echanges-config";
 
-// E-mails « système » (compte / sécurité + test) + digest, contenu modifiable. Cet ordre
-// détermine l'affichage dans Administration › Échanges. « E-mail de test » est placé après
-// le préavis RGPD ; « Auto-validations » (digest, réglé par service) figure en dernier.
+// E-mails « système » (compte / sécurité + test) + notifications aux gestionnaires, contenu
+// modifiable. Cet ordre détermine l'affichage dans Administration › Échanges. « E-mail de
+// test » est placé après le préavis RGPD ; les deux récapitulatifs destinés aux
+// gestionnaires ferment la liste, « Nouvelles réservations » après « Auto-validations ».
 export const SYSTEM_MAIL_KINDS = [
   "email_verification",
   "password_reset",
@@ -31,6 +32,7 @@ export const SYSTEM_MAIL_KINDS = [
   "account_deletion_notice",
   "email_test",
   "manager_digest",
+  "manager_new_bookings",
 ] as const satisfies readonly TemplateKind[];
 
 // Libellés / descriptions / destinataire PAR DÉFAUT des types d'e-mail intégrés (repli code).
@@ -101,6 +103,12 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
       "Récapitulatif des réservations validées automatiquement, envoyé aux gestionnaires du service (rôle gestionnaire, via leur rattachement). Fréquence réglée par service (Paramètres > Réservations).",
     recipient: "Les gestionnaires du service",
   },
+  manager_new_bookings: {
+    label: "Nouvelles réservations",
+    description:
+      "Récapitulatif des réservations déposées depuis la dernière notification — demandes en attente ET confirmées, groupées par nature dans la liste —, envoyé aux gestionnaires du service. Même fréquence que « Auto-validations » (Paramètres > Réservations).",
+    recipient: "Les gestionnaires du service",
+  },
 };
 
 export type MailTypeMeta = { label: string; description: string; recipient: string };
@@ -155,10 +163,10 @@ export async function getMailRows(
       description: m.description,
       recipient: m.recipient,
       locked: !toggleable.has(kind),
-      // « Système » = e-mail compte/sécurité TOUJOURS envoyé. `manager_digest`
-      // (Auto-validations) est listé ici mais son envoi est réglé PAR SERVICE
-      // (Paramètres › Réservations) → pas « système ».
-      system: systemSet.has(kind) && kind !== "manager_digest",
+      // « Système » = e-mail compte/sécurité TOUJOURS envoyé. Les récapitulatifs aux
+      // gestionnaires (`manager_digest`, `manager_new_bookings`) sont listés ici mais
+      // leur envoi dépend d'un réglage PAR SERVICE → pas « système ».
+      system: systemSet.has(kind) && !kind.startsWith("manager_"),
       subject: templates[i].subject,
       html: templates[i].html,
       defaultSubject: DEFAULT_TEMPLATES[kind].subject,

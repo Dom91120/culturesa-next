@@ -22,6 +22,7 @@ export const TEMPLATE_KINDS = [
   "account_deletion_notice",
   "email_test",
   "manager_digest",
+  "manager_new_bookings",
 ] as const;
 
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
@@ -91,6 +92,14 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
     {
       name: "liste",
       desc: "Liste (générée) des réservations auto-validées — à placer où vous voulez",
+    },
+  ],
+  manager_new_bookings: [
+    { name: "service", desc: "Nom du service / de l'activité" },
+    { name: "nombre", desc: "Nombre de nouvelles réservations dans ce récapitulatif" },
+    {
+      name: "liste",
+      desc: "Liste (générée) des nouvelles réservations — à placer où vous voulez",
     },
   ],
 };
@@ -196,6 +205,15 @@ ${DETAILS_CONFIRMATION}
     subject: "Auto-validations — {{service}}",
     html: `<p>Bonjour,</p>
 <p>{{nombre}} réservation(s) ont été <strong>validées automatiquement</strong> pour « {{service}} » depuis la dernière notification :</p>
+{{liste}}
+<p>Vous pouvez les consulter dans l'agenda du service sur CultuRésa.</p>`,
+  },
+  manager_new_bookings: {
+    subject: "Nouvelles réservations — {{service}}",
+    // La nature de chaque ligne (« demande de réservation » / « réservation ») est
+    // portée par {{liste}}, d'où une phrase d'introduction unique.
+    html: `<p>Bonjour,</p>
+<p>{{nombre}} nouvelle(s) demande(s) ont été déposées pour « {{service}} » depuis la dernière notification :</p>
 {{liste}}
 <p>Vous pouvez les consulter dans l'agenda du service sur CultuRésa.</p>`,
   },
