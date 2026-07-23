@@ -1,20 +1,7 @@
-import { requireRole } from "@/server/guards";
-import { getBackupMode, listBackups } from "@/server/services/backup";
-import { type BackupRow, BackupsPanel } from "./backups-panel";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function SauvegardesPage() {
-  // Administration réservée aux administrateurs.
-  await requireRole("administrateur");
-  const [files, mode] = await Promise.all([listBackups(), getBackupMode()]);
-
-  const rows: BackupRow[] = files.map((f) => ({
-    name: f.name,
-    kind: f.kind,
-    size: f.size,
-    mtime: f.mtime.toISOString(),
-  }));
-
-  return <BackupsPanel rows={rows} toolsAvailable={mode !== null} />;
+// L'onglet « Sauvegardes » est devenu un sous-onglet de « Tâches planifiées » : cette
+// route redirige pour ne pas casser les liens/marque-pages existants.
+export default function SauvegardesPage() {
+  redirect("/taches-planifiees/sauvegardes");
 }

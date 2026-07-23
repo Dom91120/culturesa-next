@@ -223,7 +223,7 @@ export function InactivityScan({
     <div>
       <div className="panel-title" style={{ padding: ".3rem 0" }}>
         <span className="dot" style={{ background: "var(--warn)" }} />
-        RGPD — Scan d&apos;inactivité
+        Scan d&apos;inactivité
       </div>
       <p
         style={{

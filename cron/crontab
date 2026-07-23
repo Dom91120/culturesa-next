@@ -1,16 +1,14 @@
 # Tâches planifiées CultuRésa.
 # $CRON_SECRET est injecté via l'environnement du conteneur (docker-compose).
 # busybox crond exécute chaque ligne via /bin/sh, qui développe la variable.
+#
+# Toutes les tâches sont APPELÉES toutes les 5 minutes : chaque route applique la
+# planification configurée dans l'admin (Tâches planifiées › CRON — défauts :
+# auto-validation toutes les 15 min, rétention RGPD à 03h00, rappels à 07h00,
+# export de la base à 02h00) et ne s'exécute que si son échéance est atteinte ;
+# sinon l'appel répond `skipped` sans rien faire.
 
-# Auto-validation des réservations — toutes les 15 minutes
-*/15 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/auto-validate >/dev/null 2>&1
-
-# Rétention RGPD (préavis + anonymisation des comptes inactifs) — tous les jours à 03h00
-0 3 * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/rgpd-retention >/dev/null 2>&1
-
-# Rappels de réservation (J-7 et J-1) — tous les jours à 07h00
-0 7 * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/booking-reminder >/dev/null 2>&1
-
-# Sauvegarde de la base — tous les jours à 02h00 (dump compressé + rotation sur 7 jours).
-# Sortie redirigée vers le stdout du conteneur (PID 1) → visible via `docker compose logs cron`.
-0 2 * * * /usr/local/bin/backup.sh >/proc/1/fd/1 2>&1
+*/5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/auto-validate >/dev/null 2>&1
+*/5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/rgpd-retention >/dev/null 2>&1
+*/5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/booking-reminder >/dev/null 2>&1
+*/5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/backup >/dev/null 2>&1

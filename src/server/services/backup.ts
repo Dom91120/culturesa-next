@@ -11,11 +11,10 @@ const gunzip = promisify(gunzipCb);
 /**
  * Sauvegardes de la base (dumps PostgreSQL).
  *
- * Le dossier est PARTAGÉ avec le cron de production (docker-compose : ./backups monté
- * dans le conteneur cron, cf. cron/backup.sh) : les dumps automatiques y atterrissent
- * en `culturesa-<ts>.sql.gz`, les exports manuels créés ici en `manuel-<ts>.sql.gz`
- * (préfixe différent → hors du glob de rotation de backup.sh), les dumps téléversés
- * en `televerse-<ts>-<nom>.sql[.gz]`.
+ * TOUS les dumps sont produits par l'app dans BACKUPS_DIR : les exports automatiques
+ * planifiés (route /api/cron/backup) en `culturesa-<ts>.sql.gz` — seuls concernés par
+ * la rotation —, les exports manuels en `manuel-<ts>.sql.gz`, les dumps téléversés en
+ * `televerse-<ts>-<nom>.sql[.gz]`.
  *
  * `pg_dump`/`psql` sont exécutés :
  *   - en direct s'ils sont disponibles (PATH ou PG_BIN) — cas de l'image Docker de
@@ -171,8 +170,12 @@ function timestamp(): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-/** Crée un export manuel (mêmes options que le dump automatique de backup.sh). */
-export async function createBackup(): Promise<BackupFile> {
+/**
+ * Dump complet gzippé → BACKUPS_DIR/<name>.
+ *   --clean --if-exists : DROP ... IF EXISTS avant CREATE (restauration sur base existante)
+ *   --no-owner --no-privileges : pas de dépendance aux rôles/ACL de l'instance source
+ */
+async function writeDump(name: string): Promise<BackupFile> {
   const p = dbParams();
   const sql = await runPgTool("pg_dump", [
     "-d",
@@ -182,12 +185,33 @@ export async function createBackup(): Promise<BackupFile> {
     "--clean",
     "--if-exists",
   ]);
-  const name = `manuel-${timestamp()}.sql.gz`;
   await fs.mkdir(BACKUPS_DIR, { recursive: true });
   const gz = await gzip(sql, { level: 9 });
   await fs.writeFile(backupPath(name), gz);
   const st = await fs.stat(backupPath(name));
-  return { name, kind: "manuel", size: st.size, mtime: st.mtime };
+  return { name, kind: kindOf(name), size: st.size, mtime: st.mtime };
+}
+
+/** Crée un export manuel (jamais purgé par la rotation). */
+export function createBackup(): Promise<BackupFile> {
+  return writeDump(`manuel-${timestamp()}.sql.gz`);
+}
+
+// Rotation des exports automatiques : on ne conserve que les RETAIN plus récents
+// (≈ une semaine pour une exécution quotidienne) — même politique que l'ancien backup.sh.
+const AUTO_RETAIN = 7;
+
+/**
+ * Export automatique planifié (route /api/cron/backup) : dump `culturesa-<ts>.sql.gz`
+ * puis rotation sur les seuls fichiers `culturesa-*` (les exports manuels et téléversés
+ * ne sont jamais purgés).
+ */
+export async function createAutoBackup(): Promise<{ file: BackupFile; purged: number }> {
+  const file = await writeDump(`culturesa-${timestamp()}.sql.gz`);
+  const autos = (await listBackups()).filter((f) => f.name.startsWith("culturesa-"));
+  const olds = autos.slice(AUTO_RETAIN); // listBackups renvoie les plus récents d'abord
+  for (const f of olds) await fs.unlink(backupPath(f.name));
+  return { file, purged: olds.length };
 }
 
 /** Enregistre un dump téléversé (contenu .sql ou .sql.gz déjà validé par l'appelant). */

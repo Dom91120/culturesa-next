@@ -95,7 +95,9 @@ docker compose up -d --build           # redéployer après un git pull
 
 ```bash
 # 1. SAUVEGARDER d'abord (les migrations de schéma ne sont pas réversibles automatiquement)
-docker compose exec cron /usr/local/bin/backup.sh
+#    — bouton « Créer un export maintenant » dans l'admin (Tâches planifiées › Exports),
+#    ou en ligne de commande :
+docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges --clean --if-exists' | gzip -9 > backups/manuel-$(date +%Y%m%d-%H%M%S).sql.gz
 
 # 2. Récupérer la nouvelle version
 git pull
@@ -116,23 +118,26 @@ environnement de pré-prod quand c'est possible.
 
 ## Sauvegarde de la base
 
-### Automatique (quotidienne)
+### Automatique (planifiée)
 
-Le conteneur `cron` réalise un **dump quotidien à 02h00** (`cron/backup.sh`, déclenché par
-`cron/crontab`) : `pg_dump` compressé en gzip, déposé dans **`./backups/`** sur l'hôte.
-La **rotation** ne conserve que les **7 dumps les plus récents** (≈ une semaine) ; les
-plus anciens sont supprimés automatiquement.
+L'app réalise un **dump automatique** (défaut 02h00, planification modifiable dans l'admin :
+Administration › Tâches planifiées › CRON) via la route `/api/cron/backup`, appelée toutes
+les 5 minutes par le conteneur `cron` : `pg_dump` compressé en gzip, déposé dans
+**`./backups/`** sur l'hôte. La **rotation** ne conserve que les **7 dumps automatiques les
+plus récents** (≈ une semaine) ; les plus anciens sont supprimés automatiquement.
+⚠️ L'export passe par l'app : si elle est indisponible à l'échéance, le dump est rattrapé au
+prochain passage une fois l'app relancée.
 
 ```bash
 # Vérifier les sauvegardes présentes
 ls -lh backups/
 
-# Suivre l'exécution (le job écrit sur la sortie du conteneur)
+# Vérifier que les appels du déclencheur partent
 docker compose logs -f cron
-
-# Lancer un dump immédiat (hors planification)
-docker compose exec cron /usr/local/bin/backup.sh
 ```
+
+La dernière exécution (et un bouton « Exécuter maintenant ») sont visibles dans l'admin,
+onglet Tâches planifiées › CRON.
 
 > 💡 `./backups/` vit sur le même disque que la base : **copie ces dumps hors-site**
 > (rsync/scp/objet S3…) pour une vraie protection contre la perte du serveur.

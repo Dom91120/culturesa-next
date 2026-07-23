@@ -10,7 +10,7 @@ export async function createBackupAction(): Promise<ActionState> {
   await requireRole("administrateur");
   try {
     await createBackup();
-    revalidatePath("/sauvegardes");
+    revalidatePath("/taches-planifiees/sauvegardes");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Échec de l'export." };
@@ -34,7 +34,7 @@ export async function deleteBackupAction(name: string): Promise<ActionState> {
   await requireRole("administrateur");
   try {
     await deleteBackup(name);
-    revalidatePath("/sauvegardes");
+    revalidatePath("/taches-planifiees/sauvegardes");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Échec de la suppression." };

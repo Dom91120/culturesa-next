@@ -52,7 +52,6 @@ const WEEKDAY_LABELS: { value: string; label: string }[] = [
 
 const AUTO_VALIDATION_OPTIONS: { value: number; label: string }[] = [
   { value: 0, label: "Jamais" },
-  { value: -120, label: "2 heures ouvrées" },
   { value: -1440, label: "1 jour ouvré" },
   { value: -2880, label: "2 jours ouvrés" },
   { value: -4320, label: "3 jours ouvrés" },

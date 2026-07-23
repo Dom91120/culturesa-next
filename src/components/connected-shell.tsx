@@ -13,8 +13,8 @@ const ADMIN_TABS: Tab[] = [
   { href: "/users", label: "Utilisateurs", icon: "👥" },
   { href: "/echanges", label: "Échanges", icon: "📨" },
   { href: "/messagerie", label: "Messagerie", icon: "✉️" },
+  { href: "/taches-planifiees", label: "Tâches planifiées", icon: "⏰" },
   { href: "/rgpd", label: "RGPD", icon: "🛡️" },
-  { href: "/sauvegardes", label: "Sauvegardes", icon: "💾" },
 ];
 
 function serviceTabs(id: string): Tab[] {
@@ -76,7 +76,8 @@ export function ConnectedShell({
   }, [pathname, activeServiceId]);
 
   // Mémorise le dernier onglet d'ADMINISTRATION ouvert (Configuration / Utilisateurs /
-  // Échanges / Messagerie / RGPD) pour y revenir via le bouton « Administration ».
+  // Échanges / Messagerie / Tâches planifiées / RGPD) pour y revenir via le bouton
+  // « Administration ».
   useEffect(() => {
     if (!adminActive || !activeHref) return;
     try {

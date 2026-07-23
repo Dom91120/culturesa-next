@@ -114,25 +114,26 @@ docker compose exec db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
 
 ## 6. Sauvegarde et restauration
 
-### Sauvegarde automatique (quotidienne)
+### Sauvegarde automatique (planifiée)
 
-Le conteneur `cron` réalise un **dump quotidien à 02h00** (script `cron/backup.sh`,
-planifié dans `cron/crontab`) :
+L'application réalise un **dump automatique** — par défaut à **02h00**, planification
+modifiable dans l'admin (Administration › Tâches planifiées › CRON) — via la route
+`/api/cron/backup`, appelée toutes les 5 minutes par le conteneur `cron` :
 
 - `pg_dump` complet, **compressé en gzip**, déposé dans **`./backups/`** sur l'hôte ;
-- **rotation** : seuls les **7 dumps les plus récents** sont conservés (≈ une semaine) ;
-  les plus anciens sont supprimés automatiquement.
+- **rotation** : seuls les **7 dumps automatiques les plus récents** sont conservés
+  (≈ une semaine) ; les plus anciens sont supprimés automatiquement.
 
 ```bash
 # Lister les sauvegardes présentes
 ls -lh backups/
 
-# Suivre l'exécution du job (sortie visible dans les logs du conteneur)
+# Vérifier que les appels du déclencheur partent
 docker compose logs -f cron
-
-# Déclencher un dump immédiat, hors planification
-docker compose exec cron /usr/local/bin/backup.sh
 ```
+
+Un dump immédiat se déclenche depuis l'admin : « Exécuter maintenant » (Tâches planifiées ›
+CRON) ou « Créer un export maintenant » (Tâches planifiées › Exports).
 
 > ⚠️ **Copie hors-site indispensable.** `./backups/` se trouve sur le même disque que la
 > base : en cas de perte du serveur, les sauvegardes disparaissent avec lui. Planifiez une
@@ -156,9 +157,9 @@ cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_D
 docker compose exec db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup_$(date +%F).sql
 ```
 
-> Régler l'horaire ou la durée de rétention : modifier la ligne de sauvegarde dans
-> `cron/crontab` (heure) et la variable `RETAIN` dans `cron/backup.sh` (nombre de dumps
-> conservés), puis reconstruire le conteneur : `docker compose up -d --build cron`.
+> Régler l'horaire : directement dans l'admin (Tâches planifiées › CRON), pris en compte
+> sans redéploiement. La durée de rétention (7 dumps automatiques) est fixée dans le code
+> (`AUTO_RETAIN`, `src/server/services/backup.ts`).
 
 ---
 

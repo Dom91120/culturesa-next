@@ -128,11 +128,11 @@ export function BackupsPanel({
   const btnGhostSmall = { padding: ".25rem .7rem", fontSize: ".72rem" } as const;
 
   return (
-    <div>
+    <div className="panel">
       {/* ── Exports ── */}
       <div className="panel-title" style={{ padding: ".3rem 0" }}>
         <span className="dot" style={{ background: "var(--warn)" }} />
-        Sauvegardes — Exports de la base
+        Exports de la base
       </div>
       <p
         style={{
@@ -142,9 +142,10 @@ export function BackupsPanel({
           lineHeight: 1.5,
         }}
       >
-        Dumps PostgreSQL complets (schéma + données), restaurables tels quels. En production, un
-        export automatique est créé chaque nuit à 02h00 (rotation : 7 jours) ; les exports manuels
-        et téléversés ne sont pas soumis à la rotation.
+        Dumps PostgreSQL complets (schéma + données), restaurables tels quels. Un export automatique
+        est créé selon la planification configurée dans le sous-onglet CRON (défaut : chaque nuit à
+        02h00 ; rotation : les 7 plus récents) ; les exports manuels et téléversés ne sont pas
+        soumis à la rotation.
       </p>
 
       {!toolsAvailable && (
@@ -230,14 +231,14 @@ export function BackupsPanel({
                       className="btn btn-ghost"
                       href={`/api/backups/download?file=${encodeURIComponent(f.name)}`}
                       style={{
-                        padding: ".05rem .5rem",
+                        padding: ".05rem .3rem",
                         fontSize: ".72rem",
                         textDecoration: "none",
                         marginRight: ".3rem",
                       }}
                       title="Télécharger ce dump"
                     >
-                      ⬇️ Télécharger
+                      ⬇️
                     </a>
                     <button
                       type="button"
@@ -245,7 +246,7 @@ export function BackupsPanel({
                       onClick={() => deleteOne(f.name)}
                       disabled={pending}
                       style={{
-                        padding: ".05rem .5rem",
+                        padding: ".05rem .3rem",
                         fontSize: ".72rem",
                         borderColor: "rgba(224,107,107,.4)",
                         color: "var(--danger)",

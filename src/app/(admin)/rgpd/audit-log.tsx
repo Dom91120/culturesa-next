@@ -108,7 +108,7 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
     <div style={{ marginTop: "2rem" }}>
       <div className="panel-title" style={{ padding: ".3rem 0" }}>
         <span className="dot" style={{ background: "var(--warn)" }} />
-        Journal d&apos;audit RGPD
+        Journal d&apos;audit
       </div>
       <p
         style={{

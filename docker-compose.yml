@@ -35,13 +35,14 @@ services:
       NEXT_PUBLIC_APP_URL: ${APP_URL}
       # Secret partagé avec le conteneur cron
       CRON_SECRET: ${CRON_SECRET}
-      # Dossier des dumps (onglet admin « Sauvegardes ») — partagé avec le conteneur cron
+      # Dossier des dumps (admin « Tâches planifiées › Exports » ; l'export automatique
+      # planifié est produit par l'app elle-même via /api/cron/backup)
       BACKUPS_DIR: /backups
       NODE_ENV: production
     ports: !override
       - "127.0.0.1:3000:3000"
     volumes:
-      # Mêmes dumps que le cron : liste/téléchargement/restauration depuis l'admin.
+      # Dumps persistés sur l'hôte (./backups, à copier hors-site).
       - ./backups:/backups
     networks:
       - web
@@ -63,22 +64,16 @@ services:
     networks:
       - web
 
+  # Simple déclencheur : appelle les routes /api/cron/* de l'app toutes les 5 minutes
+  # (la planification réelle est configurée dans l'admin, y compris l'export de la base).
   cron:
     build:
       context: ./cron
     restart: unless-stopped
     depends_on:
       - app
-      - db
     environment:
       CRON_SECRET: ${CRON_SECRET}
-      # Sauvegarde quotidienne de la base (pg_dump → /backups, cf. cron/backup.sh)
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      # Les dumps atterrissent dans ./backups sur l'hôte (à copier hors-site).
-      - ./backups:/backups
     networks:
       - web
 
