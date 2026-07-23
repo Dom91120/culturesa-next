@@ -1329,6 +1329,8 @@ const copyTargetSchema = z.discriminatedUnion("kind", [
  * compteurs + le thème de la source, puis recrée une réservation sur la cible
  * (récurrente ou ponctuelle) via les actions de création. La source est conservée
  * (copier, pas couper). Le contrôle d'unicité (P2002) renvoie une erreur lisible.
+ * La copie REPREND la date de dépôt (createdAt) de la source — comme la coupe, qui
+ * passe par ici : un coller n'est pas un nouveau dépôt (décision 2026-07-23).
  */
 export async function copyBookingAction(input: {
   serviceId: string;
@@ -1353,6 +1355,7 @@ export async function copyBookingAction(input: {
       bookingType: true,
       parentBookingId: true,
       pointage: true,
+      createdAt: true,
     },
   });
   if (!src || src.serviceId !== input.serviceId) {
@@ -1369,27 +1372,45 @@ export async function copyBookingAction(input: {
   ) {
     return { ok: false, error: "Réservation non copiable (séance pointée ou miroir)." };
   }
-  if (target.data.kind === "recurring") {
-    return createRecurringBookingAction({
-      serviceId: input.serviceId,
-      slotId: target.data.slotId,
-      periodId: target.data.periodId,
-      dayKey: target.data.dayKey,
-      userId: src.userId,
-      enfants: src.enfants,
-      accompagnants: src.accompagnants,
-      theme: src.themeLabel ?? "",
-      week: target.data.week,
+  const res =
+    target.data.kind === "recurring"
+      ? await createRecurringBookingAction({
+          serviceId: input.serviceId,
+          slotId: target.data.slotId,
+          periodId: target.data.periodId,
+          dayKey: target.data.dayKey,
+          userId: src.userId,
+          enfants: src.enfants,
+          accompagnants: src.accompagnants,
+          theme: src.themeLabel ?? "",
+          week: target.data.week,
+        })
+      : await createUniqueBookingAction({
+          serviceId: input.serviceId,
+          slotId: target.data.slotId,
+          userId: src.userId,
+          enfants: src.enfants,
+          accompagnants: src.accompagnants,
+          theme: src.themeLabel ?? "",
+        });
+  if (res.ok) {
+    // La réservation collée CONSERVE la date de dépôt (createdAt) de la source : un
+    // coller — copie ou coupe — n'est pas un nouveau dépôt (décision 2026-07-23). Elle
+    // n'apparaît donc PAS dans le récapitulatif « Nouvelles réservations » et garde son
+    // rang dans les éditions triées par date. Les actions de création ne renvoyant pas
+    // d'id, la ligne collée est retrouvée par sa clé naturelle : un seul PARENT possible
+    // par usager × créneau (cf. uq_recurring ; un ponctuel n'a ni période ni parité).
+    await prisma.booking.updateMany({
+      where: {
+        userId: src.userId,
+        serviceId: input.serviceId,
+        slotId: target.data.slotId,
+        parentBookingId: null,
+      },
+      data: { createdAt: src.createdAt },
     });
   }
-  return createUniqueBookingAction({
-    serviceId: input.serviceId,
-    slotId: target.data.slotId,
-    userId: src.userId,
-    enfants: src.enfants,
-    accompagnants: src.accompagnants,
-    theme: src.themeLabel ?? "",
-  });
+  return res;
 }
 
 /**
