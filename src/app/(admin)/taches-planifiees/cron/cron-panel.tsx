@@ -334,7 +334,7 @@ export function CronPanel({
                       </button>
                     ) : (
                       <Link
-                        href="/taches-planifiees/sauvegardes"
+                        href="/taches-planifiees/exports"
                         className="btn btn-ghost"
                         style={{
                           padding: ".25rem .45rem",

@@ -7,7 +7,7 @@ type SubTab = { slug: string; label: string; icon: string };
 
 const SUB_TABS: SubTab[] = [
   { slug: "cron", label: "CRON", icon: "🕒" },
-  { slug: "sauvegardes", label: "Exports", icon: "💾" },
+  { slug: "exports", label: "Exports", icon: "💾" },
 ];
 
 /**
