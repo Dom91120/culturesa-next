@@ -4,7 +4,9 @@
 // serveur) : utilisable côté serveur (envoi) ET client (aperçu de l'éditeur). Le `innerHtml`
 // est le corps du message (rendu des gabarits).
 
-const THEME = {
+// Exporté : l'éditeur de modèles (echanges/email-frame.tsx) reproduit l'habillage en DOM
+// pour l'édition « dans l'aperçu » — mêmes couleurs, source unique.
+export const EMAIL_THEME = {
   pageBg: "#f4f6ec",
   card: "#ffffff",
   border: "#e3e8d2",
@@ -13,6 +15,7 @@ const THEME = {
   text: "#1f2a22",
   muted: "#5a7a4f",
 };
+const THEME = EMAIL_THEME;
 
 /**
  * Échappement HTML des valeurs de confiance limitée injectées dans du HTML généré

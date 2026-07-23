@@ -12,6 +12,7 @@ import {
   setMailTemplateAction,
   updateMailTypeAction,
 } from "./actions";
+import { EmailFrame } from "./email-frame";
 import { RichTextEditor } from "./rich-text-editor";
 
 export type KindData = {
@@ -306,7 +307,7 @@ export function EchangesConfig({
       {editingRow && (
         <ModalOverlay
           onClose={() => setEditing(null)}
-          boxStyle={{ maxWidth: 1000, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
+          boxStyle={{ maxWidth: 980, width: "95vw", maxHeight: "95vh", overflowY: "auto" }}
         >
           <div className="modal-title">✏️ {editingRow.label}</div>
           <Editor
@@ -614,14 +615,29 @@ function Editor({
   onReset: () => void;
   onSave: () => void;
 }) {
+  // Bascule : édition directe dans l'e-mail habillé (défaut) ↔ aperçu avec les données
+  // d'exemple (lecture seule, iframe = rendu de référence, identique à l'envoi).
+  const [showPreview, setShowPreview] = useState(false);
   const previewHtml = useMemo(
     () => renderHtmlTemplate(draft.html, SAMPLE, SAMPLE_RAW),
     [draft.html],
   );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: ".6rem" }}>
-      <div className="field" style={{ margin: 0 }}>
-        <label htmlFor="tpl-subject" style={{ fontSize: ".76rem", fontWeight: 600 }}>
+      {/* Libellé à GAUCHE du champ, même style que le titre « Corps » (les styles globaux
+          de <label> — majuscules, espacement, gris — sont neutralisés), champ réduit d'autant. */}
+      <div style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+        <label
+          htmlFor="tpl-subject"
+          style={{
+            fontSize: ".76rem",
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+            textTransform: "none",
+            letterSpacing: "normal",
+            color: "var(--text)",
+          }}
+        >
           Objet
         </label>
         <input
@@ -630,29 +646,75 @@ function Editor({
           value={draft.subject}
           maxLength={500}
           onChange={(e) => onField("subject", e.target.value)}
-          style={{ width: "100%", boxSizing: "border-box" }}
+          style={{ flex: 1, boxSizing: "border-box" }}
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: ".6rem" }}>
-        <div>
-          <div style={{ fontSize: ".76rem", fontWeight: 600, marginBottom: ".3rem" }}>Corps</div>
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: ".5rem",
+            marginBottom: ".3rem",
+          }}
+        >
+          <div style={{ fontSize: ".76rem", fontWeight: 600 }}>
+            {showPreview
+              ? "Aperçu (données d'exemple)"
+              : "Corps — édition directe dans l'e-mail (en-tête et pied non modifiables)"}
+          </div>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setShowPreview((v) => !v)}
+            style={{ padding: ".2rem .6rem", fontSize: ".74rem" }}
+          >
+            {showPreview ? "✏️ Reprendre l'édition" : "👁️ Aperçu avec données d'exemple"}
+          </button>
+        </div>
+
+        {/* Éditeur habillé — MASQUÉ (pas démonté) en mode aperçu : l'historique
+            d'annulation et la position du curseur sont préservés. */}
+        <div style={{ display: showPreview ? "none" : undefined }}>
           <RichTextEditor
             key={editorKey}
             initialHtml={draft.html}
             variables={variables}
             ariaLabel={`Corps de l'e-mail : ${label}`}
             onChange={(html) => onField("html", html)}
+            renderFrame={(content) => <EmailFrame>{content}</EmailFrame>}
+            actions={
+              <span style={{ display: "inline-flex", gap: ".5rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={onReset}
+                  disabled={pending}
+                  style={{ fontSize: ".72rem", padding: ".25rem .55rem" }}
+                >
+                  ↺ Réinitialiser
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={onSave}
+                  disabled={pending || !dirty}
+                  style={{ fontSize: ".72rem", padding: ".25rem .55rem" }}
+                >
+                  💾 Enregistrer
+                </button>
+              </span>
+            }
           />
           <div style={{ fontSize: ".7rem", color: "var(--muted)", marginTop: ".3rem" }}>
             Astuce : un bloc <code>{"{{#if periode}}…{{/if}}"}</code> n&apos;apparaît que si la
             variable est renseignée.
           </div>
         </div>
-        <div>
-          <div style={{ fontSize: ".76rem", fontWeight: 600, marginBottom: ".3rem" }}>
-            Aperçu (e-mail habillé, données d&apos;exemple)
-          </div>
+
+        {showPreview && (
           <iframe
             title="Aperçu de l'e-mail"
             // sandbox sans allow-scripts : l'aperçu rend du HTML d'éditeur (Tiptap) mais
@@ -661,34 +723,13 @@ function Editor({
             srcDoc={wrapEmailHtml(previewHtml, { preheader: "", logoSrc: "/email-logo.png" })}
             style={{
               width: "100%",
-              minHeight: 360,
+              minHeight: 460,
               border: "1px solid var(--border)",
               borderRadius: 6,
               background: "#fff",
             }}
           />
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={onReset}
-          disabled={pending}
-          style={{ fontSize: ".78rem" }}
-        >
-          ↺ Réinitialiser
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={onSave}
-          disabled={pending || !dirty}
-          style={{ fontSize: ".78rem" }}
-        >
-          💾 Enregistrer
-        </button>
+        )}
       </div>
     </div>
   );

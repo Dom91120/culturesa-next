@@ -13,12 +13,25 @@ type Props = {
   variables: { name: string; desc: string }[];
   ariaLabel: string;
   onChange: (html: string) => void;
+  // Habille la ZONE ÉDITABLE (et elle seule) — la barre d'outils et les variables restent
+  // en dehors. Utilisé pour l'édition « dans l'aperçu » des e-mails (cf. EmailFrame).
+  renderFrame?: (editorContent: React.ReactNode) => React.ReactNode;
+  // Boutons d'action (Réinitialiser / Enregistrer…) affichés à droite du bloc Variables,
+  // juste sous la zone d'édition.
+  actions?: React.ReactNode;
 };
 
 // Éditeur de texte enrichi (WYSIWYG) basé sur Tiptap/ProseMirror, produisant du HTML :
 // mise en forme, titres, listes, citations, liens, alignement, couleur, surlignage,
 // images et tableaux.
-export function RichTextEditor({ initialHtml, variables, ariaLabel, onChange }: Props) {
+export function RichTextEditor({
+  initialHtml,
+  variables,
+  ariaLabel,
+  onChange,
+  renderFrame,
+  actions,
+}: Props) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
@@ -260,35 +273,42 @@ export function RichTextEditor({ initialHtml, variables, ariaLabel, onChange }: 
         </Btn>
       </div>
 
-      <EditorContent editor={editor} />
+      {renderFrame ? (
+        renderFrame(<EditorContent editor={editor} />)
+      ) : (
+        <EditorContent editor={editor} />
+      )}
 
-      <div style={{ marginTop: ".4rem" }}>
-        <div style={{ fontSize: ".72rem", color: "var(--muted)", marginBottom: ".25rem" }}>
-          Variables (cliquer pour insérer au curseur) :
+      <div style={{ marginTop: ".4rem", display: "flex", alignItems: "flex-start", gap: ".8rem" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: ".72rem", color: "var(--muted)", marginBottom: ".25rem" }}>
+            Variables (cliquer pour insérer au curseur) :
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: ".3rem" }}>
+            {variables.map((v) => (
+              <button
+                key={v.name}
+                type="button"
+                title={v.desc}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => editor.chain().focus().insertContent(`{{${v.name}}}`).run()}
+                style={{
+                  fontSize: ".72rem",
+                  fontFamily: "monospace",
+                  padding: ".15rem .2rem",
+                  border: "1px solid var(--border)",
+                  borderRadius: 4,
+                  background: "var(--surface2)",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                }}
+              >
+                {`{{${v.name}}}`}
+              </button>
+            ))}
+          </div>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: ".3rem" }}>
-          {variables.map((v) => (
-            <button
-              key={v.name}
-              type="button"
-              title={v.desc}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => editor.chain().focus().insertContent(`{{${v.name}}}`).run()}
-              style={{
-                fontSize: ".72rem",
-                fontFamily: "monospace",
-                padding: ".15rem .4rem",
-                border: "1px solid var(--border)",
-                borderRadius: 4,
-                background: "var(--surface2)",
-                color: "var(--text)",
-                cursor: "pointer",
-              }}
-            >
-              {`{{${v.name}}}`}
-            </button>
-          ))}
-        </div>
+        {actions && <div style={{ flexShrink: 0 }}>{actions}</div>}
       </div>
     </div>
   );

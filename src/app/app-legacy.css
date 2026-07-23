@@ -2770,6 +2770,71 @@ textarea.theme-pending:focus::placeholder {
   height: auto;
 }
 
+/* Édition « dans l'aperçu » des modèles d'e-mails : la zone Tiptap EST le corps de la
+   carte e-mail (EmailFrame) — typo/couleurs du thème mail, forcées en clair quel que
+   soit le thème de l'app. Valeurs miroir de EMAIL_THEME + wrapEmailHtml
+   (src/lib/email-theme.ts) : green #1e6b47, border #e3e8d2, text #1f2a22, muted #5a7a4f. */
+.em-edit .rte-content {
+  border: none;
+  border-radius: 0;
+  background: #ffffff;
+  color: #1f2a22;
+  padding: 28px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.em-edit .rte-content:focus {
+  outline: none;
+}
+/* SEUL le corps défile, à hauteur FIXE : toute la place restante de la modale (95vh)
+   une fois décomptés titre, objet, barre d'outils, en-tête/pied de l'e-mail, variables…
+   (≈ 540px) — le fond crème a ainsi une hauteur constante quel que soit le contenu,
+   et l'habillage complet reste visible sans ascenseur intermédiaire.
+   Plancher à 220px sur petit écran (la modale défile alors en dernier recours). */
+.modal-box .em-edit .rte-content {
+  height: max(220px, calc(90vh - 540px));
+  max-height: none;
+}
+.em-edit .rte-content h1,
+.em-edit .rte-content h2,
+.em-edit .rte-content h3 {
+  color: #1e6b47;
+  margin: 0 0 12px;
+  line-height: 1.25;
+}
+.em-edit .rte-content p {
+  margin: 0 0 12px;
+}
+.em-edit .rte-content ul,
+.em-edit .rte-content ol {
+  margin: 0 0 12px 20px;
+  padding: 0;
+}
+.em-edit .rte-content li {
+  margin: 4px 0;
+}
+.em-edit .rte-content blockquote {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 3px solid #1e6b47;
+  color: #5a7a4f;
+}
+.em-edit .rte-content a {
+  color: #1e6b47;
+}
+.em-edit .rte-content table {
+  border-collapse: collapse;
+}
+.em-edit .rte-content th,
+.em-edit .rte-content td {
+  border: 1px solid #e3e8d2;
+  padding: 6px 10px;
+}
+.em-edit .rte-content th {
+  background: transparent;
+}
+
 /* ── Réservations : version smartphone (vue « un jour à la fois ») ──────────── */
 /* Barre de navigation jour (smartphone) déguisée en rangée d'en-tête du tableau :
    flèches carrées 44px en fond gris (comme les coins), libellé central encadré sur
