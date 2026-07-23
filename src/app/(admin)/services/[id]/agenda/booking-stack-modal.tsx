@@ -17,7 +17,8 @@ type Block = AgendaBlockBase<Booking>;
  *
  * Composant CONTRÔLÉ : le bloc/créneau affichés et toutes les actions (création,
  * édition, suppression, drag, copier/couper, pointage/validation) restent pilotés
- * par la grille parente via les callbacks — la modale ne porte aucun état.
+ * par la grille parente via les callbacks — la modale ne porte que de l'état de
+ * PRÉSENTATION (tri des badges, masquage pendant un glissé, échelle horaire).
  */
 export function BookingStackModal({
   stackKey,
@@ -147,6 +148,36 @@ export function BookingStackModal({
   const blockMinH = hasRange ? Math.max(56, (eMin - sMin) * pxPerMinModal) : 56;
   const marks: number[] = [];
   if (hasRange) for (let m = sMin; m <= eMin; m += 15) marks.push(m);
+
+  // Hauteur RÉELLE du bloc créneau : quand la liste des badges l'étire AU-DELÀ de la
+  // hauteur « horaire » (blockMinH), l'échelle minute → pixel est recalculée pour que
+  // les marques de la colonne ET les lignes de fond (--quarter-h/--hour-h) se
+  // répartissent sur toute la hauteur — port du recalcul JS du legacy que le CSS
+  // annonce (« Le JS recalcule ces valeurs après rendu », cf. .csm-slot-block).
+  const slotBlockRef = useRef<HTMLDivElement | null>(null);
+  const [blockH, setBlockH] = useState<number | null>(null);
+  useEffect(() => {
+    const el = slotBlockRef.current;
+    if (!el || !hasRange) return;
+    // clientHeight : hors bordures, comme le fond (background-clip: padding-box).
+    const ro = new ResizeObserver(() => setBlockH(el.clientHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasRange]);
+  const pxPerMin =
+    hasRange && blockH != null && blockH > blockMinH ? blockH / (eMin - sMin) : pxPerMinModal;
+
+  // Tri des badges — sélecteur compact en haut à droite du tableau : date de DÉPÔT
+  // (défaut, plus anciennes en haut) ou alphabétique (le champ `name` est déjà
+  // « NOM Prénom »). Préférence locale à la modale (réinitialisée à la réouverture).
+  const [sortMode, setSortMode] = useState<"date" | "alpha">("date");
+  const sortedBookings = [...block.bookings].sort((a, b) =>
+    // Départage par id dans les deux cas : deux réservations peuvent partager le
+    // même nom (homonymes) comme la même date (un coller reprend celle de sa source).
+    sortMode === "alpha"
+      ? a.name.localeCompare(b.name, "fr", { sensitivity: "base" }) || a.id - b.id
+      : a.createdAt.localeCompare(b.createdAt) || a.id - b.id,
+  );
   const timeLabel = (s: { startTime: string; endTime: string }) =>
     allday ? "Journée entière" : `${s.startTime} – ${s.endTime}`;
 
@@ -222,12 +253,50 @@ export function BookingStackModal({
           </label>
         </div>
       </div>
+      {/* Tri : en haut à droite du tableau, SOUS les bascules de l'en-tête — une rangée
+          basse (16 px) rien que pour lui, au-dessus de la bordure pointillée du bloc. */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          height: 16,
+          margin: "0 0 3px",
+        }}
+      >
+        <select
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value as "date" | "alpha")}
+          title="Critère de tri des réservations"
+          style={{
+            height: 16,
+            boxSizing: "border-box",
+            fontSize: ".66rem",
+            padding: "0 .2rem",
+            border: "none",
+            background: "none",
+            color: "var(--muted)",
+            cursor: "pointer",
+            // Le <select> fermé est large comme sa plus LONGUE option : la valeur
+            // affichée est calée à droite (contre le chevron) plutôt que flottante à
+            // gauche du blanc ; les lignes de la liste, elles, restent à gauche.
+            textAlignLast: "right",
+          }}
+        >
+          <option value="date" style={{ textAlign: "left" }}>
+            Par date
+          </option>
+          <option value="alpha" style={{ textAlign: "left" }}>
+            Alphabétique
+          </option>
+        </select>
+      </div>
       <div className="csm-grid-wrap">
         {/* Colonne horaire masquée pour un créneau « journée entière ». */}
         {!allday && (
-          <div className="csm-time-col" style={{ height: blockMinH }}>
+          <div className="csm-time-col" style={{ height: blockH ?? blockMinH }}>
             {marks.map((m) => (
-              <div key={m} className="csm-time-mark" style={{ top: (m - sMin) * pxPerMinModal }}>
+              <div key={m} className="csm-time-mark" style={{ top: (m - sMin) * pxPerMin }}>
                 {`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`}
               </div>
             ))}
@@ -235,6 +304,7 @@ export function BookingStackModal({
         )}
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: fond du créneau (clic = créer une réservation) */}
         <div
+          ref={slotBlockRef}
           className={`csm-slot-block${isPonctuel ? " is-uniq" : ""}`}
           // Info-bulle au survol du créneau, identique à celle de la grille :
           // récurrent → période + jour/heures + demandeurs + capacité ;
@@ -259,115 +329,113 @@ export function BookingStackModal({
           style={
             {
               minHeight: blockMinH,
-              "--quarter-h": "24px",
-              "--hour-h": "96px",
+              // Lignes de fond calées sur l'échelle courante : 24/96 px au repos,
+              // recalculées si la liste des badges étire le bloc (cf. pxPerMin).
+              "--quarter-h": `${pxPerMin * 15}px`,
+              "--hour-h": `${pxPerMin * 60}px`,
               cursor: creatable ? "pointer" : undefined,
             } as React.CSSProperties
           }
         >
           <div className="cell-stack-list">
-            {[...block.bookings]
-              // Tri des badges par date de DÉPÔT (créées en premier en haut) — ISO 8601,
-              // comparable en chaîne. Départage par id : deux réservations peuvent
-              // partager la même date, un coller reprenant celle de sa source.
-              .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)
-              .map((bk) => (
-                // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
-                <div
-                  key={bk.id}
-                  className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
-                  // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée / occurrence
-                  // pointée). Récurrent en Semaine réelle inclus (déplace la parente).
-                  draggable={!lockedByPointage(bk)}
-                  style={{
-                    ...badgeStyle(bk.validated),
-                    cursor: !lockedByPointage(bk) ? "grab" : "default",
-                    position: "relative",
-                    opacity:
-                      draggingId === bk.id ||
-                      (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
-                        ? 0.4
-                        : 1,
-                  }}
-                  data-tip={badgeTitle(bk)}
-                  onDragStart={
-                    lockedByPointage(bk)
-                      ? undefined
-                      : (e) => {
-                          // On amorce le drag ; la pile reste ouverte et ne se fermera
-                          // qu'à la SORTIE de la boîte (cf. effet dragActive plus haut),
-                          // libérant alors la grille comme cible de dépôt.
-                          e.stopPropagation();
-                          setDragActive(true);
-                          onDragStartBooking(bk);
-                        }
-                  }
-                  onDragEnd={
-                    lockedByPointage(bk)
-                      ? undefined
-                      : () => {
-                          // Tire TOUJOURS (la source reste montée, la pile n'étant que
-                          // masquée) : lève l'estompage, puis — si le glissé était sorti
-                          // de la boîte (dépôt sur la grille, Échap, dépôt hors cible) —
-                          // ferme la pile pour de bon.
-                          setDragActive(false);
-                          onDragEndBooking();
-                          if (hidden) onClose();
-                        }
-                  }
-                  onClick={() => {
-                    // Action rapide (valider = parente, pointer = occurrence) si un mode est
-                    // actif ; sinon la modale détail s'empile par-dessus (fermeture y ramène).
-                    if (onQuickAction(bk)) return;
-                    onOpenDetail(bk);
-                  }}
-                  // Clic droit → menu « Copier » (récurrent en Semaine réelle inclus ; pas en
-                  // création ni sur une réservation verrouillée par un pointage).
-                  onContextMenu={(e) => {
-                    if (creationMode || lockedByPointage(bk)) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onContextMenu(bk, e.clientX, e.clientY);
-                  }}
-                >
-                  <PointagePill pointage={bk.pointage} />
-                  {/* Croix masquée si verrouillée (pointée / occurrence pointée). Récurrent
+            {/* Tri par date de dépôt ou alphabétique — sélecteur « Tri » de l'en-tête. */}
+            {sortedBookings.map((bk) => (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: ligne réservation (clic = éditer)
+              <div
+                key={bk.id}
+                className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
+                // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée / occurrence
+                // pointée). Récurrent en Semaine réelle inclus (déplace la parente).
+                draggable={!lockedByPointage(bk)}
+                style={{
+                  ...badgeStyle(bk.validated),
+                  cursor: !lockedByPointage(bk) ? "grab" : "default",
+                  position: "relative",
+                  opacity:
+                    draggingId === bk.id ||
+                    (copiedBooking?.mode === "cut" && copiedBooking.id === bk.id)
+                      ? 0.4
+                      : 1,
+                }}
+                data-tip={badgeTitle(bk)}
+                onDragStart={
+                  lockedByPointage(bk)
+                    ? undefined
+                    : (e) => {
+                        // On amorce le drag ; la pile reste ouverte et ne se fermera
+                        // qu'à la SORTIE de la boîte (cf. effet dragActive plus haut),
+                        // libérant alors la grille comme cible de dépôt.
+                        e.stopPropagation();
+                        setDragActive(true);
+                        onDragStartBooking(bk);
+                      }
+                }
+                onDragEnd={
+                  lockedByPointage(bk)
+                    ? undefined
+                    : () => {
+                        // Tire TOUJOURS (la source reste montée, la pile n'étant que
+                        // masquée) : lève l'estompage, puis — si le glissé était sorti
+                        // de la boîte (dépôt sur la grille, Échap, dépôt hors cible) —
+                        // ferme la pile pour de bon.
+                        setDragActive(false);
+                        onDragEndBooking();
+                        if (hidden) onClose();
+                      }
+                }
+                onClick={() => {
+                  // Action rapide (valider = parente, pointer = occurrence) si un mode est
+                  // actif ; sinon la modale détail s'empile par-dessus (fermeture y ramène).
+                  if (onQuickAction(bk)) return;
+                  onOpenDetail(bk);
+                }}
+                // Clic droit → menu « Copier » (récurrent en Semaine réelle inclus ; pas en
+                // création ni sur une réservation verrouillée par un pointage).
+                onContextMenu={(e) => {
+                  if (creationMode || lockedByPointage(bk)) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onContextMenu(bk, e.clientX, e.clientY);
+                }}
+              >
+                <PointagePill pointage={bk.pointage} />
+                {/* Croix masquée si verrouillée (pointée / occurrence pointée). Récurrent
                       en Semaine réelle : supprime la réservation récurrente (via la parente). */}
-                  {!lockedByPointage(bk) && (
-                    <button
-                      type="button"
-                      className="planning-name-tag-close"
-                      data-tip="Supprimer"
-                      style={{ border: "none", padding: 0 }}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(bk);
-                      }}
-                    >
-                      ×
-                    </button>
-                  )}
-                  {(bk.structure || bk.demandeur) && (
-                    <span style={{ fontWeight: 700 }}>{bk.structure || bk.demandeur}</span>
-                  )}
-                  <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>{bk.name}</span>
-                  {themeMode && bk.theme && (
-                    <span
-                      style={{
-                        fontSize: ".62rem",
-                        fontWeight: 600,
-                        color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
-                      }}
-                    >
-                      {bk.theme}
-                    </span>
-                  )}
-                </div>
-              ))}
+                {!lockedByPointage(bk) && (
+                  <button
+                    type="button"
+                    className="planning-name-tag-close"
+                    data-tip="Supprimer"
+                    style={{ border: "none", padding: 0 }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(bk);
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+                {(bk.structure || bk.demandeur) && (
+                  <span style={{ fontWeight: 700 }}>{bk.structure || bk.demandeur}</span>
+                )}
+                <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>{bk.name}</span>
+                {themeMode && bk.theme && (
+                  <span
+                    style={{
+                      fontSize: ".62rem",
+                      fontWeight: 600,
+                      color: bk.validated ? "var(--accent)" : "rgba(232, 164, 90, .95)",
+                    }}
+                  >
+                    {bk.theme}
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
