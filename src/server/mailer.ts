@@ -37,7 +37,7 @@ const MAIL_KEYS = [
   "mail.password",
 ] as const;
 
-export type MailSettings = {
+type MailSettings = {
   driver: string;
   from: string;
   fromName: string;
@@ -57,7 +57,7 @@ function pick(dbValue: string, envValue: string | undefined): string {
  * Construit les réglages mail effectifs : config base complétée par l'env.
  * Lue à chaque envoi (volume faible, pas de cache nécessaire ici).
  */
-export async function getMailSettings(): Promise<MailSettings> {
+async function getMailSettings(): Promise<MailSettings> {
   const cfg = await getConfigMany([...MAIL_KEYS]);
   const portStr = pick(cfg["mail.port"], process.env.SMTP_PORT);
   const port = Number(portStr) || 587;

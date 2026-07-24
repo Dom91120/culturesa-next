@@ -179,11 +179,10 @@ model Service {
   position              Int        @default(0)
   createdAt             DateTime   @default(now()) @db.Timestamptz
 
-  // Durée (min) et capacité (places) par défaut des créneaux du service.
-  // Fusion des anciens champs ponct*/recur* (un seul jeu de valeurs par défaut).
+  // Capacité (places) par défaut des créneaux du service.
   // (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — vivent
-  // désormais sur CHAQUE EXERCICE, cf. Exercice + opening.ts.)
-  duration              Int        @default(60)
+  // désormais sur CHAQUE EXERCICE, cf. Exercice + opening.ts. L'ex-colonne
+  // `duration`, jamais lue, a été supprimée — audit 2026-07-24.)
   capacity              Int        @default(1)
   icon                  String?
   // (Le « délai limite de réservation » est désormais porté PAR EXERCICE, cf. Exercice.)

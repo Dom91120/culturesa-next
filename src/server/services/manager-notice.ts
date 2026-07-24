@@ -38,16 +38,16 @@ export type NoticeMode = "none" | "hours" | "daily" | "weekly";
 // Jours : alias de la source unique DAYS (schemas/config). Réexporté car consommé
 // par config/actions.ts (notification gestionnaires) via z.enum(WEEKDAYS).
 export const WEEKDAYS = DAYS;
-export type Weekday = (typeof DAYS)[number];
+type Weekday = (typeof DAYS)[number];
 
-export function normalizeMode(v: string): NoticeMode {
+function normalizeMode(v: string): NoticeMode {
   return v === "hours" || v === "daily" || v === "weekly" ? v : "none";
 }
-export function normalizeWeekday(v: string): Weekday {
+function normalizeWeekday(v: string): Weekday {
   return (WEEKDAYS as readonly string[]).includes(v) ? (v as Weekday) : "lun";
 }
 
-export type DueConfig = {
+type DueConfig = {
   mode: NoticeMode;
   intervalHours: number;
   hour: number;
@@ -58,7 +58,7 @@ export type DueConfig = {
 // Calendrier Europe/Paris (heure murale, DST) : source unique dans lib/paris-time.
 
 /** Le digest d'un service est-il dû à `now`, vu son mode et son dernier envoi ? */
-export function isDigestDue(cfg: DueConfig, now: Date): boolean {
+function isDigestDue(cfg: DueConfig, now: Date): boolean {
   if (cfg.mode === "none") return false;
   if (cfg.mode === "hours") {
     if (!cfg.lastSentAt) return true; // baseline posée par sendManagerDigest

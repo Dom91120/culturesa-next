@@ -17,7 +17,7 @@ import { EXERCICE_OPENING_SELECT } from "@/server/services/opening";
 //  Validation : héritée du parent (propagée ici). Pointage : JAMAIS touché ici.
 // ════════════════════════════════════════════════════════════
 
-export type ParentForSync = {
+type ParentForSync = {
   id: number;
   userId: string;
   serviceId: string;

@@ -29,15 +29,15 @@ const DOCKER_CONTAINER = process.env.PG_DOCKER_CONTAINER || "culturesa-db";
 /** Nom de fichier de dump admissible (liste, téléchargement, restauration, suppression). */
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.sql(\.gz)?$/;
 
-export type BackupKind = "auto" | "manuel" | "televerse";
-export type BackupFile = {
+type BackupKind = "auto" | "manuel" | "televerse";
+type BackupFile = {
   name: string;
   kind: BackupKind;
   size: number;
   mtime: Date;
 };
 
-export type BackupMode = "direct" | "docker" | null;
+type BackupMode = "direct" | "docker" | null;
 
 function dbParams() {
   const url = new URL(process.env.DATABASE_URL ?? "");

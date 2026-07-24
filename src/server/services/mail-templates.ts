@@ -27,10 +27,10 @@ export const TEMPLATE_KINDS = [
 
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 
-export type MailTemplate = { subject: string; html: string };
+type MailTemplate = { subject: string; html: string };
 
 /** Variable disponible dans un gabarit (pour l'aide à la saisie). */
-export type MailVar = { name: string; desc: string };
+type MailVar = { name: string; desc: string };
 
 const COMMON_VARS: MailVar[] = [
   { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, » sans prénom)" },
@@ -284,7 +284,7 @@ export async function setMailTemplate(
 
 // ── Types d'e-mails PERSONNALISÉS (lignes `mail_types` avec builtin = false) ──────────
 //  serviceId fourni ⇒ type DU SERVICE (serviceId = "<svc>") ; omis ⇒ type GLOBAL (serviceId = "").
-export type CustomMailType = { key: string; label: string; description: string; recipient: string };
+type CustomMailType = { key: string; label: string; description: string; recipient: string };
 const DEFAULT_CUSTOM_RECIPIENT = "L'usager concerné";
 
 /** Gabarit de départ d'un type personnalisé (sert aussi de cible au bouton « Réinitialiser »). */

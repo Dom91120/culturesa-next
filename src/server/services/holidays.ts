@@ -14,7 +14,7 @@ export async function getSchoolZone(): Promise<string> {
   return cfg["school.zone"] || "A";
 }
 
-export type SchoolHolidayRange = { dateStart: string; dateEnd: string };
+type SchoolHolidayRange = { dateStart: string; dateEnd: string };
 
 /** Plages de vacances scolaires (ISO `yyyy-mm-dd`) d'une zone — source unique
  *  (4 copies du `findMany` + mapping avant l'audit 2026-07-18). */

@@ -14,17 +14,17 @@ import { buildMirrorRows, loadMirrorContext, newRecurId } from "@/server/service
  *  et génériques (audit 2026-07-19, cf. B2). */
 export class CycleError extends Error {}
 
-export type CycleOptions = {
+type CycleOptions = {
   recreatePeriods: boolean;
   recreateSlots: boolean;
 };
 
-export type CycleResult = {
+type CycleResult = {
   created: number;
   slotsCreated: number;
 };
 
-export type UndoInfo = {
+type UndoInfo = {
   hasUndo: boolean;
   createdAt: string | null;
   bookingsCount: number;
@@ -80,7 +80,7 @@ function isLeapYear(y: number): boolean {
  * Décale une date « YYYY-MM-DD » d'un an. Gère le 29 février : si l'année cible
  * n'est pas bissextile, retombe sur le 28 février.
  */
-export function shiftDateOneYear(date: string | null): string | null {
+function shiftDateOneYear(date: string | null): string | null {
   if (!date) return null;
   const y = Number.parseInt(date.slice(0, 4), 10);
   const m = Number.parseInt(date.slice(5, 7), 10);
@@ -490,7 +490,7 @@ export async function undoCycle(serviceId: string): Promise<void> {
 // UNDO_INFO
 // =====================================================================================
 
-export async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
+async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
   const ev = await prisma.cycleEvent.findFirst({
     where: { serviceId },
     orderBy: { id: "desc" },

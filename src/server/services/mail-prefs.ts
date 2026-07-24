@@ -14,7 +14,7 @@ export const MAIL_KINDS = [
   "booking_reminder",
 ] as const;
 
-export type MailKind = (typeof MAIL_KINDS)[number];
+type MailKind = (typeof MAIL_KINDS)[number];
 
 // ════════════════════════════════════════════════════════════
 //  Contrôle PAR ACTION (déclencheur).
@@ -25,7 +25,7 @@ export type MailKind = (typeof MAIL_KINDS)[number];
 //  tout en le gardant sur la validation manuelle). Le CONTENU reste, lui, défini par
 //  TYPE d'e-mail (un seul gabarit par type, cf. mail-templates).
 // ════════════════════════════════════════════════════════════
-export const BOOKING_TRIGGERS = [
+const BOOKING_TRIGGERS = [
   "pending_create",
   "unvalidate",
   "refuse",
@@ -44,7 +44,7 @@ export type BookingTrigger = (typeof BOOKING_TRIGGERS)[number];
  * par défaut et ordre d'affichage. Persisté dans la table `mail_triggers` (cf. listMailTriggers) ;
  * cette liste sert au seed et de repli si la table n'est pas encore peuplée.
  */
-export type MailTriggerDef = {
+type MailTriggerDef = {
   key: BookingTrigger;
   label: string;
   defaultKind: MailKind;
@@ -120,7 +120,7 @@ export function defaultMailTriggers(): MailTriggerDef[] {
 }
 
 /** Type d'e-mail par défaut de chaque déclencheur (repli code, miroir de la table). */
-export const TRIGGER_KIND = Object.fromEntries(
+const TRIGGER_KIND = Object.fromEntries(
   DEFAULT_MAIL_TRIGGERS.map((t) => [t.key, t.defaultKind]),
 ) as Record<BookingTrigger, MailKind>;
 
@@ -261,7 +261,7 @@ function recipientAddrKey(t: BookingTrigger): string {
   return `mail.recipient.${t}.addr`;
 }
 
-export type TriggerRecipient = { kind: MailRecipientKind; addr: string };
+type TriggerRecipient = { kind: MailRecipientKind; addr: string };
 
 /** Réglage destinataire d'une action (défaut « usager » si absent/invalide). */
 export async function getTriggerRecipient(t: BookingTrigger): Promise<TriggerRecipient> {

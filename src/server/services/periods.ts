@@ -62,7 +62,7 @@ export class PeriodError extends Error {}
 
 // ── Exercices (entité explicite, par service) ────────────────────────────────
 
-export type ExerciceRow = {
+type ExerciceRow = {
   id: number;
   label: string;
   type: ExerciceType;
@@ -105,7 +105,7 @@ const EXERCICE_SELECT = {
 } as const;
 
 /** Exercices d'un service (triés par date de début, nulls en dernier, puis libellé). */
-export async function listServiceExercices(serviceId: string): Promise<ExerciceRow[]> {
+async function listServiceExercices(serviceId: string): Promise<ExerciceRow[]> {
   const rows = await prisma.exercice.findMany({ where: { serviceId }, select: EXERCICE_SELECT });
   return rows.sort((a, b) => {
     const as = a.dateStart?.getTime();
@@ -274,7 +274,7 @@ async function validatePeriodWithinExercice(
   }
 }
 
-export type PeriodRow = {
+type PeriodRow = {
   id: number;
   label: string;
   etiquette: string | null;
@@ -322,7 +322,7 @@ export async function listServicePeriods(
   return { periods: sorted, exercices };
 }
 
-export type CreateServicePeriodInput = {
+type CreateServicePeriodInput = {
   exerciceId: number;
   label: string;
   etiquette: string | null;
@@ -361,7 +361,7 @@ export async function createServicePeriod(
   });
 }
 
-export type UpdateServicePeriodInput = {
+type UpdateServicePeriodInput = {
   label?: string;
   etiquette?: string | null;
   dateStart?: Date | null;
@@ -479,7 +479,7 @@ export async function deleteServicePeriod(serviceId: string, id: number) {
   }
 }
 
-export type ServiceOpeningConfig = {
+type ServiceOpeningConfig = {
   activeDays: string[];
   openOnHolidays: boolean;
   openOnSchoolHolidays: boolean;

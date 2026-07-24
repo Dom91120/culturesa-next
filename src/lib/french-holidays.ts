@@ -38,7 +38,7 @@ function addDaysUtc(d: Date, days: number): Date {
 }
 
 /** Jours fériés légaux français (fixes + mobiles liés à Pâques) d'une année. */
-export function frenchHolidays(year: number): { date: string; label: string }[] {
+function frenchHolidays(year: number): { date: string; label: string }[] {
   const fmt = (d: Date) =>
     `${pad4(d.getUTCFullYear())}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
   const easter = easterSunday(year);

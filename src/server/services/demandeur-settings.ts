@@ -41,7 +41,7 @@ export async function getServiceDemandeurSettings(
  *   - `openOnSchoolHolidays` : ouvert pendant les vacances scolaires (niveau
  *                              DEMANDEUR, propre à chaque ligne).
  */
-export type DemandeurSettingLabeledRow = DemandeurSettingRow & {
+type DemandeurSettingLabeledRow = DemandeurSettingRow & {
   label: string;
   openOnHolidays: boolean;
   openOnSchoolHolidays: boolean;

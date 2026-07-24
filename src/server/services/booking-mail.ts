@@ -44,7 +44,7 @@ export function formatSlotLabel(slot: {
   return [day, time].filter(Boolean).join(" · ");
 }
 
-export type PeriodLabelInput = {
+type PeriodLabelInput = {
   serviceId: string;
   periodId?: number | null;
   slotDate?: Date | null;
@@ -120,7 +120,7 @@ export async function resolvePeriodLabels(
  * ponctuel (periodId absent/0) → période ACTIVE du service couvrant la date du
  * créneau. Renvoie "" si rien ne correspond. Délègue à resolvePeriodLabels.
  */
-export async function resolvePeriodLabel(args: PeriodLabelInput): Promise<string> {
+async function resolvePeriodLabel(args: PeriodLabelInput): Promise<string> {
   return (await resolvePeriodLabels([args]))[0] ?? "";
 }
 

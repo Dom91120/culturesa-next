@@ -57,7 +57,7 @@ export const EXERCICE_OPENING_SELECT = {
  * Exercice du service couvrant la date « YYYY-MM-DD » (bornes incluses), avec ses
  * réglages d'ouverture ; null si aucun. `db` accepte le client global ou un tx.
  */
-export async function exerciceForDate(
+async function exerciceForDate(
   db: Prisma.TransactionClient,
   serviceId: string,
   dateYmd: string,

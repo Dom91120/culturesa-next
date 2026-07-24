@@ -24,7 +24,7 @@ export type StatsFilters = {
 
 export type LabeledCount = { label: string; value: number; color?: string };
 
-export type ServiceStats = {
+type ServiceStats = {
   total: number;
   distinctUsers: number;
   pending: number;

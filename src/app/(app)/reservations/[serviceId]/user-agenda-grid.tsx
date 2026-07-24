@@ -1356,7 +1356,6 @@ export function UserAgendaGrid({
 
   const gridStartMin = firstHour * 60;
   const gridEndMin = lastHour * 60;
-  const _QUARTER_H = ROW_H / 4; // px par tranche de 15 min
 
   // Ids des créneaux ponctuels AUTONOMES (non miroirs) : affichés en vert et en
   // lecture seule (on neutralise la création/déplacement de résa récurrente dessus ;

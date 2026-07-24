@@ -5,14 +5,14 @@ import { prisma } from "@/server/db";
 import { resolveEffectiveDemandeurId } from "@/server/services/bookings";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 
-export type AnonymizeReason = "self_service" | "admin" | "retention";
+type AnonymizeReason = "self_service" | "admin" | "retention";
 
 /** Délai de grâce par défaut (jours) après préavis avant effacement, si config absente. */
-export const DEFAULT_GRACE_DAYS = 30;
+const DEFAULT_GRACE_DAYS = 30;
 /** Clé app_config du délai de grâce RGPD. */
 const GRACE_DAYS_KEY = "rgpd.graceDays";
 /** Durée de rétention par défaut (années) si la config est absente. */
-export const DEFAULT_RETENTION_YEARS = 3;
+const DEFAULT_RETENTION_YEARS = 3;
 /** Clé app_config de la durée de rétention RGPD. */
 const RETENTION_YEARS_KEY = "rgpd.retentionYears";
 
@@ -161,9 +161,9 @@ export async function hardDeleteEmptyUser(
 const MS_PER_DAY = 86_400_000;
 
 /** Source de la « dernière activité » retenue pour un compte. */
-export type LastSeenSource = "connexion" | "réservation" | "création";
+type LastSeenSource = "connexion" | "réservation" | "création";
 
-export type InactiveUser = {
+type InactiveUser = {
   id: string;
   nom: string;
   prenom: string;
@@ -267,7 +267,7 @@ export async function listInactiveScan(): Promise<InactiveUser[]> {
 // ════════════════════════════════════════════════════════════
 
 /** Usager du service exposé au panneau RGPD (dates sérialisées côté page). */
-export type ServiceRgpdUser = {
+type ServiceRgpdUser = {
   id: string;
   nom: string;
   prenom: string;

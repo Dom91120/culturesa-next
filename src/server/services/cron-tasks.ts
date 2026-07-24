@@ -24,7 +24,7 @@ export type CronSchedule =
   | { type: "everyMinutes"; step: number }
   | { type: "dailyAt"; hour: number; minute: number };
 
-export type CronTaskDef = {
+type CronTaskDef = {
   key: CronTaskKey;
   label: string;
   description: string;
@@ -198,7 +198,7 @@ export function nextCronRun(
 // ── Journal des exécutions ───────────────────────────────────────────────────────────
 
 /** Dernière exécution consignée d'une tâche. */
-export type CronRunInfo = {
+type CronRunInfo = {
   at: string; // ISO
   ok: boolean;
   trigger: "cron" | "manuel";

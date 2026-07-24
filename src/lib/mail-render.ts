@@ -12,7 +12,7 @@ export function greeting(name?: string | null): string {
 }
 
 /** Résout les blocs conditionnels {{#if nom}}…{{/if}} (gardés si la variable est non vide). */
-export function applyConditionals(tpl: string, vars: Record<string, string>): string {
+function applyConditionals(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_m, key, inner) =>
     (vars[key] ?? "").trim() ? inner : "",
   );

@@ -8,7 +8,7 @@ const TZ = "Europe/Paris";
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** Minutes dont Paris est en avance sur UTC à cet instant (60 hiver / 120 été). */
-export function parisOffsetMin(instant: Date): number {
+function parisOffsetMin(instant: Date): number {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone: TZ,
     year: "numeric",
@@ -32,7 +32,7 @@ export function parisOffsetMin(instant: Date): number {
   return Math.round((asUtc - instant.getTime()) / 60000);
 }
 
-export type ParisWall = { y: number; mo: number; da: number; min: number };
+type ParisWall = { y: number; mo: number; da: number; min: number };
 
 /** Instant → heure murale Paris (min = minutes depuis minuit). */
 export function toParisWall(instant: Date): ParisWall {

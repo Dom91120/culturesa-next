@@ -7,7 +7,7 @@ import { prisma } from "@/server/db";
 /** Libellés des états de pointage (partagé par les écrans Liste et Pointages). */
 export const POINTAGE_LABEL: Record<string, string> = { present: "Présent", absent: "Absent" };
 
-export type EditionRow = {
+type EditionRow = {
   id: number;
   type: string; // Récurrente / Ponctuelle
   structure: string; // structure de l'usager (repli sur le demandeur)

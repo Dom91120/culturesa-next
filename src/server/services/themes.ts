@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db";
 
-export type ThemesMode = "libre" | "liste";
+type ThemesMode = "libre" | "liste";
 
 /**
  * Nettoie une liste de libellés de thèmes (utilisé client ET serveur,
@@ -10,7 +10,7 @@ export type ThemesMode = "libre" | "liste";
  *   - troncature à 255 caractères,
  *   - dédoublonnage insensible à la casse en conservant l'ordre.
  */
-export function cleanThemeLabels(labels: string[]): string[] {
+function cleanThemeLabels(labels: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of labels) {

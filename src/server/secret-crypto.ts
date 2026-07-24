@@ -21,7 +21,7 @@ const keyV1 = (): Buffer =>
     .digest();
 
 /** Indique si une valeur stockée est déjà chiffrée par ce module (v1 ou v2). */
-export function isEncrypted(value: string): boolean {
+function isEncrypted(value: string): boolean {
   return typeof value === "string" && (value.startsWith(PREFIX_V2) || value.startsWith(PREFIX_V1));
 }
 
