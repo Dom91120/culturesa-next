@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useMemo, useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
@@ -13,7 +14,16 @@ import {
   updateMailTypeAction,
 } from "./actions";
 import { EmailFrame } from "./email-frame";
-import { RichTextEditor } from "./rich-text-editor";
+
+// Éditeur TipTap chargé À LA DEMANDE (audit 2026-07-24) : l'import statique
+// embarquait TipTap/ProseMirror (~33 paquets) dans le chunk des pages Échanges,
+// payé à CHAQUE ouverture de l'onglet alors que l'éditeur n'est rendu que dans la
+// modale d'édition. `ssr:false` : composant purement interactif, inutile en SSR.
+// Le remontage par editorNonce (prop `key`) est indépendant du chargement différé.
+const RichTextEditor = dynamic(() => import("./rich-text-editor").then((m) => m.RichTextEditor), {
+  ssr: false,
+  loading: () => <div className="muted">Chargement de l’éditeur…</div>,
+});
 
 export type KindData = {
   kind: string;
