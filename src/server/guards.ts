@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { Role } from "@/generated/prisma/client";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
@@ -11,10 +12,14 @@ const RANK: Record<Role, number> = {
   administrateur: 2,
 };
 
-/** Renvoie la session courante ou null. */
-export async function getSession() {
+/**
+ * Renvoie la session courante ou null. Mémoïsée PAR REQUÊTE via React.cache :
+ * un même rendu (layout + page + services qui re-vérifient la session) ne paie
+ * qu'un seul aller-retour Better Auth au lieu de 3-4.
+ */
+export const getSession = cache(async () => {
   return auth.api.getSession({ headers: await headers() });
-}
+});
 
 /** Exige un utilisateur connecté, sinon redirige vers la page de connexion. */
 export async function requireUser() {
