@@ -7,11 +7,16 @@ import {
   useAgendaAutoRefresh,
   useAgendaToast,
   useCoveringPeriodLock,
+  useFreshRef,
   usePersistedAgendaView,
+  useWeekGridColumns,
+  useWeekNavigation,
 } from "@/components/agenda-hooks";
 import {
+  AgendaAllDayRow,
   AgendaDayBackground,
   AgendaEmptyWeekNotice,
+  AgendaLegendSwatch,
   AgendaTimeColumn,
   AgendaWeekHeader,
   PrintIconButton,
@@ -19,6 +24,7 @@ import {
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
+  type AgendaBookingCore,
   addDays,
   autonomousUniqueIds,
   buildBlocksByDay,
@@ -30,31 +36,25 @@ import {
   dayKeyFromYmd,
   deriveCoveringPeriod,
   type ExerciceOpening,
-  gridDaysAndBounds,
   gridGeometry,
   lunchBounds,
   makeDayClosure,
-  makeWeekNavigation,
   mondayOf,
-  type Pointage,
   parseWeeks,
   periodsCoverToday,
-  ROW_H,
   type Slot,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
   type UniqueSlot,
   visiblePeriodsOf,
-  weekContextOpenings,
   weekDateLabels,
   ymd,
 } from "@/lib/agenda-core";
 import { earliestBookableISO } from "@/lib/booking-delay";
-import { escapeHtml } from "@/lib/email-theme";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeUnits } from "@/lib/gauge";
-import { printHtmlDocument } from "@/lib/print-html";
+import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { usePointerDrag } from "@/lib/use-pointer-drag";
 import type { ServiceModes } from "@/server/services/service-modes";
@@ -119,8 +119,7 @@ function StepBtn({
   // Smartphone : bordure pointillée ; desktop : pas de bordure.
   isMobile: boolean;
 }) {
-  const onClickRef = useRef(onClick);
-  onClickRef.current = onClick;
+  const onClickRef = useFreshRef(onClick);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -941,19 +940,9 @@ function participantsLabel(enfants: number, accompagnants: number): string {
   }`;
 }
 
-type Booking = {
-  id: number;
-  slotId: string;
-  periodId: number;
-  dayKey: string;
-  week: string;
-  bookingType: string;
-  parentBookingId: number | null;
-  enfants: number;
-  accompagnants: number;
-  theme: string;
-  validated: boolean;
-  pointage: Pointage;
+// Socle commun aux deux grilles (AgendaBookingCore, agenda-core) + champs propres
+// au payload USAGER.
+type Booking = AgendaBookingCore & {
   // Réservation de l'usager courant (agenda usager) → badge ✅/⏳ + annulation.
   mine: boolean;
   // Occurrence SYNTHÉTIQUE d'une récurrente détenue par l'usager, non matérialisée
@@ -1160,26 +1149,12 @@ export function UserAgendaGrid({
     [exercices, demandeurOpenOnSchoolHolidays],
   );
 
-  // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
-  // chaque jour de la semaine affichée (dédupliqué) — une semaine à cheval sur deux
-  // exercices agrège les deux.
-  const contextOpenings = useMemo(() => {
-    if (!anchorMonday) return [CLOSED_OPENING];
-    return weekContextOpenings(anchorMonday, openingForYmd);
-  }, [anchorMonday, openingForYmd]);
-
-  // Colonnes (jours actifs, UNION des exercices de la semaine — le grisage par date
-  // via isDayDisabled ferme les jours inactifs) + bornes horaires de la grille :
-  // dérivation partagée (gridDaysAndBounds, agenda-core). Mémoïsé : `days` est une
-  // dép de blocksByDay (perf).
-  const { days, baseFirst, baseLast } = useMemo(
-    () => gridDaysAndBounds(contextOpenings),
-    [contextOpenings],
-  );
-  // Offsets (depuis le lundi) du 1er et du dernier jour TRAVAILLÉ de la semaine :
-  // le libellé de la nav hebdo affiche ces bornes, pas lundi/dimanche fixes.
-  const firstDayOffset = days.length ? (DAY_OFFSET[days[0]] ?? 0) : 0;
-  const lastDayOffset = days.length ? (DAY_OFFSET[days[days.length - 1]] ?? 6) : 6;
+  // Ouvertures « de contexte », colonnes (jours actifs, UNION des exercices de la
+  // semaine — le grisage par date via isDayDisabled ferme les jours inactifs),
+  // bornes horaires et offsets des jours travaillés : câblage partagé
+  // (useWeekGridColumns, agenda-hooks). openingForYmd reste local (∧ demandeur).
+  const { contextOpenings, days, baseFirst, baseLast, firstDayOffset, lastDayOffset } =
+    useWeekGridColumns(anchorMonday, openingForYmd);
 
   // ── Mobile : vue « un jour à la fois » ──────────────────────────────────────
   // Sur smartphone, la grille hebdo (5-7 colonnes) est illisible : on n'affiche
@@ -1266,33 +1241,16 @@ export function UserAgendaGrid({
     if (!modes.abMode) return true; // pas de distinction A/B → tout récurrent compte
     return ab.has(slotWeekTag(monday));
   };
-  // Navigation hebdo ◀/▶ (fabrique partagée makeWeekNavigation, agenda-core) : bornée
+  // Navigation hebdo ◀/▶ (câblage partagé useWeekNavigation, agenda-hooks) : bornée
   // à la période couvrante ; en hideNoSlot, saute aux semaines AYANT un créneau.
-  // Mémoïsé : le balayage va jusqu'à 260 semaines — à ne recalculer que quand les
-  // données ou la semaine changent, pas à chaque survol/drag (audit perf).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: weekHasSlot est une closure recréée à chaque rendu ; ses entrées réelles sont listées (uniqSlotDates, recurSlotAbByPeriod, coveringPeriod, periods, modes.abMode).
-  const { canWeekPrev, canWeekNext, shiftTarget } = useMemo(
-    () =>
-      makeWeekNavigation({
-        mondayStr,
-        coveringPeriod,
-        hideEmpty: hideNoSlot,
-        weekHas: weekHasSlot,
-      }),
-    [
-      mondayStr,
-      hideNoSlot,
-      coveringPeriod,
-      uniqSlotDates,
-      recurSlotAbByPeriod,
-      periods,
-      modes.abMode,
-    ],
-  );
-  function shiftWeek(deltaWeeks: number) {
-    const target = shiftTarget(deltaWeeks);
-    if (target) setAnchorMonday(target);
-  }
+  const { canWeekPrev, canWeekNext, shiftWeek } = useWeekNavigation({
+    mondayStr,
+    coveringPeriod,
+    hideEmpty: hideNoSlot,
+    weekHas: weekHasSlot,
+    weekHasDeps: [uniqSlotDates, recurSlotAbByPeriod, periods, modes.abMode],
+    setAnchorMonday,
+  });
 
   // ── Navigation jour (mobile) ────────────────────────────────────────────────
   // Modèle de période (récurrent) : CYCLIQUE sur les jours de la semaine type.
@@ -1658,26 +1616,21 @@ export function UserAgendaGrid({
     }
     rows.sort((a, z) => a.date.localeCompare(z.date) || a.creneau.localeCompare(z.creneau));
 
-    const titleStr = [service.label, period?.label].filter(Boolean).join(" — ") || "Réservations";
     const who = `${userInfo.prenom} ${userInfo.nom}`.trim();
-    const head = ["Date", "Créneau", "Type", "Thème", "Statut", "Pointage"];
-    const body = rows.length
-      ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
-          .map(
-            (r) =>
-              `<tr><td>${escapeHtml(dateLabel(r.date))}</td><td>${escapeHtml(r.creneau)}</td><td>${escapeHtml(
-                r.type,
-              )}</td><td>${escapeHtml(r.theme)}</td><td>${escapeHtml(r.statut)}</td><td>${escapeHtml(
-                r.pointage,
-              )}</td></tr>`,
-          )
-          .join("")}</tbody></table>`
-      : `<p class="empty">Aucune réservation pour cette période.</p>`;
-    const css =
-      "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:24px;font-size:12px}h1{font-size:16px;margin:0 0 4px}.meta{color:#444;margin:0 0 16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px 8px;text-align:left}th{background:#eee !important;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.empty{color:#444}";
-    printHtmlDocument(
-      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(titleStr)}</title><style>${css}</style></head><body><h1>${escapeHtml(titleStr)}</h1><div class="meta">${escapeHtml(who)} · ${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${body}</body></html>`,
-    );
+    // Gabarit partagé (printTableDocument, lib/print-html), variante standard.
+    printTableDocument({
+      title: [service.label, period?.label].filter(Boolean).join(" — ") || "Réservations",
+      meta: `${who} · ${rows.length} réservation${rows.length > 1 ? "s" : ""}`,
+      head: ["Date", "Créneau", "Type", "Thème", "Statut", "Pointage"],
+      rows: rows.map((r) => [
+        { text: dateLabel(r.date) },
+        { text: r.creneau },
+        { text: r.type },
+        { text: r.theme },
+        { text: r.statut },
+        { text: r.pointage },
+      ]),
+    });
   }
 
   // Ancre PAR DÉFAUT (aucune vue mémorisée) — décision produit :
@@ -2090,8 +2043,7 @@ export function UserAgendaGrid({
   // déposer sur un autre jour sans relâcher. Le 1er pas est immédiat, puis répétition tant
   // que le pointeur reste sur le bord. Ref toujours frais vers mobileGoDay : sinon
   // l'intervalle capturerait une closure figée sur un mobileDayIdx/anchor périmé.
-  const mobileGoDayRef = useRef(mobileGoDay);
-  mobileGoDayRef.current = mobileGoDay;
+  const mobileGoDayRef = useFreshRef(mobileGoDay);
   const edgePageRef = useRef<{ dir: -1 | 1; timer: ReturnType<typeof setInterval> } | null>(null);
   function stopEdgePaging() {
     if (edgePageRef.current) {
@@ -2485,8 +2437,7 @@ export function UserAgendaGrid({
     setPendingAdds,
     beginDrag,
   };
-  const blockApiRef = useRef(blockApi);
-  blockApiRef.current = blockApi;
+  const blockApiRef = useFreshRef(blockApi);
 
   // Cache de callbacks STABLES par badge (clé "bk:<id>" ou "add:<key>") : chaque
   // wrapper garde une identité CONSTANTE tandis que sa closure interne (holder.fresh)
@@ -3330,16 +3281,9 @@ export function UserAgendaGrid({
               vides réservables) : le compactage « sans créneau » ne masque que des
               heures vides, pas les créneaux. */}
             {displayDays.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
-              <>
-                <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
-                  Journée entière
-                </div>
-                {displayDays.map((d) => (
-                  <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
-                    {dayBlockEls.allday.get(d)}
-                  </div>
-                ))}
-              </>
+              <AgendaAllDayRow days={displayDays} outOfPeriodCls={outOfPeriodCls}>
+                {(d) => dayBlockEls.allday.get(d)}
+              </AgendaAllDayRow>
             )}
 
             <AgendaTimeColumn
@@ -3536,8 +3480,8 @@ export function UserAgendaGrid({
               Demande en attente de validation
             </span>
             {/* Légende « Créneau récurrent » (même rendu que l'agenda admin), à droite. */}
-            <span
-              className="agenda-legend-item"
+            <AgendaLegendSwatch
+              kind="rec"
               style={{
                 marginLeft: "1rem",
                 letterSpacing: "-0.02em",
@@ -3548,9 +3492,8 @@ export function UserAgendaGrid({
                 lineHeight: 1.1,
               }}
             >
-              <span className="agenda-legend-swatch is-rec" />
               Créneau récurrent
-            </span>
+            </AgendaLegendSwatch>
           </span>
           {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
           <div
@@ -3649,8 +3592,8 @@ export function UserAgendaGrid({
               Réservation validée
             </span>
             {/* Légende « Créneau ponctuel » (même rendu que l'agenda admin), à droite. */}
-            <span
-              className="agenda-legend-item"
+            <AgendaLegendSwatch
+              kind="uniq"
               style={{
                 marginLeft: "1rem",
                 letterSpacing: "-0.02em",
@@ -3661,9 +3604,8 @@ export function UserAgendaGrid({
                 lineHeight: 1.1,
               }}
             >
-              <span className="agenda-legend-swatch is-uniq" />
               Créneau ponctuel
-            </span>
+            </AgendaLegendSwatch>
           </span>
           {/* Compteur du brouillon (aligné à droite). */}
           <p

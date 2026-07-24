@@ -7,11 +7,16 @@ import {
   useAgendaAutoRefresh,
   useAgendaToast,
   useCoveringPeriodLock,
+  useFreshRef,
   usePersistedAgendaView,
+  useWeekGridColumns,
+  useWeekNavigation,
 } from "@/components/agenda-hooks";
 import {
+  AgendaAllDayRow,
   AgendaDayBackground,
   AgendaEmptyWeekNotice,
+  AgendaLegendSwatch,
   AgendaTimeColumn,
   AgendaWeekHeader,
   PointagePill,
@@ -20,6 +25,7 @@ import {
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
+  type AgendaBookingCore,
   addDays,
   autonomousUniqueIds,
   badgeStyle,
@@ -32,32 +38,27 @@ import {
   dayKeyFromYmd,
   deriveCoveringPeriod,
   type ExerciceOpening,
-  gridDaysAndBounds,
   gridGeometry,
   isBookingLockedByPointage,
   lunchBounds,
   makeDayClosure,
-  makeWeekNavigation,
   minutesToHHMM,
   mondayOf,
   type Pointage,
   parseWeeks,
   periodsCoverToday,
-  ROW_H,
   type Slot,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
   type UniqueSlot,
   visiblePeriodsOf,
-  weekContextOpenings,
   weekDateLabels,
   ymd,
 } from "@/lib/agenda-core";
-import { escapeHtml } from "@/lib/email-theme";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor } from "@/lib/gauge";
-import { printHtmlDocument } from "@/lib/print-html";
+import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
@@ -128,19 +129,9 @@ type Exercice = {
   opening: ExerciceOpening;
 };
 
-export type Booking = {
-  id: number;
-  slotId: string;
-  periodId: number;
-  dayKey: string;
-  week: string;
-  bookingType: string;
-  parentBookingId: number | null;
-  enfants: number;
-  accompagnants: number;
-  theme: string;
-  validated: boolean;
-  pointage: Pointage;
+// Socle commun aux deux grilles (AgendaBookingCore, agenda-core) + champs propres
+// au payload ADMIN (identité/contact du réservant).
+export type Booking = AgendaBookingCore & {
   name: string;
   tel: string;
   email: string;
@@ -610,27 +601,12 @@ export function AgendaGrid({
     [exercices],
   );
 
-  // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
-  // chaque jour de la semaine affichée (dédupliqué) — une semaine à cheval sur deux
-  // exercices agrège les deux.
-  const contextOpenings = useMemo(() => {
-    if (!anchorMonday) return [CLOSED_OPENING];
-    return weekContextOpenings(anchorMonday, openingForYmd);
-  }, [anchorMonday, openingForYmd]);
-
-  // Colonnes (jours actifs du contexte — en Semaine réelle, UNION des exercices de la
-  // semaine, le grisage par date fermant les jours inactifs) + bornes horaires de la
-  // grille : dérivation partagée (gridDaysAndBounds, agenda-core). Mémoïsé : `days`
-  // est une dép de blocksByDay — un nouveau tableau à chaque rendu invaliderait la
-  // chaîne (perf).
-  const { days, baseFirst, baseLast } = useMemo(
-    () => gridDaysAndBounds(contextOpenings),
-    [contextOpenings],
-  );
-  // Offsets (depuis le lundi) du 1er et du dernier jour TRAVAILLÉ de la semaine :
-  // le libellé de la nav hebdo affiche ces bornes, pas lundi/dimanche fixes.
-  const firstDayOffset = days.length ? (DAY_OFFSET[days[0]] ?? 0) : 0;
-  const lastDayOffset = days.length ? (DAY_OFFSET[days[days.length - 1]] ?? 6) : 6;
+  // Ouvertures « de contexte », colonnes (jours actifs — en Semaine réelle, UNION
+  // des exercices de la semaine, le grisage par date fermant les jours inactifs),
+  // bornes horaires et offsets des jours travaillés : câblage partagé
+  // (useWeekGridColumns, agenda-hooks).
+  const { contextOpenings, days, baseFirst, baseLast, firstDayOffset, lastDayOffset } =
+    useWeekGridColumns(anchorMonday, openingForYmd);
 
   // Périodes visibles = celles de l'exercice courant (toutes si aucun exercice).
   const visiblePeriods = visiblePeriodsOf(periods, currentExerciceId);
@@ -702,19 +678,16 @@ export function AgendaGrid({
     if (!modes.abMode) return true; // pas de distinction A/B → toute résa récurrente compte
     return ab.has("") || ab.has(slotWeekTag(monday));
   };
-  // Navigation hebdo ◀/▶ (fabrique partagée makeWeekNavigation, agenda-core) : bornée
+  // Navigation hebdo ◀/▶ (câblage partagé useWeekNavigation, agenda-hooks) : bornée
   // à la période couvrante ; en hideEmpty, saute aux semaines AYANT une réservation.
-  // Mémoïsé : le balayage va jusqu'à 260 semaines — à ne recalculer que quand les
-  // données ou la semaine changent, pas à chaque survol/drag (audit perf).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: weekHasBooking est une closure recréée à chaque rendu ; ses entrées réelles sont listées (bookedSlotDates, recurAbByPeriod, coveringPeriod, periods, modes.abMode).
-  const { canWeekPrev, canWeekNext, shiftTarget } = useMemo(
-    () => makeWeekNavigation({ mondayStr, coveringPeriod, hideEmpty, weekHas: weekHasBooking }),
-    [mondayStr, hideEmpty, coveringPeriod, bookedSlotDates, recurAbByPeriod, periods, modes.abMode],
-  );
-  function shiftWeek(deltaWeeks: number) {
-    const target = shiftTarget(deltaWeeks);
-    if (target) setAnchorMonday(target);
-  }
+  const { canWeekPrev, canWeekNext, shiftWeek } = useWeekNavigation({
+    mondayStr,
+    coveringPeriod,
+    hideEmpty,
+    weekHas: weekHasBooking,
+    weekHasDeps: [bookedSlotDates, recurAbByPeriod, periods, modes.abMode],
+    setAnchorMonday,
+  });
   // Libellé daté de chaque jour de la semaine réelle, par dayKey.
   const weekDateByDay = weekDateLabels(mondayStr, days);
   // Jour fermé / férié / vacances (Semaine réelle) : prédicats partagés
@@ -1968,7 +1941,7 @@ export function AgendaGrid({
   // Impression « liste » (bouton N&B) : au lieu du modèle graphique, la LISTE nominative
   // des réservations de TOUS les usagers pour la semaine affichée. Une ligne par occurrence
   // datée (ponctuels + miroirs des récurrentes), via une action gardée gestionnaire
-  // (listDatedSessions). Rendu dans un iframe caché (printHtmlDocument) — sans pop-up.
+  // (listDatedSessions). Rendu dans un iframe caché (lib/print-html) — sans pop-up.
   async function printSessionsList() {
     if (typeof window === "undefined") return;
     if (!mondayStr) return;
@@ -1998,32 +1971,34 @@ export function AgendaGrid({
         pointage: pointageOf(a.pointage),
       })),
     );
-    const head = [
-      "Date",
-      "Créneau",
-      "Identité",
-      "Structure / Demandeur",
-      "Enf.",
-      "Acc.",
-      "Thème",
-      "P/A",
-    ];
-    const inner = rows.length
-      ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
-          .map(
-            (r) =>
-              `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.creneau)}</td><td>${escapeHtml(r.identite)}</td><td>${escapeHtml(r.struct)}</td><td class="c">${r.enfants}</td><td class="c">${r.accompagnants}</td><td>${escapeHtml(r.theme)}</td><td class="c">${escapeHtml(r.pointage)}</td></tr>`,
-          )
-          .join("")}</tbody></table>`
-      : '<p class="empty">Aucune réservation pour cette période.</p>';
-    const titleStr = `${service.label} — ${scopeLabel}`;
-    // Plus compact : police réduite, cellules sur une seule ligne (white-space:nowrap)
-    // pour que « 09:00 – 10:00 » et l'identité ne se coupent pas.
-    const css =
-      "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:18px;font-size:10px}h1{font-size:14px;margin:0 0 3px}.meta{color:#444;margin:0 0 10px;font-size:10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:2px 6px;text-align:left;white-space:nowrap}td.c{text-align:center}th{background:#eee !important;font-size:9px;text-transform:uppercase;letter-spacing:.03em}.empty{color:#444}";
-    printHtmlDocument(
-      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(titleStr)}</title><style>${css}</style></head><body><h1>${escapeHtml(titleStr)}</h1><div class="meta">${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${inner}</body></html>`,
-    );
+    // Gabarit partagé (printTableDocument, lib/print-html) en variante compacte :
+    // police réduite, cellules sur une seule ligne pour que « 09:00 – 10:00 » et
+    // l'identité ne se coupent pas.
+    printTableDocument({
+      title: `${service.label} — ${scopeLabel}`,
+      meta: `${rows.length} réservation${rows.length > 1 ? "s" : ""}`,
+      head: [
+        "Date",
+        "Créneau",
+        "Identité",
+        "Structure / Demandeur",
+        "Enf.",
+        "Acc.",
+        "Thème",
+        "P/A",
+      ],
+      rows: rows.map((r) => [
+        { text: r.date },
+        { text: r.creneau },
+        { text: r.identite },
+        { text: r.struct },
+        { text: String(r.enfants), center: true },
+        { text: String(r.accompagnants), center: true },
+        { text: r.theme },
+        { text: r.pointage, center: true },
+      ]),
+      compact: true,
+    });
   }
 
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
@@ -2217,8 +2192,7 @@ export function AgendaGrid({
     lockedByPointage,
     actionBooking,
   };
-  const blockApiRef = useRef(blockApi);
-  blockApiRef.current = blockApi;
+  const blockApiRef = useFreshRef(blockApi);
 
   // Créneau SOURCE d'un déplacement / redimensionnement en cours (estompé 0.35).
   // Dérivé STABLE des états de drag : il ne change qu'au début et à la fin du
@@ -2236,11 +2210,10 @@ export function AgendaGrid({
   // restent frais SANS que ces états transitoires soient en déps de renderBlock (sinon
   // chaque start/end de glisser et chaque copier/couper re-rendait les ~100 blocs).
   // L'atténuation visuelle du badge glissé/coupé est posée en DOM direct (cf. data-bkid).
-  const draggingIdRef = useRef(draggingId);
-  draggingIdRef.current = draggingId;
-  const copiedBookingRef = useRef(copiedBooking);
-  copiedBookingRef.current = copiedBooking;
+  const draggingIdRef = useFreshRef(draggingId);
+  const copiedBookingRef = useFreshRef(copiedBooking);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: les handlers d'événements passent par blockApiRef (useFreshRef, hors déps — lus au moment de l'événement) ; les entrées réelles lues AU RENDU sont listées à la main en fin de callback.
   const renderBlock = useCallback(
     (b: Block, allday: boolean) => {
       const {
@@ -3386,11 +3359,21 @@ export function AgendaGrid({
               days.some((d) =>
                 dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
               )) && (
-              <>
-                <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
-                  Journée entière
-                </div>
-                {days.map((d) => {
+              <AgendaAllDayRow
+                days={days}
+                outOfPeriodCls={outOfPeriodCls}
+                cellProps={(d) => ({
+                  // data-allday-daykey : repère la cellule sous le curseur pendant le
+                  // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
+                  "data-allday-daykey": d,
+                  style: {
+                    cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "default",
+                  },
+                  // Mode création : amorce le glisser-créer « journée entière » (horizontal).
+                  onMouseDown: (e) => onAllDayCreateMouseDown(e, d),
+                })}
+              >
+                {(d) => {
                   // Jours couverts par le glisser-créer « journée entière » (clic =
                   // 1 jour ; glisser horizontal = plusieurs) → aperçu du créneau à créer.
                   const inAllDayDrag =
@@ -3400,22 +3383,7 @@ export function AgendaGrid({
                   // cf. .agenda-block) / gris-bleu ponctuel (--slot-uniq-color, .is-uniq).
                   const drawColor = createKind === "rec" ? "#ffdc00" : "var(--slot-uniq-color)";
                   return (
-                    <div
-                      key={`ad-${d}`}
-                      // data-allday-daykey : repère la cellule sous le curseur pendant le
-                      // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
-                      data-allday-daykey={d}
-                      className={`agenda-allday-cell${outOfPeriodCls(d)}`}
-                      style={{
-                        cursor: isDayDisabled(d)
-                          ? "not-allowed"
-                          : creationMode
-                            ? "pointer"
-                            : "default",
-                      }}
-                      // Mode création : amorce le glisser-créer « journée entière » (horizontal).
-                      onMouseDown={(e) => onAllDayCreateMouseDown(e, d)}
-                    >
+                    <>
                       {dayBlockEls.allday.get(d)}
                       {/* Aperçu du créneau « journée entière » qui va être créé (clic ou
                         glisser horizontal), à la façon de l'aperçu de création horaire. */}
@@ -3441,10 +3409,10 @@ export function AgendaGrid({
                           Journée entière
                         </div>
                       )}
-                    </div>
+                    </>
                   );
-                })}
-              </>
+                }}
+              </AgendaAllDayRow>
             )}
 
             <AgendaTimeColumn
@@ -3659,16 +3627,8 @@ export function AgendaGrid({
           <div className="agenda-legend" style={{ flexShrink: 0 }}>
             {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
                 cet item de légende. */}
-            {modes.recurringMode && (
-              <span className="agenda-legend-item">
-                <span className="agenda-legend-swatch is-rec" />
-                Récurrent
-              </span>
-            )}
-            <span className="agenda-legend-item">
-              <span className="agenda-legend-swatch is-uniq" />
-              Ponctuel
-            </span>
+            {modes.recurringMode && <AgendaLegendSwatch kind="rec">Récurrent</AgendaLegendSwatch>}
+            <AgendaLegendSwatch kind="uniq">Ponctuel</AgendaLegendSwatch>
             <span className="agenda-legend-item">
               <span className="indic_p">P</span>
               Présent
