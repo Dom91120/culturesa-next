@@ -262,6 +262,8 @@ model Slot {
   slotDate     DateTime?   @db.Date
   // Jour de la semaine pour un créneau récurrent (un slot = un jour).
   // null pour les créneaux `unique` : le jour se déduit de slotDate.
+  // CHECK ck_slots_recurrent_complet (SQL brut, NOT VALID — migration 20260724190000,
+  // inexprimable en Prisma) : un récurrent DOIT avoir periodId ET slotDay.
   slotDay      DayOfWeek?
   capacity     Int?
   periodId     Int?
@@ -303,6 +305,8 @@ model Slot {
 // doivent tomber dans [dateStart, dateEnd]. Propre à un service (serviceId).
 model Exercice {
   id        Int          @id @default(autoincrement())
+  // CHECK ck_exercice_service_requis (SQL brut, NOT VALID — migration 20260724190000,
+  // inexprimable en Prisma) : toute NOUVELLE ligne doit porter un serviceId.
   serviceId String?
   label     String
   type      ExerciceType @default(scolaire)
@@ -349,6 +353,10 @@ model Period {
   exerciceId Int?
   label      String
   etiquette  String?
+  // Nullable À DESSEIN : période en cours de saisie, ou reconduite par la bascule
+  // quand le décalage d'un an échoue (29 février) — le moteur de miroirs les ignore.
+  // CHECK ck_periods_dates_ordonnees (SQL brut, NOT VALID — migration 20260724190000) :
+  // dateStart <= dateEnd quand les deux sont présentes.
   dateStart  DateTime?   @db.Date
   dateEnd    DateTime?   @db.Date
   // Disponibilité : date à partir de laquelle les USAGERS peuvent réserver sur
