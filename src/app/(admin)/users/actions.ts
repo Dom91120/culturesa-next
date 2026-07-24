@@ -143,7 +143,8 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionSt
       // Hors gestionnaire : aucun service nominatif → on vide la liste.
       await syncManagedServices(tx, d.id, isManager ? d.services : []);
     });
-  } catch {
+  } catch (e) {
+    console.error("[users] updateUserAction", e);
     return { ok: false, error: "Échec de la mise à jour du compte." };
   }
 
@@ -169,7 +170,8 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionSt
       },
     });
     userId = res.user.id;
-  } catch {
+  } catch (e) {
+    console.error("[users] createUserAction signUpEmail", e);
     return { ok: false, error: "Impossible de créer le compte (e-mail déjà utilisé ?)." };
   }
 
@@ -192,7 +194,8 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionSt
       });
       await syncManagedServices(tx, userId, isManager ? d.services : []);
     });
-  } catch {
+  } catch (e) {
+    console.error("[users] createUserAction champs métier", e);
     return {
       ok: false,
       error: "Compte créé mais les informations métier n'ont pas pu être enregistrées.",
