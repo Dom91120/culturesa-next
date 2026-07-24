@@ -20,6 +20,7 @@ import {
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
+  type AgendaBookingCore,
   addDays,
   autonomousUniqueIds,
   badgeStyle,
@@ -128,19 +129,9 @@ type Exercice = {
   opening: ExerciceOpening;
 };
 
-export type Booking = {
-  id: number;
-  slotId: string;
-  periodId: number;
-  dayKey: string;
-  week: string;
-  bookingType: string;
-  parentBookingId: number | null;
-  enfants: number;
-  accompagnants: number;
-  theme: string;
-  validated: boolean;
-  pointage: Pointage;
+// Socle commun aux deux grilles (AgendaBookingCore, agenda-core) + champs propres
+// au payload ADMIN (identité/contact du réservant).
+export type Booking = AgendaBookingCore & {
   name: string;
   tel: string;
   email: string;

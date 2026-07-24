@@ -19,6 +19,7 @@ import {
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
   type AgendaBlockBase,
+  type AgendaBookingCore,
   addDays,
   autonomousUniqueIds,
   buildBlocksByDay,
@@ -941,19 +942,9 @@ function participantsLabel(enfants: number, accompagnants: number): string {
   }`;
 }
 
-type Booking = {
-  id: number;
-  slotId: string;
-  periodId: number;
-  dayKey: string;
-  week: string;
-  bookingType: string;
-  parentBookingId: number | null;
-  enfants: number;
-  accompagnants: number;
-  theme: string;
-  validated: boolean;
-  pointage: Pointage;
+// Socle commun aux deux grilles (AgendaBookingCore, agenda-core) + champs propres
+// au payload USAGER.
+type Booking = AgendaBookingCore & {
   // Réservation de l'usager courant (agenda usager) → badge ✅/⏳ + annulation.
   mine: boolean;
   // Occurrence SYNTHÉTIQUE d'une récurrente détenue par l'usager, non matérialisée

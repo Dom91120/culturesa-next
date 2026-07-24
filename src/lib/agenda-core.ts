@@ -159,6 +159,25 @@ export const CLOSED_OPENING: ExerciceOpening = {
 
 export type Pointage = "present" | "absent" | null;
 
+// Socle du type Booking des deux grilles (audit 2026-07-24 : deux copies locales quasi
+// identiques) : champs communs des payloads admin et usager. Chaque grille ÉTEND ce
+// socle avec ses champs propres (admin : identité/contact ; usager : mine/synthetic) —
+// c'est aussi la forme minimale attendue par buildBlocksByDay.
+export type AgendaBookingCore = {
+  id: number;
+  slotId: string;
+  periodId: number;
+  dayKey: string;
+  week: string;
+  bookingType: string;
+  parentBookingId: number | null;
+  enfants: number;
+  accompagnants: number;
+  theme: string;
+  validated: boolean;
+  pointage: Pointage;
+};
+
 // Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.
 export function parseWeeks(weeks: string | null): ("A" | "B")[] {
   if (!weeks) return ["A", "B"];
