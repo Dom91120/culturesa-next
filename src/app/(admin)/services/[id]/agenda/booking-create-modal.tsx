@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
 import { DAY_NAMES } from "@/lib/agenda-core";
-import { plural } from "./agenda-format";
+import { fmtDateLongFr, plural } from "./agenda-format";
 import { OccurrencesField } from "./occurrences-field";
 
 // Usager proposé dans la modale (chargé à la demande par le parent via
@@ -134,11 +134,7 @@ export function BookingCreateModal({
   const dayHour =
     (ctx.ponctuel
       ? ctx.slotDate
-        ? new Date(`${ctx.slotDate}T00:00:00`).toLocaleDateString("fr-FR", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })
+        ? fmtDateLongFr(ctx.slotDate)
         : "créneau ponctuel"
       : (DAY_NAMES[ctx.dayKey] ?? ctx.dayKey)) +
     // Créneau « journée entière » (horaires vides) : libellé dédié au lieu de « – ».

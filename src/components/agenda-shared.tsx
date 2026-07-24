@@ -4,7 +4,7 @@
 // l'identique des deux copies locales (audit duplication 2026-06).
 
 import { useEffect } from "react";
-import { DAY_NAMES, type Pointage } from "@/lib/agenda-core";
+import { DAY_NAMES, minutesToHHMM, type Pointage } from "@/lib/agenda-core";
 
 // Coin haut-gauche + rangée d'en-têtes de jours de la grille (port legacy cornerAB).
 // Coin : grosse lettre A/B de la semaine active en mode A/B, sinon l'horloge.
@@ -76,8 +76,7 @@ export function AgendaTimeColumn({
   // AUCUNE marque — sinon la seule borne rescapée (fin de grille, ex. « 18:00 »)
   // se retrouverait à top:0 remontée par is-break-end, débordant dans le coin.
   if (quarters.length === 0) return <div className="agenda-time-col" style={{ height: totalH }} />;
-  const minLabel = (m: number) =>
-    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const minLabel = minutesToHHMM;
   // Fin réelle de la grille = fin du dernier quart visible (≠ gridEndMin si compacté).
   const effectiveEnd = quarters.length ? quarters[quarters.length - 1] + 15 : gridEndMin;
   // La rupture de la pause méridienne est déjà signalée par sa bande grise :

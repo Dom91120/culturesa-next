@@ -590,7 +590,7 @@ export async function assertBookingUnlocked(
 // Forme alignée sur le type Booking de l'agenda (pour réutiliser le moteur de
 // rendu), mais ANONYMISÉE : name/demandeur/structure vides, accompagnants 0,
 // theme "", pointage null. `mine` = réservation de l'usager courant.
-export type UserAgendaBooking = {
+type UserAgendaBooking = {
   id: number;
   slotId: string;
   periodId: number;
@@ -606,7 +606,19 @@ export type UserAgendaBooking = {
 };
 
 export async function getUserServiceAgenda(serviceId: string, userId: string) {
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  // Seuls les champs réellement lus (DTO `service` + thèmes) — le modèle complet
+  // (mgrNotice*, createDemandeurIds…) n'a rien à faire sur ce chemin chaud.
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: {
+      id: true,
+      label: true,
+      capacity: true,
+      themesMode: true,
+      gaugeAccompagnants: true,
+      validationBloquante: true,
+    },
+  });
   if (!service) return null;
 
   const user = await prisma.user.findUnique({

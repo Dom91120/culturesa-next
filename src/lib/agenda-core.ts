@@ -174,7 +174,7 @@ export function parseWeeks(weeks: string | null): ("A" | "B")[] {
 // Modèle « un slot = un jour » : la capacité d'un jour n'existe que si c'est LE jour
 // du créneau (slot.slotDay). Les slots ponctuels projetés portent leur slotDay = jour
 // de leur date, ce qui les fait passer ici aussi.
-export function dayCap(slot: Slot, dayKey: string): number | null {
+function dayCap(slot: Slot, dayKey: string): number | null {
   return slot.slotDay === dayKey ? slot.capacity : null;
 }
 
@@ -182,6 +182,13 @@ export function toMinutes(t: string, fallback: number): number {
   const m = /^(\d{1,2}):(\d{2})$/.exec(t);
   if (!m) return fallback;
   return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/** Inverse de `toMinutes` : minutes depuis minuit → « HH:MM » zéro-paddé.
+ * SOURCE UNIQUE (3 lambdas identiques avant l'audit 2026-07-24 : grille admin,
+ * modale pile, colonne horaire partagée). */
+export function minutesToHHMM(m: number): string {
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
 // Couleurs de base des badges, reprises de `_badgeStyle(bk)` du legacy (app.js) :
@@ -270,7 +277,7 @@ export const ROW_H = 56;
 // conteneur construit son propre `occupiedQ` et le passe ici (null = pas de
 // compactage). Le reste (pause compactée à 30 min, mapping linéaire intra-quart)
 // est identique partout. Port du legacy renderAgendaWeekly / mapMinToY.
-export type GridGeometry = {
+type GridGeometry = {
   /** Quarts d'heure visibles (minutes depuis minuit), dans l'ordre. */
   quarters: number[];
   /** Index d'un quart visible (minute → position dans `quarters`). */

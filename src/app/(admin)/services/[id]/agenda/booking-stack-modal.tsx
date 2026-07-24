@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ModalOverlay, PointagePill } from "@/components/agenda-shared";
-import { type AgendaBlockBase, badgeStyle, DAY_NAMES, toMinutes } from "@/lib/agenda-core";
+import {
+  type AgendaBlockBase,
+  badgeStyle,
+  DAY_NAMES,
+  minutesToHHMM,
+  toMinutes,
+} from "@/lib/agenda-core";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
 import { badgeTitle } from "./agenda-format";
 import type { Booking } from "./agenda-grid";
@@ -297,7 +303,7 @@ export function BookingStackModal({
           <div className="csm-time-col" style={{ height: blockH ?? blockMinH }}>
             {marks.map((m) => (
               <div key={m} className="csm-time-mark" style={{ top: (m - sMin) * pxPerMin }}>
-                {`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`}
+                {minutesToHHMM(m)}
               </div>
             ))}
           </div>

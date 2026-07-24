@@ -107,8 +107,10 @@ async function bookingLocked(b: {
  * audit 2026-07-17) : un pointage posé entre la lecture hors transaction et l'écriture
  * ne passe plus inaperçu. Le pré-contrôle hors transaction reste utile (message rapide),
  * mais c'est CETTE vérification qui fait foi. Lève BookingError.
+ * (Ex-`assertBookingUnlockedInTx`, renommée — audit 2026-07-24 — pour ne plus être
+ * quasi homonyme de `bookings.assertBookingUnlocked`, le verrou VALIDATION bloquante.)
  */
-async function assertBookingUnlockedInTx(
+async function assertNotLockedByPointageInTx(
   tx: Prisma.TransactionClient,
   bookingId: number,
   serviceId: string,
@@ -163,7 +165,7 @@ export async function setBookingValidatedAction(
   try {
     await prisma.$transaction(
       async (tx) => {
-        await assertBookingUnlockedInTx(tx, id.data, serviceId);
+        await assertNotLockedByPointageInTx(tx, id.data, serviceId);
         await tx.booking.update({ where: { id: id.data }, data: { validated } });
         await tx.booking.updateMany({ where: { parentBookingId: id.data }, data: { validated } });
       },
@@ -854,7 +856,7 @@ export async function deleteBookingAdminAction(
   try {
     await prisma.$transaction(
       async (tx) => {
-        await assertBookingUnlockedInTx(tx, id.data, serviceId);
+        await assertNotLockedByPointageInTx(tx, id.data, serviceId);
         await tx.booking.delete({ where: { id: id.data } });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -935,7 +937,7 @@ export async function updateBookingDetailAction(input: {
     await prisma.$transaction(
       async (tx) => {
         // Verrou pointage re-vérifié dans la transaction (anti-TOCTOU).
-        await assertBookingUnlockedInTx(tx, d.bookingId, d.serviceId);
+        await assertNotLockedByPointageInTx(tx, d.bookingId, d.serviceId);
         // Anti-surbooking : augmenter les compteurs ne doit pas dépasser la jauge/capacité
         // (la réservation courante est exclue du décompte).
         await assertSlotCapacity(tx, {
@@ -1004,7 +1006,7 @@ export async function moveBookingAction(
     await prisma.$transaction(
       async (tx) => {
         // Verrou pointage re-vérifié dans la transaction (anti-TOCTOU).
-        await assertBookingUnlockedInTx(tx, id.data, serviceId);
+        await assertNotLockedByPointageInTx(tx, id.data, serviceId);
         // Défense en profondeur (audit 2026-07-17) : créneau cible du MÊME service et
         // du MÊME type que la réservation (récurrent→récurrent, ponctuel→ponctuel),
         // comme le chemin usager (moveInTx). Récurrent : résolution partagée

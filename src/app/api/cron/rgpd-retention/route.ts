@@ -1,13 +1,5 @@
-import { NextResponse } from "next/server";
-import { isAuthorizedCron } from "@/server/cron";
-import {
-  getCronSchedule,
-  getLastCronAt,
-  isScheduleDue,
-  markCronAt,
-  recordCronRun,
-  summarizeRgpdRetention,
-} from "@/server/services/cron-tasks";
+import { runScheduledTask } from "@/server/cron-route";
+import { summarizeRgpdRetention } from "@/server/services/cron-tasks";
 import { runRgpdRetention } from "@/server/services/rgpd";
 
 /**
@@ -17,30 +9,11 @@ import { runRgpdRetention } from "@/server/services/rgpd";
  * planification configurée (Tâches planifiées › CRON, défaut 03h00) est due.
  */
 export async function GET() {
-  if (!(await isAuthorizedCron())) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const [schedule, lastCronAt] = await Promise.all([
-    getCronSchedule("rgpd-retention"),
-    getLastCronAt("rgpd-retention"),
-  ]);
-  if (!isScheduleDue(schedule, lastCronAt)) {
-    return NextResponse.json({ ok: true, skipped: true });
-  }
-  await markCronAt("rgpd-retention");
-
-  try {
+  return runScheduledTask("rgpd-retention", async () => {
     const { notified, anonymized } = await runRgpdRetention();
-    await recordCronRun("rgpd-retention", {
-      ok: true,
-      trigger: "cron",
+    return {
       summary: summarizeRgpdRetention({ notified, anonymized }),
-    });
-    return NextResponse.json({ ok: true, notified, anonymized });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Erreur inconnue.";
-    await recordCronRun("rgpd-retention", { ok: false, trigger: "cron", summary: message });
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
-  }
+      payload: { notified, anonymized },
+    };
+  });
 }

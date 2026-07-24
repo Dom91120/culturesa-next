@@ -110,7 +110,14 @@ export function EchangesConfig({
   // `isDirty`/la modale plantent). Ajustement PENDANT le rendu (pattern React de sync
   // état↔prop) pour précéder la lecture de `draft` dans le JSX. Le brouillon de la ligne
   // en cours d'édition est préservé (saisie non encore enregistrée).
-  const rowsSig = JSON.stringify(rows.map((r) => [r.kind, r.subject, r.html]));
+  // Mémoïsée sur la référence `rows` : sans ça, la sérialisation (HTML complets,
+  // dizaines de Ko) était recalculée à CHAQUE rendu — donc à chaque frappe dans
+  // l'éditeur TipTap (audit 2026-07-24). `rows` ne change de référence qu'au
+  // re-rendu serveur (router.refresh), exactement ce que la signature détecte.
+  const rowsSig = useMemo(
+    () => JSON.stringify(rows.map((r) => [r.kind, r.subject, r.html])),
+    [rows],
+  );
   const [syncedSig, setSyncedSig] = useState(rowsSig);
   if (rowsSig !== syncedSig) {
     setSyncedSig(rowsSig);

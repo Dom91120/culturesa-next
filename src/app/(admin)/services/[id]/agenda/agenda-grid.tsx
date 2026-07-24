@@ -38,6 +38,7 @@ import {
   lunchBounds,
   makeDayClosure,
   makeWeekNavigation,
+  minutesToHHMM,
   mondayOf,
   type Pointage,
   parseWeeks,
@@ -86,7 +87,7 @@ import {
   updateSlotBatchAction,
 } from "./actions";
 import { CopyWeekConfirmModal, SlotDeleteModal } from "./agenda-confirm-modals";
-import { badgeTitle } from "./agenda-format";
+import { badgeTitle, fmtDateLongFr } from "./agenda-format";
 import { BookingCreateModal, type UserOpt } from "./booking-create-modal";
 import { BookingDeleteModal } from "./booking-delete-modal";
 import { BookingDetailModal } from "./booking-detail-modal";
@@ -750,13 +751,19 @@ export function AgendaGrid({
 
   const gridStartMin = firstHour * 60;
   const gridEndMin = lastHour * 60;
-  const _QUARTER_H = ROW_H / 4; // px par tranche de 15 min
 
   // Ids des créneaux ponctuels AUTONOMES (non miroirs) : affichés en vert et en
   // lecture seule (on neutralise la création/déplacement de résa récurrente dessus ;
   // la réservation ponctuelle relève d'un autre flux).
   const uniqueIdSet = useMemo(() => autonomousUniqueIds(uniqueSlots), [uniqueSlots]);
   const mirrorMap = useMemo(() => buildMirrorMap(uniqueSlots), [uniqueSlots]);
+  // Parité (Slot.weeks) par id de créneau ponctuel : évite un `uniqueSlots.find()`
+  // O(n) PAR BLOC rendu en mode création multi (pendant admin de `uniqSlotById`
+  // côté grille usager — audit 2026-07-24).
+  const uniqueWeeksById = useMemo(
+    () => new Map(uniqueSlots.map((u) => [u.id, u.weeks ?? ""])),
+    [uniqueSlots],
+  );
 
   // Ids des créneaux récurrents qui portent AU MOINS une réservation (toutes semaines
   // confondues) : la réservation récurrente parente vit sur le slot récurrent lui-même
@@ -1061,8 +1068,6 @@ export function AgendaGrid({
   }
 
   // ── Mode « Création de créneau » : géométrie + création ─────────────────────
-  const minToHHMM = (m: number) =>
-    `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
   // Quart d'heure (minutes, snappé au quart) sous le curseur dans une colonne-jour.
   function quarterAtY(colTop: number, clientY: number): number {
@@ -1124,7 +1129,7 @@ export function AgendaGrid({
               color: args.color,
             }}
           >
-            {minToHHMM(segS)}–{minToHHMM(segE)}
+            {minutesToHHMM(segS)}–{minutesToHHMM(segE)}
           </div>
         );
       });
@@ -1232,8 +1237,8 @@ export function AgendaGrid({
                 serviceId: service.id,
                 periodId: effectivePeriodId,
                 dayKey,
-                startTime: minToHHMM(s),
-                endTime: minToHHMM(e),
+                startTime: minutesToHHMM(s),
+                endTime: minutesToHHMM(e),
                 weeks,
                 capacity: createCap,
                 demandeurIds: createDemIds,
@@ -1259,8 +1264,8 @@ export function AgendaGrid({
               createUniqueSlotBatchAction({
                 serviceId: service.id,
                 dates,
-                startTime: minToHHMM(s),
-                endTime: minToHHMM(e),
+                startTime: minutesToHHMM(s),
+                endTime: minutesToHHMM(e),
                 capacity: createCap,
                 demandeurIds: createDemIds,
                 jauge: jaugeMode,
@@ -1580,8 +1585,8 @@ export function AgendaGrid({
       endMin = gridEndMin;
       startMin = Math.max(gridStartMin, endMin - md.durationMin);
     }
-    const startTime = minToHHMM(startMin);
-    const endTime = minToHHMM(endMin);
+    const startTime = minutesToHHMM(startMin);
+    const endTime = minutesToHHMM(endMin);
     if (md.isUnique) {
       if (!mondayStr) return;
       const slotDate = ymd(addDays(mondayStr, DAY_OFFSET[md.curDay] ?? 0));
@@ -1741,15 +1746,15 @@ export function AgendaGrid({
     if (!segments.length) return;
     const keepIdx = rd.edge === "top" ? segments.length - 1 : 0;
     const [keepStart, keepEnd] = segments[keepIdx];
-    applyResizeTimes(rd, minToHHMM(keepStart), minToHHMM(keepEnd));
+    applyResizeTimes(rd, minutesToHHMM(keepStart), minutesToHHMM(keepEnd));
     segments.forEach(([s, e], i) => {
       if (i === keepIdx) return;
       runResult(
         cloneSlotAtTimesAction({
           serviceId: service.id,
           slotId: rd.slotId,
-          startTime: minToHHMM(s),
-          endTime: minToHHMM(e),
+          startTime: minutesToHHMM(s),
+          endTime: minutesToHHMM(e),
         }),
       );
     });
@@ -1815,8 +1820,8 @@ export function AgendaGrid({
   function finalizeHResize(hd: HResizeDrag) {
     const targets = daysSpan(hd.fromDay, hd.curDay).filter((d) => d !== hd.fromDay);
     if (!targets.length) return;
-    const startTime = minToHHMM(hd.startMin);
-    const endTime = minToHHMM(hd.endMin);
+    const startTime = minutesToHHMM(hd.startMin);
+    const endTime = minutesToHHMM(hd.endMin);
     if (hd.isUnique) {
       if (!mondayStr) return;
       // Le créneau élargi hérite du TYPE (parité A/B/toutes) du créneau SOURCE, PAS du
@@ -2267,7 +2272,7 @@ export function AgendaGrid({
       // lue sur Slot.weeks (posée à la création). Distingue Multi A / Multi B / Multi (toutes).
       const multiWeeks =
         creationMode && createKind === "multi" && batchSlotIds.has(b.slotId)
-          ? (uniqueSlots.find((u) => u.id === b.slotId)?.weeks ?? "")
+          ? (uniqueWeeksById.get(b.slotId) ?? "")
           : "";
       // Créneau de 15 min : bloc trop court pour la lettre A/B à 1.2rem → on la réduit.
       const abFontSize = !allday && b.endMin - b.startMin <= 15 ? "0.8rem" : "1.2rem";
@@ -2790,6 +2795,7 @@ export function AgendaGrid({
       slotParityById,
       createKind,
       batchSlotIds,
+      uniqueWeeksById,
     ],
   );
 
@@ -3553,7 +3559,7 @@ export function AgendaGrid({
                           color: moveColor,
                         }}
                       >
-                        {minToHHMM(s)}–{minToHHMM(e2)}
+                        {minutesToHHMM(s)}–{minutesToHHMM(e2)}
                       </div>
                     );
                   })()}
@@ -3604,7 +3610,7 @@ export function AgendaGrid({
                           color: rColor,
                         }}
                       >
-                        {minToHHMM(hResizeDrag.startMin)}–{minToHHMM(hResizeDrag.endMin)}
+                        {minutesToHHMM(hResizeDrag.startMin)}–{minutesToHHMM(hResizeDrag.endMin)}
                       </div>
                     );
                   })()}
@@ -3757,11 +3763,7 @@ export function AgendaGrid({
             : "";
           const slot = recurSlot ?? uniqSlot ?? null;
           const dayLabel = uniqSlot?.slotDate
-            ? new Date(`${uniqSlot.slotDate}T00:00:00`).toLocaleDateString("fr-FR", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })
+            ? fmtDateLongFr(uniqSlot.slotDate)
             : (DAY_NAMES[bk.dayKey] ?? bk.dayKey);
           const dayHour = dayLabel + (slot ? ` · ${slot.startTime}–${slot.endTime}` : "");
           // Occurrences (récurrent uniquement) = dates des réservations-ENFANTS réelles

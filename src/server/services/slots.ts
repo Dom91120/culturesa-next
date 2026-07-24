@@ -172,7 +172,7 @@ function computeWantedMirrors(args: {
  * 2026-07-17 : deux pipelines parallèles, l'un lisant la table, l'autre recalculant
  * les fériés en code). À charger APRÈS refreshPeriodHolidays pour une période neuve.
  */
-export type MirrorContext = {
+type MirrorContext = {
   startDate: string;
   endDate: string;
   activeDays: DayKey[];
@@ -352,7 +352,10 @@ export async function addRecurringSlot(
     jauge?: boolean;
   },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { capacity: true },
+  });
   if (!service) return { ok: false, error: "Service introuvable" };
   const period = await prisma.period.findFirst({ where: { id: periodId, serviceId } });
   if (!period?.dateStart || !period?.dateEnd) {
@@ -434,7 +437,10 @@ export async function copyRecurringWeek(
   toWeek: "A" | "B",
 ): Promise<{ ok: true; created: number } | { ok: false; error: string }> {
   if (fromWeek === toWeek) return { ok: false, error: "Semaines identiques" };
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { capacity: true },
+  });
   if (!service) return { ok: false, error: "Service introuvable" };
   const period = await prisma.period.findFirst({ where: { id: periodId, serviceId } });
   if (!period?.dateStart || !period?.dateEnd) {
@@ -870,7 +876,10 @@ export async function moveRecurringSlot(
   startTime: string,
   endTime: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { capacity: true },
+  });
   if (!service) return { ok: false, error: "Service introuvable" };
   const slot = await prisma.slot.findFirst({
     where: { id: slotId, serviceId, slotType: "recurring" },
