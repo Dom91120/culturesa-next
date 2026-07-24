@@ -164,6 +164,64 @@ export function AgendaDayBackground({
   );
 }
 
+/**
+ * Bande « Journée entière » : coin d'en-tête + une cellule par jour, au-dessus de la
+ * grille horaire (port du legacy alldayRow ; squelette jumeau des deux grilles, audit
+ * 2026-07-24). La condition d'affichage reste à chaque grille (admin : toujours en mode
+ * création ; usager : dès qu'un bloc all-day existe), comme le contenu des cellules
+ * (`children`, rendu par jour) et les interactions du mode création admin (`cellProps` :
+ * data-attributes, curseur, mousedown du glisser-créer horizontal).
+ */
+export function AgendaAllDayRow({
+  days,
+  outOfPeriodCls,
+  cellProps,
+  children,
+}: {
+  days: string[];
+  outOfPeriodCls: (d: string) => string;
+  cellProps?: (d: string) => React.HTMLAttributes<HTMLDivElement> & {
+    [key: `data-${string}`]: string | undefined;
+  };
+  children: (d: string) => React.ReactNode;
+}) {
+  return (
+    <>
+      <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
+        Journée entière
+      </div>
+      {days.map((d) => (
+        <div
+          key={`ad-${d}`}
+          className={`agenda-allday-cell${outOfPeriodCls(d)}`}
+          {...cellProps?.(d)}
+        >
+          {children(d)}
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Item de légende « pastille créneau » (récurrent jaune / ponctuel vert) — même
+ * vocabulaire visuel dans les deux grilles (classes .agenda-legend-* du legacy). */
+export function AgendaLegendSwatch({
+  kind,
+  style,
+  children,
+}: {
+  kind: "rec" | "uniq";
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="agenda-legend-item" style={style}>
+      <span className={`agenda-legend-swatch is-${kind}`} />
+      {children}
+    </span>
+  );
+}
+
 // Pastille de pointage P (présent, vert) / A (absent, rouge) affichée en haut à
 // droite du badge, reprise du legacy `_badgeIndicators` (classes .indic_p /
 // .indic_a). Le pointage n'existe que sur les réservations ponctuelles datées,

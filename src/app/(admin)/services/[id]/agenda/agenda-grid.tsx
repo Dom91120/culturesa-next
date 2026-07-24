@@ -12,8 +12,10 @@ import {
   useWeekNavigation,
 } from "@/components/agenda-hooks";
 import {
+  AgendaAllDayRow,
   AgendaDayBackground,
   AgendaEmptyWeekNotice,
+  AgendaLegendSwatch,
   AgendaTimeColumn,
   AgendaWeekHeader,
   PointagePill,
@@ -3355,11 +3357,21 @@ export function AgendaGrid({
               days.some((d) =>
                 dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
               )) && (
-              <>
-                <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
-                  Journée entière
-                </div>
-                {days.map((d) => {
+              <AgendaAllDayRow
+                days={days}
+                outOfPeriodCls={outOfPeriodCls}
+                cellProps={(d) => ({
+                  // data-allday-daykey : repère la cellule sous le curseur pendant le
+                  // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
+                  "data-allday-daykey": d,
+                  style: {
+                    cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "default",
+                  },
+                  // Mode création : amorce le glisser-créer « journée entière » (horizontal).
+                  onMouseDown: (e) => onAllDayCreateMouseDown(e, d),
+                })}
+              >
+                {(d) => {
                   // Jours couverts par le glisser-créer « journée entière » (clic =
                   // 1 jour ; glisser horizontal = plusieurs) → aperçu du créneau à créer.
                   const inAllDayDrag =
@@ -3369,22 +3381,7 @@ export function AgendaGrid({
                   // cf. .agenda-block) / gris-bleu ponctuel (--slot-uniq-color, .is-uniq).
                   const drawColor = createKind === "rec" ? "#ffdc00" : "var(--slot-uniq-color)";
                   return (
-                    <div
-                      key={`ad-${d}`}
-                      // data-allday-daykey : repère la cellule sous le curseur pendant le
-                      // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
-                      data-allday-daykey={d}
-                      className={`agenda-allday-cell${outOfPeriodCls(d)}`}
-                      style={{
-                        cursor: isDayDisabled(d)
-                          ? "not-allowed"
-                          : creationMode
-                            ? "pointer"
-                            : "default",
-                      }}
-                      // Mode création : amorce le glisser-créer « journée entière » (horizontal).
-                      onMouseDown={(e) => onAllDayCreateMouseDown(e, d)}
-                    >
+                    <>
                       {dayBlockEls.allday.get(d)}
                       {/* Aperçu du créneau « journée entière » qui va être créé (clic ou
                         glisser horizontal), à la façon de l'aperçu de création horaire. */}
@@ -3410,10 +3407,10 @@ export function AgendaGrid({
                           Journée entière
                         </div>
                       )}
-                    </div>
+                    </>
                   );
-                })}
-              </>
+                }}
+              </AgendaAllDayRow>
             )}
 
             <AgendaTimeColumn
@@ -3628,16 +3625,8 @@ export function AgendaGrid({
           <div className="agenda-legend" style={{ flexShrink: 0 }}>
             {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
                 cet item de légende. */}
-            {modes.recurringMode && (
-              <span className="agenda-legend-item">
-                <span className="agenda-legend-swatch is-rec" />
-                Récurrent
-              </span>
-            )}
-            <span className="agenda-legend-item">
-              <span className="agenda-legend-swatch is-uniq" />
-              Ponctuel
-            </span>
+            {modes.recurringMode && <AgendaLegendSwatch kind="rec">Récurrent</AgendaLegendSwatch>}
+            <AgendaLegendSwatch kind="uniq">Ponctuel</AgendaLegendSwatch>
             <span className="agenda-legend-item">
               <span className="indic_p">P</span>
               Présent

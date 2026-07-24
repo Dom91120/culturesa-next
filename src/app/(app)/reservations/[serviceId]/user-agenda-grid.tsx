@@ -12,8 +12,10 @@ import {
   useWeekNavigation,
 } from "@/components/agenda-hooks";
 import {
+  AgendaAllDayRow,
   AgendaDayBackground,
   AgendaEmptyWeekNotice,
+  AgendaLegendSwatch,
   AgendaTimeColumn,
   AgendaWeekHeader,
   PrintIconButton,
@@ -3285,16 +3287,9 @@ export function UserAgendaGrid({
               vides réservables) : le compactage « sans créneau » ne masque que des
               heures vides, pas les créneaux. */}
             {displayDays.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
-              <>
-                <div className="agenda-header-cell agenda-allday-corner" data-tip="Journée entière">
-                  Journée entière
-                </div>
-                {displayDays.map((d) => (
-                  <div key={`ad-${d}`} className={`agenda-allday-cell${outOfPeriodCls(d)}`}>
-                    {dayBlockEls.allday.get(d)}
-                  </div>
-                ))}
-              </>
+              <AgendaAllDayRow days={displayDays} outOfPeriodCls={outOfPeriodCls}>
+                {(d) => dayBlockEls.allday.get(d)}
+              </AgendaAllDayRow>
             )}
 
             <AgendaTimeColumn
@@ -3491,8 +3486,8 @@ export function UserAgendaGrid({
               Demande en attente de validation
             </span>
             {/* Légende « Créneau récurrent » (même rendu que l'agenda admin), à droite. */}
-            <span
-              className="agenda-legend-item"
+            <AgendaLegendSwatch
+              kind="rec"
               style={{
                 marginLeft: "1rem",
                 letterSpacing: "-0.02em",
@@ -3503,9 +3498,8 @@ export function UserAgendaGrid({
                 lineHeight: 1.1,
               }}
             >
-              <span className="agenda-legend-swatch is-rec" />
               Créneau récurrent
-            </span>
+            </AgendaLegendSwatch>
           </span>
           {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
           <div
@@ -3604,8 +3598,8 @@ export function UserAgendaGrid({
               Réservation validée
             </span>
             {/* Légende « Créneau ponctuel » (même rendu que l'agenda admin), à droite. */}
-            <span
-              className="agenda-legend-item"
+            <AgendaLegendSwatch
+              kind="uniq"
               style={{
                 marginLeft: "1rem",
                 letterSpacing: "-0.02em",
@@ -3616,9 +3610,8 @@ export function UserAgendaGrid({
                 lineHeight: 1.1,
               }}
             >
-              <span className="agenda-legend-swatch is-uniq" />
               Créneau ponctuel
-            </span>
+            </AgendaLegendSwatch>
           </span>
           {/* Compteur du brouillon (aligné à droite). */}
           <p
