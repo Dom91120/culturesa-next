@@ -24,6 +24,7 @@ import {
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import {
+  type BookingConfirmationParams,
   sendBookingCancellationMail,
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
@@ -35,6 +36,10 @@ import {
   resolveEffectiveDemandeurId,
 } from "@/server/services/bookings";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
+import {
+  insertRecurringBookingInTx,
+  resolveRecurringTarget,
+} from "@/server/services/recurring-booking";
 import {
   PARENT_FOR_SYNC_SELECT,
   syncRecurringChildren,
@@ -1002,31 +1007,27 @@ export async function moveBookingAction(
         await assertBookingUnlockedInTx(tx, id.data, serviceId);
         // Défense en profondeur (audit 2026-07-17) : créneau cible du MÊME service et
         // du MÊME type que la réservation (récurrent→récurrent, ponctuel→ponctuel),
-        // comme le chemin usager (moveInTx). La période SUIT le créneau cible : sans
-        // cette mise à jour, la jauge restait décomptée sur la partition
-        // {slotId, ancienne période} → sous-comptage et sur-réservation possibles.
+        // comme le chemin usager (moveInTx). Récurrent : résolution partagée
+        // (recurring-booking.ts) — la période et la parité SUIVENT le créneau cible
+        // (sans quoi la jauge restait décomptée sur {slotId, ancienne période} et une
+        // "A" déposée sur un créneau "B" devenait fantôme, audits 2026-07-17/19).
+        // Ponctuel → aucune période (NULL), aligné sur le chemin usager.
         const wantType = lk.bookingType === "recurring" ? "recurring" : "unique";
-        const target = await tx.slot.findFirst({
-          where: { id: slotId, serviceId },
-          select: { slotType: true, periodId: true, weeks: true },
-        });
-        if (!target || target.slotType !== wantType) {
-          throw new BookingError("Ce créneau n'est pas disponible.");
+        let newPeriodId: number | null = null;
+        let newWeek: "" | "A" | "B" = "";
+        if (wantType === "recurring") {
+          const target = await resolveRecurringTarget(tx, { serviceId, slotId });
+          newPeriodId = target.periodId;
+          newWeek = target.week;
+        } else {
+          const target = await tx.slot.findFirst({
+            where: { id: slotId, serviceId },
+            select: { slotType: true },
+          });
+          if (target?.slotType !== "unique") {
+            throw new BookingError("Ce créneau n'est pas disponible.");
+          }
         }
-        if (wantType === "recurring" && !(target.periodId != null && target.periodId > 0)) {
-          throw new BookingError("Période requise pour une réservation récurrente.");
-        }
-        // Récurrent → période du créneau cible ; ponctuel → aucune période (NULL),
-        // aligné sur le chemin usager.
-        const newPeriodId = wantType === "recurring" ? target.periodId : null;
-        // La parité SUIT le créneau cible (Slot.weeks), comme à la création — figée à
-        // l'ancienne valeur, une récurrente "A" déposée sur un créneau "B" gardait sa
-        // parité et syncRecurringChildren supprimait TOUTES ses occurrences (aucun
-        // miroir compatible) : réservation fantôme (audit 2026-07-19).
-        const newWeek =
-          wantType === "recurring" && (target.weeks === "A" || target.weeks === "B")
-            ? target.weeks
-            : "";
         // Anti-surbooking : déplacer vers un créneau complet est refusé (jauge/capacité).
         await assertSlotCapacity(tx, {
           serviceId,
@@ -1037,20 +1038,16 @@ export async function moveBookingAction(
           accompagnants: lk.accompagnants,
           excludeBookingId: id.data,
         });
-        await tx.booking.update({
+        const updated = await tx.booking.update({
           where: { id: id.data },
           // auto_validate_from réinitialisé à NOW() sur un déplacement (cf. logique d'origine).
           data: { slotId, periodId: newPeriodId, week: newWeek, autoValidateFrom: new Date() },
         });
-        const b = await tx.booking.findUnique({
-          where: { id: id.data },
-          // Select UNIQUE du parent à resynchroniser (+ bookingType pour la branche).
-          select: { ...PARENT_FOR_SYNC_SELECT, bookingType: true },
-        });
-        // Récurrente : régénère les enfants sur les miroirs du nouveau créneau.
+        // Récurrente : régénère les enfants sur les miroirs du nouveau créneau — la
+        // ligne mise à jour EST le ParentForSync (plus de refetch nécessaire).
         // Gestionnaire : pas de délai de réservation, on borne juste au présent.
-        if (b && b.bookingType === "recurring")
-          await syncRecurringChildren(tx, b, { cutoffISO: todayParisISO() });
+        if (updated.bookingType === "recurring")
+          await syncRecurringChildren(tx, updated, { cutoffISO: todayParisISO() });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -1097,30 +1094,19 @@ export async function createRecurringBookingAction(input: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
   }
   const d = parsed.data;
+  let mail: BookingConfirmationParams | null = null;
   try {
     await prisma.$transaction(
       async (tx) => {
-        // Défense en profondeur : le créneau cible doit être un récurrent ACTIF du service
-        // (comme createUniqueBookingInTx pour le ponctuel). Évite une récurrente posée sur
-        // un créneau ponctuel/désactivé via un slotId forgé, que syncRecurringChildren
-        // propagerait ensuite. (assertSlotCapacity ne contrôle que le couple slot/service.)
-        const target = await tx.slot.findFirst({
-          where: { id: d.slotId, serviceId: d.serviceId },
-          select: { slotType: true, periodId: true, weeks: true },
+        // Résolution/validation du créneau cible : récurrent actif du service, période
+        // annoncée ÉGALE à celle du créneau (anti-injection : jauge et unicité
+        // uq_recurring cloisonnées par {slotId, periodId}), parité dérivée du créneau
+        // — source unique partagée avec le chemin usager (recurring-booking.ts).
+        const target = await resolveRecurringTarget(tx, {
+          serviceId: d.serviceId,
+          slotId: d.slotId,
+          periodId: d.periodId,
         });
-        if (target?.slotType !== "recurring") {
-          throw new BookingError("Ce créneau n'est pas disponible.");
-        }
-        // Anti-injection : la période annoncée DOIT être celle du créneau — la jauge et
-        // l'unicité uq_recurring sont cloisonnées par {slotId, periodId}, un periodId
-        // forgé les contournerait et matérialiserait les occurrences sur la mauvaise
-        // plage. Même garde que le chemin usager (reserveRecurringInTx).
-        if (target.periodId !== d.periodId) {
-          throw new BookingError("Ce créneau n'est pas disponible.");
-        }
-        // La réservation SUIT la parité du CRÉNEAU (Slot.weeks), pas la semaine annoncée par
-        // le client : "A"/"B" → cette parité ; "" (toutes semaines) → toutes les occurrences.
-        const slotWeek = target.weeks === "A" || target.weeks === "B" ? target.weeks : "";
         // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.
         // (pas de délai de réservation côté gestionnaire, mais la capacité s'applique.)
         await assertSlotCapacity(tx, {
@@ -1131,38 +1117,18 @@ export async function createRecurringBookingAction(input: {
           enfants: d.enfants,
           accompagnants: d.accompagnants,
         });
-        const created = await tx.booking.create({
-          data: {
-            bookingType: "recurring",
-            userId: d.userId,
-            serviceId: d.serviceId,
-            slotId: d.slotId,
-            periodId: d.periodId,
-            week: slotWeek,
-            enfants: d.enfants,
-            accompagnants: d.accompagnants,
-            themeLabel: d.theme,
-            validated: true,
-            autoValidateFrom: new Date(),
-          },
+        // Insertion partagée (booking + réservations-enfants + paramètres d'e-mail).
+        // Créée par un gestionnaire : validée d'emblée, matérialisée dès aujourd'hui
+        // (pas de délai de réservation côté gestionnaire).
+        mail = await insertRecurringBookingInTx(tx, target, {
+          userId: d.userId,
+          theme: d.theme,
+          enfants: d.enfants,
+          accompagnants: d.accompagnants,
+          validated: true,
+          trigger: "confirm_manager_create",
+          cutoffISO: todayParisISO(),
         });
-        await syncRecurringChildren(
-          tx,
-          {
-            id: created.id,
-            userId: d.userId,
-            serviceId: d.serviceId,
-            slotId: d.slotId,
-            periodId: d.periodId,
-            week: slotWeek,
-            themeLabel: d.theme,
-            enfants: d.enfants,
-            accompagnants: d.accompagnants,
-            validated: true,
-          },
-          // Gestionnaire : pas de délai de réservation (borne au présent).
-          { cutoffISO: todayParisISO() },
-        );
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -1173,34 +1139,8 @@ export async function createRecurringBookingAction(input: {
     });
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
-  // Confirmation à l'usager (best-effort) : réservation créée par un gestionnaire = validée.
-  const slot = await prisma.slot.findUnique({
-    where: { id: d.slotId },
-    select: {
-      startTime: true,
-      endTime: true,
-      slotDay: true,
-      service: { select: { label: true } },
-    },
-  });
-  if (slot) {
-    await sendBookingConfirmationMail({
-      userId: d.userId,
-      serviceId: d.serviceId,
-      serviceLabel: slot.service.label,
-      trigger: "confirm_manager_create",
-      slot: {
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        slotDate: null,
-        slotDay: slot.slotDay,
-      },
-      periodId: d.periodId,
-      enfants: d.enfants,
-      accompagnants: d.accompagnants,
-      theme: d.theme,
-    });
-  }
+  // Confirmation à l'usager (best-effort), APRÈS le commit.
+  if (mail) await sendBookingConfirmationMail(mail);
   return { ok: true };
 }
 

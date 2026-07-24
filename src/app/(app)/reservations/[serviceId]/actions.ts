@@ -34,6 +34,10 @@ import {
   userCanAccessService,
 } from "@/server/services/bookings";
 import { openingForDate } from "@/server/services/opening";
+import {
+  insertRecurringBookingInTx,
+  resolveRecurringTarget,
+} from "@/server/services/recurring-booking";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 
 function revalidate(serviceId: string) {
@@ -65,28 +69,11 @@ async function reserveRecurringInTx(
   },
 ): Promise<BookingConfirmationParams> {
   const { slotId, periodId, theme, enfants, accompagnants } = args;
-  // Une réservation récurrente est TOUJOURS rattachée à une période (FK bookings.periodId).
-  // Garde défensif : refuse un periodId absent/invalide plutôt que de violer la FK.
-  if (!(periodId > 0)) {
-    throw new BookingError("Période requise pour une réservation récurrente.");
-  }
-  const slot = await tx.slot.findUnique({
-    where: { id: slotId },
-    include: { service: true, demandeurs: { select: { demandeurId: true } } },
-  });
-  if (!slot || slot.serviceId !== serviceId || slot.slotType !== "recurring") {
-    throw new BookingError("Ce créneau n'est pas disponible.");
-  }
-  // Anti-injection : le periodId DOIT être celui du créneau récurrent. Un periodId
-  // forgé (même d'un autre service, du moment qu'il est « dispo ») contournerait
-  // sinon la jauge — cloisonnée par {slotId, periodId} (assertSlotCapacity) — et
-  // l'unicité uq_recurring, et matérialiserait les enfants sur la mauvaise plage.
-  if (slot.periodId !== periodId) {
-    throw new BookingError("Ce créneau n'est pas disponible.");
-  }
-  // La réservation SUIT la parité du CRÉNEAU (Slot.weeks), pas la semaine annoncée par le
-  // client : "A"/"B" → cette parité ; "" (toutes semaines) → toutes les occurrences.
-  const slotWeek = slot.weeks === "A" || slot.weeks === "B" ? slot.weeks : "";
+  // Résolution/validation du créneau cible : type récurrent, service, période
+  // annoncée obligatoire et ÉGALE à celle du créneau (anti-injection : jauge et
+  // unicité uq_recurring cloisonnées par {slotId, periodId}), parité dérivée du
+  // créneau — source unique partagée avec l'agenda admin (recurring-booking.ts).
+  const target = await resolveRecurringTarget(tx, { serviceId, slotId, periodId });
   // Accès service : le demandeur effectif de l'usager doit accepter ce service.
   if (!(await userCanAccessService(tx, userId, serviceId))) {
     throw new BookingError("Vous n'avez pas accès à ce service.");
@@ -110,9 +97,9 @@ async function reserveRecurringInTx(
   // Demandeurs autorisés (SlotDemandeur) : évalués sur le demandeur EFFECTIF (le
   // sien, sinon celui de sa structure) — cohérent avec l'affichage de l'agenda
   // usager. Compte sans demandeur effectif (ex. admin) : autorisé.
-  if (slot.demandeurs.length > 0) {
+  if (target.demandeurIds.length > 0) {
     const demId = await effectiveDemandeurId(tx, userId);
-    if (demId != null && !slot.demandeurs.some((d) => d.demandeurId === demId)) {
+    if (demId != null && !target.demandeurIds.includes(demId)) {
       throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
     }
   }
@@ -136,51 +123,16 @@ async function reserveRecurringInTx(
   });
   // Validation : validée d'emblée sauf si le demandeur EFFECTIF est en mode validation.
   const validated = !(await isValidationMode(tx, userId, serviceId));
-  const created = await tx.booking.create({
-    data: {
-      bookingType: "recurring",
-      userId,
-      serviceId,
-      slotId,
-      periodId,
-      week: slotWeek,
-      enfants: myEnfants,
-      accompagnants: myAcc,
-      themeLabel: theme,
-      validated,
-      autoValidateFrom: new Date(),
-    },
-  });
-  // Matérialise les réservations-enfants datées (une par occurrence).
-  await syncRecurringChildren(tx, {
-    id: created.id,
+  // Insertion partagée (booking + réservations-enfants + paramètres d'e-mail).
+  // Création par l'usager : confirmée d'emblée (validation off) ou demande en attente.
+  return insertRecurringBookingInTx(tx, target, {
     userId,
-    serviceId,
-    slotId,
-    periodId,
-    week: slotWeek,
-    themeLabel: theme,
+    theme,
     enfants: myEnfants,
     accompagnants: myAcc,
     validated,
-  });
-  return {
-    userId,
-    serviceId,
-    serviceLabel: slot.service.label,
-    // Création par l'usager : confirmée d'emblée (validation off) ou demande en attente.
     trigger: validated ? "confirm_create" : "pending_create",
-    slot: {
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      slotDate: null,
-      slotDay: slot.slotDay,
-    },
-    periodId,
-    enfants: myEnfants,
-    accompagnants: myAcc,
-    theme,
-  };
+  });
 }
 
 async function reservePonctuelInTx(
@@ -309,45 +261,53 @@ async function moveInTx(
   if (!booking) throw new BookingError("Réservation introuvable.");
   // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
   await assertBookingUnlocked(tx, userId, booking);
-  const slot = await tx.slot.findUnique({
-    where: { id: target.slotId },
-    include: {
-      service: true,
-      demandeurs: { select: { demandeurId: true } },
-      parent: { select: { demandeurs: { select: { demandeurId: true } } } },
-    },
-  });
-  const wantType = target.ponctuel ? "unique" : "recurring";
-  if (!slot || slot.serviceId !== serviceId || slot.slotType !== wantType) {
-    throw new BookingError("Ce créneau n'est pas disponible.");
+  // Créneau cible : récurrent = résolution partagée avec la création et l'agenda
+  // admin (resolveRecurringTarget : type/service, période annoncée obligatoire et
+  // égale à celle du créneau — anti-injection, parité dérivée du créneau, cf.
+  // audit 2026-07-19) ; ponctuel = fetch local (restriction avec repli PARENT).
+  let slotWeek: "" | "A" | "B" = "";
+  let restriction: number[] = [];
+  let uniqueSlot: { periodId: number | null; slotDate: Date | null } | null = null;
+  if (!target.ponctuel) {
+    const t = await resolveRecurringTarget(tx, {
+      serviceId,
+      slotId: target.slotId,
+      periodId: target.periodId ?? 0,
+    });
+    slotWeek = t.week;
+    restriction = t.demandeurIds;
+  } else {
+    const slot = await tx.slot.findUnique({
+      where: { id: target.slotId },
+      include: {
+        demandeurs: { select: { demandeurId: true } },
+        parent: { select: { demandeurs: { select: { demandeurId: true } } } },
+      },
+    });
+    if (!slot || slot.serviceId !== serviceId || slot.slotType !== "unique") {
+      throw new BookingError("Ce créneau n'est pas disponible.");
+    }
+    // Restriction du créneau, sinon celle de son PARENT pour un miroir (cohérent
+    // avec createUniqueBookingInTx — un miroir ne porte pas ses propres lignes
+    // SlotDemandeur).
+    restriction = (slot.demandeurs.length ? slot.demandeurs : (slot.parent?.demandeurs ?? [])).map(
+      (d) => d.demandeurId,
+    );
+    uniqueSlot = slot;
   }
-  // La parité de la réservation SUIT le créneau cible (Slot.weeks), comme à la création
-  // (reserveRecurringInTx) — la valeur annoncée par le client n'est plus utilisée : un
-  // "A" forgé sur un créneau toutes-semaines divisait par deux les occurrences
-  // matérialisées (audit 2026-07-19).
-  const slotWeek = !target.ponctuel && (slot.weeks === "A" || slot.weeks === "B") ? slot.weeks : "";
-  // Déplacement vers un créneau récurrent → période cible obligatoire (FK bookings.periodId).
-  if (!target.ponctuel && !(target.periodId != null && target.periodId > 0)) {
-    throw new BookingError("Période requise pour une réservation récurrente.");
-  }
-  // Anti-injection : vers un récurrent, la période cible DOIT être celle du créneau
-  // (même raison qu'à la création : jauge/unicité cloisonnées par periodId).
-  if (!target.ponctuel && slot.periodId !== target.periodId) {
-    throw new BookingError("Ce créneau n'est pas disponible.");
-  }
-  // Demandeurs autorisés (SlotDemandeur) : restriction du créneau, sinon celle de son
-  // PARENT pour un miroir (cohérent avec createUniqueBookingInTx — un miroir ne porte
-  // pas ses propres lignes SlotDemandeur). Évalué sur le demandeur EFFECTIF (le sien,
+  // Demandeurs autorisés (SlotDemandeur) : évalué sur le demandeur EFFECTIF (le sien,
   // sinon celui de sa structure). Compte sans demandeur effectif (ex. admin) : autorisé.
-  const restriction = slot.demandeurs.length ? slot.demandeurs : (slot.parent?.demandeurs ?? []);
   if (restriction.length > 0) {
     const demId = await effectiveDemandeurId(tx, userId);
-    if (demId != null && !restriction.some((d) => d.demandeurId === demId)) {
+    if (demId != null && !restriction.includes(demId)) {
       throw new BookingError("Ce créneau est réservé à d'autres demandeurs.");
     }
   }
   // Disponibilité de la période CIBLE (colonne « Dispo ») : pas encore ouverte → refus.
-  await assertPeriodOpenForUser(tx, target.ponctuel ? slot.periodId : target.periodId);
+  await assertPeriodOpenForUser(
+    tx,
+    target.ponctuel ? (uniqueSlot?.periodId ?? null) : target.periodId,
+  );
   // Déplacement vers un créneau PONCTUEL daté : mêmes gardes de date que la création
   // (createUniqueBookingInTx) — date passée refusée, délai de réservation re-vérifié
   // (le move permettait sinon de contourner le délai : créer sur un créneau autorisé
@@ -355,8 +315,9 @@ async function moveInTx(
   // 2026-07-19), vacances scolaires selon exercice ∧ demandeur. Date hors de tout
   // exercice = fermée.
   if (target.ponctuel) {
-    if (!slot.slotDate) throw new BookingError("Ce créneau n'est pas disponible.");
-    const slotYmd = slot.slotDate.toISOString().slice(0, 10);
+    const slotDate = uniqueSlot?.slotDate;
+    if (!slotDate) throw new BookingError("Ce créneau n'est pas disponible.");
+    const slotYmd = slotDate.toISOString().slice(0, 10);
     if (slotYmd < todayParisISO()) {
       throw new BookingError("Ce créneau est passé.");
     }
@@ -375,7 +336,7 @@ async function moveInTx(
     if (slotYmd < earliest) {
       throw new BookingError("Le délai de réservation pour ce créneau n'est pas encore atteint.");
     }
-    await assertNotSchoolHolidayForUser(tx, userId, slot.slotDate, opening.openOnSchoolHolidays);
+    await assertNotSchoolHolidayForUser(tx, userId, slotDate, opening.openOnSchoolHolidays);
   }
   // Anti-surbooking : règle canonique partagée (assertSlotCapacity), la réservation
   // déplacée étant exclue du décompte.
@@ -396,11 +357,11 @@ async function moveInTx(
     serviceId,
     userId,
     bookingType: target.ponctuel ? "unique" : "recurring",
-    periodId: target.ponctuel ? (slot.periodId ?? 0) : (target.periodId ?? 0),
+    periodId: target.ponctuel ? (uniqueSlot?.periodId ?? 0) : (target.periodId ?? 0),
     excludeBookingId: bookingId,
   });
   const validated = !(await isValidationMode(tx, userId, serviceId));
-  await tx.booking.update({
+  const updated = await tx.booking.update({
     where: { id: bookingId },
     data: {
       slotId: target.slotId,
@@ -415,19 +376,9 @@ async function moveInTx(
     // Devient ponctuelle : plus d'occurrences → on retire d'éventuels enfants.
     await tx.booking.deleteMany({ where: { parentBookingId: bookingId } });
   } else {
-    // Récurrente : régénère les enfants sur les nouveaux miroirs.
-    await syncRecurringChildren(tx, {
-      id: bookingId,
-      userId,
-      serviceId,
-      slotId: target.slotId,
-      periodId: target.periodId ?? 0,
-      week: slotWeek,
-      themeLabel: booking.themeLabel,
-      enfants: booking.enfants,
-      accompagnants: booking.accompagnants,
-      validated,
-    });
+    // Récurrente : régénère les enfants sur les nouveaux miroirs — la ligne mise à
+    // jour EST le ParentForSync (plus de payload parallèle à maintenir en phase).
+    await syncRecurringChildren(tx, updated);
   }
 }
 
