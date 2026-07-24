@@ -256,11 +256,6 @@ header {
 }
 
 /* ── Options des onglets Planning (cases à cocher) ─────── */
-.planning-options {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
 .planning-options-row {
   display: flex;
   align-items: center;
@@ -992,43 +987,7 @@ textarea {
   background: var(--accent);
   display: none;
 }
-#cap-period-tabs-2 .period-badge,
-#planning-period-tabs .period-badge,
-#planning-rec-period-tabs .period-badge,
-#period-tabs .period-badge {
-  display: block;
-}
-.unique td:first-child {
-  padding-left: 2.1rem;
-}
-/* ── Slot button ─────────────────────────────────────────── */
-.slot-btn {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 160px;
-  height: 44px;
-  border: none;
-  border-radius: var(--rad-sm);
-  background: none;
-  margin: 4px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.2s;
-  position: relative;
-}
-.slot-btn.selected {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #0f1117;
-}
-.slot-btn:disabled {
-  opacity: 0.8;
-  cursor: not-allowed;
-}
 /* Petite croix de suppression sur le badge « ma réservation », visible au survol */
-.slot-btn .slot-btn-close,
 .user-agenda-mine-badge .slot-btn-close {
   position: absolute;
   top: 1px;
@@ -1050,12 +1009,11 @@ textarea {
 .user-agenda-mine-badge:hover .slot-btn-close {
   display: inline-flex;
 }
-.slot-btn .slot-btn-close:hover,
 .user-agenda-mine-badge .slot-btn-close:hover {
   color: var(--danger);
 }
 /* Croix × du badge usager : taille proportionnelle au créneau (cqmin), au lieu des
-   18px / 1.15rem fixes partagés avec la table (.slot-btn, laissée en pixels). */
+   18px / 1.15rem fixes de la règle de base ci-dessus. */
 .user-agenda-mine-badge .slot-btn-close {
   top: calc(var(--bu) * 2);
   right: calc(var(--bu) * 6);
@@ -1154,10 +1112,6 @@ textarea.theme-pending:focus::placeholder {
   -webkit-text-fill-color: #b2a478 !important;
   opacity: 1;
 }
-.slot-btn.selected .slot-spots {
-  background: rgba(0, 0, 0, 0.2);
-  color: #0f1117;
-}
 .slot-icon {
   font-size: 0.85rem;
 }
@@ -1174,14 +1128,6 @@ textarea.theme-pending:focus::placeholder {
   font-size: 0.6rem;
   width: stretch;
   text-align: center;
-}
-
-/* ── Drag-and-drop réservations utilisateur ─────────────── */
-.slot-btn[draggable="true"] {
-  cursor: grab;
-}
-.slot-btn[draggable="true"]:active {
-  cursor: grabbing;
 }
 
 /* ── Misc ────────────────────────────────────────────────── */
@@ -1271,19 +1217,6 @@ textarea.theme-pending:focus::placeholder {
 }
 .admin-table th.sorted {
   color: var(--accent);
-}
-/* Liste des réservations (Editions) : compacité via taille + padding (pas de police
-   custom — on hérite du body pour rester lisible). Surcharge spécifique via l'id. */
-#admin-table {
-  font-size: 0.73rem;
-}
-#admin-table th {
-  font-size: 0.68rem;
-  padding: 0.28rem 0.2rem 0.2rem;
-  letter-spacing: 0.07em;
-}
-#admin-table td {
-  padding: 0.18rem 0.45rem;
 }
 .periods-table {
   border-collapse: collapse;
@@ -1669,46 +1602,11 @@ textarea.theme-pending:focus::placeholder {
   line-height: 1;
 }
 
-/* ── Context menu ────────────────────────────────────────── */
-#badge-ctx-menu {
-  position: fixed;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--rad-sm);
-  padding: 0.35rem 0;
-  z-index: 10001;
-  min-width: 160px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-#badge-ctx-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.45rem 0.85rem;
-  background: none;
-  border: none;
-  font-family: inherit;
-  font-size: 0.78rem;
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-#badge-ctx-menu button:hover {
-  background: var(--surface);
-}
-#badge-ctx-menu button.ctx-danger {
-  color: var(--danger);
-}
-#badge-ctx-menu button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
-}
 .planning-name-tag.is-locked {
   cursor: default;
 }
 
-/* ── Menu contextuel (clic droit) — repris du legacy #badge-ctx-menu ─────── */
+/* ── Menu contextuel (clic droit) ────────────────────────── */
 .badge-ctx-menu {
   position: fixed;
   background: var(--surface2);
@@ -1866,6 +1764,10 @@ textarea.theme-pending:focus::placeholder {
 .csm-slot-block {
   flex: 1;
   position: relative;
+  /* Curseur "+" sur tout le bloc créneau (même style que les cellules du planning) pour
+     signaler le clic = nouvelle réservation. Les badges enfants définissent leur propre
+     curseur (grab) qui prend le pas. */
+  cursor: cell;
   /* Couleur par défaut : jaune (récurrent / miroir). Surcharge en vert lime via .is-uniq.
      DOIT rester synchrone avec .agenda-block et la légende (.agenda-legend-swatch). */
   --agenda-block-color: #ffdc00;
@@ -1907,12 +1809,6 @@ textarea.theme-pending:focus::placeholder {
   align-content: flex-start;
   justify-content: start;
   padding: 12px;
-}
-/* Curseur "+" sur tout le bloc créneau (même style que les cellules du planning) pour
-   signaler le clic = nouvelle réservation. Les badges enfants définissent leur propre
-   curseur (grab) qui prend le pas. */
-.csm-slot-block {
-  cursor: cell;
 }
 .cell-stack-list .planning-name-tag {
   width: 160px;
@@ -2111,14 +2007,6 @@ textarea.theme-pending:focus::placeholder {
 .planning-name-tag:active {
   cursor: grabbing;
 }
-@keyframes drag-tab-fill {
-  from {
-    width: 0;
-  }
-  to {
-    width: 100%;
-  }
-}
 /* Barre du bandeau de bilan de lot (agenda admin) : se vide sur la durée
    d'auto-fermeture, en transform (compositor, zéro re-render) — cf. agenda-grid.tsx. */
 @keyframes batch-dismiss {
@@ -2139,14 +2027,12 @@ textarea.theme-pending:focus::placeholder {
   padding: 0.16rem 0.44rem;
   font-size: 0.66rem;
 }
-/* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda et dans la
-   modale multi-badges (cell-stack-modal) — même taille texte + même scale de case. */
-#tab-content-agenda .planning-option,
-#cell-stack-modal .planning-option {
+/* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda :
+   taille texte réduite + scale de case. */
+#tab-content-agenda .planning-option {
   font-size: 0.65rem;
 }
-#tab-content-agenda .planning-option input[type="checkbox"],
-#cell-stack-modal .planning-option input[type="checkbox"] {
+#tab-content-agenda .planning-option input[type="checkbox"] {
   transform: scale(0.8);
   transform-origin: center;
 }
@@ -2156,14 +2042,6 @@ textarea.theme-pending:focus::placeholder {
   letter-spacing: -0.2px;
 }
 
-.agenda-mode-toggles-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  flex-wrap: wrap;
-  flex-direction: row;
-  justify-content: flex-end;
-}
 .agenda-mode-toggle {
   display: inline-flex;
   border: 1px solid var(--border);
@@ -2492,28 +2370,6 @@ textarea.theme-pending:focus::placeholder {
 }
 
 /* ── Agenda utilisateur (onglet Réservations) ────────────── */
-.user-agenda-block .user-agenda-block-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  height: 100%;
-  pointer-events: none;
-  text-align: center;
-}
-/* Icône 📆 pour les créneaux sans réservation : rendue en 24×24 px (overrides
-   le .slot-icon par défaut à .85rem qui rendrait l'icône bien trop petite
-   dans la grille agenda comparée au texte places en dessous). */
-.user-agenda-block .user-agenda-block-inner .slot-icon {
-  font-size: 24px;
-  line-height: 1;
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 /* Texte des badges colorés : chaque ligne reste sur une seule ligne
    (white-space: nowrap) et le DÉPASSEMENT est clippé par le badge parent
    (overflow: hidden sur .planning-name-tag / .user-agenda-mine-badge), pas
