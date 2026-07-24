@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import "./app-legacy.css";
+import { BootScript } from "@/components/boot-script";
 
 // Police AUTO-HÉBERGÉE via next/font (audit sécurité 2026-07-19) : téléchargée au build
 // et servie depuis l'origine de l'app → plus de requête visiteur vers fonts.googleapis.com
@@ -39,14 +40,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             clair, et une sidebar repliée mémorisée apparaissait dépliée le temps de
             l'hydratation. `sb-collapsed` (jamais en mobile : la sidebar y est une barre
             horizontale) est relayée par l'état React des shells après hydratation.
-            Sous 1000px la sidebar est réduite D'OFFICE (même sans préférence). */}
-        <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: script inline statique, sans donnée externe.
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.remove('light');if(!matchMedia('(max-width: 640px)').matches&&(localStorage.getItem('sidebar-collapsed')==='1'||matchMedia('(max-width: 1000px)').matches))document.documentElement.classList.add('sb-collapsed');}catch(e){}",
-          }}
-        />
+            Sous 1000px la sidebar est réduite D'OFFICE (même sans préférence).
+            Rendu côté SERVEUR uniquement (cf. BootScript) : évite l'avertissement
+            React 19 « script tag while rendering » aux re-rendus client. */}
+        <BootScript />
       </head>
       <body>{children}</body>
     </html>
