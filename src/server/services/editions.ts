@@ -153,7 +153,13 @@ function jourDateOf(bookingType: string, slotDate: Date | null, slotDay: string 
 /**
  * Lignes de réservation d'un service, prêtes pour l'affichage et l'export CSV.
  * `userId` fourni → restreint aux réservations de CET usager (export « mes réservations »),
- * en excluant les miroirs (une ligne par réservation, pas par occurrence).
+ * en excluant les miroirs : une ligne par RÉSERVATION (abonnement), pas par occurrence.
+ * Sans `userId` (export CSV admin) → une ligne par SÉANCE DATÉE (réservations-enfants
+ * des récurrentes + ponctuelles autonomes), granularité de l'écran Liste et des
+ * Statistiques. Les PARENTES récurrentes sont exclues : avant l'audit 2026-07-24, le
+ * CSV mélangeait la ligne d'abonnement ET ses ~36 séances (double comptage garanti
+ * dans tout tableur). Période et date de dépôt d'une séance : reprises du PARENT
+ * (l'enfant porte periodId NULL et un createdAt de matérialisation).
  */
 export async function listEditionRows(
   serviceId: string,
@@ -164,12 +170,18 @@ export async function listEditionRows(
   const bookings = await prisma.booking.findMany({
     where: {
       serviceId,
-      ...(userId ? { userId, parentBookingId: null } : {}),
+      // Admin : séances datées seules — un parent récurrent est le seul bookingType
+      // "recurring" (ses enfants matérialisés sont des "unique" sur slots miroirs).
+      ...(userId ? { userId, parentBookingId: null } : { bookingType: "unique" }),
       // Scope exercice via le CRÉNEAU (slot.periodId) : booking.periodId est null pour
       // les ponctuels — filtrer dessus les excluait (récurrents seuls visibles).
       ...(scopePeriodIds ? { slot: { periodId: { in: scopePeriodIds } } } : {}),
     },
-    orderBy: [{ periodId: "asc" }, { createdAt: "asc" }],
+    // Usager (une ligne par réservation) : tri legacy période puis dépôt. Admin (une
+    // ligne par séance) : tri chronologique des séances, comme l'écran Liste.
+    orderBy: userId
+      ? [{ periodId: "asc" }, { createdAt: "asc" }]
+      : [{ slot: { slotDate: "asc" } }, { slot: { startTime: "asc" } }, { createdAt: "asc" }],
     select: {
       id: true,
       bookingType: true,
@@ -192,11 +204,18 @@ export async function listEditionRows(
         },
       },
       periodId: true,
+      parentBookingId: true,
+      // Parent d'une séance de récurrente : porte la période et la vraie date de dépôt.
+      parent: { select: { periodId: true, createdAt: true } },
     },
   });
 
   const periodIds = [
-    ...new Set(bookings.map((b) => b.periodId).filter((p): p is number => p != null && p > 0)),
+    ...new Set(
+      bookings
+        .map((b) => b.periodId ?? b.parent?.periodId)
+        .filter((p): p is number => p != null && p > 0),
+    ),
   ];
   const periods = await prisma.period.findMany({
     where: { id: { in: periodIds } },
@@ -208,9 +227,13 @@ export async function listEditionRows(
     const s = b.slot.startTime ? b.slot.startTime.slice(0, 5) : "";
     const e = b.slot.endTime ? b.slot.endTime.slice(0, 5) : "";
     const demandeurLabel = b.user.demandeur?.label ?? "";
+    // Séance issue d'une récurrente (enfant matérialisé, techniquement "unique") :
+    // le TYPE affiché reste « Récurrente », la période et la date de dépôt sont
+    // celles du parent.
+    const isRecurringChild = b.parentBookingId != null;
     return {
       id: b.id,
-      type: b.bookingType === "recurring" ? "Récurrente" : "Ponctuelle",
+      type: b.bookingType === "recurring" || isRecurringChild ? "Récurrente" : "Ponctuelle",
       // Structure de l'usager, repli sur le demandeur (cohérent avec le legacy).
       structure: b.user.structure?.label || demandeurLabel,
       niveau: b.user.niveau ?? "",
@@ -221,7 +244,7 @@ export async function listEditionRows(
       prenom: b.user.prenom,
       enfants: b.enfants,
       accompagnants: b.accompagnants,
-      periode: periodLabel.get(b.periodId ?? 0) ?? "—",
+      periode: periodLabel.get(b.periodId ?? b.parent?.periodId ?? 0) ?? "—",
       creneau: s && e ? `${s} – ${e}` : "Journée entière",
       debut: b.slot.startTime,
       fin: b.slot.endTime,
@@ -230,7 +253,7 @@ export async function listEditionRows(
       theme: b.themeLabel,
       statut: b.validated ? "Validée" : "En attente",
       pointage: b.pointage === "present" ? "Présent" : b.pointage === "absent" ? "Absent" : "",
-      createdAt: b.createdAt.toISOString().slice(0, 16).replace("T", " "),
+      createdAt: (b.parent?.createdAt ?? b.createdAt).toISOString().slice(0, 16).replace("T", " "),
     };
   });
 }
