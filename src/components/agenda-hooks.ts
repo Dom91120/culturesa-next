@@ -60,26 +60,82 @@ export function useAgendaToast<P extends object>() {
  * (modale ouverte côté admin, brouillon en cours côté usager) ou onglet masqué.
  * `canRefresh`/`refresh` sont relus à CHAQUE tick via des refs : les appelants
  * passent des closures sur leurs valeurs de rendu sans se soucier des deps.
+ *
+ * `versionUrl` (audit perf 2026-07-24) : sonde légère (/api/agenda-version) lue à
+ * chaque tick — le refresh COMPLET (~18-20 requêtes + payload de tous les miroirs)
+ * n'est déclenché que si la version a changé depuis le dernier tick. Baseline posée
+ * au montage (la page vient d'être rendue). Sonde en échec (réseau, 401 après
+ * expiration de session…) → refresh quand même (comportement historique, fail-open).
+ * Le retour d'onglet rafraîchit TOUJOURS (les données froides non couvertes par la
+ * version — périodes, réglages — rattrapent à ce moment-là), puis rebase la version.
  */
 export function useAgendaAutoRefresh(
   seconds: number,
   canRefresh: () => boolean,
   refresh: () => void,
+  versionUrl?: string,
 ) {
   const canRef = useRef(canRefresh);
   canRef.current = canRefresh;
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
+  const versionUrlRef = useRef(versionUrl ?? null);
+  versionUrlRef.current = versionUrl ?? null;
+  const lastVersionRef = useRef<string | null>(null);
   useEffect(() => {
     if (!seconds || seconds <= 0) return;
-    const refreshIfIdle = () => {
-      if (document.visibilityState === "visible" && canRef.current()) refreshRef.current();
+    let disposed = false;
+    const fetchVersion = async (): Promise<string | null> => {
+      const url = versionUrlRef.current;
+      if (!url) return null;
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) return null;
+        const j = (await r.json()) as { version?: unknown };
+        return typeof j.version === "string" ? j.version : null;
+      } catch {
+        return null;
+      }
     };
-    const id = window.setInterval(refreshIfIdle, seconds * 1000);
-    document.addEventListener("visibilitychange", refreshIfIdle);
+    const rebase = () => {
+      fetchVersion().then((v) => {
+        if (!disposed && v != null) lastVersionRef.current = v;
+      });
+    };
+    // Baseline : version au montage ≈ version des données rendues. (Fenêtre de
+    // course de quelques ms rendu → baseline : un changement pile dedans n'est
+    // rattrapé qu'au changement suivant ou au retour d'onglet — assumé.)
+    if (versionUrlRef.current) rebase();
+    const tick = async () => {
+      if (document.visibilityState !== "visible" || !canRef.current()) return;
+      if (!versionUrlRef.current) {
+        refreshRef.current();
+        return;
+      }
+      const v = await fetchVersion();
+      if (disposed || document.visibilityState !== "visible" || !canRef.current()) return;
+      // Sonde en échec → fail-open (refresh, cadence historique).
+      if (v == null) {
+        refreshRef.current();
+        return;
+      }
+      if (lastVersionRef.current !== null && v === lastVersionRef.current) return;
+      lastVersionRef.current = v;
+      refreshRef.current();
+    };
+    const onVisibility = () => {
+      // Retour d'onglet : refresh inconditionnel + rebase (cf. docstring).
+      if (document.visibilityState === "visible" && canRef.current()) {
+        refreshRef.current();
+        rebase();
+      }
+    };
+    const id = window.setInterval(tick, seconds * 1000);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      disposed = true;
       window.clearInterval(id);
-      document.removeEventListener("visibilitychange", refreshIfIdle);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [seconds]);
 }

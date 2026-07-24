@@ -2280,11 +2280,13 @@ export function UserAgendaGrid({
   // (visibilitychange). SUSPENDU tant qu'un brouillon est en cours (ajouts/retraits/
   // maj/déplacements) ou pendant l'enregistrement, pour ne jamais écraser les
   // sélections de l'usager. En pause quand l'onglet est masqué.
-  // (Hook partagé avec la grille admin — cf. components/agenda-hooks.)
+  // (Hook partagé avec la grille admin — cf. components/agenda-hooks.) La sonde
+  // /api/agenda-version court-circuite le refresh complet quand rien n'a changé.
   useAgendaAutoRefresh(
     autoRefreshSeconds,
     () => pendingCount === 0 && !committing,
     () => startTransition(() => router.refresh()),
+    `/api/agenda-version?serviceId=${encodeURIComponent(service.id)}`,
   );
 
   // « Enregistrer → » : valide le brouillon (crée les ajouts, annule les retraits).

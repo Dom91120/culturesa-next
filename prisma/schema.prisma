@@ -274,6 +274,9 @@ model Slot {
   // « A une jauge » : posé À LA CRÉATION selon le mode jauge de l'agenda admin
   // (icône capsule) ; les miroirs héritent du récurrent parent.
   jauge        Boolean     @default(false)
+  // Alimente la « version d'agenda » du polling des grilles (max(updatedAt) + count,
+  // cf. /api/agenda-version) — audit perf 2026-07-24.
+  updatedAt    DateTime    @default(now()) @updatedAt @db.Timestamptz
 
   service     Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   period      Period?         @relation(fields: [periodId], references: [id], onDelete: Cascade)
@@ -497,6 +500,9 @@ model Booking {
   accompagnants   Int         @default(0) @db.SmallInt
   validated       Boolean     @default(false)
   createdAt       DateTime    @default(now()) @db.Timestamptz
+  // Alimente la « version d'agenda » du polling des grilles (max(updatedAt) + count,
+  // cf. /api/agenda-version) — audit perf 2026-07-24.
+  updatedAt       DateTime    @default(now()) @updatedAt @db.Timestamptz
 
   // Point de départ du décompte d'auto-validation (= createdAt, MAJ sur déplacement).
   autoValidateFrom DateTime? @db.Timestamptz

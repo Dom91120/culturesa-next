@@ -999,11 +999,13 @@ export function AgendaGrid({
     copyConfirm !== null ||
     slotDeleteTarget !== null ||
     ctxMenu !== null;
-  // (Hook partagé avec la grille usager — cf. components/agenda-hooks.)
+  // (Hook partagé avec la grille usager — cf. components/agenda-hooks.) La sonde
+  // /api/agenda-version court-circuite le refresh complet quand rien n'a changé.
   useAgendaAutoRefresh(
     autoRefreshSeconds,
     () => !autoRefreshBusy,
     () => startTransition(() => router.refresh()),
+    `/api/agenda-version?serviceId=${encodeURIComponent(service.id)}`,
   );
 
   // Toast léger (réutilise les classes .toast du legacy), hook partagé : affiché ~4 s
