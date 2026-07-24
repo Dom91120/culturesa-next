@@ -20,6 +20,19 @@ import {
 // ════════════════════════════════════════════════════════════
 
 /**
+ * Ref « toujours fraîche » : miroir d'une valeur de rendu, réassigné à CHAQUE rendu.
+ * À lire AU MOMENT d'un événement (handlers via blockApiRef, états transitoires de
+ * drag / copier-coller, callbacks d'intervalle) : la valeur reste fraîche SANS figurer
+ * dans les déps d'un useCallback/useMemo/useEffect — pattern répété dans les deux
+ * grilles (structure et commentaires jumeaux, audit 2026-07-24).
+ */
+export function useFreshRef<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
+/**
  * Colonnes et bornes de la grille pour la semaine affichée (audit 2026-07-24 :
  * câblage jumeau des deux grilles) : ouvertures « de contexte » de la semaine
  * (dédupliquées — une semaine à cheval sur deux exercices agrège les deux), jours
@@ -132,6 +145,8 @@ export function useAgendaAutoRefresh(
   canRefresh: () => boolean,
   refresh: () => void,
 ) {
+  // (Pattern useFreshRef inline : biome ne reconnaît une ref exemptée de déps que
+  // déclarée par useRef local — un ref importé serait signalé en dépendance manquante.)
   const canRef = useRef(canRefresh);
   canRef.current = canRefresh;
   const refreshRef = useRef(refresh);
@@ -188,6 +203,7 @@ export function usePersistedAgendaView<V extends object>(opts: {
   deps: readonly unknown[];
 }) {
   const persistSkip = useRef(true);
+  // (Pattern useFreshRef inline — même raison biome que useAgendaAutoRefresh.)
   const restoreRef = useRef(opts.restore);
   restoreRef.current = opts.restore;
   const snapshotRef = useRef(opts.snapshot);

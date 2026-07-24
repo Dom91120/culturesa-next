@@ -7,6 +7,7 @@ import {
   useAgendaAutoRefresh,
   useAgendaToast,
   useCoveringPeriodLock,
+  useFreshRef,
   usePersistedAgendaView,
   useWeekGridColumns,
   useWeekNavigation,
@@ -55,10 +56,9 @@ import {
   weekDateLabels,
   ymd,
 } from "@/lib/agenda-core";
-import { escapeHtml } from "@/lib/email-theme";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor } from "@/lib/gauge";
-import { printHtmlDocument } from "@/lib/print-html";
+import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
@@ -1939,7 +1939,7 @@ export function AgendaGrid({
   // Impression « liste » (bouton N&B) : au lieu du modèle graphique, la LISTE nominative
   // des réservations de TOUS les usagers pour la semaine affichée. Une ligne par occurrence
   // datée (ponctuels + miroirs des récurrentes), via une action gardée gestionnaire
-  // (listDatedSessions). Rendu dans un iframe caché (printHtmlDocument) — sans pop-up.
+  // (listDatedSessions). Rendu dans un iframe caché (lib/print-html) — sans pop-up.
   async function printSessionsList() {
     if (typeof window === "undefined") return;
     if (!mondayStr) return;
@@ -1969,32 +1969,34 @@ export function AgendaGrid({
         pointage: pointageOf(a.pointage),
       })),
     );
-    const head = [
-      "Date",
-      "Créneau",
-      "Identité",
-      "Structure / Demandeur",
-      "Enf.",
-      "Acc.",
-      "Thème",
-      "P/A",
-    ];
-    const inner = rows.length
-      ? `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows
-          .map(
-            (r) =>
-              `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.creneau)}</td><td>${escapeHtml(r.identite)}</td><td>${escapeHtml(r.struct)}</td><td class="c">${r.enfants}</td><td class="c">${r.accompagnants}</td><td>${escapeHtml(r.theme)}</td><td class="c">${escapeHtml(r.pointage)}</td></tr>`,
-          )
-          .join("")}</tbody></table>`
-      : '<p class="empty">Aucune réservation pour cette période.</p>';
-    const titleStr = `${service.label} — ${scopeLabel}`;
-    // Plus compact : police réduite, cellules sur une seule ligne (white-space:nowrap)
-    // pour que « 09:00 – 10:00 » et l'identité ne se coupent pas.
-    const css =
-      "*{color:#000;background:#fff}body{font-family:system-ui,Arial,sans-serif;margin:18px;font-size:10px}h1{font-size:14px;margin:0 0 3px}.meta{color:#444;margin:0 0 10px;font-size:10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:2px 6px;text-align:left;white-space:nowrap}td.c{text-align:center}th{background:#eee !important;font-size:9px;text-transform:uppercase;letter-spacing:.03em}.empty{color:#444}";
-    printHtmlDocument(
-      `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(titleStr)}</title><style>${css}</style></head><body><h1>${escapeHtml(titleStr)}</h1><div class="meta">${rows.length} réservation${rows.length > 1 ? "s" : ""}</div>${inner}</body></html>`,
-    );
+    // Gabarit partagé (printTableDocument, lib/print-html) en variante compacte :
+    // police réduite, cellules sur une seule ligne pour que « 09:00 – 10:00 » et
+    // l'identité ne se coupent pas.
+    printTableDocument({
+      title: `${service.label} — ${scopeLabel}`,
+      meta: `${rows.length} réservation${rows.length > 1 ? "s" : ""}`,
+      head: [
+        "Date",
+        "Créneau",
+        "Identité",
+        "Structure / Demandeur",
+        "Enf.",
+        "Acc.",
+        "Thème",
+        "P/A",
+      ],
+      rows: rows.map((r) => [
+        { text: r.date },
+        { text: r.creneau },
+        { text: r.identite },
+        { text: r.struct },
+        { text: String(r.enfants), center: true },
+        { text: String(r.accompagnants), center: true },
+        { text: r.theme },
+        { text: r.pointage, center: true },
+      ]),
+      compact: true,
+    });
   }
 
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
@@ -2188,8 +2190,7 @@ export function AgendaGrid({
     lockedByPointage,
     actionBooking,
   };
-  const blockApiRef = useRef(blockApi);
-  blockApiRef.current = blockApi;
+  const blockApiRef = useFreshRef(blockApi);
 
   // Créneau SOURCE d'un déplacement / redimensionnement en cours (estompé 0.35).
   // Dérivé STABLE des états de drag : il ne change qu'au début et à la fin du
@@ -2207,11 +2208,10 @@ export function AgendaGrid({
   // restent frais SANS que ces états transitoires soient en déps de renderBlock (sinon
   // chaque start/end de glisser et chaque copier/couper re-rendait les ~100 blocs).
   // L'atténuation visuelle du badge glissé/coupé est posée en DOM direct (cf. data-bkid).
-  const draggingIdRef = useRef(draggingId);
-  draggingIdRef.current = draggingId;
-  const copiedBookingRef = useRef(copiedBooking);
-  copiedBookingRef.current = copiedBooking;
+  const draggingIdRef = useFreshRef(draggingId);
+  const copiedBookingRef = useFreshRef(copiedBooking);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: les handlers d'événements passent par blockApiRef (useFreshRef, hors déps — lus au moment de l'événement) ; les entrées réelles lues AU RENDU sont listées à la main en fin de callback.
   const renderBlock = useCallback(
     (b: Block, allday: boolean) => {
       const {
