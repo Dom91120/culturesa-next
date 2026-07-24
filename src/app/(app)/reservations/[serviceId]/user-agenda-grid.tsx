@@ -8,6 +8,8 @@ import {
   useAgendaToast,
   useCoveringPeriodLock,
   usePersistedAgendaView,
+  useWeekGridColumns,
+  useWeekNavigation,
 } from "@/components/agenda-hooks";
 import {
   AgendaDayBackground,
@@ -31,23 +33,18 @@ import {
   dayKeyFromYmd,
   deriveCoveringPeriod,
   type ExerciceOpening,
-  gridDaysAndBounds,
   gridGeometry,
   lunchBounds,
   makeDayClosure,
-  makeWeekNavigation,
   mondayOf,
-  type Pointage,
   parseWeeks,
   periodsCoverToday,
-  ROW_H,
   type Slot,
   shortDateFmt,
   slotWeekTag,
   toMinutes,
   type UniqueSlot,
   visiblePeriodsOf,
-  weekContextOpenings,
   weekDateLabels,
   ymd,
 } from "@/lib/agenda-core";
@@ -1151,26 +1148,12 @@ export function UserAgendaGrid({
     [exercices, demandeurOpenOnSchoolHolidays],
   );
 
-  // Ouvertures « de contexte » pour les colonnes, les bornes de grille et la pause :
-  // chaque jour de la semaine affichée (dédupliqué) — une semaine à cheval sur deux
-  // exercices agrège les deux.
-  const contextOpenings = useMemo(() => {
-    if (!anchorMonday) return [CLOSED_OPENING];
-    return weekContextOpenings(anchorMonday, openingForYmd);
-  }, [anchorMonday, openingForYmd]);
-
-  // Colonnes (jours actifs, UNION des exercices de la semaine — le grisage par date
-  // via isDayDisabled ferme les jours inactifs) + bornes horaires de la grille :
-  // dérivation partagée (gridDaysAndBounds, agenda-core). Mémoïsé : `days` est une
-  // dép de blocksByDay (perf).
-  const { days, baseFirst, baseLast } = useMemo(
-    () => gridDaysAndBounds(contextOpenings),
-    [contextOpenings],
-  );
-  // Offsets (depuis le lundi) du 1er et du dernier jour TRAVAILLÉ de la semaine :
-  // le libellé de la nav hebdo affiche ces bornes, pas lundi/dimanche fixes.
-  const firstDayOffset = days.length ? (DAY_OFFSET[days[0]] ?? 0) : 0;
-  const lastDayOffset = days.length ? (DAY_OFFSET[days[days.length - 1]] ?? 6) : 6;
+  // Ouvertures « de contexte », colonnes (jours actifs, UNION des exercices de la
+  // semaine — le grisage par date via isDayDisabled ferme les jours inactifs),
+  // bornes horaires et offsets des jours travaillés : câblage partagé
+  // (useWeekGridColumns, agenda-hooks). openingForYmd reste local (∧ demandeur).
+  const { contextOpenings, days, baseFirst, baseLast, firstDayOffset, lastDayOffset } =
+    useWeekGridColumns(anchorMonday, openingForYmd);
 
   // ── Mobile : vue « un jour à la fois » ──────────────────────────────────────
   // Sur smartphone, la grille hebdo (5-7 colonnes) est illisible : on n'affiche
@@ -1257,33 +1240,16 @@ export function UserAgendaGrid({
     if (!modes.abMode) return true; // pas de distinction A/B → tout récurrent compte
     return ab.has(slotWeekTag(monday));
   };
-  // Navigation hebdo ◀/▶ (fabrique partagée makeWeekNavigation, agenda-core) : bornée
+  // Navigation hebdo ◀/▶ (câblage partagé useWeekNavigation, agenda-hooks) : bornée
   // à la période couvrante ; en hideNoSlot, saute aux semaines AYANT un créneau.
-  // Mémoïsé : le balayage va jusqu'à 260 semaines — à ne recalculer que quand les
-  // données ou la semaine changent, pas à chaque survol/drag (audit perf).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: weekHasSlot est une closure recréée à chaque rendu ; ses entrées réelles sont listées (uniqSlotDates, recurSlotAbByPeriod, coveringPeriod, periods, modes.abMode).
-  const { canWeekPrev, canWeekNext, shiftTarget } = useMemo(
-    () =>
-      makeWeekNavigation({
-        mondayStr,
-        coveringPeriod,
-        hideEmpty: hideNoSlot,
-        weekHas: weekHasSlot,
-      }),
-    [
-      mondayStr,
-      hideNoSlot,
-      coveringPeriod,
-      uniqSlotDates,
-      recurSlotAbByPeriod,
-      periods,
-      modes.abMode,
-    ],
-  );
-  function shiftWeek(deltaWeeks: number) {
-    const target = shiftTarget(deltaWeeks);
-    if (target) setAnchorMonday(target);
-  }
+  const { canWeekPrev, canWeekNext, shiftWeek } = useWeekNavigation({
+    mondayStr,
+    coveringPeriod,
+    hideEmpty: hideNoSlot,
+    weekHas: weekHasSlot,
+    weekHasDeps: [uniqSlotDates, recurSlotAbByPeriod, periods, modes.abMode],
+    setAnchorMonday,
+  });
 
   // ── Navigation jour (mobile) ────────────────────────────────────────────────
   // Modèle de période (récurrent) : CYCLIQUE sur les jours de la semaine type.
