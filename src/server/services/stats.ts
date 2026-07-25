@@ -85,20 +85,9 @@ function ymd(d: Date): string {
 }
 
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
-const MONTH_NAMES = [
-  "Janv.",
-  "Févr.",
-  "Mars",
-  "Avr.",
-  "Mai",
-  "Juin",
-  "Juil.",
-  "Août",
-  "Sept.",
-  "Oct.",
-  "Nov.",
-  "Déc.",
-];
+// Libellés de mois : le NUMÉRO du mois (1..12) — demande Dom 2026-07-25 (colonnes
+// étroites des courbes mensuelles) ; l'année reste lisible via le filtre d'exercice.
+const monthLabel = (bucket: string): string => String(Number(bucket.slice(5, 7)));
 
 function inRange(d: string, from: string | null, to: string | null): boolean {
   return (!from || d >= from) && (!to || d <= to);
@@ -287,13 +276,10 @@ export async function getServiceStats(
   }
   const fillByMonth = [...monthFillSum.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([bucket, sum]) => {
-      const [y, m] = bucket.split("-");
-      return {
-        label: `${MONTH_NAMES[Number(m) - 1]} ${y}`,
-        value: Math.round(sum / (monthFillCnt.get(bucket) ?? 1)),
-      };
-    });
+    .map(([bucket, sum]) => ({
+      label: monthLabel(bucket),
+      value: Math.round(sum / (monthFillCnt.get(bucket) ?? 1)),
+    }));
 
   // Remplissage moyen par structure : chaque occurrence apporte le remplissage de SA séance.
   const fillSum = new Map<string, number>();
@@ -317,10 +303,7 @@ export async function getServiceStats(
   // Évolution mensuelle : nombre d'occurrences datées par mois.
   const byMonth = [...monthCount.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([bucket, value]) => {
-      const [y, m] = bucket.split("-");
-      return { label: `${MONTH_NAMES[Number(m) - 1]} ${y}`, value };
-    });
+    .map(([bucket, value]) => ({ label: monthLabel(bucket), value }));
 
   // Effectifs (enfants) par exercice — TOUT l'historique daté (occAll), filtre type.
   // « total » = cumul des séances ; « distincts » = règle du max par usager, appliquée

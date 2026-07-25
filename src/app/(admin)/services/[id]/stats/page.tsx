@@ -473,23 +473,17 @@ function AreaChart({ data, color }: { data: LabeledCount[]; color: string }) {
           vectorEffect="non-scaling-stroke"
         />
       </svg>
+      {/* Numéros de mois = axe X, remontés DANS la marge basse interne du SVG (pad=14
+          → ~16px rendus) pour coller à la courbe ; valeurs aérées en dessous.
+          Clé indicée : les libellés de mois (1..12) peuvent se répéter sur une plage
+          manuelle de plus d'un an. */}
       <div
-        style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: ".3rem" }}
+        style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: -15 }}
       >
-        {data.map((d) => (
-          <div key={d.label} style={{ textAlign: "center", minWidth: 0 }}>
-            <div style={{ fontSize: ".8rem", fontWeight: 600 }}>{d.value}</div>
-            <div
-              style={{
-                fontSize: ".62rem",
-                color: "var(--muted)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {d.label}
-            </div>
+        {data.map((d, i) => (
+          <div key={`${d.label}-${i}`} style={{ textAlign: "center", minWidth: 0 }}>
+            <div style={{ fontSize: ".5rem", color: "var(--muted)" }}>{d.label}</div>
+            <div style={{ fontSize: ".8rem", fontWeight: 600, marginTop: ".4rem" }}>{d.value}</div>
           </div>
         ))}
       </div>
@@ -539,7 +533,7 @@ function FillCurve({ data, color }: { data: LabeledCount[]; color: string }) {
         />
         {data.map((d, i) => (
           <circle
-            key={d.label}
+            key={`${d.label}-${i}`}
             cx={x(i)}
             cy={y(d.value)}
             r={3}
@@ -549,22 +543,16 @@ function FillCurve({ data, color }: { data: LabeledCount[]; color: string }) {
           />
         ))}
       </svg>
+      {/* Numéros de mois = axe X, remontés dans la marge basse interne du SVG ;
+          valeurs aérées en dessous (cf. AreaChart). */}
       <div
-        style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: ".3rem" }}
+        style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: -12 }}
       >
-        {data.map((d) => (
-          <div key={d.label} style={{ textAlign: "center", minWidth: 0 }}>
-            <div style={{ fontSize: ".62rem", fontWeight: 600 }}>{d.value}%</div>
-            <div
-              style={{
-                fontSize: ".62rem",
-                color: "var(--muted)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {d.label}
+        {data.map((d, i) => (
+          <div key={`${d.label}-${i}`} style={{ textAlign: "center", minWidth: 0 }}>
+            <div style={{ fontSize: ".5rem", color: "var(--muted)" }}>{d.label}</div>
+            <div style={{ fontSize: ".62rem", fontWeight: 600, marginTop: ".4rem" }}>
+              {d.value}%
             </div>
           </div>
         ))}
