@@ -14,7 +14,7 @@ import {
 
 /** Variante d'ActionState renvoyant les compteurs du cycle. */
 export type CycleActionState =
-  | { ok: true; created: number; slotsCreated: number }
+  | { ok: true; created: number; slotsCreated: number; multiSlotsCreated: number }
   | { ok: false; error: string };
 
 function revalidate(serviceId: string): void {
@@ -50,14 +50,21 @@ const cycleSchema = z.object({
   serviceId: stringIdSchema,
   recreatePeriods: z.boolean(),
   recreateSlots: z.boolean(),
+  recreateMultiSlots: z.boolean(),
 });
 
 export async function cycleAction(
   serviceId: string,
   recreatePeriods: boolean,
   recreateSlots: boolean,
+  recreateMultiSlots: boolean,
 ): Promise<CycleActionState> {
-  const parsed = cycleSchema.safeParse({ serviceId, recreatePeriods, recreateSlots });
+  const parsed = cycleSchema.safeParse({
+    serviceId,
+    recreatePeriods,
+    recreateSlots,
+    recreateMultiSlots,
+  });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
   }
@@ -66,9 +73,15 @@ export async function cycleAction(
     const res = await cycleService(parsed.data.serviceId, {
       recreatePeriods: parsed.data.recreatePeriods,
       recreateSlots: parsed.data.recreateSlots,
+      recreateMultiSlots: parsed.data.recreateMultiSlots,
     });
     revalidate(parsed.data.serviceId);
-    return { ok: true, created: res.created, slotsCreated: res.slotsCreated };
+    return {
+      ok: true,
+      created: res.created,
+      slotsCreated: res.slotsCreated,
+      multiSlotsCreated: res.multiSlotsCreated,
+    };
   } catch (err) {
     if (err instanceof CycleError) return { ok: false, error: err.message };
     console.error("[exercice] cycleService", err);

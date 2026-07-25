@@ -1,6 +1,10 @@
 import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
+import { parseWeeks } from "@/lib/agenda-core";
+import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
+import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { schoolYearLabel } from "@/lib/school-year";
 import { prisma } from "@/server/db";
+import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { DEFAULT_OPENING, EXERCICE_OPENING_SELECT } from "@/server/services/opening";
 import { refreshPeriodHolidays } from "@/server/services/periods";
 import { buildMirrorRows, loadMirrorContext, newRecurId } from "@/server/services/slots";
@@ -17,11 +21,16 @@ export class CycleError extends Error {}
 type CycleOptions = {
   recreatePeriods: boolean;
   recreateSlots: boolean;
+  // Reconduire aussi les LOTS de créneaux multi-ponctuels (batchId) : mêmes jour de
+  // semaine / horaires / capacité / jauge / parité / demandeurs, aux dates régénérées
+  // dans la nouvelle période (même filtrage qu'à la création multiple).
+  recreateMultiSlots: boolean;
 };
 
 type CycleResult = {
   created: number;
   slotsCreated: number;
+  multiSlotsCreated: number;
 };
 
 type UndoInfo = {
@@ -43,6 +52,9 @@ type CycleEventData = {
   newPeriodIds: number[];
   newRecurringSlotIds: string[];
   newMirrorSlotIds: string[];
+  // Ponctuels des lots « multi » reconduits — absent sur les événements antérieurs
+  // à l'option (2026-07-25).
+  newMultiSlotIds?: string[];
   // Exercice créé par la bascule (par service) → supprimé tel quel à l'annulation.
   newExerciceId: number | null;
   // Exercice qui portait « Affiché aux utilisateurs » avant la bascule (le flag est
@@ -138,15 +150,32 @@ type SlotSnapshot = {
 // bascule entretenait son propre générateur, avec une source de fériés et des
 // conventions de normalisation divergentes.)
 
+// Jour de semaine (getUTCDay 0=dim..6=sam) → clé de jour (les @db.Date sont à minuit UTC).
+const DOW_TO_DAY: DayKey[] = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+
+/** Représentant d'un LOT multi-ponctuel (batchId) : tous les créneaux d'un lot partagent
+ *  jour de semaine, horaires, capacité, jauge, parité et demandeurs — cf. addUniqueSlotBatch. */
+type MultiLotSnapshot = {
+  startTime: string;
+  endTime: string;
+  capacity: number | null;
+  jauge: boolean;
+  // Parité du lot ("A" | "B" | "" = toutes) — même sens que Slot.weeks.
+  weeks: string;
+  slotDay: DayKey;
+  demandeurIds: number[];
+};
+
 // =====================================================================================
 // CYCLE — création du prochain exercice
 // =====================================================================================
 
 export async function cycleService(serviceId: string, opts: CycleOptions): Promise<CycleResult> {
-  const { recreatePeriods, recreateSlots } = opts;
+  const { recreatePeriods, recreateSlots, recreateMultiSlots } = opts;
   // Legacy (api/periods.php) : si « Recréer les périodes » est décoché, la bascule ne
-  // fait rien (no-op). `recreateSlots` ne gate, lui, que le clonage des créneaux.
-  if (!recreatePeriods) return { created: 0, slotsCreated: 0 };
+  // fait rien (no-op). `recreateSlots`/`recreateMultiSlots` ne gatent, eux, que le
+  // clonage des créneaux (récurrents / lots multi-ponctuels).
+  if (!recreatePeriods) return { created: 0, slotsCreated: 0, multiSlotsCreated: 0 };
 
   return prisma.$transaction(
     async (tx) => {
@@ -193,6 +222,42 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
           demandeurIds: s.demandeurs.map((d) => d.demandeurId),
         });
         slotsByPeriod.set(s.periodId, list);
+      }
+
+      // 2 bis. snapshot des LOTS multi-ponctuels par période active : un représentant
+      // par batchId (jour/horaires/capacité/jauge/parité/demandeurs partagés par le lot,
+      // cf. copyPonctuelWeek). Les ponctuels ISOLÉS (batchId null) ne sont pas reconduits.
+      const multiRows = recreateMultiSlots
+        ? await tx.slot.findMany({
+            where: {
+              serviceId,
+              periodId: { in: actives.map((p) => p.id) },
+              slotType: "unique",
+              batchId: { not: null },
+              parentSlotId: null,
+            },
+            include: { demandeurs: { select: { demandeurId: true } } },
+            orderBy: { slotDate: "asc" },
+          })
+        : [];
+      const lotsByPeriod = new Map<number, MultiLotSnapshot[]>();
+      const seenBatchIds = new Set<string>();
+      for (const s of multiRows) {
+        if (!s.batchId || !s.slotDate || s.periodId == null || seenBatchIds.has(s.batchId)) {
+          continue;
+        }
+        seenBatchIds.add(s.batchId);
+        const list = lotsByPeriod.get(s.periodId) ?? [];
+        list.push({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          capacity: s.capacity,
+          jauge: s.jauge,
+          weeks: s.weeks ?? "",
+          slotDay: DOW_TO_DAY[s.slotDate.getUTCDay()],
+          demandeurIds: s.demandeurs.map((d) => d.demandeurId),
+        });
+        lotsByPeriod.set(s.periodId, list);
       }
 
       // (Les exercices antérieurs ne sont plus archivés : la notion d'état a été
@@ -269,11 +334,21 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       });
       const exId = newExo.id;
 
+      // Vacances scolaires pour la reconduction des lots multi-ponctuels : comme à la
+      // création multiple (cf. copyPonctuelWeek), les dates en vacances sont exclues
+      // sauf si le nouvel exercice ouvre pendant les vacances scolaires.
+      const openOnSchool = opening.openOnSchoolHolidays;
+      const schoolRanges =
+        recreateMultiSlots && !openOnSchool
+          ? await loadSchoolHolidayRanges(tx, await getSchoolZone())
+          : [];
+
       // 6. recopie des périodes — jours actifs / fériés du nouvel exercice (résolus
       // par loadMirrorContext depuis l'exercice créé, cf. plus bas).
       const newPeriodIds: number[] = [];
       const newRecurringSlotIds: string[] = [];
       const newMirrorSlotIds: string[] = [];
+      const newMultiSlotIds: string[] = [];
 
       for (const p of actives) {
         const ns = shiftDateOneYear(fmtDateUtc(p.dateStart));
@@ -299,8 +374,13 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
 
         // Contexte de génération des miroirs UNIQUE (même pipeline que les
         // mutations de créneau, slots.ts) — chargé APRÈS le remplissage des fériés.
+        // Sert aussi à régénérer les dates des lots multi-ponctuels reconduits.
         const mirrorCtx =
-          recreateSlots && ns && ne && newPeriod.dateStart && newPeriod.dateEnd
+          (recreateSlots || recreateMultiSlots) &&
+          ns &&
+          ne &&
+          newPeriod.dateStart &&
+          newPeriod.dateEnd
             ? await loadMirrorContext(tx, {
                 id: newPeriod.id,
                 dateStart: newPeriod.dateStart,
@@ -365,6 +445,56 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
           if (mirrorRows.length > 0) await tx.slot.createMany({ data: mirrorRows });
         }
 
+        // Lots multi-ponctuels reconduits : dates régénérées dans la nouvelle période
+        // (même jour de semaine et parité que le lot source, filtrées comme à la
+        // création multiple — jours actifs, fériés, vacances scolaires du NOUVEL
+        // exercice). Un lot dont le jour n'est plus ouvert ne produit rien.
+        if (recreateMultiSlots && mirrorCtx) {
+          const lots = lotsByPeriod.get(p.id) ?? [];
+          const multiSlotRows: Prisma.SlotCreateManyInput[] = [];
+          const multiDemandeurRows: { slotId: string; demandeurId: number }[] = [];
+          for (const lot of lots) {
+            const dates = mirrorDates({
+              startDate: mirrorCtx.startDate,
+              endDate: mirrorCtx.endDate,
+              slotDay: lot.slotDay,
+              activeDays: mirrorCtx.activeDays,
+              allowedWeeks: parseWeeks(lot.weeks || null),
+              holidaySet: mirrorCtx.holidaySet,
+              openOnHolidays: mirrorCtx.openOnHolidays,
+            }).filter((d) => openOnSchool || !isInSchoolHolidayRange(d, schoolRanges));
+            if (dates.length === 0) continue;
+            // batchId/parité seulement si plusieurs dates (cf. addUniqueSlotBatch).
+            const isBatch = dates.length > 1;
+            const newBatchId = isBatch ? crypto.randomUUID() : null;
+            const weeks = isBatch ? lot.weeks : "";
+            for (const d of dates) {
+              const newSlotId = newRecurId();
+              multiSlotRows.push({
+                id: newSlotId,
+                serviceId,
+                slotType: "unique",
+                startTime: lot.startTime,
+                endTime: lot.endTime,
+                slotDate: dateFromYmd(d),
+                capacity: lot.capacity,
+                periodId: newPeriod.id,
+                jauge: lot.jauge,
+                batchId: newBatchId,
+                weeks,
+              });
+              newMultiSlotIds.push(newSlotId);
+              for (const demandeurId of lot.demandeurIds) {
+                multiDemandeurRows.push({ slotId: newSlotId, demandeurId });
+              }
+            }
+          }
+          if (multiSlotRows.length > 0) await tx.slot.createMany({ data: multiSlotRows });
+          if (multiDemandeurRows.length > 0) {
+            await tx.slotDemandeur.createMany({ data: multiDemandeurRows });
+          }
+        }
+
         // (Les périodes reconduites RESTENT actives : « exercice précédent » se déduit
         // de leur exerciceId, la visibilité usager de la case « Affiché aux utilisateurs ».)
       }
@@ -386,6 +516,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         newPeriodIds,
         newRecurringSlotIds,
         newMirrorSlotIds,
+        newMultiSlotIds,
         newExerciceId: exId,
         visibleFromExerciceId,
       };
@@ -396,6 +527,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       return {
         created: newPeriodIds.length,
         slotsCreated: newRecurringSlotIds.length,
+        multiSlotsCreated: newMultiSlotIds.length,
       };
       // Timeout élargi : la bascule reste l'opération la plus lourde de l'app
       // (périodes × créneaux × occurrences) — le défaut Prisma (5 s) est trop court.
@@ -419,15 +551,18 @@ export async function undoCycle(serviceId: string): Promise<void> {
 
       const data = ev.data as unknown as CycleEventData;
       const newMirrorSlotIds = data.newMirrorSlotIds ?? [];
+      const newMultiSlotIds = data.newMultiSlotIds ?? [];
       const newRecurringSlotIds = data.newRecurringSlotIds ?? [];
       const newPeriodIds = data.newPeriodIds ?? [];
 
-      // 1. miroirs uniques : bookings unique puis slots
-      if (newMirrorSlotIds.length > 0) {
+      // 1. miroirs uniques + ponctuels des lots multi reconduits : bookings unique
+      // puis slots (mêmes suppressions, populations disjointes).
+      const uniqueSlotIds = [...newMirrorSlotIds, ...newMultiSlotIds];
+      if (uniqueSlotIds.length > 0) {
         await tx.booking.deleteMany({
-          where: { slotId: { in: newMirrorSlotIds }, bookingType: "unique" },
+          where: { slotId: { in: uniqueSlotIds }, bookingType: "unique" },
         });
-        await tx.slot.deleteMany({ where: { id: { in: newMirrorSlotIds } } });
+        await tx.slot.deleteMany({ where: { id: { in: uniqueSlotIds } } });
       }
 
       // 2. récurrents : bookings recurring puis slots
@@ -499,7 +634,11 @@ async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
 
   const data = ev.data as unknown as CycleEventData;
   const newPeriodIds = data.newPeriodIds ?? [];
-  const allSlotIds = [...(data.newRecurringSlotIds ?? []), ...(data.newMirrorSlotIds ?? [])];
+  const allSlotIds = [
+    ...(data.newRecurringSlotIds ?? []),
+    ...(data.newMirrorSlotIds ?? []),
+    ...(data.newMultiSlotIds ?? []),
+  ];
 
   // Compte ce que l'undo supprimera RÉELLEMENT : les créneaux créés après la bascule
   // (ponctuel ajouté à l'agenda, nouveau récurrent, miroirs régénérés) ne sont pas dans

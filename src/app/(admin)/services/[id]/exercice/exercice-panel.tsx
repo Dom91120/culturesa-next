@@ -27,6 +27,7 @@ export function ExercicePanel({ serviceId, data }: Props) {
   const [mode, setMode] = useState<Mode>("none");
   const [recreatePeriods, setRecreatePeriods] = useState(true);
   const [recreateSlots, setRecreateSlots] = useState(true);
+  const [recreateMultiSlots, setRecreateMultiSlots] = useState(true);
   const [undoAck, setUndoAck] = useState(false);
   // Modale de confirmation ouverte (port des modales legacy exercice-create/delete-confirm).
   const [confirm, setConfirm] = useState<"create" | "undo" | null>(null);
@@ -55,13 +56,13 @@ export function ExercicePanel({ serviceId, data }: Props) {
   function doCreate() {
     setConfirm(null);
     startTransition(async () => {
-      const res = await cycleAction(serviceId, recreatePeriods, recreateSlots);
+      const res = await cycleAction(serviceId, recreatePeriods, recreateSlots, recreateMultiSlots);
       if (!res.ok) {
         setError(res.error);
         return;
       }
       setInfo({
-        text: `Exercice ${data.nextName} créé : ${res.created} période(s), ${res.slotsCreated} créneau(x) récurrent(s).`,
+        text: `Exercice ${data.nextName} créé : ${res.created} période(s), ${res.slotsCreated} créneau(x) récurrent(s), ${res.multiSlotsCreated} créneau(x) multi-ponctuel(s).`,
         tone: "accent",
       });
       setMode("none");
@@ -199,6 +200,15 @@ export function ExercicePanel({ serviceId, data }: Props) {
                   onChange={(e) => setRecreateSlots(e.target.checked)}
                 />{" "}
                 Recréer les créneaux récurrents à l&apos;identique
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={recreateMultiSlots}
+                  disabled={isPending}
+                  onChange={(e) => setRecreateMultiSlots(e.target.checked)}
+                />{" "}
+                Recréer les créneaux multi-ponctuels à l&apos;identique
               </label>
             </div>
             {data.hasActivePeriods ? null : (
