@@ -625,26 +625,22 @@ export function AgendaGrid({
   const exLabel = exIdx >= 0 ? exercices[exIdx].label : "—";
   const canExPrev = exIdx > 0 && showPrevious;
   const canExNext = exIdx >= 0 && exIdx < exercices.length - 1;
-  function gotoExercice(id: number) {
-    // Mémorise la semaine quittée pour l'exercice courant : y revenir doit ramener
-    // là où on en était (priorité 1 ci-dessous).
-    if (currentExerciceId != null && anchorMonday) {
-      setWeekByExercice((m) => ({ ...m, [currentExerciceId]: anchorMonday }));
-    }
-    setCurrentExerciceId(id);
-    // Repositionne la semaine DANS l'exercice choisi. Sans cela, l'ancre restait sur
-    // la semaine courante — qui appartient le plus souvent à l'AUTRE exercice — et la
-    // grille continuait d'afficher son contenu (la période couvrante est cherchée parmi
-    // TOUTES les périodes chargées), sans onglet actif : l'en-tête annonçait un exercice
-    // et la grille en montrait un autre. Cible, par ordre de priorité :
-    //   1. la semaine déjà consultée dans cet exercice (tant qu'une de ses périodes la
-    //      couvre encore — sinon on rouvrirait une semaine vide) ;
-    //   2. la semaine du jour si l'exercice la couvre (retour à l'exercice en cours) ;
-    //   3. le début de sa première période.
-    const inExo = visiblePeriodsOf(periods, id).filter(
+  /**
+   * Semaine sur laquelle se poser DANS un exercice — règle UNIQUE, appliquée à
+   * l'arrivée sur l'onglet comme au changement d'exercice. Par ordre de priorité :
+   *   1. la semaine déjà consultée dans cet exercice, tant qu'une de ses périodes la
+   *      couvre encore (sinon on rouvrirait une semaine vide) ;
+   *   2. la semaine du jour si l'exercice la couvre ;
+   *   3. le début de sa première période.
+   * null = exercice sans période datée (l'appelant décide du repli).
+   */
+  function weekTargetFor(
+    exerciceId: number | null,
+    seenWeek: string | null,
+  ): { periodId: number; monday: string } | null {
+    const inExo = visiblePeriodsOf(periods, exerciceId).filter(
       (p): p is typeof p & { dateStart: string; dateEnd: string } => !!p.dateStart && !!p.dateEnd,
     );
-    const seenWeek = weekByExercice[id] ?? null;
     const seenSunday = seenWeek ? ymd(addDays(seenWeek, 6)) : null;
     const seenPeriod =
       seenWeek && seenSunday
@@ -653,10 +649,30 @@ export function AgendaGrid({
     const covering = inExo.find((p) => p.dateStart <= todayYmd && p.dateEnd >= todayYmd);
     // `periods` arrive trié par date de début → inExo[0] = première période de l'exercice.
     const target = seenPeriod ?? covering ?? inExo[0];
-    if (!target) return; // exercice sans période datée : on ne déplace pas la semaine
-    setRwPeriodId(target.id);
+    if (!target) return null;
     const anchorDate = seenPeriod && seenWeek ? seenWeek : covering ? todayYmd : target.dateStart;
-    setAnchorMonday(ymd(mondayOf(new Date(`${anchorDate}T00:00:00`))));
+    return {
+      periodId: target.id,
+      monday: ymd(mondayOf(new Date(`${anchorDate}T00:00:00`))),
+    };
+  }
+
+  function gotoExercice(id: number) {
+    // Mémorise la semaine quittée pour l'exercice courant : y revenir doit ramener
+    // là où on en était (priorité 1 de weekTargetFor).
+    if (currentExerciceId != null && anchorMonday) {
+      setWeekByExercice((m) => ({ ...m, [currentExerciceId]: anchorMonday }));
+    }
+    setCurrentExerciceId(id);
+    // Repositionne la semaine DANS l'exercice choisi. Sans cela, l'ancre restait sur la
+    // semaine courante — qui appartient le plus souvent à l'AUTRE exercice — et la grille
+    // continuait d'afficher son contenu (la période couvrante est cherchée parmi TOUTES
+    // les périodes chargées), sans onglet actif : l'en-tête annonçait un exercice et la
+    // grille en montrait un autre.
+    const target = weekTargetFor(id, weekByExercice[id] ?? null);
+    if (!target) return; // exercice sans période datée : on ne déplace pas la semaine
+    setRwPeriodId(target.periodId);
+    setAnchorMonday(target.monday);
   }
 
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
@@ -2037,7 +2053,7 @@ export function AgendaGrid({
 
   // Restaure la vue (exercice / période / semaine) depuis sessionStorage au montage,
   // puis la persiste à chaque changement (hook partagé usePersistedAgendaView —
-  // clé PAR gestionnaire). À défaut, ancre la semaine réelle sur le lundi courant.
+  // clé PAR gestionnaire).
   usePersistedAgendaView<{
     exerciceId: number | null;
     anchorMonday: string | null;
@@ -2045,22 +2061,22 @@ export function AgendaGrid({
   }>({
     storageKey: `agenda-admin-view:${service.id}:${viewerEmail}`,
     restore: (v) => {
-      let anchored = false;
+      // Exercice : celui mémorisé s'il existe encore, sinon celui de l'état initial (le
+      // plus récent). Un `null` mémorisé (vue enregistrée quand le service n'avait pas
+      // d'exercice) est ignoré, sinon il désactiverait le filtre d'exercice (toutes les
+      // périodes affichées, nav «—»).
+      let exoId = currentExerciceId;
+      let seenWeek: string | null = null;
+      const weeks: Record<number, string> = {};
       if (v) {
-        // Ne restaure l'exercice que s'il existe encore ; un `null` mémorisé (vue
-        // enregistrée quand le service n'avait pas d'exercice) est ignoré, sinon il
-        // désactiverait le filtre d'exercice (toutes les périodes affichées, nav «—»).
         if (v.exerciceId != null && exercices.some((e) => e.id === v.exerciceId)) {
+          exoId = v.exerciceId;
           setCurrentExerciceId(v.exerciceId);
         }
-        if (typeof v.anchorMonday === "string") {
-          setAnchorMonday(v.anchorMonday);
-          anchored = true;
-        }
+        if (typeof v.anchorMonday === "string") seenWeek = v.anchorMonday;
         // Semaines mémorisées par exercice : on ne garde que les exercices encore
         // présents (un exercice supprimé laisserait une entrée morte).
         if (v.weekByExercice && typeof v.weekByExercice === "object") {
-          const kept: Record<number, string> = {};
           for (const [key, week] of Object.entries(v.weekByExercice)) {
             const exId = Number(key);
             if (
@@ -2068,13 +2084,21 @@ export function AgendaGrid({
               typeof week === "string" &&
               exercices.some((e) => e.id === exId)
             ) {
-              kept[exId] = week;
+              weeks[exId] = week;
             }
           }
-          setWeekByExercice(kept);
+          setWeekByExercice(weeks);
         }
       }
-      if (!anchored) setAnchorMonday(ymd(mondayOf(new Date())));
+      // MÊMES RÈGLES qu'un changement d'exercice (weekTargetFor) : semaine consultée,
+      // sinon semaine du jour si l'exercice la couvre, sinon début de sa première
+      // période. Repli sur le lundi courant si l'exercice n'a aucune période datée.
+      const target = weekTargetFor(
+        exoId,
+        seenWeek ?? (exoId != null ? (weeks[exoId] ?? null) : null),
+      );
+      setRwPeriodId(target?.periodId ?? null);
+      setAnchorMonday(target?.monday ?? ymd(mondayOf(new Date())));
     },
     snapshot: () => ({ exerciceId: currentExerciceId, anchorMonday, weekByExercice }),
     deps: [service.id, viewerEmail, currentExerciceId, anchorMonday, weekByExercice],
