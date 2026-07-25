@@ -281,14 +281,22 @@ export async function getServiceStats(
       value: Math.round(sum / (monthFillCnt.get(bucket) ?? 1)),
     }));
 
-  // Remplissage moyen par structure : chaque occurrence apporte le remplissage de SA séance.
+  // Remplissage moyen par structure : moyenne PAR SÉANCE, comme la moyenne globale et
+  // la courbe mensuelle. Une séance ne compte qu'UNE FOIS par structure présente —
+  // pondérer par occurrence (correctif 2026-07-25) comptait deux fois les séances
+  // partagées, or ce sont les mieux remplies : sur un service à structure unique la
+  // valeur affichée dépassait la moyenne globale (44 % vs 40 %), ce qui n'a pas de sens.
   const fillSum = new Map<string, number>();
   const fillCnt = new Map<string, number>();
+  const countedStructSession = new Set<string>();
   for (const b of occ) {
     if (!b.slot.slotDate) continue;
-    const f = sessionFill.get(sessionKeyOf(b, ymd(b.slot.slotDate)));
+    const sessionKey = sessionKeyOf(b, ymd(b.slot.slotDate));
+    const f = sessionFill.get(sessionKey);
     if (f == null) continue;
     const s = structOf(b);
+    if (countedStructSession.has(`${s}|${sessionKey}`)) continue;
+    countedStructSession.add(`${s}|${sessionKey}`);
     fillSum.set(s, (fillSum.get(s) ?? 0) + f);
     fillCnt.set(s, (fillCnt.get(s) ?? 0) + 1);
   }
