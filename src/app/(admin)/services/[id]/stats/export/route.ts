@@ -26,11 +26,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   lines.push([]);
   lines.push(["Indicateur", "Valeur"]);
   lines.push(["Séances", String(stats.total)]);
-  lines.push(["Usagers distincts", String(stats.distinctUsers)]);
+  lines.push(["Inscrits distincts", String(stats.distinctUsers)]);
   lines.push(["Demandes en attente", String(stats.pending)]);
-  lines.push(["Enfants distincts (1 fois par usager)", String(stats.enfants)]);
+  lines.push(["Enfants distincts (1 fois par inscrit)", String(stats.enfants)]);
   lines.push(["Fréquentation enfants (cumul des séances)", String(stats.enfantsCumul)]);
-  lines.push(["Accompagnants (effectif estimé, 1 fois par usager)", String(stats.accompagnants)]);
+  lines.push(["Accompagnants (effectif estimé, 1 fois par inscrit)", String(stats.accompagnants)]);
   lines.push([]);
   lines.push(["Prévu / Réalisé (séances passées)", "Valeur"]);
   lines.push(["Prévu", String(stats.prevu)]);
@@ -59,7 +59,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   section("Par thème", "Réservations", stats.topThemes);
   section("Remplissage moyen par mois (%)", "%", stats.fillByMonth);
   section("Remplissage moyen par structure (%)", "%", stats.fillByStructure);
-  // Deux lectures par exercice : Total = cumul des séances, Distincts = 1 fois par usager.
+  // Deux lectures par exercice : Total = cumul des séances, Distincts = 1 fois par inscrit.
   lines.push([]);
   lines.push(["Effectifs (enfants) par exercice", "Total", "Distincts"]);
   for (const r of stats.effectifsByExercice) {

@@ -632,7 +632,7 @@ export default async function StatsPage({
   // Métriques dérivées « intéressantes ». La moyenne par séance se calcule sur le CUMUL
   // (enfants × séances), pas sur l'effectif distinct.
   const moyEnfants = stats.total > 0 ? (stats.enfantsCumul / stats.total).toFixed(1) : "0";
-  const moyParUsager =
+  const moyParInscrit =
     stats.distinctUsers > 0 ? (stats.total / stats.distinctUsers).toFixed(1) : "0";
   const peakDay = [...stats.byDay].sort((a, b) => b.value - a.value)[0];
 
@@ -671,13 +671,13 @@ export default async function StatsPage({
 
       {/* Bandeau KPIs */}
       <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-        <MetricCard value={stats.total} label="Séances" sub={`${moyParUsager} / usager`} />
-        <MetricCard value={stats.distinctUsers} label="Usagers distincts" color="#5ab4e8" />
+        <MetricCard value={stats.total} label="Séances" sub={`${moyParInscrit} / inscrit`} />
+        <MetricCard value={stats.distinctUsers} label="Inscrits distincts" color="#5ab4e8" />
         <MetricCard
           value={stats.enfants}
           label="Enfants distincts"
           color="#e8a45a"
-          hint="Effectif estimé : chaque usager compte une seule fois, avec l'effectif de sa réservation la plus nombreuse (récurrent ou re-réservations ne comptent qu'une fois)"
+          hint="Effectif estimé : chaque inscrit compte une seule fois, avec l'effectif de sa réservation la plus nombreuse (récurrent ou re-réservations ne comptent qu'une fois)"
         />
         <MetricCard
           value={stats.enfantsCumul}
@@ -691,7 +691,7 @@ export default async function StatsPage({
             value={stats.accompagnants}
             label="Accompagnants"
             color="#a07dd4"
-            hint="Effectif estimé, même règle que les enfants : une seule fois par usager (sa réservation la plus accompagnée)"
+            hint="Effectif estimé, même règle que les enfants : une seule fois par inscrit (sa réservation la plus accompagnée)"
           />
         )}
         <MetricCard
@@ -737,15 +737,19 @@ export default async function StatsPage({
           />
         )}
 
-        <DonutPanel
-          title="Type de réservation"
-          data={[
-            { label: "Récurrentes", value: stats.recurringCount, color: C_PRESENT },
-            { label: "Ponctuelles", value: stats.uniqueCount, color: "#5ab4e8" },
-          ]}
-          centerValue={String(stats.recurringCount + stats.uniqueCount)}
-          centerLabel="séances"
-        />
+        {/* Uniquement quand les deux types coexistent : un anneau à 100 % récurrentes
+            (ou 100 % ponctuelles) n'apprend rien. */}
+        {stats.recurringCount > 0 && stats.uniqueCount > 0 && (
+          <DonutPanel
+            title="Type de réservation"
+            data={[
+              { label: "Récurrentes", value: stats.recurringCount, color: C_PRESENT },
+              { label: "Ponctuelles", value: stats.uniqueCount, color: "#5ab4e8" },
+            ]}
+            centerValue={String(stats.recurringCount + stats.uniqueCount)}
+            centerLabel="séances"
+          />
+        )}
 
         <DonutPanel
           title="Répartition par jour"
@@ -759,7 +763,7 @@ export default async function StatsPage({
           title="Top structures"
           data={forDonut(stats.topStructures, 5)}
           centerValue={String(stats.distinctUsers)}
-          centerLabel="usagers"
+          centerLabel="inscrits"
         />
 
         <DonutPanel
@@ -809,7 +813,7 @@ export default async function StatsPage({
           empty={stats.effectifsByExercice.length === 0}
         >
           {/* Total = cumul des séances (comme « Fréquentation enfants ») ;
-              Distincts = 1 fois par usager (règle du max). */}
+              Distincts = 1 fois par inscrit (règle du max). */}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".78rem" }}>
             <thead>
               <tr
