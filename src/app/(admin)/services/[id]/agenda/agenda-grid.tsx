@@ -623,6 +623,21 @@ export function AgendaGrid({
   const canExNext = exIdx >= 0 && exIdx < exercices.length - 1;
   function gotoExercice(id: number) {
     setCurrentExerciceId(id);
+    // Repositionne la semaine DANS l'exercice choisi. Sans cela, l'ancre restait sur
+    // la semaine courante — qui appartient le plus souvent à l'AUTRE exercice — et la
+    // grille continuait d'afficher son contenu (la période couvrante est cherchée parmi
+    // TOUTES les périodes chargées), sans onglet actif : l'en-tête annonçait un exercice
+    // et la grille en montrait un autre. Cible : la semaine d'aujourd'hui si l'exercice
+    // la couvre (retour à l'exercice en cours), sinon le début de sa première période.
+    const inExo = visiblePeriodsOf(periods, id).filter(
+      (p): p is typeof p & { dateStart: string; dateEnd: string } => !!p.dateStart && !!p.dateEnd,
+    );
+    const covering = inExo.find((p) => p.dateStart <= todayYmd && p.dateEnd >= todayYmd);
+    // `periods` arrive trié par date de début → inExo[0] = première période de l'exercice.
+    const target = covering ?? inExo[0];
+    if (!target) return; // exercice sans période datée : on ne déplace pas la semaine
+    setRwPeriodId(target.id);
+    setAnchorMonday(ymd(mondayOf(new Date(`${covering ? todayYmd : target.dateStart}T00:00:00`))));
   }
 
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
