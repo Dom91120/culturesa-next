@@ -66,6 +66,8 @@ services:
 
   # Simple déclencheur : appelle les routes /api/cron/* de l'app toutes les 5 minutes
   # (la planification réelle est configurée dans l'admin, y compris l'export de la base).
+  # Embarque aussi l'export manuel de secours (`docker compose exec cron backup.sh`),
+  # qui parle directement à Postgres — d'où les variables POSTGRES_* et le volume.
   cron:
     build:
       context: ./cron
@@ -74,6 +76,13 @@ services:
       - app
     environment:
       CRON_SECRET: ${CRON_SECRET}
+      # Pour backup.sh uniquement (le crontab, lui, ne fait que des curl vers l'app)
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Même dossier de dumps que l'app (./backups sur l'hôte)
+      - ./backups:/backups
     networks:
       - web
 
