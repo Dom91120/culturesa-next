@@ -12,6 +12,13 @@ import { prisma } from "@/server/db";
 // compte donc une fois PAR occurrence. `occAll` = tout l'historique daté du service ;
 // `occ` = filtré au type et à la plage de dates. Le pointage (prévu/réalisé) vit sur ces
 // mêmes occurrences (séances passées, plus toute séance pointée — validée ou non).
+//
+// EXCEPTION (décision produit 2026-07-25) : les EFFECTIFS (enfants, accompagnants,
+// effectifs par exercice) sont des personnes, pas des volumes de séances. Sans identité
+// des enfants en base, on les estime par la « règle du max » : pour chaque usager ayant
+// réservé dans la population, on retient l'effectif de sa réservation la plus nombreuse
+// (un récurrent ou des re-réservations du même usager ne comptent qu'une fois). Le cumul
+// par séance reste exposé (enfantsCumul → tuile « Fréquentation enfants »).
 // =====================================================================================
 
 export type StatsType = "all" | "rec" | "uniq";
@@ -28,8 +35,13 @@ type ServiceStats = {
   total: number;
   distinctUsers: number;
   pending: number;
+  // Effectifs ESTIMÉS (règle du max par usager, cf. en-tête) — « chaque enfant/
+  // accompagnant compté une fois », même en récurrent ou multi-réservations.
   enfants: number;
   accompagnants: number;
+  // Cumul par séance (ancienne sémantique volume) : un récurrent compte ses enfants à
+  // chaque occurrence — tuile « Fréquentation enfants » + moyenne par séance.
+  enfantsCumul: number;
   // Répartition par type sur les OCCURRENCES — anneau « Type de réservation » (miroir =
   // récurrente, ponctuel autonome = ponctuelle).
   recurringCount: number;
@@ -62,7 +74,9 @@ type ServiceStats = {
   fillByStructure: LabeledCount[];
   // Effectifs (enfants) par exercice — TOUS exercices (ignore la plage de dates), pour
   // suivre l'évolution d'une année scolaire à l'autre. Respecte le filtre de type.
-  effectifsByExercice: LabeledCount[];
+  // Deux lectures par exercice : total = cumul des séances (volume), distincts = règle
+  // du max par usager appliquée à l'intérieur de l'exercice.
+  effectifsByExercice: { label: string; total: number; distincts: number }[];
 };
 
 /** Date UTC → 'YYYY-MM-DD'. */
@@ -194,8 +208,19 @@ export async function getServiceStats(
   const total = occ.length;
   const distinctUsers = new Set(occ.map((b) => b.userId)).size;
   const pending = occ.filter((b) => !b.validated).length;
-  const enfants = occ.reduce((s, b) => s + b.enfants, 0);
-  const accompagnants = occ.reduce((s, b) => s + b.accompagnants, 0);
+  // Règle du max par usager (cf. en-tête) : max indépendant par métrique — pour les
+  // accompagnants aussi, on retient la réservation la plus accompagnée de l'usager.
+  const sumOfMaxByUser = (
+    pop: typeof occAll,
+    pick: (b: (typeof occAll)[number]) => number,
+  ): number => {
+    const m = new Map<string, number>();
+    for (const b of pop) m.set(b.userId, Math.max(m.get(b.userId) ?? 0, pick(b)));
+    return [...m.values()].reduce((s, v) => s + v, 0);
+  };
+  const enfants = sumOfMaxByUser(occ, (b) => b.enfants);
+  const accompagnants = sumOfMaxByUser(occ, (b) => b.accompagnants);
+  const enfantsCumul = occ.reduce((s, b) => s + b.enfants, 0);
   const recurringCount = occ.filter((b) => b.parentBookingId != null).length;
   const uniqueCount = occ.filter((b) => b.parentBookingId == null).length;
 
@@ -298,16 +323,23 @@ export async function getServiceStats(
     });
 
   // Effectifs (enfants) par exercice — TOUT l'historique daté (occAll), filtre type.
-  const exoMap = new Map<string, number>();
+  // « total » = cumul des séances ; « distincts » = règle du max par usager, appliquée
+  // À L'INTÉRIEUR de chaque exercice (un usager présent sur deux années scolaires compte
+  // dans chacune, avec son max de l'année).
+  const exoOcc = new Map<string, typeof occAll>();
   for (const b of occAll) {
     if (!typePass(b) || !b.slot.slotDate) continue;
     const label = schoolYearLabel(b.slot.slotDate);
     if (!label) continue;
-    exoMap.set(label, (exoMap.get(label) ?? 0) + b.enfants);
+    exoOcc.set(label, [...(exoOcc.get(label) ?? []), b]);
   }
-  const effectifsByExercice = [...exoMap.entries()]
+  const effectifsByExercice = [...exoOcc.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([label, value]) => ({ label, value }));
+    .map(([label, pop]) => ({
+      label,
+      total: pop.reduce((s, b) => s + b.enfants, 0),
+      distincts: sumOfMaxByUser(pop, (b) => b.enfants),
+    }));
 
   // ── Prévu / réalisé : les stats comptent ce qui a été SAISI, sans blocage (validée ou
   // non — le verrou, c'est l'acte de pointage qui le porte). Population = séances passées
@@ -338,6 +370,7 @@ export async function getServiceStats(
     pending,
     enfants,
     accompagnants,
+    enfantsCumul,
     recurringCount,
     uniqueCount,
     avgFill,

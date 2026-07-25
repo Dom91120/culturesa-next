@@ -640,10 +640,10 @@ export default async function StatsPage({
     }));
 
   const niveauMax = Math.max(1, ...stats.topNiveaux.map((r) => r.value));
-  const effMax = Math.max(1, ...stats.effectifsByExercice.map((r) => r.value));
 
-  // Métriques dérivées « intéressantes ».
-  const moyEnfants = stats.total > 0 ? (stats.enfants / stats.total).toFixed(1) : "0";
+  // Métriques dérivées « intéressantes ». La moyenne par séance se calcule sur le CUMUL
+  // (enfants × séances), pas sur l'effectif distinct.
+  const moyEnfants = stats.total > 0 ? (stats.enfantsCumul / stats.total).toFixed(1) : "0";
   const moyParUsager =
     stats.distinctUsers > 0 ? (stats.total / stats.distinctUsers).toFixed(1) : "0";
   const peakDay = [...stats.byDay].sort((a, b) => b.value - a.value)[0];
@@ -687,12 +687,24 @@ export default async function StatsPage({
         <MetricCard value={stats.distinctUsers} label="Usagers distincts" color="#5ab4e8" />
         <MetricCard
           value={stats.enfants}
-          label="Enfants"
+          label="Enfants distincts"
           color="#e8a45a"
+          hint="Effectif estimé : chaque usager compte une seule fois, avec l'effectif de sa réservation la plus nombreuse (récurrent ou re-réservations ne comptent qu'une fois)"
+        />
+        <MetricCard
+          value={stats.enfantsCumul}
+          label="Fréquentation enfants"
+          color="#d98cc0"
           sub={`${moyEnfants} / séance`}
+          hint="Cumul sur les séances : une réservation récurrente compte ses enfants à chaque séance"
         />
         {stats.accompagnants > 0 && (
-          <MetricCard value={stats.accompagnants} label="Accompagnants" color="#a07dd4" />
+          <MetricCard
+            value={stats.accompagnants}
+            label="Accompagnants"
+            color="#a07dd4"
+            hint="Effectif estimé, même règle que les enfants : une seule fois par usager (sa réservation la plus accompagnée)"
+          />
         )}
         <MetricCard
           value={stats.avgFill != null ? `${stats.avgFill}%` : "—"}
@@ -714,11 +726,12 @@ export default async function StatsPage({
       </div>
 
       {/* Grille unique : anneaux (5, ou 4 sans présence) PUIS panneaux — tout s'enchaîne
-          sur 4 colonnes, sans colonne vide entre les deux sections. */}
+          sans colonne vide entre les deux sections. Colonnes responsives : 250px de
+          largeur minimum par panneau, retour à la ligne en dessous. */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
           gap: ".85rem",
         }}
       >
@@ -807,9 +820,39 @@ export default async function StatsPage({
           title="Effectifs (enfants) par exercice"
           empty={stats.effectifsByExercice.length === 0}
         >
-          {stats.effectifsByExercice.map((r) => (
-            <BarRow key={r.label} label={r.label} value={r.value} max={effMax} color="#6dceaa" />
-          ))}
+          {/* Total = cumul des séances (comme « Fréquentation enfants ») ;
+              Distincts = 1 fois par usager (règle du max). */}
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".78rem" }}>
+            <thead>
+              <tr
+                style={{
+                  color: "var(--muted)",
+                  fontSize: ".62rem",
+                  textTransform: "uppercase",
+                  letterSpacing: ".08em",
+                }}
+              >
+                <th style={{ textAlign: "left", fontWeight: 600, padding: ".2rem 0" }}>Exercice</th>
+                <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>Total</th>
+                <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                  Distincts
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.effectifsByExercice.map((r) => (
+                <tr key={r.label} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ color: "var(--muted)", padding: ".35rem 0" }}>{r.label}</td>
+                  <td style={{ textAlign: "right", fontWeight: 600, color: "#d98cc0" }}>
+                    {r.total}
+                  </td>
+                  <td style={{ textAlign: "right", fontWeight: 600, color: "#e8a45a" }}>
+                    {r.distincts}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Panel>
       </div>
     </div>
