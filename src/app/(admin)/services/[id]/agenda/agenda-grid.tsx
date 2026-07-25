@@ -318,6 +318,10 @@ export function AgendaGrid({
   // réservations récurrentes). La période active se déduit de la semaine affichée (verrou
   // rwPeriodId), il n'y a plus de sélection de période/semaine A/B « abstraite ».
   const [anchorMonday, setAnchorMonday] = useState<string | null>(null);
+  // Dernière semaine consultée PAR EXERCICE (renseignée en quittant un exercice) :
+  // revenir sur un exercice rouvre la semaine où on l'avait laissé, plutôt que sa
+  // première période. Persistée avec le reste de la vue (sessionStorage).
+  const [weekByExercice, setWeekByExercice] = useState<Record<number, string>>({});
   // Période active verrouillée : sans ce verrou, on re-dérive la période depuis la semaine à
   // chaque ◀/▶ — et quand une semaine chevauche la frontière de deux périodes contiguës,
   // elle bascule sur la voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
@@ -622,22 +626,37 @@ export function AgendaGrid({
   const canExPrev = exIdx > 0 && showPrevious;
   const canExNext = exIdx >= 0 && exIdx < exercices.length - 1;
   function gotoExercice(id: number) {
+    // Mémorise la semaine quittée pour l'exercice courant : y revenir doit ramener
+    // là où on en était (priorité 1 ci-dessous).
+    if (currentExerciceId != null && anchorMonday) {
+      setWeekByExercice((m) => ({ ...m, [currentExerciceId]: anchorMonday }));
+    }
     setCurrentExerciceId(id);
     // Repositionne la semaine DANS l'exercice choisi. Sans cela, l'ancre restait sur
     // la semaine courante — qui appartient le plus souvent à l'AUTRE exercice — et la
     // grille continuait d'afficher son contenu (la période couvrante est cherchée parmi
     // TOUTES les périodes chargées), sans onglet actif : l'en-tête annonçait un exercice
-    // et la grille en montrait un autre. Cible : la semaine d'aujourd'hui si l'exercice
-    // la couvre (retour à l'exercice en cours), sinon le début de sa première période.
+    // et la grille en montrait un autre. Cible, par ordre de priorité :
+    //   1. la semaine déjà consultée dans cet exercice (tant qu'une de ses périodes la
+    //      couvre encore — sinon on rouvrirait une semaine vide) ;
+    //   2. la semaine du jour si l'exercice la couvre (retour à l'exercice en cours) ;
+    //   3. le début de sa première période.
     const inExo = visiblePeriodsOf(periods, id).filter(
       (p): p is typeof p & { dateStart: string; dateEnd: string } => !!p.dateStart && !!p.dateEnd,
     );
+    const seenWeek = weekByExercice[id] ?? null;
+    const seenSunday = seenWeek ? ymd(addDays(seenWeek, 6)) : null;
+    const seenPeriod =
+      seenWeek && seenSunday
+        ? inExo.find((p) => p.dateStart <= seenSunday && p.dateEnd >= seenWeek)
+        : undefined;
     const covering = inExo.find((p) => p.dateStart <= todayYmd && p.dateEnd >= todayYmd);
     // `periods` arrive trié par date de début → inExo[0] = première période de l'exercice.
-    const target = covering ?? inExo[0];
+    const target = seenPeriod ?? covering ?? inExo[0];
     if (!target) return; // exercice sans période datée : on ne déplace pas la semaine
     setRwPeriodId(target.id);
-    setAnchorMonday(ymd(mondayOf(new Date(`${covering ? todayYmd : target.dateStart}T00:00:00`))));
+    const anchorDate = seenPeriod && seenWeek ? seenWeek : covering ? todayYmd : target.dateStart;
+    setAnchorMonday(ymd(mondayOf(new Date(`${anchorDate}T00:00:00`))));
   }
 
   // ── Mode "Semaine réelle" : semaine datée + période couvrant cette semaine ──
@@ -2022,6 +2041,7 @@ export function AgendaGrid({
   usePersistedAgendaView<{
     exerciceId: number | null;
     anchorMonday: string | null;
+    weekByExercice: Record<number, string>;
   }>({
     storageKey: `agenda-admin-view:${service.id}:${viewerEmail}`,
     restore: (v) => {
@@ -2037,11 +2057,27 @@ export function AgendaGrid({
           setAnchorMonday(v.anchorMonday);
           anchored = true;
         }
+        // Semaines mémorisées par exercice : on ne garde que les exercices encore
+        // présents (un exercice supprimé laisserait une entrée morte).
+        if (v.weekByExercice && typeof v.weekByExercice === "object") {
+          const kept: Record<number, string> = {};
+          for (const [key, week] of Object.entries(v.weekByExercice)) {
+            const exId = Number(key);
+            if (
+              Number.isFinite(exId) &&
+              typeof week === "string" &&
+              exercices.some((e) => e.id === exId)
+            ) {
+              kept[exId] = week;
+            }
+          }
+          setWeekByExercice(kept);
+        }
       }
       if (!anchored) setAnchorMonday(ymd(mondayOf(new Date())));
     },
-    snapshot: () => ({ exerciceId: currentExerciceId, anchorMonday }),
-    deps: [service.id, viewerEmail, currentExerciceId, anchorMonday],
+    snapshot: () => ({ exerciceId: currentExerciceId, anchorMonday, weekByExercice }),
+    deps: [service.id, viewerEmail, currentExerciceId, anchorMonday, weekByExercice],
   });
 
   // Verrouille la période active en semaine réelle (hook partagé, cf. agenda-hooks).
