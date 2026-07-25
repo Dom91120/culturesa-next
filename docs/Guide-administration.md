@@ -143,7 +143,7 @@ CRON) ou « Créer un export maintenant » (Tâches planifiées › Exports).
 ### Restauration
 
 ```bash
-# Depuis un dump compressé du conteneur cron
+# Depuis un dump compressé du dossier backups/ (automatique culturesa-* ou manuel manuel-*)
 gunzip -c backups/culturesa-AAAAMMJJ-HHMMSS.sql.gz \
   | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
 
@@ -154,8 +154,12 @@ cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_D
 ### Dump manuel ponctuel
 
 ```bash
-docker compose exec db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup_$(date +%F).sql
+docker compose exec cron backup.sh
 ```
+
+> Dump direct depuis Postgres (fonctionne même si le conteneur `app` est arrêté) →
+> `backups/manuel-AAAAMMJJ-HHMMSS.sql.gz`, visible dans l'admin (Tâches planifiées ›
+> Exports) et **jamais purgé** par la rotation automatique.
 
 > Régler l'horaire : directement dans l'admin (Tâches planifiées › CRON), pris en compte
 > sans redéploiement. La durée de rétention (7 dumps automatiques) est fixée dans le code
