@@ -477,9 +477,7 @@ function AreaChart({ data, color }: { data: LabeledCount[]; color: string }) {
           → ~16px rendus) pour coller à la courbe ; valeurs aérées en dessous.
           Clé indicée : les libellés de mois (1..12) peuvent se répéter sur une plage
           manuelle de plus d'un an. */}
-      <div
-        style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: -15 }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: -15 }}>
         {data.map((d, i) => (
           <div key={`${d.label}-${i}`} style={{ textAlign: "center", minWidth: 0 }}>
             <div style={{ fontSize: ".5rem", color: "var(--muted)" }}>{d.label}</div>
@@ -545,9 +543,7 @@ function FillCurve({ data, color }: { data: LabeledCount[]; color: string }) {
       </svg>
       {/* Numéros de mois = axe X, remontés dans la marge basse interne du SVG ;
           valeurs aérées en dessous (cf. AreaChart). */}
-      <div
-        style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: -12 }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, marginTop: -12 }}>
         {data.map((d, i) => (
           <div key={`${d.label}-${i}`} style={{ textAlign: "center", minWidth: 0 }}>
             <div style={{ fontSize: ".5rem", color: "var(--muted)" }}>{d.label}</div>
@@ -572,9 +568,21 @@ export default async function StatsPage({
   const sp = await searchParams;
   const service = await prisma.service.findUnique({
     where: { id },
-    select: { label: true, showPreviousExercices: true },
+    select: {
+      label: true,
+      showPreviousExercices: true,
+      // Panneau « Répartition par thème » : uniquement si le service travaille en
+      // LISTE de thèmes non vide ET qu'au moins un demandeur a les thèmes activés.
+      themesMode: true,
+      _count: { select: { themes: true } },
+      demandeurSettings: { where: { themes: true }, select: { demandeurId: true }, take: 1 },
+    },
   });
   if (!service) notFound();
+  const showThemes =
+    service.themesMode === "liste" &&
+    service._count.themes > 0 &&
+    service.demandeurSettings.length > 0;
 
   const type = parseStatsType(sp.type);
   const rawFrom = parseStatsDate(sp.from);
@@ -766,12 +774,14 @@ export default async function StatsPage({
           centerLabel="inscrits"
         />
 
-        <DonutPanel
-          title="Répartition par thème"
-          data={forDonut(stats.topThemes, 6)}
-          centerValue={String(stats.themedCount)}
-          centerLabel="séances"
-        />
+        {showThemes && (
+          <DonutPanel
+            title="Répartition par thème"
+            data={forDonut(stats.topThemes, 6)}
+            centerValue={String(stats.themedCount)}
+            centerLabel="séances"
+          />
+        )}
 
         <Panel
           title="Évolution mensuelle"
