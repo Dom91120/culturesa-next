@@ -13,6 +13,7 @@ import {
 import { verifyCaptcha } from "@/server/captcha";
 import { prisma } from "@/server/db";
 import { sendTemplatedMail } from "@/server/services/mail-send";
+import { SESSION_EXPIRES_IN, SESSION_FRESH_AGE, SESSION_UPDATE_AGE } from "@/server/session-policy";
 
 // Endpoints Better Auth qui définissent/changent un mot de passe : on y impose la
 // politique de complexité (Better Auth ne valide nativement que la longueur min).
@@ -85,6 +86,16 @@ export const auth = betterAuth({
         "Réinitialiser mon mot de passe",
       );
     },
+  },
+
+  // Durée de vie du COOKIE porteur et de la ligne `session`. Les délais réels
+  // (inactivité 15 min gestionnaire/administrateur, 2 h usager ; plafonds absolus)
+  // sont appliqués PAR RÔLE côté application — cf. server/session-policy.ts, qui
+  // explique pourquoi le glissement natif de Better Auth ne peut pas tenir ce rôle.
+  session: {
+    expiresIn: SESSION_EXPIRES_IN,
+    updateAge: SESSION_UPDATE_AGE,
+    freshAge: SESSION_FRESH_AGE,
   },
 
   emailVerification: {

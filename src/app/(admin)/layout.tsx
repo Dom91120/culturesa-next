@@ -1,12 +1,14 @@
 import { ConnectedShell } from "@/components/connected-shell";
 import { OnboardingModal } from "@/components/onboarding-modal";
+import { SessionWatchdog } from "@/components/session-watchdog";
 import { prisma } from "@/server/db";
-import { requireRole } from "@/server/guards";
+import { requireRole, sessionDeadline } from "@/server/guards";
 import { listServicesForCurrentAdmin } from "@/server/services/services";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole("gestionnaire");
   const isAdmin = (session.user as { role?: string }).role === "administrateur";
+  const deadline = await sessionDeadline();
   // Nav : un gestionnaire ne voit que les services qu'il gère ; un admin, tous.
   const services = await listServicesForCurrentAdmin();
   // Onboarding : modale de bienvenue (variante gestionnaire) à la 1re connexion. Lecture
@@ -33,6 +35,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         variant={isAdmin ? "administrateur" : "gestionnaire"}
         open={needsOnboarding}
       />
+      {deadline !== null && <SessionWatchdog expiresAt={deadline} />}
     </ConnectedShell>
   );
 }

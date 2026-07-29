@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
-import { getSession } from "@/server/guards";
+import { getSessionNoTouch } from "@/server/guards";
 import { userCanAccessService } from "@/server/services/bookings";
 
 /**
@@ -17,9 +17,13 @@ import { userCanAccessService } from "@/server/services/bookings";
  * Accès : mêmes règles que les grilles — administrateur ; gestionnaire DU service
  * (ServiceManager) ; usager dont le demandeur effectif est accepté par le service.
  * Route API (et non server action) : GET haute fréquence sans mutation, no-store.
+ *
+ * Session lue via `getSessionNoTouch` : ce sondage est émis par la PAGE, pas par
+ * un geste de l'usager. Le compter comme activité maintiendrait indéfiniment en
+ * vie la session d'un onglet d'agenda laissé ouvert devant un poste inoccupé.
  */
 export async function GET(req: Request) {
-  const session = await getSession();
+  const session = await getSessionNoTouch();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const serviceId = new URL(req.url).searchParams.get("serviceId")?.trim() ?? "";
   if (!serviceId) return NextResponse.json({ error: "serviceId requis" }, { status: 400 });

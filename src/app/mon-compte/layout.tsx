@@ -1,7 +1,8 @@
 import { ConnectedShell } from "@/components/connected-shell";
+import { SessionWatchdog } from "@/components/session-watchdog";
 import { UserShell } from "@/components/user-shell";
 import type { Role } from "@/generated/prisma/client";
-import { requireUser } from "@/server/guards";
+import { requireUser, sessionDeadline } from "@/server/guards";
 import { listBookableServices } from "@/server/services/bookings";
 import { listServicesForCurrentAdmin } from "@/server/services/services";
 
@@ -13,6 +14,8 @@ export default async function MonCompteLayout({ children }: { children: React.Re
   const session = await requireUser();
   const role = (session.user as { role?: Role }).role ?? "utilisateur";
   const user = { name: session.user.name ?? "", email: session.user.email };
+  const deadline = await sessionDeadline();
+  const watchdog = deadline !== null && <SessionWatchdog expiresAt={deadline} />;
 
   if (role === "gestionnaire" || role === "administrateur") {
     // Périmètre par rôle : un gestionnaire ne voit QUE ses services gérés (ServiceManager),
@@ -22,6 +25,7 @@ export default async function MonCompteLayout({ children }: { children: React.Re
     return (
       <ConnectedShell user={user} services={services} isAdmin={role === "administrateur"}>
         {children}
+        {watchdog}
       </ConnectedShell>
     );
   }
@@ -33,6 +37,7 @@ export default async function MonCompteLayout({ children }: { children: React.Re
       services={services.map((s) => ({ id: s.id, label: s.label, icon: s.icon }))}
     >
       {children}
+      {watchdog}
     </UserShell>
   );
 }
