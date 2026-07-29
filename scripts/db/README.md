@@ -25,48 +25,81 @@ Aucune migration ne doit être en attente, et le schéma ne doit pas utiliser d'
 
 ## Procédure
 
+> Les commandes ci-dessous utilisent `docker compose exec db`, qui désigne le **service** : elles fonctionnent quel que soit le nom du conteneur, lequel porte le préfixe du projet (`culturesa-db-1`) et varie d'un déploiement à l'autre.
+
 ### 1. Répéter sur une copie
 
-Ne faites pas cette bascule directement en production. Sur une base jetable :
+Ne faites pas cette bascule directement en production.
+
+`CREATE DATABASE … TEMPLATE` exigerait qu'aucune session ne soit ouverte sur la base source, donc l'arrêt de l'application. On passe par `pg_dump`, qui n'interrompt rien :
 
 ```bash
-docker exec culturesa-db psql -U "$POSTGRES_USER" -d postgres \
-  -c "CREATE DATABASE bascule_test TEMPLATE $POSTGRES_DB;"
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE IF EXISTS bascule_test" -c "CREATE DATABASE bascule_test"'
 ```
 
-Déroulez les étapes 2 à 4 dessus, puis supprimez-la. C'est là qu'on découvre le détail qui manque.
+```bash
+docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges | psql -U "$POSTGRES_USER" -d bascule_test -q'
+```
+
+Les lignes `setval` en sortie sont normales (recalage des séquences). Vérifiez que la copie est fidèle en comparant le nombre de tables :
+
+```bash
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d bascule_test -tAc "SELECT count(*) FROM pg_stat_user_tables"'
+```
+
+Déroulez les étapes 2 et 3 sur `bascule_test`, puis rejouez-les sur la base de production. C'est là qu'on découvre le détail qui manque.
 
 ### 2. Générer le mot de passe et créer le rôle
 
-```bash
-openssl rand -base64 24
-```
-
-Le mot de passe n'est pas écrit dans le script : il est passé en variable.
+**En hexadécimal, pas en base64** : ce mot de passe finit dans une URL de connexion, et les `/` que produit `base64` la casseraient.
 
 ```bash
-docker cp scripts/db/01-creer-role-applicatif.sql culturesa-db:/tmp/01.sql
+export APP_PW="$(openssl rand -hex 24)" && echo "généré, non affiché"
+```
+
+`export` est une primitive du shell : la valeur ne passe ni par l'historique ni par la ligne de commande d'un processus.
+
+```bash
+docker compose cp scripts/db/01-creer-role-applicatif.sql db:/tmp/01.sql
 ```
 
 ```bash
-docker exec culturesa-db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -v app_role=culturesa_app -v app_password='LE_MOT_DE_PASSE' -f /tmp/01.sql
+docker compose exec -e APP_PW db sh -c 'psql -U "$POSTGRES_USER" -d bascule_test -v app_role=culturesa_app -v app_password="$APP_PW" -f /tmp/01.sql'
 ```
+
+`-e APP_PW` **sans valeur** transmet la variable par son nom : le mot de passe n'apparaît pas dans les arguments du conteneur.
 
 Attendu en fin de sortie : `superutilisateur = f` et `objets encore possédés par un autre rôle = 0`.
+
+> Les rôles PostgreSQL sont **globaux à l'instance**, pas propres à une base. Au passage en production, le script affichera donc `ALTER ROLE` sans `CREATE ROLE` — le rôle créé pendant la répétition existe déjà, et seul son mot de passe est réaligné. C'est le comportement idempotent attendu.
 
 ### 3. Vérifier, connecté avec le nouveau rôle
 
 ```bash
-docker cp scripts/db/02-verifier-role-applicatif.sql culturesa-db:/tmp/02.sql
+docker compose cp scripts/db/02-verifier-role-applicatif.sql db:/tmp/02.sql
 ```
 
 ```bash
-docker exec -e PGPASSWORD='LE_MOT_DE_PASSE' culturesa-db psql -U culturesa_app -h 127.0.0.1 \
-  -d "$POSTGRES_DB" -f /tmp/02.sql
+docker compose exec -e APP_PW db sh -c 'PGPASSWORD="$APP_PW" psql -U culturesa_app -h 127.0.0.1 -d bascule_test -f /tmp/02.sql'
 ```
 
 Aucune ligne `✗` ni `PROBLÈME` ne doit apparaître. Les cinq contrôles doivent passer, **y compris le cinquième** — celui qui vérifie qu'on n'a pas trop retiré et que les migrations restent possibles.
+
+Puis rejouez le démarrage réel de l'application, qui applique les migrations à chaque lancement du conteneur :
+
+```bash
+export DATABASE_URL="postgresql://culturesa_app:$APP_PW@db:5432/bascule_test?schema=public"
+```
+
+```bash
+docker compose run --rm -e DATABASE_URL --entrypoint node_modules/.bin/prisma app migrate deploy
+```
+
+```bash
+unset DATABASE_URL
+```
+
+Attendu : `No pending migrations to apply.` sans erreur de permission.
 
 ### 4. Basculer la connexion de l'application
 
@@ -77,13 +110,13 @@ APP_DB_USER=culturesa_app
 APP_DB_PASSWORD=LE_MOT_DE_PASSE
 ```
 
-Contrôlez la chaîne effectivement transmise avant de redémarrer :
+Contrôlez la chaîne effectivement transmise avant de redémarrer — cette forme n'affiche **pas** le mot de passe :
 
 ```bash
-docker compose config | grep DATABASE_URL
+docker compose config | grep -o 'postgresql://[^:]*:' | head -1
 ```
 
-Elle doit mentionner `culturesa_app`. Le service `db`, lui, continue d'utiliser `POSTGRES_USER` : le rôle d'amorçage reste intact, pour l'administration et le retour arrière.
+Elle doit afficher `postgresql://culturesa_app:`. Le service `db`, lui, continue d'utiliser `POSTGRES_USER` : le rôle d'amorçage reste intact, pour l'administration et le retour arrière.
 
 ```bash
 docker compose up -d app
@@ -110,8 +143,22 @@ Le rôle d'amorçage n'a rien perdu ; la propriété des objets reste au rôle a
 Une fois la bascule confirmée en production, supprimer la base de répétition :
 
 ```bash
-docker exec culturesa-db psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE bascule_test;"
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE IF EXISTS bascule_test"'
 ```
+
+Retirez aussi les scripts du conteneur et le mot de passe de votre session :
+
+```bash
+docker compose exec db rm -f /tmp/01.sql /tmp/02.sql && unset APP_PW
+```
+
+Enfin, refermez les droits du dossier de sauvegardes s'il est encore en `755` :
+
+```bash
+sudo chgrp "$(id -gn)" backups && sudo chmod 2750 backups && sudo chmod 640 backups/*
+```
+
+Le bit `setgid` (le `2` de `2750`) fait hériter les nouveaux fichiers du groupe du dossier au lieu de celui du conteneur — sans quoi chaque sauvegarde redeviendrait illisible depuis l'hôte.
 
 ## Barrière complémentaire, déjà en place
 

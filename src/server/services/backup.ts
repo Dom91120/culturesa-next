@@ -47,6 +47,14 @@ const gunzip = promisify(gunzipCb);
 const BACKUPS_DIR = process.env.BACKUPS_DIR || "backups";
 const DOCKER_CONTAINER = process.env.PG_DOCKER_CONTAINER || "culturesa-db";
 
+// Droits POSIX des dumps et de leur dossier. Sans cela, l'umask du conteneur (022)
+// crée des fichiers en 644 : lisibles par tout compte de l'hôte dès que le dossier
+// est traversable. Le chiffrement (D1) limite déjà la portée d'une lecture, mais un
+// secret protégé à un seul niveau n'est protégé que jusqu'au premier oubli.
+// Sans effet sur un fichier existant — les noms étant horodatés, chaque écriture crée.
+const FILE_MODE = 0o640;
+const DIR_MODE = 0o750;
+
 /** Nom de fichier de dump admissible (liste, téléchargement, restauration, suppression). */
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.sql(\.gz)?(\.enc)?$/;
 
@@ -238,9 +246,9 @@ async function writeDump(name: string): Promise<BackupFile> {
     "--clean",
     "--if-exists",
   ]);
-  await fs.mkdir(BACKUPS_DIR, { recursive: true });
+  await fs.mkdir(BACKUPS_DIR, { recursive: true, mode: DIR_MODE });
   const gz = await gzip(sql, { level: 9 });
-  await fs.writeFile(backupPath(name), encryptBackup(gz));
+  await fs.writeFile(backupPath(name), encryptBackup(gz), { mode: FILE_MODE });
   const st = await fs.stat(backupPath(name));
   return { name, kind: kindOf(name), size: st.size, mtime: st.mtime, encrypted: true };
 }
@@ -310,8 +318,8 @@ export async function saveUploadedBackup(originalName: string, data: Buffer): Pr
   // sous un autre nom. Sinon la liste annoncerait « en clair » un fichier protégé.
   const name = `televerse-${timestamp()}-${base}${base.endsWith(".enc") ? "" : ".enc"}`;
   if (!SAFE_NAME.test(name)) throw new Error("Nom de fichier invalide.");
-  await fs.mkdir(BACKUPS_DIR, { recursive: true });
-  await fs.writeFile(backupPath(name), encryptBackup(data));
+  await fs.mkdir(BACKUPS_DIR, { recursive: true, mode: DIR_MODE });
+  await fs.writeFile(backupPath(name), encryptBackup(data), { mode: FILE_MODE });
   return name;
 }
 

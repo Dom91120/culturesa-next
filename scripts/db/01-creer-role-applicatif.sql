@@ -28,6 +28,21 @@
 
 \set ON_ERROR_STOP on
 
+-- Sans ces variables, psql laisse `:'app_password'` littéral et l'échec se
+-- manifeste par une « syntax error at or near ":" » qui n'aide personne.
+\if :{?app_role}
+\else
+  \echo 'ERREUR : variable app_role manquante.'
+  \echo 'Usage : psql -v app_role=culturesa_app -v app_password=... -f 01-creer-role-applicatif.sql'
+  \quit
+\endif
+\if :{?app_password}
+\else
+  \echo 'ERREUR : variable app_password manquante.'
+  \echo 'Usage : psql -v app_role=culturesa_app -v app_password=... -f 01-creer-role-applicatif.sql'
+  \quit
+\endif
+
 \echo '→ 1/5 Création du rôle applicatif (si absent)'
 
 -- `\gexec` exécute la requête produite : permet un CREATE ROLE conditionnel,
@@ -51,14 +66,15 @@ SELECT format('ALTER ROLE %I NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS NOR
 
 -- Ces rôles prédéfinis rendraient le durcissement inopérant : ils redonnent
 -- précisément l'accès au système de fichiers et à l'exécution de programmes.
--- REVOKE est sans effet s'ils n'ont jamais été accordés.
-SELECT format('REVOKE %I FROM %I', g, :'app_role')
-FROM unnest(ARRAY[
-  'pg_execute_server_program',
-  'pg_read_server_files',
-  'pg_write_server_files'
-]) AS g
-WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = g)
+-- On ne révoque QUE si l'appartenance existe réellement : un REVOKE à vide est
+-- sans effet, mais PostgreSQL 16+ émet alors un WARNING par rôle, qui donne à
+-- tort l'impression d'un problème pendant la bascule.
+SELECT format('REVOKE %I FROM %I', r.rolname, :'app_role')
+FROM pg_auth_members m
+JOIN pg_roles r ON r.oid = m.roleid
+JOIN pg_roles u ON u.oid = m.member
+WHERE u.rolname = :'app_role'
+  AND r.rolname IN ('pg_execute_server_program', 'pg_read_server_files', 'pg_write_server_files')
 \gexec
 
 \echo '→ 3/5 Propriété du schéma public'
@@ -134,12 +150,22 @@ SELECT rolname AS "rôle",
        rolcreaterole AS "peut créer des rôles"
 FROM pg_roles WHERE rolname = :'app_role';
 
+-- Tables, séquences, vues… ET types : les types énuméré étaient absents de ce
+-- contrôle, alors qu'un enum resté à l'ancien propriétaire ferait échouer toute
+-- migration le modifiant (ALTER TYPE … ADD VALUE).
 SELECT count(*) AS "objets encore possédés par un autre rôle"
-FROM pg_class c
-JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'public'
-  AND c.relkind IN ('r', 'S', 'v', 'm', 'p')
-  AND pg_get_userbyid(c.relowner) <> :'app_role';
+FROM (
+  SELECT c.relowner AS owner
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relkind IN ('r', 'S', 'v', 'm', 'p')
+  UNION ALL
+  SELECT t.typowner
+  FROM pg_type t
+  JOIN pg_namespace n ON n.oid = t.typnamespace
+  WHERE n.nspname = 'public' AND t.typtype IN ('e', 'd')
+) o
+WHERE pg_get_userbyid(o.owner) <> :'app_role';
 
 \echo ''
 \echo '✓ Terminé. Lancez 02-verifier-role-applicatif.sql EN VOUS CONNECTANT AVEC LE NOUVEAU RÔLE.'
