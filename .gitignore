@@ -29,6 +29,18 @@ src/generated
 # Sauvegardes) — ancré à la racine : ne PAS ignorer src/app/api/backups/.
 /backups/
 
+# Rapport d'audit de sécurité — NE PAS COMMITTER TANT QUE CE DÉPÔT EST PUBLIC.
+# Il détaille des vulnérabilités NON CORRIGÉES d'un service en production traitant
+# des données de mineurs : emplacement et contenu des dumps en clair (D1), chemin
+# complet d'élévation vers l'exécution de commandes sur le conteneur PostgreSQL
+# (D2), angles précis de A1/BAC1/BAC5/D3. Le publier reviendrait à fournir une
+# feuille de route vérifiée — et Git est difficilement réversible : historique,
+# forks et caches GitHub conservent le contenu même après suppression du fichier.
+# Lever cette exclusion suppose que D1 et D2 soient corrigés, ou le dépôt privé.
+# (Les commentaires « audit » du code, eux, décrivent des failles CORRIGÉES et
+# expliquent pourquoi les garde-fous existent : ils restent versionnés.)
+docs/AUDIT-SECURITE.md
+
 # config locale Claude Code
 .claude/settings.local.json
 
