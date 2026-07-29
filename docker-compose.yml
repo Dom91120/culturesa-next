@@ -23,6 +23,12 @@ services:
       # Better Auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${APP_URL}
+      # Chiffrement des sauvegardes (constat D1, audit 2026-07-29). OPTIONNEL : non
+      # définie, la clé est dérivée de BETTER_AUTH_SECRET — le chiffrement fonctionne,
+      # mais faire tourner le secret applicatif rendrait ILLISIBLES toutes les
+      # sauvegardes antérieures. Une clé dédiée découple ces deux cycles de vie.
+      # ⚠️ À SAUVEGARDER HORS DE CETTE MACHINE : un dump chiffré sans sa clé est perdu.
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
       # SMTP (Nodemailer) — OPTIONNEL : simple repli quand la configuration
       # n'est pas renseignée en base (écran admin Messagerie, clés mail.*).
       # `:-` = défaut vide si absent du .env (pas d'avertissement compose).
