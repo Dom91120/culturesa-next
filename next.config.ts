@@ -16,6 +16,27 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/captcha": ["./node_modules/svg-captcha/fonts/**"],
   },
+  // Symétrique : ce que le traçage ne doit JAMAIS embarquer. `BACKUPS_DIR` se replie
+  // sur path.join(process.cwd(), "backups") (services/backup.ts) ; un chemin construit
+  // depuis process.cwd() est indéchiffrable pour le traceur, qui embarquait par sécurité
+  // TOUT le projet dans .next/standalone — donc dans l'image Docker : fichier .env,
+  // dumps SQL en clair, sources, docs (audit 2026-07-29).
+  // Défense en profondeur avec .dockerignore : celui-ci protège l'image Docker, ces
+  // exclusions protègent AUSSI les builds hors Docker (`pnpm build` en local).
+  // `docs/` est sans objet à l'exécution : le prebuild en a déjà tiré public/aide/.
+  outputFileTracingExcludes: {
+    "*": [
+      "./backups/**",
+      "./docs/**",
+      // `.env` ET `.env*` : le glob `*` exige au moins un caractère, donc `./.env*`
+      // seul laissait passer le fichier `.env` lui-même (vérifié au build).
+      "./.env",
+      "./.env*",
+      "./scripts/**",
+      "./*.tsbuildinfo",
+      "./**/*.test.ts",
+    ],
+  },
   // Indicateur Next.js de développement (le « rond N ») : affiché par défaut en dev
   // sous Next 15.5 ; seule la position reste configurable.
   devIndicators: {
