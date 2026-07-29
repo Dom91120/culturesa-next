@@ -12,6 +12,8 @@ export type BackupRow = {
   kind: "auto" | "manuel" | "televerse";
   size: number;
   mtime: string;
+  /** Chiffré au repos ? `false` = dump en clair antérieur au chiffrement (constat D1). */
+  encrypted: boolean;
 };
 
 const KIND_META: Record<BackupRow["kind"], { label: string; color: string }> = {
@@ -214,7 +216,21 @@ export function BackupsPanel({
               const meta = KIND_META[f.kind];
               return (
                 <tr key={f.name}>
-                  <td style={{ fontFamily: "monospace", fontSize: ".72rem" }}>{f.name}</td>
+                  <td style={{ fontFamily: "monospace", fontSize: ".72rem" }}>
+                    {f.name}{" "}
+                    {/* Un dump en clair reste restaurable, mais expose des données
+                        nominatives de mineurs : on le signale sans ambiguïté. */}
+                    <span
+                      title={
+                        f.encrypted
+                          ? "Chiffré au repos (AES-256-GCM)"
+                          : "EN CLAIR — dump antérieur au chiffrement. Recréez-en un puis supprimez celui-ci."
+                      }
+                      style={{ cursor: "help" }}
+                    >
+                      {f.encrypted ? "🔒" : "⚠️"}
+                    </span>
+                  </td>
                   <td style={{ textAlign: "center" }}>
                     <span style={{ color: meta.color, fontWeight: 600, fontSize: ".7rem" }}>
                       {meta.label}
@@ -297,7 +313,8 @@ export function BackupsPanel({
       >
         Remplace <strong>l'intégralité</strong> de la base par le contenu du dump sélectionné
         (tout-ou-rien : en cas d'erreur, la base actuelle est conservée). Choisissez un export de la
-        liste ci-dessus ou téléversez un fichier <code>.sql</code> / <code>.sql.gz</code>.
+        liste ci-dessus ou téléversez un fichier <code>.sql</code>, <code>.sql.gz</code> ou{" "}
+        <code>.sql.gz.enc</code>. Tout dump téléversé est chiffré avant d&apos;être stocké.
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
@@ -323,7 +340,7 @@ export function BackupsPanel({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".sql,.gz"
+          accept=".sql,.gz,.enc"
           disabled={pending || uploading}
           onChange={(e) => {
             const file = e.target.files?.[0];

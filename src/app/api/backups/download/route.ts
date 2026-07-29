@@ -22,9 +22,17 @@ export async function GET(req: Request) {
   }
 
   const data = await fs.readFile(backupPath(name));
+  // Le dump est servi TEL QU'IL EST STOCKÉ, donc chiffré (constat D1) : le déchiffrer
+  // ici replacerait des données nominatives de mineurs en clair sur le poste de
+  // l'administrateur, c'est-à-dire exactement ce que le chiffrement au repos évite.
+  // Pour relire un fichier hors de l'application : scripts/decrypt-backup.mjs.
   return new NextResponse(new Uint8Array(data), {
     headers: {
-      "Content-Type": name.endsWith(".gz") ? "application/gzip" : "application/sql",
+      "Content-Type": name.endsWith(".enc")
+        ? "application/octet-stream"
+        : name.endsWith(".gz")
+          ? "application/gzip"
+          : "application/sql",
       "Content-Disposition": `attachment; filename="${name}"`,
       "Content-Length": String(data.byteLength),
     },
