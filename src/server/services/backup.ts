@@ -10,6 +10,7 @@ import {
   isEncryptedBackup,
   isGzip,
 } from "@/server/services/backup-crypto";
+import { assertSafeDump } from "@/server/services/backup-guard";
 
 const gzip = promisify(gzipCb);
 const gunzip = promisify(gunzipCb);
@@ -275,6 +276,26 @@ export async function createAutoBackup(): Promise<{ file: BackupFile; purged: nu
  * conserve donc la clé qui l'a produit, laquelle peut différer de la clé courante
  * (la restauration le signalera explicitement le cas échéant).
  */
+/**
+ * Contrôle du contenu AU TÉLÉVERSEMENT : retour immédiat plutôt qu'à la
+ * restauration, quand l'administrateur a le fichier sous les yeux.
+ *
+ * Best-effort volontaire : si le contenu ne peut pas être lu (chiffré avec une
+ * autre clé, gzip corrompu), on laisse passer. Refuser ici empêcherait de STOCKER
+ * une sauvegarde ancienne parfaitement légitime — et la restauration, elle,
+ * contrôle systématiquement. Le vrai verrou est là-bas.
+ */
+async function rejectUnsafeUpload(data: Buffer): Promise<void> {
+  let plain: Buffer;
+  try {
+    plain = isEncryptedBackup(data) ? decryptBackup(data) : data;
+    if (isGzip(plain)) plain = await gunzip(plain);
+  } catch {
+    return;
+  }
+  assertSafeDump(plain);
+}
+
 export async function saveUploadedBackup(originalName: string, data: Buffer): Promise<string> {
   const base = path
     .basename(originalName)
@@ -283,6 +304,7 @@ export async function saveUploadedBackup(originalName: string, data: Buffer): Pr
   if (!/\.sql(\.gz)?(\.enc)?$/.test(base)) {
     throw new Error("Extension attendue : .sql, .sql.gz ou .sql.gz.enc");
   }
+  await rejectUnsafeUpload(data);
   // Le contenu écrit est TOUJOURS chiffré (encryptBackup est idempotent) : le suffixe
   // `.enc` doit donc être systématique, y compris pour un fichier déjà chiffré arrivé
   // sous un autre nom. Sinon la liste annoncerait « en clair » un fichier protégé.
@@ -312,6 +334,12 @@ export async function restoreBackup(name: string): Promise<void> {
   // correspond pas — cf. backup-crypto.ts.
   sql = decryptBackup(sql);
   if (isGzip(sql)) sql = await gunzip(sql);
+  // Dernière barrière avant `psql` : restaurer, c'est exécuter du SQL venu de
+  // l'extérieur (constat D2). Contrôle placé ICI plutôt qu'au téléversement seul,
+  // car c'est le point de passage OBLIGÉ — il couvre aussi un fichier déposé
+  // directement dans le dossier de sauvegardes. Barrière secondaire : la mesure
+  // décisive reste le rôle PostgreSQL non-superutilisateur (cf. scripts/db/).
+  assertSafeDump(sql);
   const p = dbParams();
   await runPgTool(
     "psql",

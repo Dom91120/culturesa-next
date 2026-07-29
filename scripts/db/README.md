@@ -70,20 +70,20 @@ Aucune ligne `✗` ni `PROBLÈME` ne doit apparaître. Les cinq contrôles doive
 
 ### 4. Basculer la connexion de l'application
 
-Dans le `.env` de l'hôte :
+`docker-compose.yml` est déjà prêt : `DATABASE_URL` utilise `APP_DB_USER` / `APP_DB_PASSWORD` **avec repli sur `POSTGRES_*`**. Il n'y a rien à modifier dans le fichier — il suffit de renseigner les deux variables dans le `.env` de l'hôte :
 
 ```
 APP_DB_USER=culturesa_app
 APP_DB_PASSWORD=LE_MOT_DE_PASSE
 ```
 
-Puis dans `docker-compose.yml`, service `app` :
+Contrôlez la chaîne effectivement transmise avant de redémarrer :
 
-```yaml
-DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+```bash
+docker compose config | grep DATABASE_URL
 ```
 
-Le service `db` continue d'utiliser `POSTGRES_USER` : le rôle d'amorçage reste intact, pour les opérations d'administration et le retour arrière.
+Elle doit mentionner `culturesa_app`. Le service `db`, lui, continue d'utiliser `POSTGRES_USER` : le rôle d'amorçage reste intact, pour l'administration et le retour arrière.
 
 ```bash
 docker compose up -d app
@@ -97,7 +97,7 @@ Depuis l'interface : créer une sauvegarde, puis **la restaurer**. C'est le chem
 
 ## Retour arrière
 
-Remettre l'ancienne `DATABASE_URL` et redémarrer :
+Retirer `APP_DB_USER` et `APP_DB_PASSWORD` du `.env` — la connexion se replie automatiquement sur le rôle d'amorçage — puis redémarrer :
 
 ```bash
 docker compose up -d app
@@ -113,9 +113,14 @@ Une fois la bascule confirmée en production, supprimer la base de répétition 
 docker exec culturesa-db psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE bascule_test;"
 ```
 
+## Barrière complémentaire, déjà en place
+
+`src/server/services/backup-guard.ts` inspecte le contenu de tout dump **avant** de le passer à `psql`, et refuse les instructions qu'une sauvegarde applicative ne produit jamais : `COPY … FROM/TO PROGRAM`, `CREATE EXTENSION`, `ALTER SYSTEM`, blocs `DO`, accès aux fichiers du serveur, création de rôle superutilisateur…
+
+L'analyse est structurelle et non textuelle : les blocs de données (`COPY … FROM stdin;` … `\.`) sont isolés avant examen, faute de quoi un champ libre contenant « CREATE EXTENSION » ferait rejeter une sauvegarde parfaitement valide.
+
+⚠️ **C'est un filtre par liste noire, donc contournable par nature.** Il agit en défense en profondeur et couvre la période antérieure à la bascule. Il ne remplace pas le rôle non-superutilisateur, qui supprime la *capacité* au lieu d'en reconnaître les usages.
+
 ## Reste à faire
 
-Le rôle non-superutilisateur ferme la capacité de sortir de la base. Deux mesures complémentaires, non couvertes ici :
-
-- **contrôler le contenu d'un dump avant restauration** (rejet de `COPY … FROM PROGRAM`, `CREATE EXTENSION`, `DO $$`) — filtre par liste noire, contournable, donc complément et non substitut ;
-- **exiger une ré-authentification** avant les opérations destructrices (restauration, suppression de service, anonymisation en masse). `freshAge` est déjà posé dans `src/server/session-policy.ts`.
+**Exiger une ré-authentification** avant les opérations destructrices (restauration, suppression de service, anonymisation en masse). `freshAge` est déjà posé dans `src/server/session-policy.ts` — c'est le constat BAC3.
