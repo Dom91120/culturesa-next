@@ -4,6 +4,12 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { gunzip as gunzipCb, gzip as gzipCb } from "node:zlib";
 import { prisma } from "@/server/db";
+import {
+  decryptBackup,
+  encryptBackup,
+  isEncryptedBackup,
+  isGzip,
+} from "@/server/services/backup-crypto";
 
 const gzip = promisify(gzipCb);
 const gunzip = promisify(gunzipCb);
@@ -12,9 +18,15 @@ const gunzip = promisify(gunzipCb);
  * Sauvegardes de la base (dumps PostgreSQL).
  *
  * TOUS les dumps sont produits par l'app dans BACKUPS_DIR : les exports automatiques
- * planifiés (route /api/cron/backup) en `culturesa-<ts>.sql.gz` — seuls concernés par
- * la rotation —, les exports manuels en `manuel-<ts>.sql.gz`, les dumps téléversés en
- * `televerse-<ts>-<nom>.sql[.gz]`.
+ * planifiés (route /api/cron/backup) en `culturesa-<ts>.sql.gz.enc` — seuls concernés
+ * par la rotation —, les exports manuels en `manuel-<ts>.sql.gz.enc`, les dumps
+ * téléversés en `televerse-<ts>-<nom>.sql[.gz][.enc]`.
+ *
+ * CHIFFREMENT (constat D1, audit 2026-07-29) : tout dump écrit par l'app l'est en
+ * AES-256-GCM (cf. backup-crypto.ts) — ces fichiers contiennent l'intégralité des
+ * données nominatives, dont celles de mineurs. Le suffixe `.enc` le signale, mais
+ * la détection à la lecture se fait sur le CONTENU : les dumps en clair antérieurs
+ * restent restaurables, et un fichier renommé ne trompe pas la restauration.
  *
  * `pg_dump`/`psql` sont exécutés :
  *   - en direct s'ils sont disponibles (PATH ou PG_BIN) — cas de l'image Docker de
@@ -35,7 +47,7 @@ const BACKUPS_DIR = process.env.BACKUPS_DIR || "backups";
 const DOCKER_CONTAINER = process.env.PG_DOCKER_CONTAINER || "culturesa-db";
 
 /** Nom de fichier de dump admissible (liste, téléchargement, restauration, suppression). */
-const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.sql(\.gz)?$/;
+const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.sql(\.gz)?(\.enc)?$/;
 
 type BackupKind = "auto" | "manuel" | "televerse";
 type BackupFile = {
@@ -43,6 +55,8 @@ type BackupFile = {
   kind: BackupKind;
   size: number;
   mtime: Date;
+  /** Dump chiffré au repos ? `false` = fichier en clair antérieur au constat D1. */
+  encrypted: boolean;
 };
 
 type BackupMode = "direct" | "docker" | null;
@@ -157,12 +171,39 @@ export async function listBackups(): Promise<BackupFile[]> {
   const files: BackupFile[] = [];
   for (const name of entries) {
     if (!SAFE_NAME.test(name)) continue;
-    const st = await fs.stat(path.join(BACKUPS_DIR, name));
+    const full = path.join(BACKUPS_DIR, name);
+    const st = await fs.stat(full);
     if (!st.isFile()) continue;
-    files.push({ name, kind: kindOf(name), size: st.size, mtime: st.mtime });
+    files.push({
+      name,
+      kind: kindOf(name),
+      size: st.size,
+      mtime: st.mtime,
+      encrypted: await isFileEncrypted(full),
+    });
   }
   files.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
   return files;
+}
+
+/**
+ * Le fichier est-il chiffré ? Lit uniquement l'EN-TÊTE (64 octets, l'en-tête complet
+ * en faisant 50) : la liste est affichée à chaque visite du panneau, charger des dumps
+ * entiers pour cela serait absurde. Détection sur le contenu et non sur l'extension —
+ * un fichier renommé ne doit pas être annoncé comme protégé alors qu'il ne l'est pas.
+ */
+async function isFileEncrypted(full: string): Promise<boolean> {
+  let fh: Awaited<ReturnType<typeof fs.open>> | undefined;
+  try {
+    fh = await fs.open(full, "r");
+    const buf = Buffer.alloc(64);
+    const { bytesRead } = await fh.read(buf, 0, 64, 0);
+    return isEncryptedBackup(buf.subarray(0, bytesRead));
+  } catch {
+    return false; // illisible → on n'annonce pas une protection non vérifiée
+  } finally {
+    await fh?.close();
+  }
 }
 
 /** Résout un nom de dump vers son chemin, en refusant tout nom hors du dossier. */
@@ -179,9 +220,12 @@ function timestamp(): string {
 }
 
 /**
- * Dump complet gzippé → BACKUPS_DIR/<name>.
+ * Dump complet gzippé PUIS CHIFFRÉ → BACKUPS_DIR/<name>.
  *   --clean --if-exists : DROP ... IF EXISTS avant CREATE (restauration sur base existante)
  *   --no-owner --no-privileges : pas de dépendance aux rôles/ACL de l'instance source
+ *
+ * Ordre gzip → chiffrement : compresser APRÈS chiffrement ne gagnerait rien (un texte
+ * chiffré est incompressible). Le dump n'existe en clair qu'en mémoire, jamais sur disque.
  */
 async function writeDump(name: string): Promise<BackupFile> {
   const p = dbParams();
@@ -195,14 +239,14 @@ async function writeDump(name: string): Promise<BackupFile> {
   ]);
   await fs.mkdir(BACKUPS_DIR, { recursive: true });
   const gz = await gzip(sql, { level: 9 });
-  await fs.writeFile(backupPath(name), gz);
+  await fs.writeFile(backupPath(name), encryptBackup(gz));
   const st = await fs.stat(backupPath(name));
-  return { name, kind: kindOf(name), size: st.size, mtime: st.mtime };
+  return { name, kind: kindOf(name), size: st.size, mtime: st.mtime, encrypted: true };
 }
 
 /** Crée un export manuel (jamais purgé par la rotation). */
 export function createBackup(): Promise<BackupFile> {
-  return writeDump(`manuel-${timestamp()}.sql.gz`);
+  return writeDump(`manuel-${timestamp()}.sql.gz.enc`);
 }
 
 // Rotation des exports automatiques : on ne conserve que les RETAIN plus récents
@@ -215,24 +259,37 @@ const AUTO_RETAIN = 7;
  * ne sont jamais purgés).
  */
 export async function createAutoBackup(): Promise<{ file: BackupFile; purged: number }> {
-  const file = await writeDump(`culturesa-${timestamp()}.sql.gz`);
+  const file = await writeDump(`culturesa-${timestamp()}.sql.gz.enc`);
   const autos = (await listBackups()).filter((f) => f.name.startsWith("culturesa-"));
   const olds = autos.slice(AUTO_RETAIN); // listBackups renvoie les plus récents d'abord
   for (const f of olds) await fs.unlink(backupPath(f.name));
   return { file, purged: olds.length };
 }
 
-/** Enregistre un dump téléversé (contenu .sql ou .sql.gz déjà validé par l'appelant). */
+/**
+ * Enregistre un dump téléversé (.sql, .sql.gz, ou .enc produit par cette application).
+ *
+ * Le contenu est CHIFFRÉ avant écriture s'il ne l'est pas déjà : un dump réintroduit
+ * depuis une copie hors-site ne doit pas rouvrir la brèche que D1 vient de fermer.
+ * `encryptBackup` étant idempotent, un fichier déjà chiffré est stocké tel quel — et
+ * conserve donc la clé qui l'a produit, laquelle peut différer de la clé courante
+ * (la restauration le signalera explicitement le cas échéant).
+ */
 export async function saveUploadedBackup(originalName: string, data: Buffer): Promise<string> {
   const base = path
     .basename(originalName)
     .replace(/[^A-Za-z0-9._-]+/g, "_")
     .replace(/^[._-]+/, "");
-  if (!/\.sql(\.gz)?$/.test(base)) throw new Error("Extension attendue : .sql ou .sql.gz");
-  const name = `televerse-${timestamp()}-${base}`;
+  if (!/\.sql(\.gz)?(\.enc)?$/.test(base)) {
+    throw new Error("Extension attendue : .sql, .sql.gz ou .sql.gz.enc");
+  }
+  // Le contenu écrit est TOUJOURS chiffré (encryptBackup est idempotent) : le suffixe
+  // `.enc` doit donc être systématique, y compris pour un fichier déjà chiffré arrivé
+  // sous un autre nom. Sinon la liste annoncerait « en clair » un fichier protégé.
+  const name = `televerse-${timestamp()}-${base}${base.endsWith(".enc") ? "" : ".enc"}`;
   if (!SAFE_NAME.test(name)) throw new Error("Nom de fichier invalide.");
   await fs.mkdir(BACKUPS_DIR, { recursive: true });
-  await fs.writeFile(backupPath(name), data);
+  await fs.writeFile(backupPath(name), encryptBackup(data));
   return name;
 }
 
@@ -245,8 +302,16 @@ export async function saveUploadedBackup(originalName: string, data: Buffer): Pr
  */
 export async function restoreBackup(name: string): Promise<void> {
   const file = backupPath(name);
-  let sql = await fs.readFile(file);
-  if (name.endsWith(".gz")) sql = await gunzip(sql);
+  // Type explicite : `fs.readFile` renvoie un Buffer plus étroit (NonSharedBuffer) que
+  // celui produit par le déchiffrement, qui est réaffecté ici.
+  let sql: Buffer = await fs.readFile(file);
+  // Déchiffrement puis décompression, décidés sur le CONTENU (magic) et non sur
+  // l'extension : un fichier renommé, ou un dump en clair antérieur au chiffrement
+  // (constat D1), se restaure correctement dans tous les cas. `decryptBackup` laisse
+  // passer un contenu non chiffré et lève un message explicite si la clé ne
+  // correspond pas — cf. backup-crypto.ts.
+  sql = decryptBackup(sql);
+  if (isGzip(sql)) sql = await gunzip(sql);
   const p = dbParams();
   await runPgTool(
     "psql",

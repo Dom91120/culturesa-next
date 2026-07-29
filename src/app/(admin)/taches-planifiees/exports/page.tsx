@@ -14,6 +14,7 @@ export default async function SauvegardesPage() {
     kind: f.kind,
     size: f.size,
     mtime: f.mtime.toISOString(),
+    encrypted: f.encrypted,
   }));
 
   return <BackupsPanel rows={rows} toolsAvailable={mode !== null} />;
