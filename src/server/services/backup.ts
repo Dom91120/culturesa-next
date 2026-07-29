@@ -23,7 +23,15 @@ const gunzip = promisify(gunzipCb);
  *     défaut « culturesa-db ») — cas du poste de dev Windows sans outils client.
  */
 
-const BACKUPS_DIR = process.env.BACKUPS_DIR || path.join(process.cwd(), "backups");
+// Repli en chemin RELATIF (et non path.join(process.cwd(), …)) : un chemin bâti sur
+// process.cwd() n'est pas résoluble statiquement, et le traceur de fichiers en concluait
+// que n'importe quel fichier du projet pouvait être lu — il embarquait donc TOUT dans
+// .next/standalone, jusque dans l'image Docker : .env, dumps SQL en clair, sources
+// (audit 2026-07-29). L'exécution est inchangée : les API `fs` résolvent un chemin
+// relatif contre process.cwd(). Cf. aussi outputFileTracingExcludes (next.config.ts)
+// et .dockerignore. En production BACKUPS_DIR est fourni par docker-compose (/backups) ;
+// ce repli ne sert qu'au poste de développement.
+const BACKUPS_DIR = process.env.BACKUPS_DIR || "backups";
 const DOCKER_CONTAINER = process.env.PG_DOCKER_CONTAINER || "culturesa-db";
 
 /** Nom de fichier de dump admissible (liste, téléchargement, restauration, suppression). */

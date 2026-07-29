@@ -15,3 +15,15 @@ docker-compose*.yml
 coverage
 .vscode
 .idea
+
+# Dumps de la base : le dossier ./backups de l'hôte est celui que docker-compose
+# monte en /backups — il contient donc les sauvegardes de PRODUCTION. Sans cette
+# exclusion, un « docker compose up --build » les fait entrer dans le contexte, d'où
+# le traceur de fichiers les embarque jusque dans une couche de l'image (audit
+# 2026-07-29). Une couche d'image ne s'efface pas en supprimant le fichier.
+# NB : `docs/` n'est PAS exclu — le script prebuild (gen-guide-html.mjs) le lit pour
+# générer public/aide/. L'exclure ferait échouer le build.
+backups
+
+# Cache TypeScript (~400 Ko, inutile à l'exécution)
+*.tsbuildinfo
