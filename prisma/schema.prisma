@@ -666,7 +666,12 @@ model LoginAttempt {
 // zéro : il suffisait d'attendre un déploiement pour repartir avec un quota neuf
 // (constat A3). Le schéma est imposé par Better Auth (clé, compteur, horodatage).
 model RateLimit {
-  key         String @id
+  // `id` est INDISPENSABLE : l adaptateur Prisma de Better Auth en genere un pour
+  // tout enregistrement cree. Sans ce champ, chaque ecriture du quota echoue sur
+  // « Unknown argument id » — et donc TOUTE tentative de connexion. La cle
+  // fonctionnelle est `key`, en index unique.
+  id          String @id @default(cuid())
+  key         String @unique
   count       Int    @default(0)
   lastRequest BigInt @default(0) @map("last_request")
 

@@ -291,9 +291,14 @@ export const auth = betterAuth({
     window: 60,
     max: 10,
     customRules: {
-      // Endpoints où un essai raté a une valeur pour l'attaquant. 10 tentatives
-      // par minute laissaient ~14 000 essais par jour et par IP.
-      "/sign-in/email": { window: 15 * 60, max: 5 },
+      // 10 tentatives par minute laissaient ~14 000 essais par jour et par IP.
+      // Ce quota compte TOUTES les requêtes, succès compris — il ne peut donc pas
+      // être aussi serré que le freinage par compte, qui ne compte que les échecs.
+      // À 5 par 15 min, une mairie ou une école derrière une IP partagée (NAT)
+      // n'aurait disposé que de 5 connexions par quart d'heure pour tout le
+      // bâtiment. 20 borne encore un attaquant à ~80 essais/heure depuis une IP,
+      // tandis que login-throttle.ts limite la profondeur compte par compte.
+      "/sign-in/email": { window: 15 * 60, max: 20 },
       // Chaque appel déclenche un envoi d'e-mail : bride le harcèlement d'une
       // boîte tierce et la mise en liste noire du domaine de la Ville.
       "/forget-password": { window: 15 * 60, max: 3 },
