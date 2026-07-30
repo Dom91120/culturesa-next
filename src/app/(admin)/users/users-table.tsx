@@ -2,10 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { ConfirmPasswordModal } from "@/components/confirm-password-modal";
 import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import type { Role } from "@/generated/prisma/client";
 import { formatTel } from "@/lib/format";
-import { anonymizeUserAction, deleteEmptyUserAction, resendVerificationAction } from "./actions";
+import {
+  anonymizeUserAction,
+  deleteEmptyUserAction,
+  resendVerificationAction,
+  resetTwoFactorAction,
+} from "./actions";
 import { AnonymizeUserModal } from "./anonymize-user-modal";
 import { DeleteUserModal } from "./delete-user-modal";
 import { UserModal } from "./user-modal";
@@ -18,6 +24,8 @@ export type UserRow = {
   tel: string;
   role: Role;
   emailVerified: boolean;
+  /** Second facteur actif (A6). Conditionne le bouton de réinitialisation. */
+  twoFactorEnabled: boolean;
   niveau: string;
   enfants: number;
   accompagnants: number;
@@ -141,6 +149,13 @@ export function UsersTable({
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
   // Compte visé par la modale d'anonymisation RGPD (barre d'actions ou bouton de ligne).
   const [anonymizeTarget, setAnonymizeTarget] = useState<UserRow | null>(null);
+  // Compte dont on réinitialise le second facteur (A6) — seul recours pour un
+  // administrateur ayant perdu son téléphone ET ses codes de secours.
+  const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
+  // Le refus de ré-authentification (mot de passe incorrect) doit s'afficher DANS
+  // la modale, sans la fermer : la refermer sur un `alert` obligerait à tout
+  // ressaisir pour une simple faute de frappe.
+  const [resetErreur, setResetErreur] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = normSearch(query.trim());
@@ -199,6 +214,24 @@ export function UsersTable({
       if (!res?.ok) alert(res?.error ?? "Échec de l'anonymisation.");
       setAnonymizeTarget(null);
       if (selectedId === id) setSelectedId(null);
+      router.refresh();
+    });
+  }
+
+  // Réinitialisation du second facteur d'un AUTRE compte. Le serveur re-vérifie
+  // le rôle administrateur et exige le mot de passe de l'opérateur (BAC3) :
+  // retirer un second facteur abaisse la protection d'un compte privilégié.
+  function confirmResetTwoFactor(password: string) {
+    if (!resetTarget) return;
+    const id = resetTarget.id;
+    setResetErreur(null);
+    startTransition(async () => {
+      const res = await resetTwoFactorAction(id, password);
+      if (!res?.ok) {
+        setResetErreur(res?.error ?? "Échec de la réinitialisation.");
+        return;
+      }
+      setResetTarget(null);
       router.refresh();
     });
   }
@@ -526,6 +559,28 @@ export function UsersTable({
               🖅 Renvoyer le mail de confirmation
             </button>
           )}
+          {/* N'apparaît que si un second facteur est effectivement actif : proposer
+              de réinitialiser ce qui n'existe pas n'apprendrait rien à personne, et
+              le serveur refuserait de toute façon. */}
+          {selected?.twoFactorEnabled && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setResetErreur(null);
+                if (selected) setResetTarget(selected);
+              }}
+              disabled={pending}
+              style={{
+                borderColor: "rgba(232,164,90,.4)",
+                color: "var(--warn)",
+                ...ACTION_BTN_STYLE,
+              }}
+              title="Téléphone ou codes de secours perdus : retire le second facteur, la personne se réenrôle à sa prochaine visite"
+            >
+              🔑 Réinitialiser la double authentification
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-ghost"
@@ -546,6 +601,37 @@ export function UsersTable({
           onCancel={() => setAnonymizeTarget(null)}
           onConfirm={confirmAnonymize}
         />
+      )}
+
+      {resetTarget && (
+        <ConfirmPasswordModal
+          titre="🔑 Réinitialiser la double authentification"
+          libelleAction="Réinitialiser"
+          pending={pending}
+          erreur={resetErreur}
+          onCancel={() => setResetTarget(null)}
+          onConfirm={confirmResetTwoFactor}
+        >
+          <p style={{ marginBottom: ".6rem" }}>
+            Le second facteur de{" "}
+            <strong>
+              {`${resetTarget.prenom} ${resetTarget.nom}`.trim() || resetTarget.email}
+            </strong>{" "}
+            sera retiré. La personne se reconnectera avec son seul mot de passe, puis sera invitée à
+            se réenrôler dès sa prochaine visite.
+          </p>
+          {/* Dire à quoi sert ce bouton évite qu'il serve à autre chose : c'est un
+              recours, pas un moyen commode de contourner le second facteur. */}
+          <p style={{ color: "var(--muted)", marginBottom: ".6rem" }}>
+            À n&apos;utiliser que si la personne a perdu son téléphone <em>et</em> ses codes de
+            secours.
+          </p>
+          <p style={{ color: "var(--warn)", fontWeight: 600 }}>
+            ⚠️ Assurez-vous de son identité par un autre canal que le courriel. Cette opération
+            abaisse la protection d&apos;un compte privilégié ; elle est tracée au journal
+            d&apos;audit.
+          </p>
+        </ConfirmPasswordModal>
       )}
 
       {deleteTarget && (
