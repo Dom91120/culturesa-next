@@ -672,3 +672,34 @@ model RateLimit {
 
   @@map("rate_limits")
 }
+
+// Journal des actions PRIVILÉGIÉES (constat BAC4, audit 2026-07-29).
+//
+// Distinct de `RgpdLog`, et volontairement : celui-ci est un registre à finalité
+// JURIDIQUE (droits des personnes, art. 15 et 17) ; celui-là est un journal
+// OPÉRATIONNEL de sécurité. Les confondre reviendrait à noyer les demandes
+// d'exercice de droits sous les opérations d'exploitation, et inversement.
+//
+// Ce qui manquait : changement de rôle, restauration ou téléchargement de
+// sauvegarde, modification des identifiants SMTP, suppression de service — soit
+// exactement les actes qu'on cherche à reconstituer après un incident.
+//
+// L'acteur est DÉNORMALISÉ (libellé + rôle au moment de l'acte) : un journal qui
+// perd son sens quand le compte est supprimé ou anonymisé ne sert à rien le jour
+// où l'on en a besoin. C'est aussi pourquoi il n'y a pas de clé étrangère.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  at         DateTime @default(now()) @db.Timestamptz
+  action     String
+  actorId    String?  @map("actor_id")
+  actorLabel String   @default("") @map("actor_label")
+  actorRole  String   @default("") @map("actor_role")
+  target     String?
+  details    Json?
+  ip         String?
+
+  @@index([at])
+  @@index([action])
+  @@index([actorId])
+  @@map("audit_log")
+}

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/lib/action-state";
 import { serviceCreateSchema, stringIdSchema } from "@/schemas/config";
+import { AUDIT, recordAudit } from "@/server/audit";
+import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/services";
 
@@ -40,7 +42,14 @@ export async function deleteServicesAction(ids: string[]): Promise<ActionState> 
   for (const raw of ids) {
     const id = stringIdSchema.safeParse(raw);
     if (!id.success) continue;
+    // Libellé lu AVANT suppression : un identifiant technique seul serait
+    // illisible dans le journal une fois le service disparu (constat BAC4).
+    const label = (
+      await prisma.service.findUnique({ where: { id: id.data }, select: { label: true } })
+    )?.label;
     await svc.deleteService(id.data);
+    // Emporte créneaux et réservations : destruction en cascade, jamais anodine.
+    await recordAudit(AUDIT.SERVICE_DELETED, { target: label ?? id.data });
   }
   revalidatePath("/configuration");
   return { ok: true };

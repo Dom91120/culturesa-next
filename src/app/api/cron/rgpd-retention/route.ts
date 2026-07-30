@@ -1,3 +1,4 @@
+import { purgeOldAuditEntries } from "@/server/audit";
 import { runScheduledTask } from "@/server/cron-route";
 import { purgeStaleLoginAttempts } from "@/server/login-throttle";
 import { summarizeRgpdRetention } from "@/server/services/cron-tasks";
@@ -23,9 +24,16 @@ export async function GET() {
     } catch (e) {
       console.error("[cron] purge des compteurs de connexion échouée:", e);
     }
+    // Journal d audit : purge au-dela de la duree de conservation (constat BAC4).
+    let purgedAuditEntries = 0;
+    try {
+      purgedAuditEntries = await purgeOldAuditEntries();
+    } catch (e) {
+      console.error("[cron] purge du journal d audit échouée:", e);
+    }
     return {
       summary: summarizeRgpdRetention({ notified, anonymized }),
-      payload: { notified, anonymized, purgedLoginAttempts },
+      payload: { notified, anonymized, purgedLoginAttempts, purgedAuditEntries },
     };
   });
 }

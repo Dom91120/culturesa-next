@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Role } from "@/generated/prisma/client";
+import { AUDIT, recordAudit } from "@/server/audit";
 import { getSession } from "@/server/guards";
 import { saveUploadedBackup } from "@/server/services/backup";
 
@@ -32,6 +33,10 @@ export async function POST(req: Request) {
   try {
     const data = Buffer.from(await file.arrayBuffer());
     const name = await saveUploadedBackup(file.name, data);
+    await recordAudit(AUDIT.BACKUP_UPLOADED, {
+      target: name,
+      details: { origine: file.name, octets: file.size },
+    });
     return NextResponse.json({ ok: true, name });
   } catch (e) {
     return NextResponse.json(

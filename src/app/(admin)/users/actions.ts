@@ -11,6 +11,7 @@ import {
   profileCountOk,
   telSchema,
 } from "@/schemas/user";
+import { AUDIT, recordAudit } from "@/server/audit";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { getSession, requireRole } from "@/server/guards";
@@ -123,6 +124,14 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionSt
   const d = parsed.data;
   const isManager = d.role === "gestionnaire";
 
+  // Rôle AVANT modification : sans cette lecture, le journal dirait « rôle
+  // changé » sans pouvoir dire depuis quoi — l'information la plus utile lors
+  // d'une analyse d'incident (constat BAC4).
+  const before = await prisma.user.findUnique({
+    where: { id: d.id },
+    select: { role: true, email: true },
+  });
+
   try {
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
@@ -146,6 +155,17 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionSt
   } catch (e) {
     console.error("[users] updateUserAction", e);
     return { ok: false, error: "Échec de la mise à jour du compte." };
+  }
+
+  // Un changement de rôle est le vecteur d'élévation de privilèges le plus
+  // direct : il a sa propre entrée, distincte d'une simple mise à jour de fiche.
+  if (before && before.role !== d.role) {
+    await recordAudit(AUDIT.USER_ROLE_CHANGED, {
+      target: before.email,
+      details: { avant: before.role, apres: d.role, services: isManager ? d.services : [] },
+    });
+  } else {
+    await recordAudit(AUDIT.USER_UPDATED, { target: before?.email ?? d.id });
   }
 
   revalidatePath("/users");
@@ -202,6 +222,8 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionSt
     };
   }
 
+  await recordAudit(AUDIT.USER_CREATED, { target: d.email, details: { role: d.role } });
+
   // La personne choisit elle-même son mot de passe via le lien reçu.
   try {
     await auth.api.requestPasswordReset({
@@ -219,12 +241,23 @@ export async function anonymizeUserAction(id: string): Promise<ActionState> {
   await requireRole("administrateur");
   const parsed = z.string().min(1).safeParse(id);
   if (!parsed.success) return { ok: false, error: "Compte introuvable" };
+  const cible = await prisma.user.findUnique({
+    where: { id: parsed.data },
+    select: { email: true },
+  });
   try {
     await anonymizeUser(parsed.data, "admin");
   } catch (e) {
     if (e instanceof RgpdError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de l'anonymisation." };
   }
+  // Anonymisation : déjà inscrite au registre RGPD (finalité juridique). On la
+  // reporte ici pour que le journal opérationnel donne une vue complète des
+  // actes privilégiés sans obliger à croiser deux sources.
+  await recordAudit(AUDIT.USER_DELETED, {
+    target: cible?.email ?? parsed.data,
+    details: { mode: "anonymisation" },
+  });
   revalidatePath("/users");
   return { ok: true };
 }
@@ -236,12 +269,20 @@ export async function deleteEmptyUserAction(id: string): Promise<ActionState> {
   if (!parsed.success) return { ok: false, error: "Compte introuvable" };
   const session = await getSession();
   const actorId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  const victime = await prisma.user.findUnique({
+    where: { id: parsed.data },
+    select: { email: true },
+  });
   try {
     await hardDeleteEmptyUser(parsed.data, actorId);
   } catch (e) {
     if (e instanceof RgpdError) return { ok: false, error: e.message };
     return { ok: false, error: "Échec de la suppression." };
   }
+  await recordAudit(AUDIT.USER_DELETED, {
+    target: victime?.email ?? parsed.data,
+    details: { mode: "suppression definitive" },
+  });
   revalidatePath("/users");
   return { ok: true };
 }

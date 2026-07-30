@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import { NextResponse } from "next/server";
 import type { Role } from "@/generated/prisma/client";
+import { AUDIT, recordAudit } from "@/server/audit";
 import { getSession } from "@/server/guards";
 import { backupPath, listBackups } from "@/server/services/backup";
 
@@ -20,6 +21,9 @@ export async function GET(req: Request) {
   if (!known) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+
+  // Sortie de donnees nominatives hors du serveur : trace systematique.
+  await recordAudit(AUDIT.BACKUP_DOWNLOADED, { target: name });
 
   const data = await fs.readFile(backupPath(name));
   // Le dump est servi TEL QU'IL EST STOCKÉ, donc chiffré (constat D1) : le déchiffrer

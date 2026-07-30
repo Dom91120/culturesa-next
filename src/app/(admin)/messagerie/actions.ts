@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { AUDIT, recordAudit } from "@/server/audit";
 import { setConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
@@ -26,6 +27,9 @@ export type MailConfigInput = z.infer<typeof mailConfigSchema>;
 
 export async function saveMailConfigAction(input: MailConfigInput): Promise<ActionState> {
   await requireRole("administrateur");
+  // Les identifiants SMTP sont un secret : toute modification laisse une trace,
+  // sans jamais consigner la valeur elle-meme.
+  await recordAudit(AUDIT.MAIL_CONFIG_CHANGED, { target: input.host || null });
 
   const parsed = mailConfigSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Données invalides." };

@@ -15,6 +15,7 @@ const ADMIN_TABS: Tab[] = [
   { href: "/messagerie", label: "Messagerie", icon: "✉️" },
   { href: "/taches-planifiees", label: "Tâches planifiées", icon: "⏰" },
   { href: "/rgpd", label: "RGPD", icon: "🛡️" },
+  { href: "/journal", label: "Journal", icon: "📜" },
 ];
 
 function serviceTabs(id: string): Tab[] {
