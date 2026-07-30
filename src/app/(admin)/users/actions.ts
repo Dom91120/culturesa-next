@@ -312,3 +312,52 @@ export async function sendPasswordResetAction(email: string): Promise<ActionStat
   }
   return { ok: true };
 }
+
+/**
+ * Réinitialise le second facteur d'un compte (constat A6) — le filet de sécurité.
+ *
+ * Sans lui, un gestionnaire qui perd à la fois son téléphone ET ses codes de
+ * secours serait définitivement enfermé dehors : son rôle lui interdit de
+ * désactiver la double authentification lui-même. Un administrateur peut donc la
+ * retirer, après quoi la personne se réenrôle à sa prochaine visite.
+ *
+ * ⚠️ SI LE DERNIER ADMINISTRATEUR SE VERROUILLE, plus personne ne peut exécuter
+ * cette action. Le seul recours est alors la base de données :
+ *
+ *   DELETE FROM two_factor WHERE user_id = '<id>';
+ *   UPDATE "user" SET two_factor_enabled = false WHERE id = '<id>';
+ *
+ * C'est la raison d'être des codes de secours, et pourquoi l'écran d'enrôlement
+ * insiste pour qu'ils soient conservés AILLEURS que sur le téléphone.
+ */
+export async function resetTwoFactorAction(id: string): Promise<ActionState> {
+  await requireRole("administrateur");
+  const parsed = z.string().min(1).safeParse(id);
+  if (!parsed.success) return { ok: false, error: "Compte introuvable" };
+
+  const cible = await prisma.user.findUnique({
+    where: { id: parsed.data },
+    select: { email: true, twoFactorEnabled: true },
+  });
+  if (!cible) return { ok: false, error: "Compte introuvable" };
+  if (!cible.twoFactorEnabled) {
+    return { ok: false, error: "La double authentification n'est pas active sur ce compte." };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.twoFactor.deleteMany({ where: { userId: parsed.data } });
+      await tx.user.update({ where: { id: parsed.data }, data: { twoFactorEnabled: false } });
+    });
+  } catch (e) {
+    console.error("[users] resetTwoFactorAction", e);
+    return { ok: false, error: "Échec de la réinitialisation." };
+  }
+
+  // Retirer un second facteur ABAISSE le niveau de protection d'un compte
+  // privilégié : l'acte doit laisser une trace au même titre qu'un changement de
+  // rôle (constat BAC4).
+  await recordAudit(AUDIT.USER_2FA_RESET, { target: cible.email });
+  revalidatePath("/users");
+  return { ok: true };
+}

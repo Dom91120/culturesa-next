@@ -27,6 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   "user.updated": "✏️ Compte modifié",
   "user.deleted": "🗑️ Compte supprimé",
   "user.password_reset_sent": "✉️ Lien de mot de passe envoyé",
+  "user.two_factor_reset": "🔓 Double authentification réinitialisée",
   "backup.created": "💾 Sauvegarde créée",
   "backup.restored": "♻️ Base restaurée",
   "backup.deleted": "🗑️ Sauvegarde supprimée",
@@ -37,7 +38,12 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 /** Actions dont la portée justifie une mise en évidence visuelle. */
-const CRITIQUES = new Set(["user.role_changed", "backup.restored", "service.deleted"]);
+const CRITIQUES = new Set([
+  "user.role_changed",
+  "user.two_factor_reset",
+  "backup.restored",
+  "service.deleted",
+]);
 
 export function JournalTable({ entries }: { entries: JournalEntry[] }) {
   const [filtre, setFiltre] = useState("");

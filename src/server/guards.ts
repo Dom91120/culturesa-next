@@ -5,6 +5,7 @@ import type { Role } from "@/generated/prisma/client";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { checkSessionPolicy, sessionDeadlineAt, shouldTouch } from "@/server/session-policy";
+import { CHEMIN_ENROLEMENT, exige2FA } from "@/server/two-factor-policy";
 
 /** Hiérarchie des rôles : un administrateur satisfait aussi un guard gestionnaire. */
 const RANK: Record<Role, number> = {
@@ -114,6 +115,19 @@ export async function requireRole(min: Role) {
   const session = await requireUser();
   const role = (session.user as { role?: Role }).role ?? "utilisateur";
   if (RANK[role] < RANK[min]) redirect("/");
+
+  // Second facteur exigé des rôles privilégiés (constat A6). REDIRECTION vers
+  // l'enrôlement, jamais blocage : les comptes existants n'ont aucun secret TOTP
+  // au moment du déploiement, et refuser la connexion aurait mis dehors tous les
+  // gestionnaires à la seconde où le correctif est parti en production.
+  //
+  // Chacun peut donc toujours se connecter et s'enrôler lui-même ; seule
+  // l'administration attend. La page d'enrôlement vit sous /mon-compte, qui
+  // n'appelle que `requireUser` — elle échappe donc par construction à ce garde,
+  // sans quoi la redirection boucherait sur elle-même.
+  if (exige2FA(role) && !(session.user as { twoFactorEnabled?: boolean }).twoFactorEnabled) {
+    redirect(CHEMIN_ENROLEMENT);
+  }
   return session;
 }
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { signIn } from "@/lib/auth-client";
+import { signIn, twoFactor } from "@/lib/auth-client";
 import { useFormSubmit } from "@/lib/use-form-submit";
 
 export function LoginForm({ expired = false }: { expired?: boolean }) {
@@ -11,6 +11,12 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
   const { pending, error, onSubmit } = useFormSubmit();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Le mot de passe est déjà validé quand on arrive ici : on reste sur la MÊME
+  // page pour la saisie du code, plutôt que de rediriger. Une erreur de code
+  // n'oblige alors pas à ressaisir le mot de passe (constat A6).
+  const [etape, setEtape] = useState<"identifiants" | "code">("identifiants");
+  const [code, setCode] = useState("");
+  const [codeSecours, setCodeSecours] = useState(false);
 
   const canSubmit = email.trim().length > 0 && password.length > 0;
 
@@ -27,11 +33,109 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
       // Cas non identifié : message générique (on n'expose pas le libellé interne de la lib).
       return "Connexion impossible. Réessayez.";
     }
+    // Second facteur actif : la connexion ne renvoie PAS de session mais
+    // `twoFactorRedirect`. La session n'existera qu'après vérification du code.
+    if ((res.data as { twoFactorRedirect?: boolean } | undefined)?.twoFactorRedirect) {
+      setEtape("code");
+      return;
+    }
     // Redirection selon le rôle déléguée à « / » (gestionnaire → Administration,
     // sinon → réservation).
     router.push("/");
     router.refresh();
   });
+
+  const handleCode = onSubmit(async () => {
+    const valeur = code.trim();
+    const res = codeSecours
+      ? await twoFactor.verifyBackupCode({ code: valeur })
+      : await twoFactor.verifyTotp({ code: valeur });
+    if (res.error) {
+      return codeSecours
+        ? "Code de secours invalide ou déjà utilisé."
+        : "Code incorrect. Vérifiez l'heure de votre téléphone, puis réessayez.";
+    }
+    router.push("/");
+    router.refresh();
+  });
+
+  // ── Étape 2 : second facteur ──
+  // Écran distinct plutôt qu'un champ ajouté au formulaire : à ce stade le mot de
+  // passe est vérifié et n'a plus à être affiché ni renvoyé.
+  if (etape === "code") {
+    return (
+      <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
+        <form onSubmit={handleCode}>
+          <div className="panel">
+            <div className="panel-title">
+              <span className="dot" />
+              Vérification en deux étapes
+            </div>
+            <div className="form-grid">
+              <div className="field full">
+                <label htmlFor="l-code">
+                  {codeSecours ? "Code de secours" : "Code à 6 chiffres"}{" "}
+                  <span className="required-star">*</span>
+                </label>
+                <input
+                  id="l-code"
+                  type="text"
+                  required
+                  inputMode={codeSecours ? "text" : "numeric"}
+                  autoComplete="one-time-code"
+                  // Cas où la règle d'accessibilité s'inverse : cet écran apparaît APRÈS
+                  // une action délibérée (envoi du formulaire), le bouton qui portait le
+                  // focus a disparu, et ce champ est le seul de la page. Sans autoFocus,
+                  // un lecteur d'écran resterait sur un focus orphelin.
+                  // biome-ignore lint/a11y/noAutofocus: focus légitime après action utilisateur
+                  autoFocus
+                  placeholder={codeSecours ? "xxxxx-xxxxx" : "000000"}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+                {error && (
+                  <span className="field-error" style={{ display: "block" }}>
+                    {error}
+                  </span>
+                )}
+                <div style={{ marginTop: ".5rem", fontSize: ".75rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCodeSecours(!codeSecours);
+                      setCode("");
+                    }}
+                    style={{
+                      background: "none",
+                      border: 0,
+                      padding: 0,
+                      color: "var(--muted)",
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                      font: "inherit",
+                    }}
+                  >
+                    {codeSecours
+                      ? "Utiliser l'application d'authentification"
+                      : "Téléphone perdu ? Utiliser un code de secours"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="btn-row">
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={pending || code.trim().length < 6}
+            >
+              {pending ? "Vérification…" : "Valider →"}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <>

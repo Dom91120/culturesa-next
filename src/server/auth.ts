@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
+import { twoFactor } from "better-auth/plugins";
 import { emailButton } from "@/lib/email-theme";
 import { greeting } from "@/lib/mail-render";
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/password";
@@ -324,6 +325,24 @@ export const auth = betterAuth({
     },
   },
 
-  // Doit rester en dernier : branche la gestion des cookies sur Next.js.
-  plugins: [nextCookies()],
+  plugins: [
+    // Second facteur TOTP (constat A6). Protège les comptes capables d'exporter
+    // la base nominative complète. A1 ayant fermé le bruteforce, l'intérêt d'un
+    // attaquant se déplace vers le vol de session et l'hameçonnage — que le
+    // second facteur adresse, là où un mot de passe seul ne peut rien.
+    //
+    // L'activation est VOLONTAIRE (l'usager s'enrôle depuis « Mon compte ») ;
+    // l'exigence pour les rôles privilégiés est appliquée par les gardes, qui
+    // redirigent vers l'enrôlement au lieu de bloquer. Imposer le second facteur
+    // sans chemin d'enrôlement aurait mis tout le monde dehors dès le
+    // déploiement — les comptes existants n'ont aucun secret TOTP.
+    twoFactor({
+      issuer: "CultuRésa",
+      // Le code n'est demandé qu'après vérification du mot de passe : le second
+      // facteur s'ajoute au premier, il ne le remplace pas.
+      skipVerificationOnEnable: false,
+    }),
+    // Doit rester en dernier : branche la gestion des cookies sur Next.js.
+    nextCookies(),
+  ],
 });

@@ -86,16 +86,20 @@ model User {
   updatedAt     DateTime @updatedAt @db.Timestamptz
 
   // ── Champs métier (additionalFields Better Auth) ──
-  prenom        String    @default("")
-  nom           String    @default("")
-  tel           String    @default("")
-  niveau        String    @default("")
-  enfants       Int       @default(0) @db.SmallInt
-  accompagnants Int       @default(0) @db.SmallInt
-  role          Role      @default(utilisateur)
-  rgpdOk        Boolean   @default(false)
+  prenom           String    @default("")
+  nom              String    @default("")
+  tel              String    @default("")
+  niveau           String    @default("")
+  enfants          Int       @default(0) @db.SmallInt
+  accompagnants    Int       @default(0) @db.SmallInt
+  role             Role      @default(utilisateur)
+  rgpdOk           Boolean   @default(false)
+  // Second facteur actif ? (constat A6) Piloté par le plugin twoFactor de Better
+  // Auth, qui le déclare `input: false` : aucune requête ne peut donc le modifier,
+  // seul l'enrôlement vérifié le bascule.
+  twoFactorEnabled Boolean   @default(false) @map("two_factor_enabled")
   // Onboarding : date de complétion de la modale de bienvenue (null = jamais vue).
-  onboardedAt   DateTime? @db.Timestamptz
+  onboardedAt      DateTime? @db.Timestamptz
 
   demandeurId Int?
   structureId Int?
@@ -111,6 +115,7 @@ model User {
   accounts        Account[]
   bookings        Booking[]
   managedServices ServiceManager[]
+  twoFactors      TwoFactor[]
 
   @@index([demandeurId])
   @@index([structureId])
@@ -707,4 +712,27 @@ model AuditLog {
   @@index([action])
   @@index([actorId])
   @@map("audit_log")
+}
+
+// Second facteur TOTP (constat A6, audit 2026-07-29). Schéma imposé par le plugin
+// twoFactor de Better Auth : les NOMS DE CHAMPS Prisma font contrat avec lui, seuls
+// les noms de colonnes sont libres.
+//
+// `id` est indispensable : l'adaptateur en génère un pour tout enregistrement créé.
+// Son absence sur `rate_limits` avait provoqué une panne complète de
+// l'authentification — la même erreur ne doit pas être commise deux fois.
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String    @map("backup_codes")
+  userId                  String    @map("user_id")
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0) @map("failed_verification_count")
+  lockedUntil             DateTime? @map("locked_until") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([secret])
+  @@index([userId])
+  @@map("two_factor")
 }

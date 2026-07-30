@@ -1,6 +1,6 @@
 "use client";
 
-import { inferAdditionalFields } from "better-auth/client/plugins";
+import { inferAdditionalFields, twoFactorClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 /**
@@ -26,9 +26,15 @@ export const authClient = createAuthClient({
         rgpdOk: { type: "boolean", required: false },
         demandeurId: { type: "number", required: false },
         structureId: { type: "number", required: false },
+        twoFactorEnabled: { type: "boolean", required: false },
       },
     }),
+    // Second facteur (constat A6). Sans `twoFactorPage` ni `onTwoFactorRedirect` :
+    // la connexion renvoie alors `twoFactorRedirect: true` dans sa réponse, et le
+    // formulaire enchaîne sur la saisie du code SANS changer de page — le mot de
+    // passe déjà saisi n'a pas à être retapé si l'usager se trompe de code.
+    twoFactorClient(),
   ],
 });
 
-export const { signIn, signUp, signOut, useSession } = authClient;
+export const { signIn, signUp, signOut, useSession, twoFactor } = authClient;

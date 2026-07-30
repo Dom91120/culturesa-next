@@ -37,6 +37,8 @@ export const AUDIT = {
   USER_UPDATED: "user.updated",
   USER_DELETED: "user.deleted",
   USER_PASSWORD_RESET_SENT: "user.password_reset_sent",
+  // Retirer un second facteur abaisse la protection d un compte privilegie.
+  USER_2FA_RESET: "user.two_factor_reset",
   // ── Sauvegardes ──
   BACKUP_CREATED: "backup.created",
   BACKUP_RESTORED: "backup.restored",
