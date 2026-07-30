@@ -146,7 +146,7 @@ export const auth = betterAuth({
       // serveur internes (auth.api.signUpEmail par un administrateur, cf.
       // users/actions.ts) n'ont pas de captcha à présenter et en sont exemptés.
       if (ctx.path === "/sign-up/email" && ctx.request && process.env.CAPTCHA_DISABLED !== "true") {
-        const ok = verifyCaptcha(
+        const ok = await verifyCaptcha(
           ctx.headers?.get("x-captcha-token"),
           ctx.headers?.get("x-captcha-answer"),
         );

@@ -81,7 +81,7 @@ export async function requestAccountDeletionAction(): Promise<ActionState> {
   const session = await requireUser();
   // Anti-abus : chaque appel envoie un e-mail. On limite à 3 demandes / 15 min par usager
   // (l'endpoint est une server action, hors du rate-limit Better Auth des routes /api/auth).
-  if (!rateLimit(`acct-del:${session.user.id}`, 3, 15 * 60_000)) {
+  if (!(await rateLimit(`acct-del:${session.user.id}`, 3, 15 * 60_000))) {
     return { ok: false, error: "Trop de demandes. Réessayez dans quelques minutes." };
   }
   try {

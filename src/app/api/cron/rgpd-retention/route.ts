@@ -1,6 +1,8 @@
 import { purgeOldAuditEntries } from "@/server/audit";
+import { purgeExpiredCaptchaNonces } from "@/server/captcha";
 import { runScheduledTask } from "@/server/cron-route";
 import { purgeStaleLoginAttempts } from "@/server/login-throttle";
+import { purgeStaleThrottleBuckets } from "@/server/rate-limit";
 import { summarizeRgpdRetention } from "@/server/services/cron-tasks";
 import { runRgpdRetention } from "@/server/services/rgpd";
 
@@ -31,9 +33,28 @@ export async function GET() {
     } catch (e) {
       console.error("[cron] purge du journal d audit échouée:", e);
     }
+    // Seaux de débit et nonces de captcha périmés (constat A3). Ces tables ne
+    // portent aucune donnée personnelle — une empreinte d'IP, un aléa —, mais elles
+    // grossissent à chaque requête bridée : sans purge, un afflux laisserait des
+    // lignes indéfiniment. Best-effort, comme les précédentes.
+    let purgedThrottle = 0;
+    let purgedCaptchaNonces = 0;
+    try {
+      purgedThrottle = await purgeStaleThrottleBuckets();
+      purgedCaptchaNonces = await purgeExpiredCaptchaNonces();
+    } catch (e) {
+      console.error("[cron] purge des compteurs de débit / captcha échouée:", e);
+    }
     return {
       summary: summarizeRgpdRetention({ notified, anonymized }),
-      payload: { notified, anonymized, purgedLoginAttempts, purgedAuditEntries },
+      payload: {
+        notified,
+        anonymized,
+        purgedLoginAttempts,
+        purgedAuditEntries,
+        purgedThrottle,
+        purgedCaptchaNonces,
+      },
     };
   });
 }

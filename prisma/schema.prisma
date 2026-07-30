@@ -736,3 +736,34 @@ model TwoFactor {
   @@index([userId])
   @@map("two_factor")
 }
+
+// ── Constat A3 : compteurs hors périmètre Better Auth, persistés ────────────────
+//
+// A1 avait traité les deux compteurs qui protègent l'AUTHENTIFICATION (`rate_limits`,
+// `login_attempts`). Ceux-ci en restaient exclus et vivaient en mémoire de processus :
+// un simple `docker compose restart` — ou un déploiement — les remettait à zéro, et
+// deux réplicas auraient eu chacun le sien.
+
+/// Seaux de la limitation de débit hors Better Auth (génération de captcha, demande
+/// de suppression de compte). Fenêtre fixe : `count` remis à 1 quand `resetAt` est
+/// dépassé. La clé porte déjà sa portée (`captcha:<ip>`, `acct-del:<userId>`).
+model ThrottleBucket {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime @map("reset_at") @db.Timestamptz
+
+  // Purge des seaux périmés (tâche de rétention).
+  @@index([resetAt])
+  @@map("throttle_buckets")
+}
+
+/// Nonces de captcha déjà consommés (anti-rejeu). La CONSOMMATION est l'insertion
+/// elle-même : une violation de clé primaire signifie « déjà servi ». Vérifier puis
+/// écrire laisserait deux requêtes simultanées passer avec le même token.
+model CaptchaNonce {
+  nonce     String   @id
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@map("captcha_nonces")
+}
