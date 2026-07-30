@@ -2,6 +2,7 @@ import puppeteer from "puppeteer";
 import { escapeHtml } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
+import { argsChromium } from "@/server/pdf-browser";
 
 // PDF serveur des éditions (Puppeteer). On réutilise la page d'édition existante en média
 // « print » (tout le CSS @media print s'applique : liste complète, paysage, en-têtes de
@@ -42,9 +43,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const browser = await puppeteer.launch({
     headless: true,
-    // --no-sandbox : requis en conteneur / root (Docker). PUPPETEER_EXECUTABLE_PATH permet
-    // d'utiliser le Chromium système au lieu de celui bundlé.
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    // Drapeaux et arbitrage du bac à sable : server/pdf-browser.ts (constat D3), qui
+    // documente les mesures ayant conduit à écarter CAP_SYS_ADMIN.
+    // PUPPETEER_EXECUTABLE_PATH permet d'utiliser le Chromium système au lieu du bundlé.
+    args: argsChromium(),
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
   });
   try {

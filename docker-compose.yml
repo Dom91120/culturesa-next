@@ -14,6 +14,26 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # ── Réduction de portée d'une compromission (constat D3) ────────────────────
+    # Chromium (génération des PDF) tourne SANS son bac à sable : le profil seccomp
+    # par défaut de Docker interdit les espaces de noms utilisateur dont il a besoin
+    # (mesuré le 2026-07-30, cf. server/pdf-browser.ts). Les deux moyens de le
+    # rétablir — `cap_add: SYS_ADMIN` ou `seccomp: unconfined` — s'appliqueraient au
+    # CONTENEUR ENTIER, donc aussi au processus Node qui sert tout le trafic HTTP :
+    # on échangerait un risque étroit contre l'amplification de tous les autres.
+    #
+    # À défaut de confiner le moteur de rendu, on réduit ce qu'une évasion
+    # rapporterait. Le conteneur n'a besoin d'AUCUNE capacité : il écoute sur le
+    # port 3000 (> 1024) sous un compte non root.
+    #
+    # ⚠️ `no-new-privileges` empêche par construction le binaire setuid
+    # `chrome-sandbox` de s'élever : rétablir un jour le bac à sable
+    # (PUPPETEER_SANDBOX=true) suppose de retirer cette ligne ET de fournir un profil
+    # seccomp autorisant les espaces de noms utilisateur. Les deux vont ensemble.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       db:
         condition: service_healthy
