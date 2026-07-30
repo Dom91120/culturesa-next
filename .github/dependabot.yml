@@ -53,6 +53,22 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Dependabot compare des NUMÉROS, pas des cycles de vie : il a proposé
+    # `node:26-alpine` alors que la 26 est une branche *Current*, non LTS
+    # (`process.release.lts` vide). Un service en production ne tourne pas sur
+    # Current — la 26 ne deviendra LTS qu'en octobre 2026.
+    #
+    # On ignore donc les montées MAJEURES de Node. Les correctifs de la branche
+    # en cours continuent d'arriver : le tag `22-alpine` est flottant, chaque
+    # reconstruction de l'image récupère les derniers correctifs système.
+    #
+    # Changer de majeure reste une décision délibérée, à traiter comme une
+    # migration (répétition, vérification de Prisma / Puppeteer / Chromium).
+    # Prochaine étape pertinente : 22 → 24, l'actuelle LTS active, à planifier
+    # avant la fin du support de la 22 (printemps 2027) — et non 26.
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
     commit-message:
       prefix: "chore(docker)"
 
