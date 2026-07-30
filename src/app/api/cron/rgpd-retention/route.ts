@@ -1,4 +1,5 @@
 import { runScheduledTask } from "@/server/cron-route";
+import { purgeStaleLoginAttempts } from "@/server/login-throttle";
 import { summarizeRgpdRetention } from "@/server/services/cron-tasks";
 import { runRgpdRetention } from "@/server/services/rgpd";
 
@@ -11,9 +12,20 @@ import { runRgpdRetention } from "@/server/services/rgpd";
 export async function GET() {
   return runScheduledTask("rgpd-retention", async () => {
     const { notified, anonymized } = await runRgpdRetention();
+    // Purge des compteurs de tentatives de connexion périmés (constat A1) :
+    // rattachée ici car c'est la même logique — ne pas conserver de données
+    // au-delà de leur utilité. La table ne porte que des empreintes, mais elle
+    // n'a pas vocation à croître indéfiniment. Best-effort : son échec ne doit
+    // pas faire échouer la rétention RGPD, qui est la tâche importante.
+    let purgedLoginAttempts = 0;
+    try {
+      purgedLoginAttempts = await purgeStaleLoginAttempts();
+    } catch (e) {
+      console.error("[cron] purge des compteurs de connexion échouée:", e);
+    }
     return {
       summary: summarizeRgpdRetention({ notified, anonymized }),
-      payload: { notified, anonymized },
+      payload: { notified, anonymized, purgedLoginAttempts },
     };
   });
 }

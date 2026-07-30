@@ -86,30 +86,30 @@ model User {
   updatedAt     DateTime @updatedAt @db.Timestamptz
 
   // ── Champs métier (additionalFields Better Auth) ──
-  prenom        String   @default("")
-  nom           String   @default("")
-  tel           String   @default("")
-  niveau        String   @default("")
-  enfants       Int      @default(0) @db.SmallInt
-  accompagnants Int      @default(0) @db.SmallInt
-  role          Role     @default(utilisateur)
-  rgpdOk        Boolean  @default(false)
+  prenom        String    @default("")
+  nom           String    @default("")
+  tel           String    @default("")
+  niveau        String    @default("")
+  enfants       Int       @default(0) @db.SmallInt
+  accompagnants Int       @default(0) @db.SmallInt
+  role          Role      @default(utilisateur)
+  rgpdOk        Boolean   @default(false)
   // Onboarding : date de complétion de la modale de bienvenue (null = jamais vue).
   onboardedAt   DateTime? @db.Timestamptz
 
-  demandeurId   Int?
-  structureId   Int?
-  demandeur     Demandeur?  @relation(fields: [demandeurId], references: [id], onDelete: SetNull)
-  structure     Structure?  @relation(fields: [structureId], references: [id], onDelete: SetNull)
+  demandeurId Int?
+  structureId Int?
+  demandeur   Demandeur? @relation(fields: [demandeurId], references: [id], onDelete: SetNull)
+  structure   Structure? @relation(fields: [structureId], references: [id], onDelete: SetNull)
 
   // ── RGPD / rétention ──
-  lastLoginAt           DateTime? @db.Timestamptz
-  anonymizedAt          DateTime? @db.Timestamptz
-  deletionNoticeSentAt  DateTime? @db.Timestamptz
+  lastLoginAt          DateTime? @db.Timestamptz
+  anonymizedAt         DateTime? @db.Timestamptz
+  deletionNoticeSentAt DateTime? @db.Timestamptz
 
-  sessions  Session[]
-  accounts  Account[]
-  bookings  Booking[]
+  sessions        Session[]
+  accounts        Account[]
+  bookings        Booking[]
   managedServices ServiceManager[]
 
   @@index([demandeurId])
@@ -171,13 +171,13 @@ model Verification {
 // ============================================================
 
 model Service {
-  id                    String     @id
-  label                 String
-  validationBloquante   Boolean    @default(true)
+  id                  String   @id
+  label               String
+  validationBloquante Boolean  @default(true)
   // (Les maximums de réservation — par période, par an — vivent sur CHAQUE
   // EXERCICE, comme les réglages d'ouverture.)
-  position              Int        @default(0)
-  createdAt             DateTime   @default(now()) @db.Timestamptz
+  position            Int      @default(0)
+  createdAt           DateTime @default(now()) @db.Timestamptz
 
   // Capacité (places) par défaut des créneaux du service.
   // (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — vivent
@@ -209,15 +209,15 @@ model Service {
   //   createDemandeurIds : demandeurs autorisés par défaut (vide = ouvert à tous).
   //     Pas de FK possible sur un tableau : la liste est filtrée contre le
   //     référentiel à la lecture, un demandeur supprimé n'y laisse qu'un id mort.
-  createKind            String     @default("uniq")
-  createParityScoped    Boolean    @default(false)
-  createJauge           Boolean    @default(false)
-  createDemandeurIds    Int[]      @default([])
+  createKind         String  @default("uniq")
+  createParityScoped Boolean @default(false)
+  createJauge        Boolean @default(false)
+  createDemandeurIds Int[]   @default([])
 
   // Délai d'auto-validation en minutes SIGNÉES (cf. services/auto-validate.ts).
   //   0 = jamais ; négatif = N minutes OUVRÉES (jours actifs ∩ plages) ;
   //   positif = N minutes calendaires après `booking.autoValidateFrom`.
-  autoValidationDelay   Int        @default(0)
+  autoValidationDelay Int @default(0)
 
   // Notification des gestionnaires sur les auto-validations (digest par service).
   //   cf. services/manager-notice.ts.
@@ -254,12 +254,12 @@ model ServiceManager {
 }
 
 model Slot {
-  id           String      @id
+  id           String     @id
   serviceId    String
-  slotType     SlotType    @default(recurring)
-  startTime    String      @default("09:00")
-  endTime      String      @default("10:30")
-  slotDate     DateTime?   @db.Date
+  slotType     SlotType   @default(recurring)
+  startTime    String     @default("09:00")
+  endTime      String     @default("10:30")
+  slotDate     DateTime?  @db.Date
   // Jour de la semaine pour un créneau récurrent (un slot = un jour).
   // null pour les créneaux `unique` : le jour se déduit de slotDate.
   // CHECK ck_slots_recurrent_complet (SQL brut, NOT VALID — migration 20260724190000,
@@ -275,20 +275,20 @@ model Slot {
   weeks        String?
   // « A une jauge » : posé À LA CRÉATION selon le mode jauge de l'agenda admin
   // (icône capsule) ; les miroirs héritent du récurrent parent.
-  jauge        Boolean     @default(false)
+  jauge        Boolean    @default(false)
   // Alimente la « version d'agenda » du polling des grilles (max(updatedAt) + count,
   // cf. /api/agenda-version) — audit perf 2026-07-24.
-  updatedAt    DateTime    @default(now()) @updatedAt @db.Timestamptz
+  updatedAt    DateTime   @default(now()) @updatedAt @db.Timestamptz
 
-  service     Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  period      Period?         @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  demandeurs  SlotDemandeur[]
-  bookings    Booking[]
+  service    Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  period     Period?         @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  demandeurs SlotDemandeur[]
+  bookings   Booking[]
   // Self-FK : un créneau MIROIR (slotType=unique, daté) référence son créneau
   // récurrent parent. Supprimer le parent supprime ses miroirs (cascade DB) — la
   // suppression manuelle dans slots.ts reste un no-op idempotent.
-  parent      Slot?           @relation("SlotMirrors", fields: [parentSlotId], references: [id], onDelete: Cascade)
-  mirrors     Slot[]          @relation("SlotMirrors")
+  parent     Slot?           @relation("SlotMirrors", fields: [parentSlotId], references: [id], onDelete: Cascade)
+  mirrors    Slot[]          @relation("SlotMirrors")
 
   @@index([serviceId])
   @@index([parentSlotId])
@@ -347,24 +347,24 @@ model Exercice {
 }
 
 model Period {
-  id         Int         @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   // Toujours rattachée à un service (plus de « périodes globales » serviceId null).
-  serviceId  String
-  exerciceId Int?
-  label      String
-  etiquette  String?
+  serviceId     String
+  exerciceId    Int?
+  label         String
+  etiquette     String?
   // Nullable À DESSEIN : période en cours de saisie, ou reconduite par la bascule
   // quand le décalage d'un an échoue (29 février) — le moteur de miroirs les ignore.
   // CHECK ck_periods_dates_ordonnees (SQL brut, NOT VALID — migration 20260724190000) :
   // dateStart <= dateEnd quand les deux sont présentes.
-  dateStart  DateTime?   @db.Date
-  dateEnd    DateTime?   @db.Date
+  dateStart     DateTime? @db.Date
+  dateEnd       DateTime? @db.Date
   // Disponibilité : date à partir de laquelle les USAGERS peuvent réserver sur
   // cette période. Vide = réservable sans restriction de date.
   // (Colonne renommée « Disponibilite » → « disponibilite » — plus de casse mixte.)
   disponibilite DateTime? @db.Date
-  color      String      @default("#6dceaa")
-  position   Int         @default(0)
+  color         String    @default("#6dceaa")
+  position      Int       @default(0)
 
   service  Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   exercice Exercice?       @relation(fields: [exerciceId], references: [id], onDelete: SetNull)
@@ -417,11 +417,11 @@ model Demandeur {
   label                String
   openOnSchoolHolidays Boolean @default(true)
 
-  structures        Structure[]
-  niveaux           Niveau[]
-  slotRestrictions  SlotDemandeur[]
-  serviceSettings   ServiceDemandeurSettings[]
-  users             User[]
+  structures       Structure[]
+  niveaux          Niveau[]
+  slotRestrictions SlotDemandeur[]
+  serviceSettings  ServiceDemandeurSettings[]
+  users            User[]
 
   @@map("demandeurs")
 }
@@ -597,7 +597,7 @@ model FailedMail {
   error       String   @default("")
   attempts    Int      @default(1) @db.SmallInt
   createdAt   DateTime @default(now()) @db.Timestamptz
-  lastTriedAt DateTime @default(now()) @db.Timestamptz @map("last_tried_at")
+  lastTriedAt DateTime @default(now()) @map("last_tried_at") @db.Timestamptz
 
   @@index([createdAt])
   @@map("failed_mails")
@@ -640,4 +640,35 @@ model MailType {
 
   @@id([serviceId, key])
   @@map("mail_types")
+}
+
+// Freinage des tentatives de connexion PAR COMPTE (constat A1, audit 2026-07-29).
+// Le quota de Better Auth est calé sur l'IP : il ne voit pas le password spraying,
+// où chaque tentative vise un compte différent. Cf. src/server/login-throttle.ts.
+//
+// Indexée sur un HMAC de l'adresse, jamais sur l'adresse elle-même :
+//  - le freinage s'applique à l'identique que le compte existe ou non, sinon la
+//    différence de comportement révélerait les adresses inscrites ;
+//  - on n'accumule pas les adresses de gens qui se sont trompés de site.
+model LoginAttempt {
+  emailHash     String    @id @map("email_hash")
+  failures      Int       @default(0) @db.SmallInt
+  lockedUntil   DateTime? @map("locked_until") @db.Timestamptz
+  lastFailureAt DateTime  @default(now()) @map("last_failure_at") @db.Timestamptz
+
+  // Purge des compteurs périmés (tâche de rétention).
+  @@index([lastFailureAt])
+  @@map("login_attempts")
+}
+
+// Quota par IP de Better Auth, persisté en base plutôt qu'en mémoire.
+// En mémoire, un simple redémarrage du conteneur remettait tous les compteurs à
+// zéro : il suffisait d'attendre un déploiement pour repartir avec un quota neuf
+// (constat A3). Le schéma est imposé par Better Auth (clé, compteur, horodatage).
+model RateLimit {
+  key         String @id
+  count       Int    @default(0)
+  lastRequest BigInt @default(0) @map("last_request")
+
+  @@map("rate_limits")
 }

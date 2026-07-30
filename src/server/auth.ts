@@ -12,6 +12,7 @@ import {
 } from "@/schemas/user";
 import { verifyCaptcha } from "@/server/captcha";
 import { prisma } from "@/server/db";
+import { clearLoginFailures, loginLockSeconds, recordLoginFailure } from "@/server/login-throttle";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { SESSION_EXPIRES_IN, SESSION_FRESH_AGE, SESSION_UPDATE_AGE } from "@/server/session-policy";
 
@@ -114,6 +115,28 @@ export const auth = betterAuth({
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // Freinage PAR COMPTE (constat A1) : le quota de Better Auth étant calé sur
+      // l'IP, il ne voit pas le password spraying — un mot de passe courant essayé
+      // sur beaucoup de comptes, chaque tentative visant un compte différent.
+      // Refus AVANT toute vérification de mot de passe : une tentative freinée ne
+      // doit pas non plus consommer de temps de calcul scrypt.
+      // Le freinage s'applique à l'identique que le compte existe ou non
+      // (cf. login-throttle.ts) : le message ne révèle donc rien.
+      if (ctx.path === "/sign-in/email" && ctx.request) {
+        const email = (ctx.body as { email?: unknown } | undefined)?.email;
+        if (typeof email === "string" && email) {
+          const wait = await loginLockSeconds(email);
+          if (wait > 0) {
+            const minutes = Math.ceil(wait / 60);
+            throw new APIError("TOO_MANY_REQUESTS", {
+              message: `Trop de tentatives de connexion. Réessayez dans ${
+                minutes <= 1 ? "une minute" : `${minutes} minutes`
+              }.`,
+            });
+          }
+        }
+      }
+
       // CAPTCHA image auto-hébergé sur l'inscription (port de captcha_img.php du
       // legacy) : on vérifie le token signé + la saisie, transmis par en-têtes,
       // AVANT toute création de compte. Désactivable via CAPTCHA_DISABLED=true
@@ -214,6 +237,22 @@ export const auth = betterAuth({
         throw new APIError("BAD_REQUEST", { message: PASSWORD_POLICY_MESSAGE });
       }
     }),
+
+    // Comptage des échecs de connexion (constat A1). Les hooks `after` sont bien
+    // exécutés quand l'endpoint échoue : l'erreur est capturée par le dispatcher
+    // et déposée dans `ctx.context.returned` (cf. better-auth/dist/api/dispatch).
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/email" || !ctx.request) return;
+      const email = (ctx.body as { email?: unknown } | undefined)?.email;
+      if (typeof email !== "string" || !email) return;
+
+      // Un APIError en retour = identifiants refusés (ou compte non vérifié).
+      // Tout le reste est un succès : on efface alors le compteur, seuls les
+      // échecs CONSÉCUTIFS devant peser.
+      const returned = ctx.context.returned;
+      if (returned instanceof APIError) await recordLoginFailure(email);
+      else await clearLoginFailures(email);
+    }),
   },
 
   // Met à jour `lastLoginAt` à chaque création de session (= chaque connexion,
@@ -236,7 +275,33 @@ export const auth = betterAuth({
   },
 
   // Limitation du débit des requêtes d'auth (anti-bruteforce).
-  rateLimit: { enabled: true, window: 60, max: 10 },
+  // Quota PAR IP (constat A1). Il ne remplace pas le freinage par compte
+  // (login-throttle.ts) : l'un borne un attaquant qui martèle depuis une machine,
+  // l'autre celui qui répartit ses essais sur beaucoup de comptes. Aucun des deux
+  // ne couvre le cas de l'autre.
+  //
+  // `storage: "database"` (constat A3) : en mémoire, un redémarrage du conteneur
+  // remettait tous les compteurs à zéro — il suffisait d'attendre un déploiement
+  // pour repartir avec un quota neuf. Table `rate_limits` (cf. schema.prisma).
+  rateLimit: {
+    enabled: true,
+    storage: "database",
+    modelName: "rateLimit",
+    // Régime général, inchangé : il couvre les endpoints d'auth peu sensibles.
+    window: 60,
+    max: 10,
+    customRules: {
+      // Endpoints où un essai raté a une valeur pour l'attaquant. 10 tentatives
+      // par minute laissaient ~14 000 essais par jour et par IP.
+      "/sign-in/email": { window: 15 * 60, max: 5 },
+      // Chaque appel déclenche un envoi d'e-mail : bride le harcèlement d'une
+      // boîte tierce et la mise en liste noire du domaine de la Ville.
+      "/forget-password": { window: 15 * 60, max: 3 },
+      "/send-verification-email": { window: 15 * 60, max: 3 },
+      // Création de compte : le captcha filtre déjà, le quota borne le reste.
+      "/sign-up/email": { window: 60 * 60, max: 10 },
+    },
+  },
 
   // Champs métier additionnels persistés sur la table `user`.
   user: {
