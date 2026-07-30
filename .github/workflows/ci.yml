@@ -15,7 +15,7 @@ jobs:
     name: Lint + Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -49,7 +49,7 @@ jobs:
     name: Audit des dépendances
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -96,7 +96,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Build de l'image de production (valide l'étape `output: standalone` + prisma generate
       # v7 en Alpine — l'étape qui échoue sous Windows à cause des symlinks).
