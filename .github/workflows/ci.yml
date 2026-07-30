@@ -54,15 +54,21 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
 
-      # PAS de `cache: pnpm` ici, contrairement au job `checks` : `pnpm audit`
-      # lit le lockfile et n'installe rien, le magasin pnpm n'existe donc jamais.
-      # L'étape de post-traitement du cache échouait alors sur un chemin absent
-      # et faisait tomber le job — pour une raison sans aucun rapport avec la
-      # sécurité. Précisément ce qui apprend à ignorer un contrôle.
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: pnpm
+
+      # `pnpm audit` n'a besoin QUE du lockfile : cette installation est en trop,
+      # et pourtant nécessaire. `actions/setup-node` met en cache le magasin pnpm
+      # de lui-même — retirer `cache: pnpm` n'y change rien —, et son étape de
+      # post-traitement échoue si le magasin n'existe pas, faisant tomber le job
+      # alors que l'audit est passé. Un contrôle qui vire au rouge pour une raison
+      # étrangère à la sécurité est un contrôle qu'on apprend à ignorer : mieux
+      # vaut trente secondes d'installation qu'un signal auquel on ne croit plus.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # Bloquant sur « high » et « critical » UNIQUEMENT. Un contrôle qui échoue en
       # permanence — sur des avis transitifs sans correctif — finit ignoré, et c'est
