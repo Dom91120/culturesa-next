@@ -1,7 +1,8 @@
 name: CI
 
 # CI Linux : reproduit la validation faite en local.
-#  - checks : lint (Biome) + typecheck (TS) après génération du client Prisma 7
+#  - checks : lint (Biome) + typecheck (TS) + tests (Vitest) après génération du client Prisma 7
+#  - audit  : vulnérabilités connues des dépendances (constat D5, audit 2026-07-29)
 #  - docker : build de l'image (output standalone) + test `migrate deploy` sur un Postgres
 
 on:
@@ -37,6 +38,45 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # La suite existait mais n'était pas exécutée en CI : une régression sur les
+      # règles métier (jauges, récurrences, politique de session, chiffrement des
+      # sauvegardes) pouvait passer inaperçue jusqu'en production.
+      - name: Tests (Vitest)
+        run: pnpm test
+
+  audit:
+    name: Audit des dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Bloquant sur « high » et « critical » UNIQUEMENT. Un contrôle qui échoue en
+      # permanence — sur des avis transitifs sans correctif — finit ignoré, et c'est
+      # pire que pas de contrôle du tout. Les avis « moderate » restent visibles dans
+      # la sortie sans faire échouer la CI.
+      #
+      # Base de référence au 2026-07-29, après remédiation : 0 critical, 0 high,
+      # 3 moderate. Toute nouvelle vulnérabilité grave fera donc échouer le job.
+      #
+      # `--ignore-registry-errors` : une indisponibilité du registre npm ne doit pas
+      # être confondue avec une vulnérabilité. Sinon la CI devient rouge pour une
+      # raison sans rapport, et l'on prend l'habitude de passer outre.
+      #
+      # Pour accepter sciemment un avis sans correctif :
+      #   pnpm audit --audit-level high --ignore-registry-errors --ignore GHSA-xxxx-xxxx-xxxx
+      # en documentant ici la raison et la date de réexamen.
+      - name: pnpm audit
+        run: pnpm audit --audit-level high --ignore-registry-errors
 
   docker:
     name: Build image + migrate deploy

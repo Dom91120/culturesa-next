@@ -1,0 +1,64 @@
+# Mises à jour automatiques des dépendances (constat D5, audit 2026-07-29).
+#
+# Complément indispensable de `pnpm audit` en CI : l'audit signale une
+# vulnérabilité une fois qu'elle existe, Dependabot fait remonter les correctifs
+# et ouvre la demande de fusion. Sans lui, l'audit se contente de rendre la CI
+# rouge sans rien proposer.
+#
+# Dependabot ouvre aussi des demandes de SÉCURITÉ hors calendrier, dès qu'un avis
+# concerne une dépendance du projet. C'est le mécanisme qui a le plus de valeur
+# ici : le projet embarque puppeteer, nodemailer, better-auth et next, tous à
+# surface d'attaque élevée.
+version: 2
+
+updates:
+  # ── Dépendances npm ──
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    # Regroupé pour limiter le bruit : une demande de fusion par lot plutôt qu'une
+    # par paquet. Les montées MAJEURES restent séparées — elles demandent une
+    # relecture, pas une fusion de routine.
+    groups:
+      production-mineur-et-correctif:
+        dependency-type: production
+        update-types: [minor, patch]
+      developpement-mineur-et-correctif:
+        dependency-type: development
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+
+  # ── Actions GitHub ──
+  # Une action compromise s'exécute avec le jeton du dépôt : elles se maintiennent
+  # comme du code, pas comme de l'outillage accessoire.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
+
+  # ── Images de base Docker ──
+  # `node:22-alpine` et l'image du conteneur cron : c'est par là qu'arrivent les
+  # correctifs des paquets système (OpenSSL, Chromium, client PostgreSQL), que
+  # `pnpm audit` ne voit pas — il n'examine que l'arbre npm.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(docker)"
+
+  - package-ecosystem: docker
+    directory: /cron
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(docker)"

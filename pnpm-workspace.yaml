@@ -8,3 +8,25 @@ allowBuilds:
   prisma: true
   puppeteer: true
   sharp: true
+
+# Versions minimales forcées sur des dépendances TRANSITIVES portant un avis de
+# sécurité, qu'aucune mise à jour de nos dépendances directes ne corrige — leurs
+# parents épinglent encore une version vulnérable (constat D5, audit 2026-07-29).
+# Tous sont des correctifs de version PATCH, sans changement d'API.
+# À réexaminer à chaque montée de version majeure de Next ou Prisma : une fois le
+# parent corrigé, la surcharge devient inutile et doit être retirée.
+overrides:
+  # Lecture de fichier arbitraire et traversée de chemin via les source maps.
+  # Chaîne : next > postcss. Build uniquement, mais sans raison de rester exposé.
+  # Bornes hautes explicites : sans elles, `>=3.1.4` a résolu fast-uri en 4.1.1,
+  # soit un saut de version MAJEURE imposé à une dépendance transitive — le
+  # remède devenait plus risqué que le mal. Une surcharge de sécurité doit rester
+  # un correctif de version patch.
+  'postcss@<8.5.18': '>=8.5.18 <9'
+  # Confusion d'hôte (antislash littéral, canonicalisation IDN).
+  # Chaîne : @prisma/client > prisma > @prisma/dev > ajv > fast-uri.
+  'fast-uri@<3.1.4': '>=3.1.4 <4'
+  # Vulnérabilités héritées de libvips (CVE-2026-33327 et suivantes).
+  # Chaîne : next > sharp. L'application n'utilise pas next/image, mais la
+  # dépendance reste dans l'arbre d'exécution.
+  'sharp@<0.35.0': '>=0.35.0 <0.36'

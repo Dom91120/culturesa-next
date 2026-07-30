@@ -1,0 +1,52 @@
+name: CodeQL
+
+# Analyse statique de sécurité (constat D5, audit 2026-07-29).
+#
+# Complète les deux autres briques sans les recouvrir :
+#   - `pnpm audit` regarde les dépendances : du code écrit par d'autres ;
+#   - Dependabot en propose les correctifs ;
+#   - CodeQL regarde NOTRE code, et lui seul — injections, données non assainies
+#     atteignant un sink, comparaisons non sûres.
+#
+# Les résultats remontent dans l'onglet « Security » du dépôt. Volontairement NON
+# bloquant pour les demandes de fusion : un analyseur statique produit des faux
+# positifs, et un contrôle bloquant qu'on apprend à contourner ne protège plus.
+# À rendre bloquant plus tard, une fois la base de référence connue et triée.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Hebdomadaire : les règles de CodeQL évoluent, du code inchangé peut devenir
+    # signalé sans qu'aucune modification ne déclenche d'analyse.
+    - cron: "0 5 * * 1"
+
+jobs:
+  analyze:
+    name: Analyse JavaScript / TypeScript
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialiser CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          # `security-and-quality` ajouterait des règles de qualité qui noieraient
+          # les alertes de sécurité sous des remarques de style — Biome s'en charge
+          # déjà. On garde le jeu étendu, mais orienté sécurité.
+          queries: security-extended
+
+      # Pas de build : l'analyse JS/TS de CodeQL est directe. Le client Prisma
+      # généré (src/generated) est absent, donc non analysé — sans importance,
+      # c'est du code généré que nous n'écrivons pas.
+      - name: Analyser
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"
