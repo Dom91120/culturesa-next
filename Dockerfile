@@ -3,7 +3,7 @@
 ##########
 # 1. Base : Node 22 LTS sur Alpine + pnpm via corepack
 ##########
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 # openssl est requis par le moteur Prisma sur Alpine
 RUN apk add --no-cache openssl
 ENV PNPM_HOME="/pnpm"
