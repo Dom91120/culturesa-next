@@ -22,8 +22,14 @@ const noopSubscribe = () => () => {};
  * un remontage par error boundary), l'avertissement devient impossible. Le retrait du
  * nœud après hydratation est sans effet : le script a déjà été exécuté au parsing, et
  * les classes qu'il pose vivent sur <html>.
+ *
+ * `nonce` : imposé par la CSP depuis le constat S2. Ce composant étant CLIENT, il
+ * ne peut pas lire `headers()` lui-même — le layout racine le lui transmet. Sans
+ * nonce, le navigateur refuse d'exécuter ce script et le thème sombre réapparaît
+ * en clair le temps de l'hydratation : la panne serait visuelle, pas bloquante,
+ * donc facile à ne pas voir passer.
  */
-export function BootScript() {
+export function BootScript({ nonce }: { nonce?: string }) {
   const isServer = useSyncExternalStore(
     noopSubscribe,
     () => false,
@@ -32,6 +38,7 @@ export function BootScript() {
   if (!isServer) return null;
   return (
     <script
+      nonce={nonce}
       // biome-ignore lint/security/noDangerouslySetInnerHtml: script inline statique, sans donnée externe.
       dangerouslySetInnerHTML={{ __html: BOOT_CODE }}
     />

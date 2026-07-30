@@ -46,27 +46,19 @@ const nextConfig: NextConfig = {
   // (l'app peut être servie en direct). HSTS reste au reverse proxy TLS externe
   // (sans objet en HTTP).
   async headers() {
-    // CSP (audit sécurité 2026-07-19). `script-src 'unsafe-inline'` est requis par Next
-    // (script anti-FOUC inline + runtime) : la CSP ne bloque donc pas le XSS par script
-    // inline, mais restreint tout le reste (cadres, objets, base, exfiltration vers une
-    // origine tierce). `connect/img/font/style` limités à 'self' (polices auto-hébergées
-    // depuis le retrait de Google Fonts ; 'unsafe-inline' style = styles inline React).
-    // 'unsafe-eval' seulement en dev (HMR/Turbopack). Pas de nonce : incompatible avec le
-    // script statique du layout sans refonte, à envisager si on durcit script-src.
-    const dev = process.env.NODE_ENV !== "production";
-    const csp = [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self'",
-      "connect-src 'self'",
-      "frame-ancestors 'none'",
-      "frame-src 'none'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join("; ");
+    // La CSP n'est PLUS ici : elle porte désormais un nonce par réponse et se
+    // construit dans le middleware (src/proxy.ts, lib/csp.ts — constat S2, audit
+    // 2026-07-30). Un en-tête défini ici est figé au build ; il ne peut donc pas
+    // porter de valeur aléatoire, ce qui obligeait à `script-src 'unsafe-inline'`.
+    //
+    // NE PAS LA REMETTRE ICI « par sécurité » : le navigateur applique alors les
+    // DEUX politiques, et l'intersection des deux ne vaut que par la plus stricte
+    // — au mieux inutile, au pire trompeur pour qui relit l'en-tête.
+    //
+    // Les en-têtes ci-dessous restent statiques : ils ne dépendent pas de la
+    // requête, et ils couvrent AUSSI les chemins que le middleware n'inspecte pas
+    // (fichiers servis tels quels). `nosniff` y est l'essentiel : c'est lui qui
+    // empêche qu'une réponse non-HTML soit interprétée comme un document.
     return [
       {
         source: "/:path*",
@@ -74,7 +66,6 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Content-Security-Policy", value: csp },
           // Coupe l'accès aux capteurs/API puissantes non utilisés par l'app.
           {
             key: "Permissions-Policy",

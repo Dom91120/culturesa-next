@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Sans } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import "./app-legacy.css";
 import { BootScript } from "@/components/boot-script";
@@ -27,7 +28,17 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/**
+ * Le layout lit `headers()` pour récupérer le nonce posé par le middleware
+ * (constat S2). Conséquence assumée : toute page devient rendue à la demande.
+ * L'application ne comptait de toute façon que trois pages statiques — le
+ * formulaire de mot de passe oublié, celui de réinitialisation et la page 404 —
+ * qui n'ont ni cache ni charge à préserver. Le compromis serait tout autre sur
+ * un site majoritairement statique.
+ */
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     // `light` = mode clair par défaut (le CSS legacy bascule via html.light).
     // suppressHydrationWarning : le script <head> ci-dessous MUTE les classes de <html>
@@ -43,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Sous 1000px la sidebar est réduite D'OFFICE (même sans préférence).
             Rendu côté SERVEUR uniquement (cf. BootScript) : évite l'avertissement
             React 19 « script tag while rendering » aux re-rendus client. */}
-        <BootScript />
+        <BootScript nonce={nonce} />
       </head>
       <body>{children}</body>
     </html>
