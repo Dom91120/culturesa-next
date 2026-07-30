@@ -1,5 +1,6 @@
 import { isConfigValueUsed } from "@/server/config";
 import { prisma } from "@/server/db";
+import { sanitizeTemplateHtml } from "@/server/services/mail-html";
 
 // Gabarits (sujet + corps HTML) éditables des e-mails. Stockés dans la table `mail_types`
 // (cf. getMailTemplate, cascade service→global) ; à défaut, le gabarit par défaut ci-dessous
@@ -255,9 +256,12 @@ export async function getMailTemplate(kind: string, serviceId?: string): Promise
 export async function setMailTemplate(
   kind: string,
   subject: string,
-  html: string,
+  htmlBrut: string,
   serviceId?: string,
 ): Promise<void> {
+  // Assainissement AU STOCKAGE : la base ne contient que du HTML déjà filtré,
+  // quel que soit le chemin d écriture (constats BAC1 et S1).
+  const html = sanitizeTemplateHtml(htmlBrut);
   const scope = scopeOf(serviceId);
   const builtin = (TEMPLATE_KINDS as readonly string[]).includes(kind);
 

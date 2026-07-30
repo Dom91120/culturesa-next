@@ -2,6 +2,7 @@ import { wrapEmailHtml } from "@/lib/email-theme";
 import { renderHtmlTemplate, renderSubjectTemplate } from "@/lib/mail-render";
 import { getAppUrl } from "@/server/config";
 import { sendMail, sendMailOrQueue } from "@/server/mailer";
+import { sanitizeTemplateHtml } from "@/server/services/mail-html";
 import { getMailTemplate, htmlToText } from "@/server/services/mail-templates";
 
 /**
@@ -16,7 +17,11 @@ export function buildTemplatedMail(
   appUrl: string,
   rawVars?: Record<string, string>,
 ): { subject: string; html: string; text: string } {
-  const inner = renderHtmlTemplate(tpl.html, vars, rawVars);
+  // Assainissement AVANT rendu : couvre les gabarits enregistres AVANT la mise en
+  // place du filtre, et tout contenu qui aurait contourne le chemin de stockage.
+  // Avant rendu et non apres, pour que le bouton d action genere par l app
+  // ({{bouton}}, injecte en variable brute) ne soit pas soumis au filtre.
+  const inner = renderHtmlTemplate(sanitizeTemplateHtml(tpl.html), vars, rawVars);
   const subject = renderSubjectTemplate(tpl.subject, vars);
   return {
     subject,
