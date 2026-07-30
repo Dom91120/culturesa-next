@@ -165,8 +165,10 @@ export function BackupsPanel({
         >
           Dumps PostgreSQL complets (schéma + données), restaurables tels quels. Un export
           automatique est créé selon la planification configurée dans le sous-onglet CRON (défaut :
-          chaque nuit à 02h00 ; rotation : les 7 plus récents) ; les exports manuels et téléversés
-          ne sont pas soumis à la rotation.
+          chaque nuit à 02h00 ; rotation : les 7 plus récents). Les exports manuels et téléversés
+          échappent à cette rotation mais sont supprimés au bout de <strong>90 jours</strong> : ce
+          sont des copies nominatives complètes, qu&apos;il n&apos;y a pas lieu de conserver
+          indéfiniment. Le dernier export disponible n&apos;est jamais supprimé.
         </p>
 
         {!toolsAvailable && (

@@ -62,7 +62,7 @@ export const CRON_TASKS: CronTaskDef[] = [
     key: "backup",
     label: "Export de la base",
     description:
-      "Dump PostgreSQL complet et compressé ; rotation : seuls les 7 exports automatiques les plus récents sont conservés. Les exports sont gérés dans le sous-onglet Exports.",
+      "Dump PostgreSQL complet et compressé ; rotation : seuls les 7 exports automatiques les plus récents sont conservés. Purge également les exports manuels et téléversés de plus de 90 jours. Les exports sont gérés dans le sous-onglet Exports.",
     defaultSchedule: { type: "dailyAt", hour: 2, minute: 0 },
     runnable: true,
   },
@@ -249,8 +249,19 @@ export function summarizeBookingReminders(r: { week: number; day: number }): str
   return `${r.week} rappel(s) J-7, ${r.day} rappel(s) J-1`;
 }
 
-export function summarizeBackup(r: { file: { name: string }; purged: number }): string {
-  return r.purged > 0 ? `${r.file.name}, ${r.purged} ancien(s) export(s) purgé(s)` : r.file.name;
+export function summarizeBackup(r: {
+  file: { name: string };
+  purged: number;
+  purgedAged: number;
+}): string {
+  // Les deux purges sont annoncées SÉPARÉMENT : la rotation est un régime permanent
+  // et attendu ; la purge par âge supprime des fichiers déposés à la main, dont on
+  // se souvient. Les additionner rendrait la seconde invisible dans le bruit.
+  const parts = [r.file.name];
+  if (r.purged > 0) parts.push(`${r.purged} export(s) auto purgé(s) par rotation`);
+  if (r.purgedAged > 0)
+    parts.push(`${r.purgedAged} export(s) manuel(s)/téléversé(s) de plus de 90 j purgé(s)`);
+  return parts.join(", ");
 }
 
 /**

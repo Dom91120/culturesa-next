@@ -20,7 +20,9 @@ const gunzip = promisify(gunzipCb);
  *
  * TOUS les dumps sont produits par l'app dans BACKUPS_DIR : les exports automatiques
  * planifiés (route /api/cron/backup) en `culturesa-<ts>.sql.gz.enc` — seuls concernés
- * par la rotation —, les exports manuels en `manuel-<ts>.sql.gz.enc`, les dumps
+ * par la rotation sur le nombre —, les exports manuels en `manuel-<ts>.sql.gz.enc`
+ * et les dumps téléversés, ces deux dernières familles étant purgées sur l'ÂGE
+ * (90 jours) plutôt que sur le nombre. Les dumps
  * téléversés en `televerse-<ts>-<nom>.sql[.gz][.enc]`.
  *
  * CHIFFREMENT (constat D1, audit 2026-07-29) : tout dump écrit par l'app l'est en
@@ -253,7 +255,7 @@ async function writeDump(name: string): Promise<BackupFile> {
   return { name, kind: kindOf(name), size: st.size, mtime: st.mtime, encrypted: true };
 }
 
-/** Crée un export manuel (jamais purgé par la rotation). */
+/** Crée un export manuel (soumis à la rétention par âge, cf. AGE_RETAIN_MS). */
 export function createBackup(): Promise<BackupFile> {
   return writeDump(`manuel-${timestamp()}.sql.gz.enc`);
 }
@@ -262,17 +264,77 @@ export function createBackup(): Promise<BackupFile> {
 // (≈ une semaine pour une exécution quotidienne) — même politique que l'ancien backup.sh.
 const AUTO_RETAIN = 7;
 
+// ── Rétention des exports manuels et téléversés ──
+// Ces deux familles échappaient à la rotation et s'accumulaient SANS AUCUNE LIMITE :
+// chaque fichier est un dump nominatif complet, incluant des données de mineurs.
+// Le chiffrement (D1) les rend inoffensifs en cas de copie, mais un dump qu'on ne
+// garde pas reste plus sûr qu'un dump chiffré — et la minimisation de la durée de
+// conservation est une exigence propre du RGPD, distincte de la protection.
+//
+// Compté en JOURS et non en « mois » : trois mois calendaires durent entre 89 et 92
+// jours selon la date de départ. Une durée fixe rend la purge prévisible et le test
+// reproductible ; l'écart avec un trimestre exact est sans portée ici.
+const AGE_RETAIN_DAYS = 90; // ≈ 3 mois — arbitrage d'exploitation, 2026-07-30
+const AGE_RETAIN_MS = AGE_RETAIN_DAYS * 24 * 60 * 60 * 1000;
+
+/** Familles soumises à la rétention par âge (les `culturesa-*` relèvent d'AUTO_RETAIN). */
+const AGE_RETAIN_PREFIXES = ["manuel-", "televerse-"] as const;
+
 /**
- * Export automatique planifié (route /api/cron/backup) : dump `culturesa-<ts>.sql.gz`
- * puis rotation sur les seuls fichiers `culturesa-*` (les exports manuels et téléversés
- * ne sont jamais purgés).
+ * Supprime les exports manuels et téléversés de plus de AGE_RETAIN_DAYS jours.
+ *
+ * GARDE-FOU : ne supprime jamais le DERNIER dump disponible, toutes familles
+ * confondues. Si la sauvegarde automatique est en panne depuis des mois — le
+ * moment précis où l'on a le plus besoin d'une copie —, un export manuel ancien
+ * peut être la seule qui reste. Une purge qui viderait le dossier ferait plus de
+ * dégâts que les données qu'elle est censée ne pas laisser traîner.
+ *
+ * Exporté pour être éprouvé isolément : une fonction qui supprime des fichiers ne
+ * doit pas n'être atteignable qu'au travers d'un `pg_dump`.
  */
-export async function createAutoBackup(): Promise<{ file: BackupFile; purged: number }> {
+export async function purgeAgedBackups(now = Date.now()): Promise<number> {
+  const all = await listBackups();
+  const perimes = all.filter(
+    (f) =>
+      AGE_RETAIN_PREFIXES.some((p) => f.name.startsWith(p)) &&
+      now - f.mtime.getTime() > AGE_RETAIN_MS,
+  );
+  // `all.length - perimes.length` = ce qui subsisterait. On ne descend pas à zéro.
+  if (perimes.length > 0 && all.length === perimes.length) {
+    const [plusRecent] = perimes.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+    console.warn(
+      `[backup] purge par âge : ${plusRecent.name} conservé, c'est le dernier dump disponible.`,
+    );
+    perimes.shift();
+  }
+  for (const f of perimes) await fs.unlink(backupPath(f.name));
+  return perimes.length;
+}
+
+/**
+ * Export automatique planifié (route /api/cron/backup) : dump `culturesa-<ts>.sql.gz`,
+ * rotation des `culturesa-*` sur le NOMBRE, puis purge des exports manuels et
+ * téléversés sur l'ÂGE.
+ *
+ * Deux politiques distinctes, parce que les besoins le sont : les exports automatiques
+ * forment une série régulière dont on veut les N derniers états ; les exports manuels et
+ * téléversés arrivent au gré des opérations, et compter les plus récents y conserverait
+ * indéfiniment un fichier isolé vieux de trois ans.
+ *
+ * La purge par âge est adossée à la tâche de sauvegarde plutôt qu'à une planification
+ * propre : une tâche de moins à surveiller, et elle ne peut pas vider le dossier au
+ * moment même où l'on constate que plus aucune sauvegarde n'est produite.
+ */
+export async function createAutoBackup(): Promise<{
+  file: BackupFile;
+  purged: number;
+  purgedAged: number;
+}> {
   const file = await writeDump(`culturesa-${timestamp()}.sql.gz.enc`);
   const autos = (await listBackups()).filter((f) => f.name.startsWith("culturesa-"));
   const olds = autos.slice(AUTO_RETAIN); // listBackups renvoie les plus récents d'abord
   for (const f of olds) await fs.unlink(backupPath(f.name));
-  return { file, purged: olds.length };
+  return { file, purged: olds.length, purgedAged: await purgeAgedBackups() };
 }
 
 /**
