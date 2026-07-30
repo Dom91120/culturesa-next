@@ -15,7 +15,12 @@ WORKDIR /app
 # 2. Dependencies : installe toutes les deps (cache séparé du code)
 ##########
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml est INDISPENSABLE ici : depuis pnpm 11, il porte les réglages
+# (allowBuilds, overrides). Les `overrides` sont inscrites dans le lockfile, donc une
+# installation `--frozen-lockfile` sans ce fichier échoue sur
+# ERR_PNPM_LOCKFILE_CONFIG_MISMATCH — le lockfile annonce des surcharges que la
+# configuration copiée ne contient pas.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # Cache du store pnpm pour des rebuilds rapides.
 # --ignore-scripts : le postinstall (`prisma generate`) ne peut pas tourner ici (le
 # schéma n'est pas encore copié) ; le client est généré au stage builder.
