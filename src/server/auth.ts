@@ -12,6 +12,11 @@ import {
   profileCountOk,
 } from "@/schemas/user";
 import { verifyCaptcha } from "@/server/captcha";
+import {
+  ATTRIBUTS_COOKIE,
+  alerteCookiesNonSecurises,
+  cookiesSecurises,
+} from "@/server/cookie-policy";
 import { prisma } from "@/server/db";
 import { clearLoginFailures, loginLockSeconds, recordLoginFailure } from "@/server/login-throttle";
 import { sendTemplatedMail } from "@/server/services/mail-send";
@@ -53,6 +58,15 @@ async function sendAccountMail(
  * - rate-limiting activé (remplace l'ancienne table auth_attempts)
  * - champs métier exposés sur le modèle User (cf. prisma/schema.prisma)
  */
+// Protection levée en production → on le dit, fort. Le silence était le défaut d'A5.
+if (alerteCookiesNonSecurises()) {
+  console.warn(
+    "[auth] ⚠️ ALLOW_INSECURE_COOKIES=true : le cookie de session part SANS l'attribut " +
+      "Secure. À réserver à un accès en HTTP sur réseau de confiance ; sur une " +
+      "installation exposée, toute interception du réseau donne accès à la session.",
+  );
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   baseURL: process.env.BETTER_AUTH_URL,
@@ -98,6 +112,13 @@ export const auth = betterAuth({
     expiresIn: SESSION_EXPIRES_IN,
     updateAge: SESSION_UPDATE_AGE,
     freshAge: SESSION_FRESH_AGE,
+  },
+
+  // Attributs du cookie de session, FIGÉS plutôt que déduits du schéma de `baseURL`
+  // (constat A5). Règle, justification et échappatoire : server/cookie-policy.ts.
+  advanced: {
+    useSecureCookies: cookiesSecurises(),
+    defaultCookieAttributes: ATTRIBUTS_COOKIE,
   },
 
   emailVerification: {
