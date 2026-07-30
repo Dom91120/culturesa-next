@@ -167,6 +167,122 @@ Les éditions (Liste / Planning / Pointages) s'impriment via un PDF généré c�
   recharger la page d'édition (par défaut l'origine de la requête). À renseigner si le
   conteneur ne joint pas l'URL publique.
 
+## Après la première connexion : retirer `ADMIN_PASSWORD`
+
+> Constat **A8** de l'audit de sécurité.
+
+`ADMIN_PASSWORD` ne sert qu'une fois, au *seed* du compte administrateur (`prisma/seed-init.ts`,
+service `init`). Il **reste ensuite en clair dans `.env`** et dans l'environnement Compose,
+alors qu'il n'a plus aucune utilité : un mot de passe qui traîne sans servir est un mot de
+passe qu'on oublie de faire tourner.
+
+À faire **dès la première connexion réussie** :
+
+```bash
+# 1. Se connecter à l'application et changer le mot de passe depuis « Mon compte ».
+#    (Le changer d'abord : la suite retire la seule trace du mot de passe initial.)
+
+# 2. Retirer la variable du .env — la ligne entière, pas seulement sa valeur.
+sed -i '/^ADMIN_PASSWORD=/d' .env
+
+# 3. Vérifier qu'elle a disparu, y compris d'un éventuel conteneur déjà lancé.
+grep -c '^ADMIN_PASSWORD=' .env          # attendu : 0
+docker compose exec -T app printenv | grep -c ADMIN_PASSWORD   # attendu : 0
+```
+
+Le service `init` ne tourne que sur demande explicite (`--profile init`) : son absence
+n'empêche donc rien au quotidien. S'il faut le relancer un jour, la variable se
+redéfinit le temps de la commande, sans repasser par le fichier :
+
+```bash
+ADMIN_PASSWORD='…' docker compose --profile init run --rm init
+```
+
+> **Point connexe, non corrigé.** Le service `init` est construit sur la cible `builder` :
+> son image embarque les dépendances de développement **et l'intégralité des sources**.
+> Le profil limite son exécution, mais l'image existe sur l'hôte. Pour la retirer une fois
+> l'initialisation faite : `docker image rm culturesa-init` (elle sera reconstruite au besoin).
+
+---
+
+## Rotation de `BETTER_AUTH_SECRET`
+
+> Constat **A9** de l'audit de sécurité. **À lire en entier avant d'agir.**
+
+`BETTER_AUTH_SECRET` n'est pas « la clé des sessions » : c'est la **racine HKDF de tout ce
+que l'application chiffre ou signe**. Sa rotation n'est pas une opération anodine, et
+plusieurs de ses effets sont **silencieux**.
+
+### Ce qui casse, et comment cela se manifeste
+
+| Élément | Effet de la rotation | Visible ? |
+|---|---|---|
+| **Secrets TOTP et codes de secours** (2FA) | **Illisibles.** Le compte reste marqué « 2FA activée », réclame un code qu'aucune application ne peut produire, et **les codes de secours ne fonctionnent pas non plus** | ❌ **Verrouillage total des administrateurs** |
+| **Sauvegardes chiffrées** | Illisibles **si `BACKUP_ENCRYPTION_KEY` n'est pas défini** (la clé est alors dérivée du secret applicatif) | ❌ découvert au moment d'une restauration |
+| **Mot de passe SMTP** (`app_config`) | `decryptSecret()` renvoie `""` **sans lever d'exception** → les e-mails cessent de partir | ❌ aucune erreur |
+| Sessions | Toutes tombent | ✅ chacun se reconnecte |
+| Captchas en circulation | Invalidés (durée de vie : 5 min) | ✅ sans conséquence |
+| Liens de suppression de compte | Invalidés (durée de vie : 24 h) | ⚠️ à redemander |
+| Compteurs anti-bruteforce | Remis à zéro (indexés sur une empreinte du courriel) | ✅ sans conséquence |
+
+Ce n'est **pas un défaut de conception** : c'est le comportement attendu d'une dérivation
+par HKDF, et la séparation par domaine est correcte. Mais l'ordre des opérations compte.
+
+> ⚠️ **Le verrouillage 2FA est le point critique.** Vérifié : un secret chiffré avec
+> l'ancienne valeur ne se déchiffre pas avec la nouvelle. Si vous tournez le secret sans
+> précaution et que vous êtes le seul administrateur, **personne ne peut plus entrer** —
+> le recours est alors une intervention directe en base (requête documentée dans
+> `src/app/(admin)/users/actions.ts`).
+
+### Procédure
+
+```bash
+# ── AVANT ──────────────────────────────────────────────────────────────────────
+# 1. Vérifier que les sauvegardes ne dépendent PAS du secret applicatif.
+grep -c '^BACKUP_ENCRYPTION_KEY=.\+' .env      # attendu : 1
+#    Si 0 : les dumps existants deviendront illisibles. Définir d'abord une clé
+#    dédiée, recréer un export, et le conserver hors machine AVANT de continuer.
+
+# 2. Prévenir les administrateurs : ils devront réinscrire leur second facteur.
+
+# 3. Sauvegarder (bouton « Créer un export maintenant », ou dump direct).
+
+# 4. DÉSACTIVER LE SECOND FACTEUR DE TOUS LES COMPTES.
+#    Sans cette étape, les secrets TOTP deviennent illisibles et les comptes
+#    restent marqués « 2FA activée » : verrouillage sans recours par l'interface.
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c 'DELETE FROM two_factor;' \
+  -c 'UPDATE "user" SET two_factor_enabled = false;'
+
+# ── ROTATION ───────────────────────────────────────────────────────────────────
+# 5. Remplacer la valeur dans .env (32 octets aléatoires).
+openssl rand -base64 32          # copier le résultat dans BETTER_AUTH_SECRET
+
+# 6. Redémarrer.
+docker compose up -d --build app
+
+# ── APRÈS ──────────────────────────────────────────────────────────────────────
+# 7. RE-SAISIR LE MOT DE PASSE SMTP dans Administration › Messagerie.
+#    Sans cela les e-mails cessent de partir SANS message d'erreur.
+#    Vérifier par le bouton d'envoi de test AVANT de considérer l'opération finie.
+
+# 8. Se reconnecter : le garde du second facteur redirige vers l'enrôlement.
+#    Rescanner le QR code et CONSERVER LES NOUVEAUX CODES DE SECOURS.
+```
+
+### Vérifications de sortie
+
+Aucune de ces trois n'est facultative : chacune couvre un effet qui, autrement,
+se découvre trop tard.
+
+```bash
+# Les e-mails repartent  → bouton « Envoyer un test » dans Administration › Messagerie
+# Le second facteur      → se déconnecter, se reconnecter, saisir un code TOTP
+# Les sauvegardes        → restaurer un dump récent sur une base de répétition
+```
+
+---
+
 ## Points d'attention
 - `next.config.ts` contient `output: "standalone"` (requis pour l'image Docker).
 - Le conteneur `app` tourne en utilisateur non-root (`nextjs`).
