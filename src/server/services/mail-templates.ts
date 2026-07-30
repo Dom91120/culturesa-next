@@ -19,6 +19,7 @@ export const TEMPLATE_KINDS = [
   "booking_reminder",
   "email_verification",
   "password_reset",
+  "password_changed",
   "account_deletion_request",
   "account_deletion_notice",
   "email_test",
@@ -79,6 +80,11 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
   booking_reminder: REMINDER_VARS,
   email_verification: LINK_VARS,
   password_reset: LINK_VARS,
+  password_changed: [
+    { name: "salutation", desc: "« Bonjour Prénom Nom, »" },
+    { name: "prenom", desc: "Prénom de l’usager" },
+    { name: "date", desc: "Date et heure du changement, ex. « 30/07/2026 à 18:42 »" },
+  ],
   account_deletion_request: LINK_VARS,
   account_deletion_notice: [
     { name: "salutation", desc: "« Bonjour Prénom Nom, »" },
@@ -179,6 +185,18 @@ ${DETAILS_CONFIRMATION}
 <p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous (lien valable 1&nbsp;h) :</p>
 <p>{{bouton}}</p>
 <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.<br>Adresse de secours : {{url}}</p>`,
+  },
+  // Envoyé APRÈS coup, et c'est tout son intérêt (constat A7) : il ne demande rien
+  // et ne contient AUCUN lien. Un courriel de sécurité porteur d'un lien apprend à
+  // cliquer sur les liens des courriels de sécurité — exactement ce dont vit
+  // l'hameçonnage. La consigne renvoie donc l'usager vers le site, par ses propres
+  // moyens, et vers un interlocuteur humain.
+  password_changed: {
+    subject: "Votre mot de passe a été modifié — CultuRésa",
+    html: `<p>{{salutation}}</p>
+<p>Le mot de passe de votre compte CultuRésa a été modifié le {{date}}.</p>
+<p>Vos autres sessions ouvertes ont été fermées : si vous étiez connecté sur un autre appareil, vous devrez vous y reconnecter.</p>
+<p><strong>Si vous n'êtes pas à l'origine de ce changement</strong>, votre compte est peut-être compromis. Rendez-vous sur CultuRésa pour réinitialiser votre mot de passe, et signalez-le au service culturel.</p>`,
   },
   account_deletion_request: {
     subject: "Confirmez la suppression de votre compte — CultuRésa",

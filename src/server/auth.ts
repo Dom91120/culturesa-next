@@ -30,6 +30,43 @@ const PASSWORD_ENDPOINTS = new Set(["/sign-up/email", "/reset-password", "/chang
  * Envoie un e-mail de compte/sécurité (vérification d'adresse, réinitialisation de
  * mot de passe) à partir du gabarit éditable (onglet Échanges), habillé du thème.
  */
+/**
+ * Alerte « votre mot de passe a été modifié » (constat A7).
+ *
+ * Envoyée APRÈS coup, sur les DEUX chemins : réinitialisation par lien et
+ * changement depuis le compte. Un attaquant qui prend un compte change le mot de
+ * passe ; sans ce courriel, le titulaire légitime ne l'apprend qu'en découvrant
+ * qu'il ne peut plus entrer — souvent bien plus tard.
+ *
+ * BEST-EFFORT, et c'est délibéré : un relais SMTP indisponible ne doit pas faire
+ * échouer le changement de mot de passe. Refuser l'opération pour cause de
+ * courriel non parti laisserait l'usager avec son ancien mot de passe, celui
+ * qu'il cherche justement à remplacer.
+ */
+async function notifierMotDePasseModifie(userId: string, email: string): Promise<void> {
+  try {
+    const prenom =
+      (
+        await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } })
+      )?.prenom?.trim() ?? "";
+    // Heure de Paris explicite : le conteneur tourne en UTC, et une heure fausse
+    // dans une alerte de sécurité fait douter de l'alerte, pas de l'heure.
+    const date = new Intl.DateTimeFormat("fr-FR", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: "Europe/Paris",
+    }).format(new Date());
+    await sendTemplatedMail({
+      to: email,
+      kind: "password_changed",
+      vars: { salutation: greeting(prenom), prenom, date },
+      mode: "direct",
+    });
+  } catch (e) {
+    console.error("[auth] alerte de changement de mot de passe non envoyée:", e);
+  }
+}
+
 async function sendAccountMail(
   userId: string,
   email: string,
@@ -93,6 +130,22 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     minPasswordLength: 12,
+
+    // ── Constat A7 ──────────────────────────────────────────────────────────────
+    // Reprendre la main sur son mot de passe ne suffisait pas à reprendre la main
+    // sur son COMPTE : un attaquant déjà connecté gardait sa session intacte. La
+    // victime croyait avoir refermé la porte alors qu'il était toujours à
+    // l'intérieur — et c'est précisément le scénario où quelqu'un change son mot
+    // de passe : parce qu'il soupçonne quelque chose.
+    revokeSessionsOnPasswordReset: true,
+
+    // Notification APRÈS coup. C'est le seul signal qui permette à un usager de
+    // découvrir une prise de contrôle : un attaquant qui change le mot de passe
+    // n'a aucune raison de le lui dire.
+    onPasswordReset: async ({ user }) => {
+      await notifierMotDePasseModifie(user.id, user.email);
+    },
+
     sendResetPassword: async ({ user, url }) => {
       await sendAccountMail(
         user.id,
@@ -137,6 +190,20 @@ export const auth = betterAuth({
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // Révocation des AUTRES sessions au changement de mot de passe (constat A7).
+      //
+      // Better Auth expose `revokeOtherSessions` dans le CORPS de la requête : il
+      // dépend donc du client, qui pourrait l'omettre — un paramètre de sécurité
+      // laissé à l'appelant n'est pas une garantie. On le force ici, côté serveur.
+      //
+      // On force le drapeau plutôt que de supprimer les sessions nous-mêmes : la
+      // bibliothèque révoque, RECRÉE une session pour l'appelant et repose son
+      // cookie. Le faire à la main déconnecterait celui qui vient de changer son
+      // mot de passe — punir le geste qu'on veut encourager.
+      if (ctx.path === "/change-password" && ctx.body && typeof ctx.body === "object") {
+        (ctx.body as { revokeOtherSessions?: boolean }).revokeOtherSessions = true;
+      }
+
       // Freinage PAR COMPTE (constat A1) : le quota de Better Auth étant calé sur
       // l'IP, il ne voit pas le password spraying — un mot de passe courant essayé
       // sur beaucoup de comptes, chaque tentative visant un compte différent.
@@ -264,6 +331,17 @@ export const auth = betterAuth({
     // exécutés quand l'endpoint échoue : l'erreur est capturée par le dispatcher
     // et déposée dans `ctx.context.returned` (cf. better-auth/dist/api/dispatch).
     after: createAuthMiddleware(async (ctx) => {
+      // Changement de mot de passe depuis le compte : alerter le titulaire
+      // (constat A7). La réinitialisation par lien passe, elle, par
+      // `onPasswordReset` — deux chemins distincts dans Better Auth, une seule
+      // alerte à écrire.
+      if (ctx.path === "/change-password" && !(ctx.context.returned instanceof APIError)) {
+        const u = (ctx.context.returned as { user?: { id?: string; email?: string } } | undefined)
+          ?.user;
+        if (u?.id && u.email) await notifierMotDePasseModifie(u.id, u.email);
+        return;
+      }
+
       if (ctx.path !== "/sign-in/email" || !ctx.request) return;
       const email = (ctx.body as { email?: unknown } | undefined)?.email;
       if (typeof email !== "string" || !email) return;

@@ -28,6 +28,7 @@ import type { KindData } from "./echanges-config";
 export const SYSTEM_MAIL_KINDS = [
   "email_verification",
   "password_reset",
+  "password_changed",
   "account_deletion_request",
   "account_deletion_notice",
   "email_test",
@@ -79,6 +80,12 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
   password_reset: {
     label: "Réinitialisation du mot de passe",
     description: "Envoyé lors d'une demande de réinitialisation (toujours envoyé).",
+    recipient: "L'utilisateur",
+  },
+  password_changed: {
+    label: "Mot de passe modifié",
+    description:
+      "Alerte envoyée APRÈS tout changement de mot de passe, réinitialisation comprise (toujours envoyé). Sans lien : c'est ce qui permet à l'usager de détecter une prise de contrôle de son compte.",
     recipient: "L'utilisateur",
   },
   account_deletion_request: {
