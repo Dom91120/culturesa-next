@@ -54,11 +54,15 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
 
+      # PAS de `cache: pnpm` ici, contrairement au job `checks` : `pnpm audit`
+      # lit le lockfile et n'installe rien, le magasin pnpm n'existe donc jamais.
+      # L'étape de post-traitement du cache échouait alors sur un chemin absent
+      # et faisait tomber le job — pour une raison sans aucun rapport avec la
+      # sécurité. Précisément ce qui apprend à ignorer un contrôle.
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: pnpm
 
       # Bloquant sur « high » et « critical » UNIQUEMENT. Un contrôle qui échoue en
       # permanence — sur des avis transitifs sans correctif — finit ignoré, et c'est
