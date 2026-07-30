@@ -2,15 +2,25 @@ import { describe, expect, it } from "vitest";
 import { CHEMIN_ENROLEMENT, exige2FA, ROLES_2FA_REQUIS } from "./two-factor-policy";
 
 describe("exige2FA — qui doit disposer d'un second facteur", () => {
-  it("les rôles privilégiés, qui peuvent exporter la base nominative", () => {
-    expect(exige2FA("gestionnaire")).toBe(true);
+  it("les administrateurs, qui cumulent tous les privilèges", () => {
+    // Export de la base nominative, restauration de sauvegarde, changement de
+    // rôle, identifiants SMTP : un mot de passe seul ne protège pas cela.
     expect(exige2FA("administrateur")).toBe(true);
   });
 
+  it("PAS les gestionnaires", () => {
+    // Agents de terrain, au périmètre borné à leurs services. Leur imposer une
+    // application d'authentification pour saisir des réservations au quotidien
+    // pèserait sur l'usage sans réduire proportionnellement le risque.
+    // Arbitrage assumé : un gestionnaire compromis garde accès aux données
+    // de SES services.
+    expect(exige2FA("gestionnaire")).toBe(false);
+  });
+
   it("PAS les usagers", () => {
-    // Leur compte ne donne accès qu'à leurs propres réservations. Imposer une
-    // application d'authentification à des familles pour réserver une séance
-    // serait disproportionné — et ferait fuir les usagers, pas les attaquants.
+    // Leur compte ne donne accès qu'à leurs propres réservations. L'exiger de
+    // familles pour réserver une séance serait disproportionné — et ferait fuir
+    // les usagers, pas les attaquants.
     expect(exige2FA("utilisateur")).toBe(false);
   });
 
@@ -30,7 +40,7 @@ describe("garde-fous du dispositif", () => {
     expect(CHEMIN_ENROLEMENT.startsWith("/mon-compte")).toBe(true);
   });
 
-  it("la liste des rôles exigeants ne contient pas « utilisateur »", () => {
-    expect(ROLES_2FA_REQUIS.has("utilisateur")).toBe(false);
+  it("la liste des rôles exigeants se limite aux administrateurs", () => {
+    expect([...ROLES_2FA_REQUIS]).toEqual(["administrateur"]);
   });
 });

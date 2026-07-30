@@ -119,7 +119,7 @@ export async function requireRole(min: Role) {
   // Second facteur exigé des rôles privilégiés (constat A6). REDIRECTION vers
   // l'enrôlement, jamais blocage : les comptes existants n'ont aucun secret TOTP
   // au moment du déploiement, et refuser la connexion aurait mis dehors tous les
-  // gestionnaires à la seconde où le correctif est parti en production.
+  // administrateurs — y compris celui qui aurait dû réparer.
   //
   // Chacun peut donc toujours se connecter et s'enrôler lui-même ; seule
   // l'administration attend. La page d'enrôlement vit sous /mon-compte, qui

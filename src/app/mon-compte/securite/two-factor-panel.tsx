@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 import { INPUT_CHROME } from "@/components/ui-styles";
 import { twoFactor } from "@/lib/auth-client";
@@ -108,8 +109,9 @@ export function TwoFactorPanel({
         </p>
         {requis ? (
           <p style={{ fontSize: ".8rem", color: "var(--muted)", lineHeight: 1.6 }}>
-            Votre rôle donne accès à l&apos;ensemble des données nominatives : la double
-            authentification est <strong>obligatoire</strong> et ne peut pas être désactivée.
+            Votre compte administrateur donne accès à l&apos;ensemble des données nominatives et aux
+            opérations les plus destructrices : la double authentification est
+            <strong> obligatoire</strong> et ne peut pas être désactivée.
           </p>
         ) : (
           <form onSubmit={desactiver} style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
@@ -187,7 +189,25 @@ export function TwoFactorPanel({
         </div>
         <p style={{ fontSize: ".82rem", lineHeight: 1.6 }}>
           Dans votre application d&apos;authentification (Google Authenticator, FreeOTP, Aegis,
-          1Password…), ajoutez un compte en saisissant cette clé :
+          1Password…), ajoutez un compte en scannant ce code :
+        </p>
+        {/* Fond blanc explicite : en thème sombre, un QR code sur fond foncé
+            devient illisible pour la plupart des appareils photo. */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            background: "#fff",
+            padding: "1rem",
+            borderRadius: 8,
+            margin: ".9rem auto",
+            width: "fit-content",
+          }}
+        >
+          <QRCodeSVG value={uri} size={196} level="M" marginSize={0} />
+        </div>
+        <p style={{ fontSize: ".78rem", color: "var(--muted)", lineHeight: 1.6 }}>
+          Impossible de scanner ? Saisissez cette clé à la main :
         </p>
         <p
           style={{
@@ -243,9 +263,9 @@ export function TwoFactorPanel({
             marginBottom: ".9rem",
           }}
         >
-          Votre rôle donne accès à l&apos;ensemble des données nominatives, y compris celles de
-          mineurs. La double authentification est <strong>requise</strong> pour accéder à
-          l&apos;administration.
+          Votre compte administrateur donne accès à l&apos;ensemble des données nominatives, y
+          compris celles de mineurs. La double authentification est <strong>requise</strong> pour
+          accéder à l&apos;administration.
         </p>
       )}
       <p style={{ fontSize: ".82rem", lineHeight: 1.6, marginBottom: ".9rem" }}>
