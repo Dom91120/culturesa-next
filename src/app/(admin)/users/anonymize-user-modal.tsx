@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import { INPUT_CHROME } from "@/components/ui-styles";
 
 /**
  * Modale de confirmation d'anonymisation RGPD d'un compte (voie normale pour un
@@ -18,8 +20,11 @@ export function AnonymizeUserModal({
   email: string;
   pending: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (password: string) => void;
 }) {
+  // Ré-authentification avant un acte irréversible (constat BAC3).
+  const [password, setPassword] = useState("");
+
   return (
     <ModalOverlay onClose={onCancel} boxStyle={{ maxWidth: 460 }}>
       <div className="modal-title" style={{ color: "var(--warn)" }}>
@@ -53,20 +58,41 @@ export function AnonymizeUserModal({
       >
         ⚠️ Cette action est irréversible : le compte ne pourra plus être ré-identifié.
       </p>
-      <div className="btn-row">
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Annuler
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={onConfirm}
-          disabled={pending}
-          style={{ background: "var(--warn)", border: "none", color: "var(--text)" }}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onConfirm(password);
+        }}
+      >
+        <label
+          htmlFor="anon-pwd"
+          style={{ display: "block", fontSize: ".78rem", marginBottom: ".3rem" }}
         >
-          🗑️ Anonymiser
-        </button>
-      </div>
+          Saisissez votre mot de passe pour confirmer
+        </label>
+        <input
+          id="anon-pwd"
+          type="password"
+          required
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{ width: "100%", fontSize: ".85rem", padding: ".35rem .5rem", ...INPUT_CHROME }}
+        />
+        <div className="btn-row" style={{ marginTop: "1rem" }}>
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            Annuler
+          </button>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={pending || password.length === 0}
+            style={{ background: "var(--warn)", border: "none", color: "var(--text)" }}
+          >
+            🗑️ Anonymiser
+          </button>
+        </div>
+      </form>
     </ModalOverlay>
   );
 }

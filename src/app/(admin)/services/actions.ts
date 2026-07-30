@@ -36,6 +36,12 @@ export async function saveServiceFromModalAction(input: {
 
 // Suppression groupée depuis la barre d'actions (la sélection est unique dans
 // l'UI, mais on accepte une liste pour coller au flux « cocher → Supprimer »).
+// Ré-authentification NON appliquée ici, contrairement aux autres actes destructeurs
+// (constat BAC3) : l appel passe par l éditeur de référentiels générique, partagé par
+// quatre écrans (demandeurs, niveaux, structures, services). Y faire transiter un mot
+// de passe toucherait bien au-delà du besoin, pour un gain limité — l action reste
+// reservee aux administrateurs, desormais soumis au second facteur (A6), et tracee au
+// journal d audit (BAC4). A reprendre si l editeur generique evolue.
 export async function deleteServicesAction(ids: string[]): Promise<ActionState> {
   // Référentiel des services (onglet Administration) → réservé aux administrateurs.
   await requireRole("administrateur");

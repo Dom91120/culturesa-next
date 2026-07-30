@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { ConfirmPasswordModal } from "@/components/confirm-password-modal";
 import { type MailConfigInput, saveMailConfigAction, sendTestMailAction } from "./actions";
 
 type Driver = "smtp" | "mail" | "sendmail";
@@ -39,6 +40,9 @@ export function MessagingConfig({ config }: { config: MailConfig }) {
   const [testTo, setTestTo] = useState("");
   const [testPending, startTest] = useTransition();
   const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Confirmation par mot de passe de L'ADMINISTRATEUR avant d'écrire la config SMTP
+  // (constat BAC3) — à ne pas confondre avec le mot de passe SMTP du formulaire.
+  const [aConfirmer, setAConfirmer] = useState<MailConfigInput | null>(null);
 
   const smtpOn = driver === "smtp";
 
@@ -81,12 +85,20 @@ export function MessagingConfig({ config }: { config: MailConfig }) {
       username: username.trim(),
       password,
     };
+    setAConfirmer(payload);
+  }
+
+  function confirmer(motDePasseAdmin: string) {
+    const payload = aConfirmer;
+    if (!payload) return;
+    setError(null);
     startTransition(async () => {
-      const res = await saveMailConfigAction(payload);
+      const res = await saveMailConfigAction(payload, motDePasseAdmin);
       if (res && !res.ok) {
         setError(res.error ?? "Échec de l'enregistrement.");
         return;
       }
+      setAConfirmer(null);
       // Après save, on ne ré-affiche jamais le mot de passe.
       setPassword("");
       setSaved(true);
@@ -112,6 +124,22 @@ export function MessagingConfig({ config }: { config: MailConfig }) {
 
   return (
     <div className="panel" id="mail-config-panel">
+      {aConfirmer && (
+        <ConfirmPasswordModal
+          titre="⚙️ Modifier la configuration SMTP"
+          libelleAction="Enregistrer"
+          pending={pending}
+          erreur={error}
+          onCancel={() => setAConfirmer(null)}
+          onConfirm={confirmer}
+        >
+          <p style={{ color: "var(--muted)", fontSize: ".8rem" }}>
+            Le relais SMTP émet les courriels au nom de la Ville. En détourner la configuration
+            permettrait d&apos;envoyer des messages authentiquement signés par elle, et
+            d&apos;intercepter les liens de réinitialisation de mot de passe.
+          </p>
+        </ConfirmPasswordModal>
+      )}
       <div className="panel-title" style={{ justifyContent: "space-between" }}>
         <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
           <span className="dot" style={{ background: "var(--warn)" }} />

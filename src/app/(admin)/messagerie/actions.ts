@@ -8,6 +8,7 @@ import { setConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 import { sendMail } from "@/server/mailer";
+import { reauthOrError } from "@/server/reauth";
 import { encryptSecret } from "@/server/secret-crypto";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 
@@ -25,8 +26,15 @@ const mailConfigSchema = z.object({
 
 export type MailConfigInput = z.infer<typeof mailConfigSchema>;
 
-export async function saveMailConfigAction(input: MailConfigInput): Promise<ActionState> {
+export async function saveMailConfigAction(
+  input: MailConfigInput,
+  password: string,
+): Promise<ActionState> {
   await requireRole("administrateur");
+  // Détourner le relais SMTP de la Ville permettrait d'émettre des courriels
+  // authentiquement signés par elle (constat BAC3).
+  const refus = await reauthOrError(password);
+  if (refus) return refus;
   // Les identifiants SMTP sont un secret : toute modification laisse une trace,
   // sans jamais consigner la valeur elle-meme.
   await recordAudit(AUDIT.MAIL_CONFIG_CHANGED, { target: input.host || null });

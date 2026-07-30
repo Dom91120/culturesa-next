@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { ConfirmPasswordModal } from "@/components/confirm-password-modal";
 import { INPUT_CHROME } from "@/components/ui-styles";
 import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import {
@@ -110,6 +111,8 @@ export function InactivityScan({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [years, setYears] = useState(retentionYears);
+  const [cible, setCible] = useState<{ ids: string[]; libelle: string } | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
   const [grace, setGrace] = useState(graceDays);
   const [page, setPage] = useState(0);
 
@@ -193,34 +196,52 @@ export function InactivityScan({
 
   function anonymizeAll() {
     if (canAnonymizeCount === 0) return;
-    if (
-      !confirm(
-        `Effacer définitivement (anonymiser) ${canAnonymizeCount} ${countWord(canAnonymizeCount)} inactif(s) dont le préavis a été envoyé il y a plus de ${grace} jours ? Cette opération est irréversible. Les réservations sont conservées.`,
-      )
-    )
-      return;
-    const ids = canAnonymizeIds.slice();
-    startTransition(async () => {
-      await anonymizeInactiveAction(ids);
-      router.refresh();
+    setCible({
+      ids: canAnonymizeIds.slice(),
+      libelle: `${canAnonymizeCount} ${countWord(canAnonymizeCount)} inactif(s)`,
     });
   }
 
   function anonymizeOne(id: string, label: string) {
-    if (
-      !confirm(
-        `Effacer définitivement (anonymiser) le compte de ${label} ? Cette opération est irréversible. Les réservations sont conservées.`,
-      )
-    )
-      return;
+    setCible({ ids: [id], libelle: `le compte de ${label}` });
+  }
+
+  // Ré-authentification avant une anonymisation IRRÉVERSIBLE, et de masse dans le
+  // premier cas (constat BAC3).
+  function confirmer(password: string) {
+    if (!cible) return;
+    setErreur(null);
     startTransition(async () => {
-      await anonymizeInactiveAction([id]);
+      const res = await anonymizeInactiveAction(cible.ids, password);
+      if (res && !res.ok) {
+        setErreur(res.error ?? "Échec de l'anonymisation.");
+        return;
+      }
+      setCible(null);
       router.refresh();
     });
   }
 
   return (
     <div>
+      {cible && (
+        <ConfirmPasswordModal
+          titre="🗑️ Anonymiser"
+          libelleAction="Anonymiser"
+          pending={pending}
+          erreur={erreur}
+          onCancel={() => setCible(null)}
+          onConfirm={confirmer}
+        >
+          <p style={{ marginBottom: ".5rem" }}>
+            Vous êtes sur le point d&apos;anonymiser <strong>{cible.libelle}</strong>.
+          </p>
+          <p style={{ color: "var(--muted)", fontSize: ".8rem" }}>
+            L&apos;opération est <strong>irréversible</strong> : ces comptes ne pourront plus être
+            ré-identifiés. Les réservations sont conservées, rattachées à un compte anonyme.
+          </p>
+        </ConfirmPasswordModal>
+      )}
       <div className="panel-title" style={{ padding: ".3rem 0" }}>
         <span className="dot" style={{ background: "var(--warn)" }} />
         Scan d&apos;inactivité

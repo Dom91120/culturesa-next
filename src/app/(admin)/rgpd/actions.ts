@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { setConfig } from "@/server/config";
 import { getSession, requireRole } from "@/server/guards";
+import { reauthOrError } from "@/server/reauth";
 import { anonymizeInactive, markDeletionNotice } from "@/server/services/rgpd";
 
 /** État enrichi d'un compteur (comme `imported` dans configuration/actions.ts). */
@@ -43,8 +44,14 @@ export async function sendInactivityNoticesAction(ids: string[]): Promise<CountR
 }
 
 /** Anonymise les comptes ciblés réellement éligibles (préavis ≥ 30 jours). */
-export async function anonymizeInactiveAction(ids: string[]): Promise<CountResult> {
+export async function anonymizeInactiveAction(
+  ids: string[],
+  password: string,
+): Promise<CountResult> {
   await requireRole("administrateur");
+  // Anonymisation EN MASSE et irréversible (constat BAC3).
+  const refus = await reauthOrError(password);
+  if (refus) return { ok: false, error: refus.error };
   if (!Array.isArray(ids) || ids.length === 0) return { ok: false, error: "Aucun compte cible." };
   const session = await getSession();
   const actorId = (session?.user as { id?: string } | undefined)?.id ?? null;

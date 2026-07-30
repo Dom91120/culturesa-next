@@ -15,6 +15,7 @@ import { AUDIT, recordAudit } from "@/server/audit";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { getSession, requireRole } from "@/server/guards";
+import { reauthOrError } from "@/server/reauth";
 import { anonymizeUser, hardDeleteEmptyUser, RgpdError } from "@/server/services/rgpd";
 
 const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
@@ -116,7 +117,10 @@ function strongRandomPassword(): string {
   return `${Buffer.from(bytes).toString("base64url")}Aa1!`;
 }
 
-export async function updateUserAction(input: UpdateUserInput): Promise<ActionState> {
+export async function updateUserAction(
+  input: UpdateUserInput,
+  password?: string,
+): Promise<ActionState> {
   await requireRole("administrateur");
   const parsed = updateUserSchema.safeParse(input);
   if (!parsed.success)
@@ -131,6 +135,15 @@ export async function updateUserAction(input: UpdateUserInput): Promise<ActionSt
     where: { id: d.id },
     select: { role: true, email: true },
   });
+
+  // Ré-authentification exigée UNIQUEMENT si le rôle change (constat BAC3) :
+  // c'est le vecteur d'élévation de privilèges le plus direct. Corriger un
+  // numéro de téléphone n'a pas à réclamer un mot de passe — une confirmation
+  // demandée sans motif finit saisie machinalement, et ne protège plus rien.
+  if (before && before.role !== d.role) {
+    const refus = await reauthOrError(password);
+    if (refus) return refus;
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -237,8 +250,11 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionSt
   return { ok: true };
 }
 
-export async function anonymizeUserAction(id: string): Promise<ActionState> {
+export async function anonymizeUserAction(id: string, password: string): Promise<ActionState> {
   await requireRole("administrateur");
+  // Anonymisation IRRÉVERSIBLE (constat BAC3).
+  const refus = await reauthOrError(password);
+  if (refus) return refus;
   const parsed = z.string().min(1).safeParse(id);
   if (!parsed.success) return { ok: false, error: "Compte introuvable" };
   const cible = await prisma.user.findUnique({
@@ -263,6 +279,9 @@ export async function anonymizeUserAction(id: string): Promise<ActionState> {
 }
 
 /** Suppression physique d'un compte VIDE (0 réservation) — cf. `hardDeleteEmptyUser`. */
+// Sans ré-authentification : ne vise que les comptes SANS réservation (test, spam
+// d inscription). Exiger un mot de passe pour un acte à si faible portée diluerait
+// la confirmation là où elle compte vraiment (constat BAC3).
 export async function deleteEmptyUserAction(id: string): Promise<ActionState> {
   await requireRole("administrateur");
   const parsed = z.string().min(1).safeParse(id);
@@ -330,8 +349,12 @@ export async function sendPasswordResetAction(email: string): Promise<ActionStat
  * C'est la raison d'être des codes de secours, et pourquoi l'écran d'enrôlement
  * insiste pour qu'ils soient conservés AILLEURS que sur le téléphone.
  */
-export async function resetTwoFactorAction(id: string): Promise<ActionState> {
+export async function resetTwoFactorAction(id: string, password: string): Promise<ActionState> {
   await requireRole("administrateur");
+  // Retirer un second facteur ABAISSE la protection d'un compte privilégié : c'est
+  // précisément le geste qu'un attaquant tenterait en premier (constat BAC3).
+  const refus = await reauthOrError(password);
+  if (refus) return refus;
   const parsed = z.string().min(1).safeParse(id);
   if (!parsed.success) return { ok: false, error: "Compte introuvable" };
 

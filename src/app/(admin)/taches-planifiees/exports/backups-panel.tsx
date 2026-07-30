@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
+import { ConfirmPasswordModal } from "@/components/confirm-password-modal";
 import { INPUT_CHROME } from "@/components/ui-styles";
 import { DATETIME_FMT_FR as dtFmt } from "@/lib/format";
 import { createBackupAction, deleteBackupAction, restoreBackupAction } from "./actions";
@@ -41,6 +42,9 @@ export function BackupsPanel({
   const [info, setInfo] = useState<string | null>(null);
   const [restoreName, setRestoreName] = useState("");
   const [uploading, setUploading] = useState(false);
+  // Confirmation par mot de passe avant restauration (constat BAC3) : remplacer
+  // la base entière ne doit pas tenir à un cookie de session.
+  const [confirmRestore, setConfirmRestore] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function refresh() {
@@ -102,281 +106,302 @@ export function BackupsPanel({
     }
   }
 
-  function restore() {
+  function restore(password: string) {
     if (!restoreName) return;
     setError(null);
     setInfo(null);
-    if (
-      !confirm(
-        `RESTAURER la base à partir de « ${restoreName} » ?\n\n` +
-          "TOUTES les données actuelles (réservations, comptes, configuration…) seront " +
-          "remplacées par le contenu de ce dump. Cette opération est irréversible.\n\n" +
-          "Les sessions ouvertes pourront être déconnectées (reconnexion nécessaire).",
-      )
-    )
-      return;
     startTransition(async () => {
-      const res = await restoreBackupAction(restoreName);
+      const res = await restoreBackupAction(restoreName, password);
       if (res && !res.ok) {
         setError(res.error ?? "Échec de la restauration.");
         return;
       }
+      setConfirmRestore(false);
       setInfo("Base restaurée ✓ — rechargement…");
-      // Recharge complet : tout l'état client (données, session) peut avoir changé.
+      // Rechargement complet : tout l'état client (données, session) peut avoir changé.
       window.location.reload();
     });
   }
 
   const btnGhostSmall = { padding: ".25rem .7rem", fontSize: ".72rem" } as const;
 
-  return (
-    <div className="panel">
-      {/* ── Exports ── */}
-      <div className="panel-title" style={{ padding: ".3rem 0" }}>
-        <span className="dot" style={{ background: "var(--warn)" }} />
-        Exports de la base
-      </div>
-      <p
-        style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          marginBottom: "1rem",
-          lineHeight: 1.5,
-        }}
-      >
-        Dumps PostgreSQL complets (schéma + données), restaurables tels quels. Un export automatique
-        est créé selon la planification configurée dans le sous-onglet CRON (défaut : chaque nuit à
-        02h00 ; rotation : les 7 plus récents) ; les exports manuels et téléversés ne sont pas
-        soumis à la rotation.
+  const modaleRestauration = confirmRestore ? (
+    <ConfirmPasswordModal
+      titre="♻️ Restaurer la base"
+      libelleAction="Restaurer"
+      pending={pending}
+      erreur={error}
+      onCancel={() => setConfirmRestore(false)}
+      onConfirm={restore}
+    >
+      <p style={{ marginBottom: ".5rem" }}>
+        La base va être remplacée par le contenu de{" "}
+        <strong style={{ fontFamily: "monospace" }}>{restoreName}</strong>.
       </p>
+      <p style={{ color: "var(--muted)", fontSize: ".8rem" }}>
+        <strong>Toutes</strong> les données actuelles — réservations, comptes, configuration —
+        seront écrasées. L&apos;opération est irréversible, et les sessions ouvertes devront se
+        reconnecter.
+      </p>
+    </ConfirmPasswordModal>
+  ) : null;
 
-      {!toolsAvailable && (
+  return (
+    <>
+      {modaleRestauration}
+      <div className="panel">
+        {/* ── Exports ── */}
+        <div className="panel-title" style={{ padding: ".3rem 0" }}>
+          <span className="dot" style={{ background: "var(--warn)" }} />
+          Exports de la base
+        </div>
         <p
           style={{
             fontSize: ".78rem",
-            color: "var(--danger)",
+            color: "var(--muted)",
+            marginBottom: "1rem",
+            lineHeight: 1.5,
+          }}
+        >
+          Dumps PostgreSQL complets (schéma + données), restaurables tels quels. Un export
+          automatique est créé selon la planification configurée dans le sous-onglet CRON (défaut :
+          chaque nuit à 02h00 ; rotation : les 7 plus récents) ; les exports manuels et téléversés
+          ne sont pas soumis à la rotation.
+        </p>
+
+        {!toolsAvailable && (
+          <p
+            style={{
+              fontSize: ".78rem",
+              color: "var(--danger)",
+              marginBottom: ".75rem",
+              lineHeight: 1.5,
+            }}
+          >
+            ⚠️ Outils PostgreSQL indisponibles (ni pg_dump/psql locaux, ni conteneur Docker
+            joignable) : la création d'export et la restauration sont désactivées. Le téléchargement
+            des fichiers existants reste possible.
+          </p>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: ".4rem",
+            flexWrap: "wrap",
+            marginBottom: ".75rem",
+          }}
+        >
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={refresh}
+            disabled={pending}
+            style={btnGhostSmall}
+          >
+            🔄 Rafraîchir
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={createNow}
+            disabled={pending || !toolsAvailable}
+            style={{
+              ...btnGhostSmall,
+              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+              color: "var(--accent)",
+              opacity: toolsAvailable ? 1 : 0.4,
+            }}
+          >
+            📦 Créer un export maintenant
+          </button>
+        </div>
+
+        <div className="admin-table-wrap">
+          <table className="admin-table zebra">
+            <thead>
+              <tr>
+                <th style={{ textAlign: "center" }}>Fichier</th>
+                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Type</th>
+                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Date</th>
+                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Taille</th>
+                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((f) => {
+                const meta = KIND_META[f.kind];
+                return (
+                  <tr key={f.name}>
+                    <td style={{ fontFamily: "monospace", fontSize: ".72rem" }}>
+                      {f.name}{" "}
+                      {/* Un dump en clair reste restaurable, mais expose des données
+                        nominatives de mineurs : on le signale sans ambiguïté. */}
+                      <span
+                        title={
+                          f.encrypted
+                            ? "Chiffré au repos (AES-256-GCM)"
+                            : "EN CLAIR — dump antérieur au chiffrement. Recréez-en un puis supprimez celui-ci."
+                        }
+                        style={{ cursor: "help" }}
+                      >
+                        {f.encrypted ? "🔒" : "⚠️"}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <span style={{ color: meta.color, fontWeight: 600, fontSize: ".7rem" }}>
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td
+                      style={{ textAlign: "center", whiteSpace: "nowrap", color: "var(--muted)" }}
+                    >
+                      {dtFmt.format(new Date(f.mtime))}
+                    </td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap", color: "var(--muted)" }}>
+                      {fmtSize(f.size)}
+                    </td>
+                    <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                      <a
+                        className="btn btn-ghost"
+                        href={`/api/backups/download?file=${encodeURIComponent(f.name)}`}
+                        style={{
+                          padding: ".05rem .3rem",
+                          fontSize: ".72rem",
+                          textDecoration: "none",
+                          marginRight: ".3rem",
+                        }}
+                        title="Télécharger ce dump"
+                      >
+                        ⬇️
+                      </a>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => deleteOne(f.name)}
+                        disabled={pending}
+                        style={{
+                          padding: ".05rem .3rem",
+                          fontSize: ".72rem",
+                          borderColor: "rgba(224,107,107,.4)",
+                          color: "var(--danger)",
+                        }}
+                        title="Supprimer ce dump"
+                      >
+                        🗑️
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    style={{
+                      textAlign: "center",
+                      padding: "1.5rem",
+                      color: "var(--muted)",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Aucun export pour l'instant.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ marginTop: ".5rem", fontSize: ".7rem", color: "var(--muted)" }}>
+          {rows.length} export{rows.length > 1 ? "s" : ""}
+        </div>
+
+        {/* ── Restauration ── */}
+        <div className="panel-title" style={{ padding: ".3rem 0", marginTop: "2rem" }}>
+          <span className="dot" style={{ background: "var(--danger)" }} />
+          Restaurer à partir d'un dump
+        </div>
+        <p
+          style={{
+            fontSize: ".78rem",
+            color: "var(--muted)",
             marginBottom: ".75rem",
             lineHeight: 1.5,
           }}
         >
-          ⚠️ Outils PostgreSQL indisponibles (ni pg_dump/psql locaux, ni conteneur Docker joignable)
-          : la création d'export et la restauration sont désactivées. Le téléchargement des fichiers
-          existants reste possible.
+          Remplace <strong>l'intégralité</strong> de la base par le contenu du dump sélectionné
+          (tout-ou-rien : en cas d'erreur, la base actuelle est conservée). Choisissez un export de
+          la liste ci-dessus ou téléversez un fichier <code>.sql</code>, <code>.sql.gz</code> ou{" "}
+          <code>.sql.gz.enc</code>. Tout dump téléversé est chiffré avant d&apos;être stocké.
         </p>
-      )}
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".4rem",
-          flexWrap: "wrap",
-          marginBottom: ".75rem",
-        }}
-      >
-        <span style={{ flex: 1 }} />
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={refresh}
-          disabled={pending}
-          style={btnGhostSmall}
-        >
-          🔄 Rafraîchir
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={createNow}
-          disabled={pending || !toolsAvailable}
-          style={{
-            ...btnGhostSmall,
-            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-            color: "var(--accent)",
-            opacity: toolsAvailable ? 1 : 0.4,
-          }}
-        >
-          📦 Créer un export maintenant
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
+          <select
+            value={restoreName}
+            onChange={(e) => setRestoreName(e.target.value)}
+            disabled={pending || uploading}
+            style={{
+              fontSize: ".78rem",
+              padding: ".3rem .5rem",
+              ...INPUT_CHROME,
+              minWidth: 280,
+            }}
+          >
+            <option value="">— Choisir un dump —</option>
+            {rows.map((f) => (
+              <option key={f.name} value={f.name}>
+                {f.name} ({fmtSize(f.size)})
+              </option>
+            ))}
+          </select>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".sql,.gz,.enc"
+            disabled={pending || uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void upload(file);
+            }}
+            style={{ fontSize: ".72rem", color: "var(--muted)", maxWidth: 260 }}
+          />
+
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => {
+              setError(null);
+              setConfirmRestore(true);
+            }}
+            disabled={pending || uploading || !restoreName || !toolsAvailable}
+            style={{
+              padding: ".3rem .9rem",
+              fontSize: ".75rem",
+              borderColor: "rgba(224,107,107,.4)",
+              color: "var(--danger)",
+              opacity: restoreName && toolsAvailable ? 1 : 0.4,
+            }}
+          >
+            ♻️ Restaurer la base
+          </button>
+        </div>
+
+        {(error || info || uploading) && (
+          <p
+            style={{
+              marginTop: ".75rem",
+              fontSize: ".78rem",
+              color: error ? "var(--danger)" : "var(--accent)",
+            }}
+          >
+            {error ?? (uploading ? "Téléversement…" : info)}
+          </p>
+        )}
       </div>
-
-      <div className="admin-table-wrap">
-        <table className="admin-table zebra">
-          <thead>
-            <tr>
-              <th style={{ textAlign: "center" }}>Fichier</th>
-              <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Type</th>
-              <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Date</th>
-              <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Taille</th>
-              <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((f) => {
-              const meta = KIND_META[f.kind];
-              return (
-                <tr key={f.name}>
-                  <td style={{ fontFamily: "monospace", fontSize: ".72rem" }}>
-                    {f.name}{" "}
-                    {/* Un dump en clair reste restaurable, mais expose des données
-                        nominatives de mineurs : on le signale sans ambiguïté. */}
-                    <span
-                      title={
-                        f.encrypted
-                          ? "Chiffré au repos (AES-256-GCM)"
-                          : "EN CLAIR — dump antérieur au chiffrement. Recréez-en un puis supprimez celui-ci."
-                      }
-                      style={{ cursor: "help" }}
-                    >
-                      {f.encrypted ? "🔒" : "⚠️"}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    <span style={{ color: meta.color, fontWeight: 600, fontSize: ".7rem" }}>
-                      {meta.label}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "center", whiteSpace: "nowrap", color: "var(--muted)" }}>
-                    {dtFmt.format(new Date(f.mtime))}
-                  </td>
-                  <td style={{ textAlign: "right", whiteSpace: "nowrap", color: "var(--muted)" }}>
-                    {fmtSize(f.size)}
-                  </td>
-                  <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                    <a
-                      className="btn btn-ghost"
-                      href={`/api/backups/download?file=${encodeURIComponent(f.name)}`}
-                      style={{
-                        padding: ".05rem .3rem",
-                        fontSize: ".72rem",
-                        textDecoration: "none",
-                        marginRight: ".3rem",
-                      }}
-                      title="Télécharger ce dump"
-                    >
-                      ⬇️
-                    </a>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => deleteOne(f.name)}
-                      disabled={pending}
-                      style={{
-                        padding: ".05rem .3rem",
-                        fontSize: ".72rem",
-                        borderColor: "rgba(224,107,107,.4)",
-                        color: "var(--danger)",
-                      }}
-                      title="Supprimer ce dump"
-                    >
-                      🗑️
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td
-                  colSpan={5}
-                  style={{
-                    textAlign: "center",
-                    padding: "1.5rem",
-                    color: "var(--muted)",
-                    fontStyle: "italic",
-                  }}
-                >
-                  Aucun export pour l'instant.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ marginTop: ".5rem", fontSize: ".7rem", color: "var(--muted)" }}>
-        {rows.length} export{rows.length > 1 ? "s" : ""}
-      </div>
-
-      {/* ── Restauration ── */}
-      <div className="panel-title" style={{ padding: ".3rem 0", marginTop: "2rem" }}>
-        <span className="dot" style={{ background: "var(--danger)" }} />
-        Restaurer à partir d'un dump
-      </div>
-      <p
-        style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          marginBottom: ".75rem",
-          lineHeight: 1.5,
-        }}
-      >
-        Remplace <strong>l'intégralité</strong> de la base par le contenu du dump sélectionné
-        (tout-ou-rien : en cas d'erreur, la base actuelle est conservée). Choisissez un export de la
-        liste ci-dessus ou téléversez un fichier <code>.sql</code>, <code>.sql.gz</code> ou{" "}
-        <code>.sql.gz.enc</code>. Tout dump téléversé est chiffré avant d&apos;être stocké.
-      </p>
-
-      <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
-        <select
-          value={restoreName}
-          onChange={(e) => setRestoreName(e.target.value)}
-          disabled={pending || uploading}
-          style={{
-            fontSize: ".78rem",
-            padding: ".3rem .5rem",
-            ...INPUT_CHROME,
-            minWidth: 280,
-          }}
-        >
-          <option value="">— Choisir un dump —</option>
-          {rows.map((f) => (
-            <option key={f.name} value={f.name}>
-              {f.name} ({fmtSize(f.size)})
-            </option>
-          ))}
-        </select>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".sql,.gz,.enc"
-          disabled={pending || uploading}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void upload(file);
-          }}
-          style={{ fontSize: ".72rem", color: "var(--muted)", maxWidth: 260 }}
-        />
-
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={restore}
-          disabled={pending || uploading || !restoreName || !toolsAvailable}
-          style={{
-            padding: ".3rem .9rem",
-            fontSize: ".75rem",
-            borderColor: "rgba(224,107,107,.4)",
-            color: "var(--danger)",
-            opacity: restoreName && toolsAvailable ? 1 : 0.4,
-          }}
-        >
-          ♻️ Restaurer la base
-        </button>
-      </div>
-
-      {(error || info || uploading) && (
-        <p
-          style={{
-            marginTop: ".75rem",
-            fontSize: ".78rem",
-            color: error ? "var(--danger)" : "var(--accent)",
-          }}
-        >
-          {error ?? (uploading ? "Téléversement…" : info)}
-        </p>
-      )}
-    </div>
+    </>
   );
 }

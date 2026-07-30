@@ -191,11 +191,11 @@ export function UsersTable({
     setModal({ mode: "edit", user: selected });
   }
 
-  function confirmAnonymize() {
+  function confirmAnonymize(password: string) {
     if (!anonymizeTarget) return;
     const id = anonymizeTarget.id;
     startTransition(async () => {
-      const res = await anonymizeUserAction(id);
+      const res = await anonymizeUserAction(id, password);
       if (!res?.ok) alert(res?.error ?? "Échec de l'anonymisation.");
       setAnonymizeTarget(null);
       if (selectedId === id) setSelectedId(null);
