@@ -32,10 +32,51 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Bouton d'action (CTA) thématisé pour les e-mails — injecté en variable brute `{{bouton}}`. */
+/**
+ * Assainit une URL destinée à un attribut `href` (constat S4).
+ *
+ * Le remplacement du seul guillemet (`href.replace(/"/g, "%22")`) empêchait de sortir
+ * de l'attribut, mais laissait passer **le schéma** : `javascript:…` restait intact.
+ * Or fermer l'échappement sans fermer le schéma protège contre la moitié du problème
+ * en donnant le sentiment de l'avoir traité en entier.
+ *
+ * Liste BLANCHE de schémas, jamais noire : une liste noire oublie toujours quelque
+ * chose (`data:`, `vbscript:`, `blob:`, les variantes encodées ou espacées). Les
+ * chemins relatifs et les ancres restent admis — l'aperçu de l'éditeur de gabarits
+ * passe `"#"`, et le refuser casserait un écran d'administration sans rien protéger.
+ *
+ * ── Pourquoi neutraliser plutôt que lever ──
+ * Cette fonction sert dans le chemin d'ENVOI des e-mails de compte : réinitialisation
+ * de mot de passe, confirmation d'adresse. Y lever une exception ferait échouer
+ * l'envoi — donc priverait un usager de la récupération de son compte à cause d'une
+ * URL mal configurée. Le lien est donc rendu inerte, et l'anomalie journalisée : le
+ * message part, le bouton ne mène nulle part, et la trace dit pourquoi.
+ */
+const SCHEMAS_AUTORISES = ["http:", "https:", "mailto:"];
+
+export function safeHref(href: string): string {
+  const v = (href ?? "").trim();
+  // Relatif, ancre ou requête : aucun schéma, donc aucun schéma dangereux.
+  if (v === "" || v.startsWith("/") || v.startsWith("#") || v.startsWith("?")) return v || "#";
+  try {
+    // `new URL` normalise les ruses d'écriture (casse, espaces, retours à la ligne
+    // insérés dans « java\nscript: ») qu'un test par expression régulière manquerait.
+    if (SCHEMAS_AUTORISES.includes(new URL(v).protocol)) return v;
+  } catch {
+    // Non analysable → traité comme un schéma inconnu.
+  }
+  console.error(`[email-theme] URL au schéma non autorisé, lien neutralisé : ${v.slice(0, 80)}`);
+  return "#";
+}
+
+/**
+ * Bouton d'action (CTA) thématisé pour les e-mails — injecté en variable brute
+ * `{{bouton}}`. `label` est ÉCHAPPÉ : aucun appelant ne fournit aujourd'hui de donnée
+ * d'usager, mais la fonction est exportée depuis un module partagé et se présente
+ * comme réutilisable — le prochain appelant héritait du piège (constat S4).
+ */
 export function emailButton(href: string, label: string): string {
-  const safe = href.replace(/"/g, "%22");
-  return `<a href="${safe}" style="display:inline-block;background:#1e6b47;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">${label}</a>`;
+  return `<a href="${escapeHtml(safeHref(href))}" style="display:inline-block;background:#1e6b47;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(label)}</a>`;
 }
 
 export function wrapEmailHtml(
@@ -45,9 +86,18 @@ export function wrapEmailHtml(
   const t = THEME;
   // « Portail CultuRésa » : lien vers l'application si l'URL est configurée (Administration
   // › Configuration), sinon simple texte. Couleur forcée (le pied est sur fond vert foncé).
+  // Même primitive que `emailButton` (constat S4) : ce lien portait le défaut
+  // à l'identique, sans être cité par le constat. Sa source est pourtant plus
+  // exposée — l'URL vient de la configuration éditable en administration, et
+  // ce lien figure dans TOUS les e-mails, pas seulement ceux qui portent un bouton.
+  //
+  // `appUrlSchema` la valide déjà à la saisie ; on ne s'en remet pas à cette
+  // validation-là. Une valeur peut entrer autrement (restauration d'un dump,
+  // écriture directe en base), et une primitive de rendu qui suppose son entrée
+  // déjà propre est exactement ce que ce constat reproche.
   const appUrl = opts?.appUrl?.trim();
   const portail = appUrl
-    ? `<a href="${appUrl.replace(/"/g, "%22")}" style="color:#ffffff;text-decoration:underline;">Portail CultuRésa</a>`
+    ? `<a href="${escapeHtml(safeHref(appUrl))}" style="color:#ffffff;text-decoration:underline;">Portail CultuRésa</a>`
     : "Portail CultuRésa";
   // Source du logo : par défaut la pièce jointe inline CID (e-mails réels) ; l'aperçu
   // de l'éditeur passe l'URL publique "/email-logo.png".
