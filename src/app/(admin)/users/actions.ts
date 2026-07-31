@@ -16,7 +16,12 @@ import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { getSession, requireRole } from "@/server/guards";
 import { reauthOrError } from "@/server/reauth";
-import { anonymizeUser, hardDeleteEmptyUser, RgpdError } from "@/server/services/rgpd";
+import {
+  anonymizeUser,
+  assertNotLastActiveAdmin,
+  hardDeleteEmptyUser,
+  RgpdError,
+} from "@/server/services/rgpd";
 
 const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
 
@@ -147,6 +152,20 @@ export async function updateUserAction(
 
   try {
     await prisma.$transaction(async (tx) => {
+      // Ne pas retirer le DERNIER administrateur (constat BAC6). La suppression et
+      // l'anonymisation étaient protégées ; le changement de rôle ne l'était pas —
+      // or c'est le chemin le plus banal, celui d'un formulaire ordinaire.
+      //
+      // Uniquement quand le rôle QUITTE « administrateur » : appelé sur une simple
+      // correction de fiche, le garde bloquerait le dernier administrateur qui met
+      // à jour son propre numéro de téléphone.
+      //
+      // DANS la transaction, avant l'écriture : hors transaction, le contrôle et la
+      // mise à jour pourraient être séparés par une autre opération.
+      if (before?.role === "administrateur" && d.role !== "administrateur") {
+        await assertNotLastActiveAdmin(tx, d.id);
+      }
+
       await tx.user.update({
         where: { id: d.id },
         data: {
@@ -166,6 +185,10 @@ export async function updateUserAction(
       await syncManagedServices(tx, d.id, isManager ? d.services : []);
     });
   } catch (e) {
+    // Le refus du garde-fou porte un message UTILISABLE (« c'est le dernier
+    // administrateur actif »). Le noyer dans « Échec de la mise à jour » laisserait
+    // l'administrateur devant un échec inexplicable, qu'il retenterait.
+    if (e instanceof RgpdError) return { ok: false, error: e.message };
     console.error("[users] updateUserAction", e);
     return { ok: false, error: "Échec de la mise à jour du compte." };
   }

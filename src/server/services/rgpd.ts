@@ -25,6 +25,30 @@ export class RgpdError extends Error {}
  * d'anonymiser/supprimer le dernier admin, ce qui verrouillerait tout accès admin.
  * No-op si l'usager n'est pas administrateur (ou déjà anonymisé / introuvable).
  */
+/**
+ * Verrou consultatif sérialisant les opérations qui peuvent retirer un
+ * administrateur (constat BAC6).
+ *
+ * « Compter les autres administrateurs puis agir » n'est pas atomique. En isolation
+ * READ COMMITTED — le défaut de PostgreSQL —, deux administrateurs se rétrogradant
+ * l'un l'autre au même instant peuvent chacun compter un autre administrateur encore
+ * en place (celui que l'autre transaction n'a pas encore validé), passer tous deux le
+ * contrôle et **n'en laisser aucun**. Le garde-fou produirait alors exactement le
+ * verrouillage qu'il existe pour empêcher.
+ *
+ * ⚠️ **Entrelacement RAISONNÉ, non reproduit.** Une tentative de le provoquer — deux
+ * transactions concurrentes rétrogradant chacune l'un des deux derniers
+ * administrateurs — a donné le même résultat avec et sans ce verrou : les deux
+ * transactions ne se sont pas chevauchées. Le verrou est donc conservé pour la
+ * propriété qu'il garantit, non pour un défaut observé. Il coûte un aller-retour sur
+ * des opérations rares (changement de rôle, anonymisation, suppression) ; le retirer
+ * demanderait de démontrer que l'entrelacement est impossible, ce qui est plus
+ * difficile que de le garder.
+ *
+ * Clé arbitraire mais FIXE — c'est elle, et non son sens, qui fait la sérialisation.
+ */
+const VERROU_DERNIER_ADMIN = 8471n;
+
 export async function assertNotLastActiveAdmin(
   db: Prisma.TransactionClient,
   userId: string,
@@ -33,7 +57,14 @@ export async function assertNotLastActiveAdmin(
     where: { id: userId },
     select: { role: true, anonymizedAt: true },
   });
+  // Ne concerne qu'un administrateur actif : sur tout autre compte, ce contrôle
+  // n'a pas lieu d'être — et bloquerait la modification d'une fiche ordinaire.
   if (!u || u.anonymizedAt || u.role !== "administrateur") return;
+
+  // Pris APRÈS le filtre ci-dessus : inutile de sérialiser les mises à jour qui ne
+  // touchent aucun administrateur, c'est-à-dire l'immense majorité.
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(${VERROU_DERNIER_ADMIN})`;
+
   const others = await db.user.count({
     where: { role: "administrateur", anonymizedAt: null, id: { not: userId } },
   });
