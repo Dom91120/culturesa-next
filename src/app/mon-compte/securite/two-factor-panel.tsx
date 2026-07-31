@@ -146,11 +146,20 @@ export function TwoFactorPanel({
           <span className="dot" />
           Codes de secours — à conserver maintenant
         </div>
+        {/* Le conseil « rangez-les dans votre gestionnaire de mots de passe » a été
+            retiré : si celui-ci contient déjà le mot de passe du compte, les DEUX
+            facteurs y vivent ensemble, et une seule compromission les emporte tous
+            les deux. Le second facteur ne protège plus rien. Même raisonnement que
+            pour le téléphone, une couche plus loin. */}
         <p style={{ fontSize: ".82rem", lineHeight: 1.6 }}>
           <strong>Ces codes ne seront plus jamais affichés.</strong> Ils sont le seul moyen de vous
-          connecter si vous perdez votre téléphone. Imprimez-les ou rangez-les dans votre
-          gestionnaire de mots de passe — pas sur le téléphone qui porte l&apos;application
-          d&apos;authentification, sans quoi vous perdriez les deux ensemble.
+          connecter si vous perdez votre téléphone. Imprimez-les et rangez-les en lieu sûr.
+        </p>
+        <p style={{ fontSize: ".82rem", lineHeight: 1.6, color: "var(--warn)" }}>
+          Ni sur le téléphone qui porte l&apos;application d&apos;authentification — vous perdriez
+          les deux ensemble —{" "}
+          <strong>ni dans le gestionnaire où se trouve votre mot de passe</strong>, sans quoi une
+          seule intrusion suffirait à obtenir les deux facteurs.
         </p>
         <ul
           style={{

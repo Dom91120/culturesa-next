@@ -211,6 +211,101 @@ ADMIN_PASSWORD='…' docker compose --profile init run --rm init
 
 ---
 
+## Reprise en main si les administrateurs sont verrouillés
+
+> Constats **A6** (second facteur) et **BAC6** (dernier administrateur).
+
+Depuis A6, les administrateurs doivent disposer d'un second facteur. C'est un gain net
+contre l'hameçonnage et le vol de session — mais cela crée un scénario où **l'application
+devient inaccessible sans qu'aucune faille ne soit exploitée** : téléphone perdu, volé ou
+remplacé.
+
+Les trois recours ci-dessous vont du plus simple au plus lourd. **Le premier suffit dans
+la quasi-totalité des cas**, à condition d'avoir été préparé à l'avance.
+
+### 1. Codes de secours — le recours normal
+
+À l'enrôlement, l'application affiche **10 codes à usage unique**, une seule fois. Chacun
+remplace le code du téléphone. Ils ne sont jamais réaffichés : ils ne sont pas stockés en
+clair.
+
+**Ils ne servent que s'ils sont conservés hors de l'appareil qui porte l'application
+d'authentification.** Les garder sur le téléphone revient à n'avoir aucun recours : sa
+perte emporte les deux.
+
+**Compte de secours désigné : `informatique@chatillon92.fr`** *(décision du 2026-07-31)*
+
+Ce compte tient le rôle de « bris de glace » : il permet de reprendre la main quand les
+autres administrateurs sont bloqués. **Il n'est pas exempté du second facteur** — sa
+protection tient à ce que ses codes soient conservés physiquement.
+
+```
+À faire une fois, et à refaire après toute réinitialisation du second facteur :
+  1. S'enrôler normalement (Mon compte › Sécurité).
+  2. IMPRIMER les 10 codes de secours.
+  3. Les ranger dans un coffre ou une armoire fermée, hors du bureau où
+     se trouve le téléphone.
+  4. Noter la date : les codes deviennent caducs si le second facteur est
+     réinitialisé (l'enrôlement suivant en génère 10 nouveaux).
+```
+
+> ⚠️ **Ni dans un gestionnaire de mots de passe, ni dans un courriel, ni dans un fichier
+> partagé.** Ces trois emplacements sont accessibles à quiconque prend le compte — c'est
+> précisément l'attaquant contre lequel le second facteur existe. Le papier dans un coffre
+> n'est pas un archaïsme : c'est le seul support qu'une compromission informatique
+> n'atteint pas.
+
+Un code utilisé est consommé. Après usage, se réenrôler pour régénérer les dix.
+
+### 2. Réinitialisation par un autre administrateur
+
+Si **un** administrateur peut encore se connecter, il réinitialise le second facteur d'un
+autre depuis **Administration › Usagers** : sélectionner le compte, puis
+« 🔑 Réinitialiser la double authentification ». La personne se réenrôle à sa prochaine
+visite.
+
+L'opération réclame le mot de passe de l'opérateur (constat BAC3) et laisse une trace au
+journal d'audit (BAC4).
+
+> ⚠️ **Vérifier l'identité du demandeur par un autre canal que le courriel** — une boîte
+> compromise est exactement la façon dont on se fait passer pour la personne à dépanner.
+
+### 3. Recours ultime — écriture directe en base
+
+Si **plus aucun** administrateur ne peut se connecter et que les codes de secours sont
+perdus, il ne reste que la base. Cet accès exige d'être sur le serveur, ce qui constitue
+en soi un second facteur — physique celui-là.
+
+```bash
+# 1. Retrouver l'identifiant du compte (l'e-mail suffit à le désigner).
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT id, email, role, two_factor_enabled FROM \"user\" WHERE email = 'informatique@chatillon92.fr';"
+
+# 2. Retirer le second facteur de CE compte — jamais de tous.
+#    `WHERE` sur l'identifiant relevé à l'étape 1 : un filtre plus large
+#    désarmerait tous les administrateurs d'un coup.
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "DELETE FROM two_factor WHERE user_id = '<id>';" \
+  -c "UPDATE \"user\" SET two_factor_enabled = false WHERE id = '<id>';"
+
+# 3. Se connecter avec le seul mot de passe, puis SE RÉENRÔLER IMMÉDIATEMENT :
+#    le garde d'A6 y invite dès l'entrée en administration.
+```
+
+**Si le rôle administrateur lui-même a été perdu** (aucun compte n'est plus administrateur —
+BAC6 l'empêche désormais, mais une base ancienne peut être dans cet état) :
+
+```bash
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "UPDATE \"user\" SET role = 'administrateur' WHERE email = 'informatique@chatillon92.fr';"
+```
+
+> Ces trois commandes sont les seules de ce document qui écrivent directement dans la base
+> en contournant l'application. **Relire le `WHERE` avant de valider** : c'est la différence
+> entre dépanner un compte et désarmer toute l'administration.
+
+---
+
 ## Rotation de `CRON_SECRET`
 
 > Constat **BAC5** de l'audit de sécurité.

@@ -371,6 +371,12 @@ export async function sendPasswordResetAction(email: string): Promise<ActionStat
  *
  * C'est la raison d'être des codes de secours, et pourquoi l'écran d'enrôlement
  * insiste pour qu'ils soient conservés AILLEURS que sur le téléphone.
+ *
+ * La procédure complète — compte de secours désigné, conservation des codes hors
+ * ligne, et les commandes exactes du recours en base — vit dans DEPLOY.md,
+ * « Reprise en main si les administrateurs sont verrouillés » : un exploitant sous
+ * pression cherche dans la documentation d'exploitation, pas dans un commentaire de
+ * code auquel il n'a peut-être pas accès.
  */
 export async function resetTwoFactorAction(id: string, password: string): Promise<ActionState> {
   await requireRole("administrateur");
