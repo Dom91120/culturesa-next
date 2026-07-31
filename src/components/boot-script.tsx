@@ -39,6 +39,23 @@ export function BootScript({ nonce }: { nonce?: string }) {
   return (
     <script
       nonce={nonce}
+      // Les navigateurs EFFACENT l'attribut `nonce` du DOM après l'analyse, par
+      // conception : sans cela, un sélecteur CSS suffirait à le lire et à le
+      // rejouer, ce qui viderait la CSP par nonce de son sens. La PROPRIÉTÉ
+      // `script.nonce` reste, elle, renseignée — c'est elle que le navigateur
+      // utilise. React compare donc « nonce=… » (rendu serveur) à « nonce="" »
+      // (attribut relu) et signale une divergence d'hydratation.
+      //
+      // ⚠️ `suppressHydrationWarning` NE LA FAIT PAS TAIRE ICI — vérifié : React
+      // hisse les éléments de `<head>`, ce qui paraît court-circuiter l'option.
+      // L'attribut est conservé pour exprimer l'intention et parce qu'il ne coûte
+      // rien, PAS parce qu'il résout le problème.
+      //
+      // Portée réelle : l'avertissement n'existe qu'en DÉVELOPPEMENT ; la console
+      // d'un build de production est vide (vérifié). La divergence est de toute
+      // façon inoffensive — le script a déjà été exécuté au parsing, et ce
+      // composant ne rend rien côté client.
+      suppressHydrationWarning
       // biome-ignore lint/security/noDangerouslySetInnerHtml: script inline statique, sans donnée externe.
       dangerouslySetInnerHTML={{ __html: BOOT_CODE }}
     />

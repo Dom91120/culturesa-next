@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/lib/action-state";
+import { adressesFixesSchema, mailTemplateSchema, mailTypeMetaSchema } from "@/schemas/echanges";
 import { requireRole, requireServiceManager } from "@/server/guards";
 import {
   isBookingTrigger,
@@ -76,14 +77,17 @@ export async function setTriggerRecipientAction(
 ): Promise<ActionState> {
   if (!isBookingTrigger(trigger)) return { ok: false, error: "Action inconnue." };
   if (!isMailRecipientKind(kind)) return { ok: false, error: "Destinataire inconnu." };
-  // Pour « adresse(s) fixe(s) » : au moins une adresse valide requise.
-  const cleanAddr = (addr ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.includes("@"))
-    .join(", ");
-  if (kind === "fixe" && cleanAddr === "") {
-    return { ok: false, error: "Renseignez au moins une adresse e-mail valide." };
+
+  // Seul le mode « adresse(s) fixe(s) » exploite l'adresse : `setTriggerRecipient`
+  // enregistre une chaîne vide pour tous les autres. On ne valide donc que ce cas,
+  // et l'on passe "" ailleurs — strictement équivalent au comportement antérieur.
+  let cleanAddr = "";
+  if (kind === "fixe") {
+    const parsed = adressesFixesSchema.safeParse(addr ?? "");
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Adresse invalide." };
+    }
+    cleanAddr = parsed.data;
   }
   await requireRole("administrateur");
   await setTriggerRecipient(trigger, kind as MailRecipientKind, cleanAddr);
@@ -109,13 +113,11 @@ export async function setMailTemplateAction(
   if (builtin && !isBookingKind(kind) && serviceId) {
     return { ok: false, error: "Portée invalide pour ce type d'e-mail." };
   }
-  if (typeof subject !== "string" || typeof html !== "string") {
-    return { ok: false, error: "Contenu invalide." };
+  const contenu = mailTemplateSchema.safeParse({ subject, html });
+  if (!contenu.success) {
+    return { ok: false, error: contenu.error.issues[0]?.message ?? "Contenu invalide." };
   }
-  if (subject.length > 500 || html.length > 50000) {
-    return { ok: false, error: "Contenu trop long." };
-  }
-  await setMailTemplate(kind, subject, html, serviceId);
+  await setMailTemplate(kind, contenu.data.subject, contenu.data.html, serviceId);
   revalidateScope(serviceId);
   return { ok: true };
 }
@@ -135,14 +137,16 @@ export async function createMailTypeAction(
   if (serviceId)
     return { ok: false, error: "Les types personnalisés se créent en administration." };
   await authorizeScope(serviceId);
-  const l = (label ?? "").trim();
-  if (!l) return { ok: false, error: "Libellé requis." };
-  if (l.length > 100 || (description ?? "").length > 300 || (recipient ?? "").length > 200) {
-    return { ok: false, error: "Champ trop long." };
+  const meta = mailTypeMetaSchema.safeParse({ label, description, recipient });
+  if (!meta.success) {
+    return { ok: false, error: meta.error.issues[0]?.message ?? "Champ invalide." };
   }
-  const d = (description ?? "").trim();
-  const r = (recipient ?? "").trim();
-  await createCustomMailType(serviceId, l, d, r || undefined);
+  await createCustomMailType(
+    serviceId,
+    meta.data.label,
+    meta.data.description,
+    meta.data.recipient || undefined,
+  );
   revalidateScope(serviceId);
   return { ok: true };
 }
@@ -166,16 +170,11 @@ export async function updateMailTypeAction(
   if (!isCustom && !isBuiltinGlobal) {
     return { ok: false, error: "Type d'e-mail inconnu." };
   }
-  const l = (label ?? "").trim();
-  if (!l) return { ok: false, error: "Libellé requis." };
-  if (l.length > 100 || (description ?? "").length > 300 || (recipient ?? "").length > 200) {
-    return { ok: false, error: "Champ trop long." };
+  const meta = mailTypeMetaSchema.safeParse({ label, description, recipient });
+  if (!meta.success) {
+    return { ok: false, error: meta.error.issues[0]?.message ?? "Champ invalide." };
   }
-  await updateCustomMailType(serviceId, key, {
-    label: l,
-    description: (description ?? "").trim(),
-    recipient: (recipient ?? "").trim(),
-  });
+  await updateCustomMailType(serviceId, key, meta.data);
   revalidateScope(serviceId);
   return { ok: true };
 }

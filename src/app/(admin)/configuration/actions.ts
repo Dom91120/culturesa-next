@@ -18,7 +18,13 @@ const refreshSecondsSchema = z.coerce.number().int().min(0).max(3600);
  */
 export async function setDebugModeAction(on: boolean): Promise<ActionState> {
   await requireRole("administrateur");
-  await setConfig("debug.mode", on ? "1" : "0");
+  // Dernier paramètre de cet écran validé par le seul typage (constat S3). Une
+  // server action est une frontière réseau : le type ne survit pas à l'appel, et
+  // `on ? "1" : "0"` transformerait n'importe quelle valeur non booléenne en un
+  // « 1 » ou un « 0 » parfaitement plausible en base.
+  const parsed = z.boolean().safeParse(on);
+  if (!parsed.success) return { ok: false, error: "Valeur invalide." };
+  await setConfig("debug.mode", parsed.data ? "1" : "0");
   revalidatePath("/configuration");
   return { ok: true };
 }
