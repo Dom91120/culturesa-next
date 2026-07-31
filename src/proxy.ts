@@ -50,7 +50,22 @@ export default function proxy(request: NextRequest) {
     if (trusted && trusted !== fwd) headers.set("x-forwarded-for", trusted);
   }
 
-  // ── 2. CSP par nonce ──
+  // ── 2. Identifiant de requête (constat D8) ──
+  //
+  // Posé sur la requête — les journaux le reprennent — ET renvoyé au client dans
+  // `x-request-id`. C'est ce qui relie « l'écran a affiché une erreur » aux lignes
+  // de journal correspondantes : sans lui, diagnostiquer revient à corréler à la
+  // minute près, dans un fichier où plusieurs requêtes s'entrelacent.
+  //
+  // La valeur transmise par un client n'est JAMAIS reprise : elle est purement
+  // déclarative, et l'accepter permettrait de rendre deux incidents indiscernables
+  // en réutilisant le même identifiant.
+  const requestId = generateNonce()
+    .replace(/[^A-Za-z0-9]/g, "")
+    .slice(0, 12);
+  headers.set("x-request-id", requestId);
+
+  // ── 3. CSP par nonce ──
   const nonce = generateNonce();
   const csp = buildCsp(nonce, process.env.NODE_ENV !== "production");
   headers.set("x-nonce", nonce);
@@ -58,6 +73,7 @@ export default function proxy(request: NextRequest) {
 
   const response = NextResponse.next({ request: { headers } });
   response.headers.set("Content-Security-Policy", csp);
+  response.headers.set("x-request-id", requestId);
   return response;
 }
 

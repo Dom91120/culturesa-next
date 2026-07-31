@@ -17,7 +17,7 @@ export async function createBackupAction(): Promise<ActionState> {
     revalidatePath("/taches-planifiees/exports");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: messageClient(e, "Échec de l'export.", "backup:create") };
+    return { ok: false, error: await messageClient(e, "Échec de l'export.", "backup:create") };
   }
 }
 
@@ -35,7 +35,10 @@ export async function restoreBackupAction(name: string, password: string): Promi
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: messageClient(e, "Échec de la restauration.", "backup:restore") };
+    return {
+      ok: false,
+      error: await messageClient(e, "Échec de la restauration.", "backup:restore"),
+    };
   }
 }
 
@@ -52,6 +55,9 @@ export async function deleteBackupAction(name: string): Promise<ActionState> {
     revalidatePath("/taches-planifiees/exports");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: messageClient(e, "Échec de la suppression.", "backup:delete") };
+    return {
+      ok: false,
+      error: await messageClient(e, "Échec de la suppression.", "backup:delete"),
+    };
   }
 }

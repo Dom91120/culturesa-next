@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, name });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: messageClient(e, "Échec du téléversement.", "backup:upload") },
+      { ok: false, error: await messageClient(e, "Échec du téléversement.", "backup:upload") },
       { status: 400 },
     );
   }

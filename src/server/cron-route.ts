@@ -52,7 +52,7 @@ export async function runScheduledTask(
     // aussi vers quiconque détiendrait `CRON_SECRET` (cf. BAC5). Elle ne porte
     // qu'un libellé générique et la référence permettant de retrouver la trace.
     return NextResponse.json(
-      { ok: false, error: messageClient(e, `Échec de la tâche « ${key} ».`, `cron:${key}`) },
+      { ok: false, error: await messageClient(e, `Échec de la tâche « ${key} ».`, `cron:${key}`) },
       { status: 500 },
     );
   }

@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { headers } from "next/headers";
+import { journal } from "@/server/log";
 
 /**
  * Erreurs destinées à être LUES PAR L'USAGER (constat D7).
@@ -31,8 +33,25 @@ export class UserFacingError extends Error {
   }
 }
 
-/** Référence courte, sans signification : elle ne sert qu'à relier écran et journal. */
-function reference(): string {
+/**
+ * Référence reliant l'écran au journal.
+ *
+ * On reprend l'IDENTIFIANT DE REQUÊTE posé par le middleware (constat D8) : la
+ * référence citée par l'administrateur désigne alors *toute* la requête, donc
+ * l'ensemble de ses lignes de journal — et non le seul instant de l'erreur. Elle
+ * figure aussi dans l'en-tête `x-request-id` de la réponse.
+ *
+ * Repli sur un aléa local si l'en-tête manque (appel hors contexte de requête,
+ * chemin non couvert par le middleware) : mieux vaut une référence isolée que pas
+ * de référence du tout — sans elle, « une erreur est survenue » est indiagnosticable.
+ */
+async function reference(): Promise<string> {
+  try {
+    const id = (await headers()).get("x-request-id");
+    if (id) return id;
+  } catch {
+    // Hors contexte de requête : `headers()` lève. Ce n'est pas une anomalie.
+  }
   return randomBytes(3).toString("hex").toUpperCase();
 }
 
@@ -46,9 +65,13 @@ function reference(): string {
  * `contexte` préfixe la ligne de journal (ex. « backup:restore ») : sans lui, une
  * pile d'exception sans origine oblige à deviner d'où elle vient.
  */
-export function messageClient(e: unknown, fallback: string, contexte: string): string {
+export async function messageClient(
+  e: unknown,
+  fallback: string,
+  contexte: string,
+): Promise<string> {
   if (e instanceof UserFacingError) return e.message;
-  const ref = reference();
-  console.error(`[${contexte}] réf. ${ref} —`, e);
+  const ref = await reference();
+  journal.erreur(contexte, fallback, { req: ref, erreur: e });
   return `${fallback} (référence ${ref})`;
 }
