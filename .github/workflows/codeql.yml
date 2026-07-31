@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Initialiser CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@v4.37.3
         with:
           languages: javascript-typescript
           # `security-and-quality` ajouterait des règles de qualité qui noieraient
@@ -47,6 +47,6 @@ jobs:
       # généré (src/generated) est absent, donc non analysé — sans importance,
       # c'est du code généré que nous n'écrivons pas.
       - name: Analyser
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@v4.37.3
         with:
           category: "/language:javascript-typescript"
