@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { gunzip as gunzipCb, gzip as gzipCb } from "node:zlib";
 import { prisma } from "@/server/db";
+import { UserFacingError } from "@/server/errors";
 import {
   decryptBackup,
   encryptBackup,
@@ -159,7 +160,9 @@ async function runPgTool(tool: "pg_dump" | "psql", args: string[], stdin?: Buffe
       { env: { PGPASSWORD: p.password }, stdin },
     );
   }
-  throw new Error(
+  // Message DESTINÉ à l administrateur : il désigne exactement ce qu il doit
+  // corriger côté déploiement (constat D7).
+  throw new UserFacingError(
     "Outils PostgreSQL indisponibles : ni pg_dump/psql sur la machine (PG_BIN), " +
       `ni conteneur Docker « ${DOCKER_CONTAINER} » joignable.`,
   );
@@ -219,7 +222,7 @@ async function isFileEncrypted(full: string): Promise<boolean> {
 
 /** Résout un nom de dump vers son chemin, en refusant tout nom hors du dossier. */
 export function backupPath(name: string): string {
-  if (!SAFE_NAME.test(name)) throw new Error("Nom de fichier invalide.");
+  if (!SAFE_NAME.test(name)) throw new UserFacingError("Nom de fichier invalide.");
   return path.join(BACKUPS_DIR, name);
 }
 
@@ -372,14 +375,14 @@ export async function saveUploadedBackup(originalName: string, data: Buffer): Pr
     .replace(/[^A-Za-z0-9._-]+/g, "_")
     .replace(/^[._-]+/, "");
   if (!/\.sql(\.gz)?(\.enc)?$/.test(base)) {
-    throw new Error("Extension attendue : .sql, .sql.gz ou .sql.gz.enc");
+    throw new UserFacingError("Extension attendue : .sql, .sql.gz ou .sql.gz.enc");
   }
   await rejectUnsafeUpload(data);
   // Le contenu écrit est TOUJOURS chiffré (encryptBackup est idempotent) : le suffixe
   // `.enc` doit donc être systématique, y compris pour un fichier déjà chiffré arrivé
   // sous un autre nom. Sinon la liste annoncerait « en clair » un fichier protégé.
   const name = `televerse-${timestamp()}-${base}${base.endsWith(".enc") ? "" : ".enc"}`;
-  if (!SAFE_NAME.test(name)) throw new Error("Nom de fichier invalide.");
+  if (!SAFE_NAME.test(name)) throw new UserFacingError("Nom de fichier invalide.");
   await fs.mkdir(BACKUPS_DIR, { recursive: true, mode: DIR_MODE });
   await fs.writeFile(backupPath(name), encryptBackup(data), { mode: FILE_MODE });
   return name;

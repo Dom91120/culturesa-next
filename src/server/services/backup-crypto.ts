@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { deriveKey } from "@/server/crypto";
+import { UserFacingError } from "@/server/errors";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Chiffrement des dumps de la base (constat D1 de l'audit 2026-07-29).
@@ -34,7 +35,14 @@ const TAG_LEN = 16;
 const HEADER_LEN = MAGIC.length + FP_LEN + IV_LEN + TAG_LEN; // 50
 
 /** Erreur de déchiffrement porteuse d'un message exploitable par l'exploitant. */
-export class BackupCryptoError extends Error {}
+/**
+ * Erreur de chiffrement/déchiffrement d un dump.
+ *
+ * Destinée à l USAGER (constat D7) : ses messages distinguent « mauvaise clé » de
+ * « fichier altéré » — deux diagnostics qui appellent des gestes opposés. Les taire
+ * derrière un libellé générique rendrait la restauration indiagnosticable.
+ */
+export class BackupCryptoError extends UserFacingError {}
 
 /**
  * Clé de chiffrement des dumps, et sa provenance.

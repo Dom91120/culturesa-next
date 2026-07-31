@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/lib/action-state";
 import { AUDIT, recordAudit } from "@/server/audit";
+import { messageClient } from "@/server/errors";
 import { requireRole } from "@/server/guards";
 import { reauthOrError } from "@/server/reauth";
 import { createBackup, deleteBackup, restoreBackup } from "@/server/services/backup";
@@ -16,7 +17,7 @@ export async function createBackupAction(): Promise<ActionState> {
     revalidatePath("/taches-planifiees/exports");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Échec de l'export." };
+    return { ok: false, error: messageClient(e, "Échec de l'export.", "backup:create") };
   }
 }
 
@@ -34,7 +35,7 @@ export async function restoreBackupAction(name: string, password: string): Promi
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Échec de la restauration." };
+    return { ok: false, error: messageClient(e, "Échec de la restauration.", "backup:restore") };
   }
 }
 
@@ -51,6 +52,6 @@ export async function deleteBackupAction(name: string): Promise<ActionState> {
     revalidatePath("/taches-planifiees/exports");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Échec de la suppression." };
+    return { ok: false, error: messageClient(e, "Échec de la suppression.", "backup:delete") };
   }
 }

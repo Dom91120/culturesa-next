@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Role } from "@/generated/prisma/client";
 import { AUDIT, recordAudit } from "@/server/audit";
+import { messageClient } from "@/server/errors";
 import { getSession } from "@/server/guards";
 import { saveUploadedBackup } from "@/server/services/backup";
 
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, name });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Échec du téléversement." },
+      { ok: false, error: messageClient(e, "Échec du téléversement.", "backup:upload") },
       { status: 400 },
     );
   }
