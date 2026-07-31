@@ -78,3 +78,19 @@ updates:
       interval: monthly
     commit-message:
       prefix: "chore(docker)"
+
+  # ── Images référencées par docker-compose.yml (constat D4) ──
+  # `postgres` y est désormais ÉPINGLÉ à une version précise, pour que deux
+  # constructions à quinze jours d'écart donnent la même base. Épingler sans
+  # surveiller échangerait un défaut de reproductibilité contre un défaut de
+  # sécurité : une version figée cesse de recevoir les correctifs, et personne ne
+  # s'en aperçoit. C'est cette entrée qui referme le marché.
+  #
+  # Les entrées `docker` ci-dessus ne couvrent QUE les Dockerfile ; les images
+  # citées dans un fichier compose relèvent d'un écosystème distinct.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(docker)"

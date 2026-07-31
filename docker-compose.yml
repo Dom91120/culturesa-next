@@ -34,6 +34,24 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    # Borne une bombe à processus (constat D4). Généreux à dessein : Chromium
+    # éclate en un processus par onglet, par cadre et par service — une valeur
+    # serrée ferait échouer la génération des PDF sans message clair, et une
+    # limite qu'on découvre en production est pire que pas de limite.
+    pids_limit: 512
+    #
+    # ⚠️ `read_only: true` N'EST PAS posé ici, contrairement à `db` et `cron`.
+    # Next.js écrit son cache de rendu sous `.next/cache`, et Chromium ses
+    # tampons dans `/tmp` : la racine immuable supposerait de cartographier ces
+    # chemins en `tmpfs`, ce qui n'a PAS été éprouvé. Le poser sans l'avoir testé
+    # produirait une panne au démarrage ou, pire, à la première édition PDF.
+    # Le conteneur est déjà sans capacité et sans élévation possible ; le gain
+    # résiduel ne justifie pas de livrer une configuration non vérifiée.
+    #
+    # `mem_limit` n'est pas posé non plus : la valeur dépend de la mémoire du
+    # serveur, qu'un fichier versionné ne peut pas connaître. Une valeur trop
+    # basse se traduit par des arrêts brutaux du conteneur, sans rapport apparent
+    # avec la cause. Cf. DEPLOY.md pour la poser en connaissance de cause.
     depends_on:
       db:
         condition: service_healthy
@@ -80,8 +98,41 @@ services:
       - web
 
   db:
-    image: postgres:17-alpine
+    # Version ÉPINGLÉE (constat D4). `17-alpine` suit le flottant : deux
+    # constructions à quinze jours d'écart ne donnaient pas la même base, et un
+    # incident devenait irreproductible. Le revers est réel — une version figée ne
+    # reçoit plus les correctifs — d'où la surveillance Dependabot ajoutée en même
+    # temps (.github/dependabot.yml, écosystème docker) : épingler SANS automatiser
+    # la montée de version échange un défaut de reproductibilité contre un défaut
+    # de sécurité, ce qui serait un mauvais marché.
+    image: postgres:17.10-alpine
     restart: unless-stopped
+    # ── Durcissement (constat D4) ────────────────────────────────────────────
+    # MESURÉ, pas supposé : `cap_drop: ALL` seul EMPÊCHE POSTGRES DE DÉMARRER —
+    # son point d'entrée doit ajuster le propriétaire du répertoire de données
+    # puis abandonner les droits de root. Appliquer la recommandation à la lettre
+    # aurait cassé la base. Ces cinq capacités sont le strict nécessaire, vérifié
+    # en retirant tout puis en réintroduisant une à une.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    # Racine immuable : les données vivent dans le volume `pgdata`, seuls les
+    # sockets et fichiers temporaires ont besoin d'être écrits.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/postgresql
+      - /var/run/postgresql
+    # Borne une bombe à processus. PostgreSQL forke par connexion ;
+    # `max_connections` vaut 100 par défaut, 256 laisse la marge nécessaire.
+    pids_limit: 256
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -104,6 +155,23 @@ services:
     build:
       context: ./cron
     restart: unless-stopped
+    # ── Durcissement (constat D4) ────────────────────────────────────────────
+    # Ce conteneur détient `CRON_SECRET` ET les identifiants PostgreSQL (pour
+    # `backup.sh`) : il mérite le même traitement que l'app, alors qu'il est le
+    # plus simple des trois — un `crond` et un `curl`.
+    #
+    # Testé : `crond` démarre, `pg_dump` fonctionne et l'écriture hors `/tmp` est
+    # refusée. Aucune capacité n'est nécessaire — rien n'y écoute sur un port.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    # `backup.sh` lance au plus pg_dump + gzip ; 64 est large et borne une bombe
+    # à processus qui viendrait d'un `crontab` altéré.
+    pids_limit: 64
     depends_on:
       - app
     environment:

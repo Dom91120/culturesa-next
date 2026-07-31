@@ -439,6 +439,42 @@ se découvre trop tard.
 
 ---
 
+## Limiter la mémoire des conteneurs (optionnel)
+
+> Constat **D4** de l'audit de sécurité.
+
+`docker-compose.yml` pose déjà, sur les trois services, la suppression des capacités
+Linux, l'interdiction d'élévation, une racine immuable (sauf `app`) et un plafond de
+processus. **`mem_limit` n'y figure pas**, et c'est délibéré : la bonne valeur dépend de
+la mémoire du serveur, qu'un fichier versionné ne peut pas connaître.
+
+Une valeur trop basse ne se manifeste pas par un message clair mais par un conteneur
+**tué et redémarré** au pire moment — pendant une génération de PDF volumineuse, ou une
+restauration. Autrement dit : mal réglée, cette option cause la panne qu'elle prétend
+éviter.
+
+Si vous voulez la poser, mesurez d'abord l'usage réel en fonctionnement normal :
+
+```bash
+docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}'
+```
+
+Puis ajoutez, avec **au moins le double** de l'usage observé au repos — Chromium et
+`pg_dump` sont ponctuellement gourmands :
+
+```yaml
+# services.app
+mem_limit: 2g       # exemple : à ajuster à VOTRE serveur
+# services.db
+mem_limit: 1g
+```
+
+> Sur un serveur dédié à cette seule application, l'intérêt est limité : rien d'autre ne
+> se dispute la mémoire. L'option prend son sens si d'autres services cohabitent — elle
+> empêche alors qu'une dérive de CultuRésa les emporte avec elle.
+
+---
+
 ## Points d'attention
 - `next.config.ts` contient `output: "standalone"` (requis pour l'image Docker).
 - Le conteneur `app` tourne en utilisateur non-root (`nextjs`).
