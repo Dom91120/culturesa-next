@@ -20,6 +20,7 @@ export const TEMPLATE_KINDS = [
   "email_verification",
   "password_reset",
   "password_changed",
+  "two_factor_changed",
   "account_deletion_request",
   "account_deletion_notice",
   "email_test",
@@ -80,6 +81,12 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
   booking_reminder: REMINDER_VARS,
   email_verification: LINK_VARS,
   password_reset: LINK_VARS,
+  two_factor_changed: [
+    { name: "salutation", desc: "« Bonjour Prénom Nom, »" },
+    { name: "prenom", desc: "Prénom de l usager" },
+    { name: "date", desc: "Date et heure du changement" },
+    { name: "operation", desc: "« activée », « réinitialisée » ou « désactivée »" },
+  ],
   password_changed: [
     { name: "salutation", desc: "« Bonjour Prénom Nom, »" },
     { name: "prenom", desc: "Prénom de l’usager" },
@@ -197,6 +204,19 @@ ${DETAILS_CONFIRMATION}
 <p>Le mot de passe de votre compte CultuRésa a été modifié le {{date}}.</p>
 <p>Vos autres sessions ouvertes ont été fermées : si vous étiez connecté sur un autre appareil, vous devrez vous y reconnecter.</p>
 <p><strong>Si vous n'êtes pas à l'origine de ce changement</strong>, votre compte est peut-être compromis. Rendez-vous sur CultuRésa pour réinitialiser votre mot de passe, et signalez-le au service culturel.</p>`,
+  },
+  // Même principe que `password_changed` : envoyé APRÈS coup, et SANS lien. Un
+  // courriel de sécurité porteur d'un lien apprend à cliquer sur les liens des
+  // courriels de sécurité — exactement ce dont vit l'hameçonnage.
+  //
+  // Le second facteur est ce qui protège un compte dont le mot de passe a fuité :
+  // sa modification, si elle n'émane pas du titulaire, est le signe qu'un tiers
+  // est déjà entré. C'est le message le plus urgent que l'application envoie.
+  two_factor_changed: {
+    subject: "Votre double authentification a été {{operation}} — CultuRésa",
+    html: `<p>{{salutation}}</p>
+<p>La double authentification de votre compte CultuRésa a été <strong>{{operation}}</strong> le {{date}}.</p>
+<p><strong>Si vous n'êtes pas à l'origine de ce changement</strong>, quelqu'un a probablement accès à votre compte. Rendez-vous sur CultuRésa pour réinitialiser votre mot de passe sans attendre, et signalez-le au service culturel.</p>`,
   },
   account_deletion_request: {
     subject: "Confirmez la suppression de votre compte — CultuRésa",

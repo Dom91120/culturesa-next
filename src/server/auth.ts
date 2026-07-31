@@ -67,6 +67,45 @@ async function notifierMotDePasseModifie(userId: string, email: string): Promise
   }
 }
 
+/**
+ * Alerte « votre double authentification a été modifiée » (constat A7, étendu au
+ * second facteur).
+ *
+ * Le second facteur est ce qui protège un compte dont le mot de passe a fuité : sa
+ * modification, si elle n'émane pas du titulaire, signale que quelqu'un est DÉJÀ
+ * entré. Sans cette alerte, le titulaire ne l'apprendrait qu'en se retrouvant dehors.
+ *
+ * BEST-EFFORT, comme pour le mot de passe : un relais SMTP indisponible ne doit pas
+ * faire échouer l'opération. Refuser le réenrôlement parce qu'un courriel n'est pas
+ * parti laisserait l'usager avec un second facteur à moitié remplacé — c'est-à-dire
+ * verrouillé.
+ */
+async function notifierSecondFacteurModifie(
+  userId: string,
+  email: string,
+  operation: "activée" | "réinitialisée" | "désactivée",
+): Promise<void> {
+  try {
+    const prenom =
+      (
+        await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } })
+      )?.prenom?.trim() ?? "";
+    const date = new Intl.DateTimeFormat("fr-FR", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: "Europe/Paris",
+    }).format(new Date());
+    await sendTemplatedMail({
+      to: email,
+      kind: "two_factor_changed",
+      vars: { salutation: greeting(prenom), prenom, date, operation },
+      mode: "direct",
+    });
+  } catch (e) {
+    console.error("[auth] alerte de changement de second facteur non envoyée:", e);
+  }
+}
+
 async function sendAccountMail(
   userId: string,
   email: string,
@@ -339,6 +378,41 @@ export const auth = betterAuth({
         const u = (ctx.context.returned as { user?: { id?: string; email?: string } } | undefined)
           ?.user;
         if (u?.id && u.email) await notifierMotDePasseModifie(u.id, u.email);
+        return;
+      }
+
+      // Modification du second facteur : alerter le titulaire.
+      //
+      // ⚠️ Sur `/two-factor/enable` et `/two-factor/disable` UNIQUEMENT, jamais sur
+      // `/two-factor/verify-totp` : celui-ci est aussi appelé à CHAQUE CONNEXION
+      // d'un compte protégé. Y brancher l'alerte enverrait un courriel « votre
+      // double authentification a été modifiée » à chaque ouverture de session —
+      // une alerte qui arrive quand tout va bien cesse d'être lue, et celle-ci est
+      // la plus urgente que l'application envoie.
+      //
+      // `enable` ne bascule PAS `twoFactorEnabled` (c'est `verify-totp` qui le
+      // fait) : la valeur lue ici est donc celle d'AVANT, ce qui distingue une
+      // première activation d'un réenrôlement.
+      if (
+        (ctx.path === "/two-factor/enable" || ctx.path === "/two-factor/disable") &&
+        !(ctx.context.returned instanceof APIError)
+      ) {
+        const u = ctx.context.session?.user as { id?: string; email?: string } | undefined;
+        if (u?.id && u.email) {
+          const avant = await prisma.user.findUnique({
+            where: { id: u.id },
+            select: { twoFactorEnabled: true },
+          });
+          await notifierSecondFacteurModifie(
+            u.id,
+            u.email,
+            ctx.path === "/two-factor/disable"
+              ? "désactivée"
+              : avant?.twoFactorEnabled
+                ? "réinitialisée"
+                : "activée",
+          );
+        }
         return;
       }
 

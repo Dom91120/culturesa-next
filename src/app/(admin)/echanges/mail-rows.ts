@@ -29,6 +29,7 @@ export const SYSTEM_MAIL_KINDS = [
   "email_verification",
   "password_reset",
   "password_changed",
+  "two_factor_changed",
   "account_deletion_request",
   "account_deletion_notice",
   "email_test",
@@ -80,6 +81,12 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
   password_reset: {
     label: "Réinitialisation du mot de passe",
     description: "Envoyé lors d'une demande de réinitialisation (toujours envoyé).",
+    recipient: "L'utilisateur",
+  },
+  two_factor_changed: {
+    label: "Double authentification modifiée",
+    description:
+      "Alerte envoyée APRÈS toute activation, réinitialisation ou désactivation du second facteur (toujours envoyé). Sans lien : c'est ce qui permet à l'usager de détecter qu'un tiers a pris la main sur son compte.",
     recipient: "L'utilisateur",
   },
   password_changed: {
