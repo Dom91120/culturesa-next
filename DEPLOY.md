@@ -191,8 +191,14 @@ docker compose exec -T app printenv | grep -c ADMIN_PASSWORD   # attendu : 0
 ```
 
 Le service `init` ne tourne que sur demande explicite (`--profile init`) : son absence
-n'empêche donc rien au quotidien. S'il faut le relancer un jour, la variable se
-redéfinit le temps de la commande, sans repasser par le fichier :
+n'empêche donc rien au quotidien, et `docker-compose.yml` déclare ces deux variables
+avec un défaut vide (`${ADMIN_PASSWORD:-}`) pour que Compose n'avertisse pas à chaque
+déploiement — un avertissement permanent finit ignoré, y compris le jour où il compte.
+La sûreté ne repose pas là-dessus : `prisma/seed-init.ts` refuse de s'exécuter si l'une
+des deux est vide, et exige 12 caractères minimum.
+
+S'il faut relancer le seed un jour, la variable se redéfinit le temps de la commande,
+sans repasser par le fichier :
 
 ```bash
 ADMIN_PASSWORD='…' docker compose --profile init run --rm init

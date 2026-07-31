@@ -137,8 +137,17 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${APP_URL}
       # Compte administrateur unique à créer (cf. .env)
-      ADMIN_EMAIL: ${ADMIN_EMAIL}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # `:-` = défaut vide si absent du .env, comme BACKUP_ENCRYPTION_KEY plus haut.
+      # Ces deux variables ne servent QU'AU SEED (profil `init`, exécuté à la main) et
+      # doivent être RETIRÉES du .env après la première connexion (constat A8) — sans
+      # ce défaut, Compose avertissait alors à CHAQUE déploiement, y compris pour un
+      # simple `up app`, qui interpole pourtant les variables de tous les services.
+      # Un avertissement qui apparaît quand tout va bien est un avertissement qu'on
+      # apprend à ignorer : appliquer A8 rendait le bruit permanent.
+      # La sûreté ne repose pas sur cette interpolation : `prisma/seed-init.ts` refuse
+      # de s'exécuter si l'une des deux est vide, et exige 12 caractères minimum.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       NODE_ENV: production
     command: ["pnpm", "db:init"]
     networks:
