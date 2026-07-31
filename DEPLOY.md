@@ -211,6 +211,61 @@ ADMIN_PASSWORD='…' docker compose --profile init run --rm init
 
 ---
 
+## Rotation de `CRON_SECRET`
+
+> Constat **BAC5** de l'audit de sécurité.
+
+`CRON_SECRET` protège les routes `/api/cron/*` (auto-validation, rétention RGPD,
+rappels, export de la base). Il est **partagé** par les conteneurs `app` et `cron`, et
+n'a jamais expiré : contrairement à `BETTER_AUTH_SECRET`, **rien n'en dépend** — aucune
+donnée n'est chiffrée avec lui. Sa rotation est donc sans effet de bord, et peut être
+faite à tout moment.
+
+```bash
+# 1. Nouvelle valeur.
+openssl rand -hex 24      # remplacer CRON_SECRET dans .env
+
+# 2. Les DEUX conteneurs doivent le recevoir ensemble : le cron l'envoie, l'app le
+#    vérifie. N'en redémarrer qu'un laisserait les tâches échouer en silence.
+docker compose up -d app cron
+
+# 3. Vérifier qu'une tâche repasse (l'appel a lieu toutes les 5 min).
+docker compose logs cron --tail=20
+```
+
+À faire notamment : au départ d'une personne ayant eu accès au `.env`, ou si le fichier
+a pu être exposé.
+
+### Restriction d'origine — à poser sur le reverse proxy
+
+Ces routes n'ont **qu'un seul appelant légitime** : le conteneur `cron`, qui joint
+`http://app:3000` sur le réseau interne Docker. Rien ne justifie qu'elles soient
+accessibles depuis Internet.
+
+L'application ne peut pas faire ce tri elle-même : Next.js définit `X-Forwarded-For`,
+`-Proto` et `-Host` sur **chaque** requête quand ils sont absents, si bien qu'ils ne
+distinguent plus l'interne de l'externe. L'adresse source ne discrimine pas davantage —
+le conteneur `cron` et le proxy présentent tous deux une adresse privée. La restriction
+appartient donc au proxy, seul à savoir ce qui vient du dehors.
+
+**Règle à demander à l'administrateur réseau** — à joindre à la revue de configuration
+déjà différée (cf. constat A5) :
+
+```nginx
+# nginx — refuser /api/cron/ depuis l'extérieur
+location ^~ /api/cron/ { return 404; }
+```
+
+`404` plutôt que `403` : inutile de confirmer à un inconnu que ces routes existent.
+
+> Sans cette règle, la protection repose sur le seul `CRON_SECRET`. Ce n'est pas
+> catastrophique — un tiers qui l'obtiendrait ne pourrait qu'avancer une tâche dans sa
+> fenêtre, `runScheduledTask` refusant toute exécution hors échéance et la rétention
+> RGPD ne touchant que des comptes déjà notifiés et hors délai de grâce. Mais c'est une
+> défense de moins, pour une règle d'une ligne.
+
+---
+
 ## Rotation de `BETTER_AUTH_SECRET`
 
 > Constat **A9** de l'audit de sécurité. **À lire en entier avant d'agir.**
