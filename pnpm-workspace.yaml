@@ -23,10 +23,20 @@ overrides:
   # remède devenait plus risqué que le mal. Une surcharge de sécurité doit rester
   # un correctif de version patch.
   'postcss@<8.5.18': '>=8.5.18 <9'
-  # Confusion d'hôte (antislash littéral, canonicalisation IDN).
+  # Confusion d'hôte (antislash littéral, canonicalisation IDN) ; plancher relevé
+  # à 3.1.5 le 2026-08-20 (GHSA-7p8r-x3mc-p8w7, nouvelle variante par antislash
+  # en introducteur d'autorité).
   # Chaîne : @prisma/client > prisma > @prisma/dev > ajv > fast-uri.
-  'fast-uri@<3.1.4': '>=3.1.4 <4'
+  'fast-uri@<3.1.5': '>=3.1.5 <4'
   # Vulnérabilités héritées de libvips (CVE-2026-33327 et suivantes).
   # Chaîne : next > sharp. L'application n'utilise pas next/image, mais la
   # dépendance reste dans l'arbre d'exécution.
   'sharp@<0.35.0': '>=0.35.0 <0.36'
+
+# Alerte VOLONTAIREMENT non surchargée (réexaminer à chaque montée de Prisma) :
+# deepmerge-ts 7.1.5 (GHSA-ggr8-5vv4-36mx, épuisement de pile sur graphe
+# d'objets récursif). Le correctif est la version MAJEURE 8.0.0 alors que
+# @prisma/config l'épingle exactement en 7.1.5 — la règle « correctif patch
+# seulement » s'applique. Risque réel nul : fusion des fichiers de config
+# Prisma par le CLI de dev, entrée maîtrisée par le développeur, jamais
+# atteignable à l'exécution de l'application.
