@@ -161,9 +161,20 @@ services:
     # plus simple des trois — un `crond` et un `curl`.
     #
     # Testé : `crond` démarre, `pg_dump` fonctionne et l'écriture hors `/tmp` est
-    # refusée. Aucune capacité n'est nécessaire — rien n'y écoute sur un port.
+    # refusée.
+    #
+    # ⚠️ SETGID et SETUID sont INDISPENSABLES : busybox `crond` appelle
+    # setgroups/setgid/setuid avant CHAQUE job, même pour root→root. Sans elles il
+    # démarre normalement mais n'exécute plus AUCUNE tâche — sans une ligne de log,
+    # même en `-l 2`. C'est ce qui a suspendu les 4 tâches planifiées (dont l'export
+    # de la base) du 31/07 au 20/08/2026 : « le conteneur démarre » ne prouve pas
+    # « les jobs tirent ». Tout futur durcissement doit vérifier qu'un job-témoin
+    # s'exécute réellement après le passage d'une minute.
     cap_drop:
       - ALL
+    cap_add:
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     read_only: true
