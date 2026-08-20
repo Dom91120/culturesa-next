@@ -191,6 +191,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # Chiffrement du dump manuel (constat D1) — pas d'élargissement réel :
+      # ce conteneur détient déjà les identifiants Postgres, donc la donnée.
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
     volumes:
       # Même dossier de dumps que l'app (./backups sur l'hôte)
       - ./backups:/backups

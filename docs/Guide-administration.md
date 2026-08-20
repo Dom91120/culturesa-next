@@ -159,9 +159,16 @@ docker compose exec --user 1001:1001 cron backup.sh
 
 > Dump direct depuis Postgres (fonctionne même si le conteneur `app` est arrêté ;
 > `--user 1001:1001` obligatoire — le conteneur durci n'autorise plus root à
-> écrire dans `/backups`) →
-> `backups/manuel-AAAAMMJJ-HHMMSS.sql.gz`, visible dans l'admin (Tâches planifiées ›
-> Exports) et **jamais purgé** par la rotation automatique.
+> écrire dans `/backups`) → `backups/manuel-AAAAMMJJ-HHMMSS.sql.gz.aes`,
+> **chiffré** avec `BACKUP_ENCRYPTION_KEY` au format openssl (différent du `.enc`
+> de l'app), **invisible dans l'admin** et **jamais purgé** : restauration en
+> ligne de commande uniquement, suppression à votre charge après usage.
+
+Restauration d'un tel dump (avec la clé en vigueur au moment de sa création) :
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:BACKUP_ENCRYPTION_KEY -in backups/manuel-AAAAMMJJ-HHMMSS.sql.gz.aes | gunzip | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+```
 
 > Régler l'horaire : directement dans l'admin (Tâches planifiées › CRON), pris en compte
 > sans redéploiement. La durée de rétention (7 dumps automatiques) est fixée dans le code
