@@ -4,7 +4,7 @@
 # (route /api/cron/backup → pg_dump embarqué dans l'image de l'app).
 #
 # L'image embarque aussi backup.sh (export MANUEL en ligne de commande, hors crontab) :
-#   docker compose exec cron backup.sh
+#   docker compose exec --user 1001:1001 cron backup.sh
 # → dump direct depuis Postgres, utilisable même si le conteneur app est HS.
 # postgresql17-client : la version du client doit couvrir celle du serveur (postgres:17),
 # d'où alpine >= 3.21 (3.20 s'arrête à postgresql16).

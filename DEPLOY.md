@@ -96,8 +96,10 @@ docker compose up -d --build           # redéployer après un git pull
 ```bash
 # 1. SAUVEGARDER d'abord (les migrations de schéma ne sont pas réversibles automatiquement)
 #    — bouton « Créer un export maintenant » dans l'admin (Tâches planifiées › Exports),
-#    ou en ligne de commande (dump direct depuis Postgres, marche même app HS) :
-docker compose exec cron backup.sh
+#    ou en ligne de commande (dump direct depuis Postgres, marche même app HS ;
+#    `--user 1001:1001` obligatoire : le conteneur durci n'autorise plus root à
+#    écrire dans /backups) :
+docker compose exec --user 1001:1001 cron backup.sh
 
 # 2. Récupérer la nouvelle version
 git pull

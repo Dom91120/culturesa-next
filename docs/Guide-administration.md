@@ -154,10 +154,12 @@ cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_D
 ### Dump manuel ponctuel
 
 ```bash
-docker compose exec cron backup.sh
+docker compose exec --user 1001:1001 cron backup.sh
 ```
 
-> Dump direct depuis Postgres (fonctionne même si le conteneur `app` est arrêté) →
+> Dump direct depuis Postgres (fonctionne même si le conteneur `app` est arrêté ;
+> `--user 1001:1001` obligatoire — le conteneur durci n'autorise plus root à
+> écrire dans `/backups`) →
 > `backups/manuel-AAAAMMJJ-HHMMSS.sql.gz`, visible dans l'admin (Tâches planifiées ›
 > Exports) et **jamais purgé** par la rotation automatique.
 
