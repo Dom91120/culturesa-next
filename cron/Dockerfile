@@ -10,7 +10,7 @@
 # d'où alpine >= 3.21 (3.20 s'arrête à postgresql16).
 # openssl : chiffrement du dump manuel de backup.sh (constat D1) — la libcrypto
 # est déjà là via curl, mais pas le binaire.
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache curl tzdata postgresql17-client openssl
 ENV TZ=Europe/Paris
 COPY crontab /etc/crontabs/root
