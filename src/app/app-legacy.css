@@ -2501,6 +2501,42 @@ textarea.theme-pending:focus::placeholder {
 }
 
 /* ── Fiche réservation ───────────────────────────────────── */
+/* Rangée de 3 champs à l'intérieur d'une cellule pleine largeur du `.form-grid`
+   (Demandeur · Mail · Tél). Même patron que `.uc-niveau-row` de la modale compte :
+   la grille externe reste à 2 colonnes, seule cette ligne en compte 3. */
+.bdet-row-3 {
+  display: grid;
+  /* 2/5 · 2/5 · 1/5 : un nom et une adresse ont besoin de place, un numéro de
+     téléphone a une longueur fixe et connue. */
+  grid-template-columns: 2fr 2fr 1fr;
+  gap: 0.65rem;
+}
+.bdet-row-3 > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  /* Sans quoi une adresse longue élargit sa colonne au lieu de se replier. */
+  min-width: 0;
+}
+/* Niveau (2/5) · Participants (3/5) : « CP » ou « Moyenne section » n'a pas besoin
+   de plus, les deux compteurs et leurs libellés si. */
+.bdet-row-niveau {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 0.65rem;
+}
+.bdet-row-niveau > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+@media (max-width: 540px) {
+  .bdet-row-3,
+  .bdet-row-niveau {
+    grid-template-columns: 1fr;
+  }
+}
 .bdet-readonly {
   background: var(--surface2);
   border: 1px solid var(--border);

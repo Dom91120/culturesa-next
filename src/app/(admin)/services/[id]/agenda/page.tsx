@@ -163,6 +163,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
               prenom: true,
               tel: true,
               email: true,
+              niveau: true,
               demandeur: { select: { label: true } },
               structure: { select: { label: true } },
             },
@@ -246,6 +247,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       email: child ? "" : (b.user.email ?? ""),
       demandeur: child ? "" : (b.user.demandeur?.label ?? ""),
       structure: child ? "" : (b.user.structure?.label ?? ""),
+      niveau: child ? "" : (b.user.niveau ?? ""),
       // Date de DÉPÔT (tri des badges de la pile). Un enfant porte la date de sa
       // matérialisation, sans intérêt : vidée ici et réhydratée depuis la parente
       // côté grille (même patron que l'identité ci-dessus).

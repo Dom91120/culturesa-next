@@ -137,6 +137,8 @@ export type Booking = AgendaBookingCore & {
   email: string;
   demandeur: string;
   structure: string;
+  /** Niveau déclaré par l'usager (texte libre du profil) — affiché dans la fiche. */
+  niveau: string;
   // Date de dépôt ISO (vide sur un enfant côté payload, réhydratée depuis la parente).
   createdAt: string;
 };
@@ -302,6 +304,7 @@ export function AgendaGrid({
               email: parent.email,
               demandeur: parent.demandeur,
               structure: parent.structure,
+              niveau: parent.niveau,
               createdAt: parent.createdAt,
             }
           : {}),

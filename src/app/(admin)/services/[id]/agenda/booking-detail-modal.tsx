@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import { formatTel } from "@/lib/format";
 import {
   setBookingPointageAction,
   setBookingValidatedAction,
@@ -172,54 +173,80 @@ export function BookingDetailModal({
 
       <div className="form-grid">
         {/* Champs en lecture seule : titre rendu en <span> (pas un <label>, qui doit être
-            associé à un contrôle) — même style que le titre « Participants » ci-dessous. */}
+            associé à un contrôle) — même style que le titre « Participants » plus bas.
+
+            Ligne 1 — l'appartenance, en UN seul champ : la structure quand il y en a
+            une (« École maternelle Arc-en-Ciel » dit déjà la catégorie), la catégorie
+            seule sinon. Les afficher toutes deux répétait l'information sur deux
+            lignes pour la majorité des fiches. */}
         <div className="field full">
-          <span style={FIELD_TITLE_STYLE}>Type de demandeur</span>
-          <div className="bdet-readonly">{booking.demandeur || "—"}</div>
+          <span style={FIELD_TITLE_STYLE}>
+            {booking.structure ? "Structure" : "Type de demandeur"}
+          </span>
+          <div className="bdet-readonly">{booking.structure || booking.demandeur || "—"}</div>
         </div>
-        {booking.structure && (
-          <div className="field full">
-            <span style={FIELD_TITLE_STYLE}>Structure</span>
-            <div className="bdet-readonly">{booking.structure}</div>
+
+        {/* Ligne 2 — qui réserve, et comment le joindre : les trois vont ensemble. */}
+        <div className="field full bdet-row-3">
+          <div>
+            <span style={FIELD_TITLE_STYLE}>Demandeur</span>
+            <div className="bdet-readonly">{booking.name || "—"}</div>
           </div>
-        )}
-        <div className="field full">
-          <span style={FIELD_TITLE_STYLE}>Demandeur</span>
-          <div className="bdet-readonly">{booking.name || "—"}</div>
+          <div>
+            <span style={FIELD_TITLE_STYLE}>Mail</span>
+            <div className="bdet-readonly">{booking.email || "—"}</div>
+          </div>
+          <div>
+            <span style={FIELD_TITLE_STYLE}>Tél</span>
+            {/* Même présentation « 06 12 34 56 78 » que la liste des comptes : un numéro
+                qu'on lit pour le composer se groupe par deux. `formatTel` rend déjà
+                « — » sur une valeur vide. */}
+            <div className="bdet-readonly">{formatTel(booking.tel)}</div>
+          </div>
         </div>
-        <div className="field full">
-          <span style={FIELD_TITLE_STYLE}>Participants</span>
-          <div className="pcm-counters">
-            <label className="pcm-counter" htmlFor="bdet-enfants">
-              <span className="pcm-counter-icon" aria-hidden="true">
-                👶
-              </span>
-              <input
-                id="bdet-enfants"
-                type="number"
-                min={0}
-                max={99}
-                value={enfants}
-                disabled={!editable}
-                onChange={(e) => setEnfants(e.target.value)}
-              />
-              <span className="pcm-counter-name">{plural(nEnf, "Enfant", "Enfants")}</span>
-            </label>
-            <label className="pcm-counter" htmlFor="bdet-accompagnants">
-              <span className="pcm-counter-icon" aria-hidden="true">
-                🧑‍🦰
-              </span>
-              <input
-                id="bdet-accompagnants"
-                type="number"
-                min={0}
-                max={99}
-                value={accompagnants}
-                disabled={!editable}
-                onChange={(e) => setAccompagnants(e.target.value)}
-              />
-              <span className="pcm-counter-name">{plural(nAcc, "Adulte", "Adultes")}</span>
-            </label>
+
+        {/* Ligne 3 — niveau et participants : ce que le gestionnaire prépare. Le niveau
+            tient sur un tiers (« CP », « Moyenne section ») ; les deux compteurs et
+            leurs libellés occupent les deux tiers restants. */}
+        <div className="field full bdet-row-niveau">
+          <div>
+            <span style={FIELD_TITLE_STYLE}>Niveau</span>
+            <div className="bdet-readonly">{booking.niveau || "—"}</div>
+          </div>
+          <div>
+            <span style={FIELD_TITLE_STYLE}>Participants</span>
+            <div className="pcm-counters">
+              <label className="pcm-counter" htmlFor="bdet-enfants">
+                <span className="pcm-counter-icon" aria-hidden="true">
+                  👶
+                </span>
+                <input
+                  id="bdet-enfants"
+                  type="number"
+                  min={0}
+                  max={99}
+                  value={enfants}
+                  disabled={!editable}
+                  onChange={(e) => setEnfants(e.target.value)}
+                />
+                <span className="pcm-counter-name">{plural(nEnf, "Enfant", "Enfants")}</span>
+              </label>
+              <label className="pcm-counter" htmlFor="bdet-accompagnants">
+                <span className="pcm-counter-icon" aria-hidden="true">
+                  🧑‍🦰
+                </span>
+                <input
+                  id="bdet-accompagnants"
+                  type="number"
+                  min={0}
+                  max={99}
+                  value={accompagnants}
+                  disabled={!editable}
+                  onChange={(e) => setAccompagnants(e.target.value)}
+                />
+                <span className="pcm-counter-name">{plural(nAcc, "Adulte", "Adultes")}</span>
+              </label>
+            </div>
           </div>
         </div>
         {showTheme && (
