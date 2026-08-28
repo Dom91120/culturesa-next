@@ -7,9 +7,12 @@ import { emailButton } from "@/lib/email-theme";
 import { greeting } from "@/lib/mail-render";
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/password";
 import {
+  normaliserStructureLibre,
   PROFILE_MIN_ACCOMPAGNANTS_MSG,
   PROFILE_MIN_ENFANTS_MSG,
   profileCountOk,
+  STRUCTURE_LIBRE_HEADER as SL_HEADER,
+  STRUCTURE_LIBRE_MSG,
 } from "@/schemas/user";
 import { verifyCaptcha } from "@/server/captcha";
 import {
@@ -20,11 +23,30 @@ import {
 import { prisma } from "@/server/db";
 import { clearLoginFailures, loginLockSeconds, recordLoginFailure } from "@/server/login-throttle";
 import { sendTemplatedMail } from "@/server/services/mail-send";
+import { resolveStructureLibre } from "@/server/services/structures";
 import { SESSION_EXPIRES_IN, SESSION_FRESH_AGE, SESSION_UPDATE_AGE } from "@/server/session-policy";
 
 // Endpoints Better Auth qui définissent/changent un mot de passe : on y impose la
 // politique de complexité (Better Auth ne valide nativement que la longueur min).
 const PASSWORD_ENDPOINTS = new Set(["/sign-up/email", "/reset-password", "/change-password"]);
+
+/**
+ * Décode une valeur d'en-tête transmise en `encodeURIComponent`.
+ *
+ * Un en-tête HTTP ne transporte que de l'ASCII : « École du Parc » posé tel quel
+ * ferait échouer la requête AVANT d'atteindre le serveur. Le formulaire encode donc,
+ * et un pourcentage isolé (saisie de l'usager, non un encodage) ne doit pas faire
+ * remonter une exception d'infrastructure : on rend alors la valeur brute, que la
+ * normalisation et le plafond de longueur traiteront comme n'importe quelle autre.
+ */
+function decoderEnTete(valeur: string | null | undefined): string {
+  if (!valeur) return "";
+  try {
+    return decodeURIComponent(valeur);
+  } catch {
+    return valeur;
+  }
+}
 
 /**
  * Envoie un e-mail de compte/sécurité (vérification d'adresse, réinitialisation de
@@ -298,21 +320,45 @@ export const auth = betterAuth({
         // violation de FK à l'insert → 500 au lieu d'un 400 propre (audit 2026-07-19).
         const demandeur = await prisma.demandeur.findUnique({
           where: { id: demandeurId },
-          select: { id: true },
+          select: { id: true, structureLibre: true },
         });
         if (!demandeur) {
           throw new APIError("BAD_REQUEST", { message: "Choisissez une catégorie." });
         }
-        const structures = await prisma.structure.findMany({
-          where: { demandeurId },
-          select: { id: true },
-        });
-        if (structures.length > 0) {
-          const structureId = Number(b.structureId);
-          if (!structures.some((s) => s.id === structureId)) {
-            throw new APIError("BAD_REQUEST", {
-              message: "Choisissez une structure pour cette catégorie.",
-            });
+
+        if (demandeur.structureLibre) {
+          // Catégorie fourre-tout : la structure est SAISIE, pas choisie. Le libellé
+          // arrive par en-tête — comme le captcha — parce que le corps de
+          // `/sign-up/email` est validé contre les champs déclarés du modèle User, où
+          // ce texte n'a pas sa place : il désigne une entrée de référentiel, pas une
+          // propriété du compte.
+          //
+          // Résolution ICI et nulle part ailleurs. La créer depuis une action publique
+          // appelée avant l'inscription aurait ouvert une écriture de référentiel sans
+          // captcha ni compte à la clé : n'importe qui aurait pu remplir la table. À
+          // cet endroit, le captcha est déjà vérifié (plus haut dans ce même hook) et
+          // une ligne au plus naît par inscription.
+          const label = normaliserStructureLibre(decoderEnTete(ctx.headers?.get(SL_HEADER)));
+          if (!label) throw new APIError("BAD_REQUEST", { message: STRUCTURE_LIBRE_MSG });
+
+          // Le corps est complété pour l'insert qui suit : le reste de l'application
+          // ne voit qu'une structure ordinaire, rattachée à sa catégorie.
+          (ctx.body as { structureId?: number }).structureId = await resolveStructureLibre(
+            demandeurId,
+            label,
+          );
+        } else {
+          const structures = await prisma.structure.findMany({
+            where: { demandeurId },
+            select: { id: true },
+          });
+          if (structures.length > 0) {
+            const structureId = Number(b.structureId);
+            if (!structures.some((s) => s.id === structureId)) {
+              throw new APIError("BAD_REQUEST", {
+                message: "Choisissez une structure pour cette catégorie.",
+              });
+            }
           }
         }
       }

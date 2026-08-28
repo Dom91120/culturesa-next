@@ -31,7 +31,10 @@ export default async function UsersPage() {
         _count: { select: { bookings: true } },
       },
     }),
-    prisma.demandeur.findMany({ orderBy: { label: "asc" }, select: { id: true, label: true } }),
+    prisma.demandeur.findMany({
+      orderBy: { label: "asc" },
+      select: { id: true, label: true, structureLibre: true },
+    }),
     prisma.structure.findMany({
       orderBy: { label: "asc" },
       select: { id: true, label: true, demandeurId: true },

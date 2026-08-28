@@ -11,6 +11,7 @@ import { requireRole } from "@/server/guards";
 const rowSchema = z.object({
   label: z.string().trim().min(1, "Le libellé est obligatoire").max(100),
   openOnSchoolHolidays: z.boolean(),
+  structureLibre: z.boolean(),
 });
 
 type CreateResult = { ok: true; id: number } | { ok: false; error: string };
@@ -19,6 +20,7 @@ type Result = { ok: true } | { ok: false; error: string };
 export async function createDemandeurAction(input: {
   label: string;
   openOnSchoolHolidays: boolean;
+  structureLibre: boolean;
 }): Promise<CreateResult> {
   await requireRole("administrateur");
   const parsed = rowSchema.safeParse(input);
@@ -26,7 +28,11 @@ export async function createDemandeurAction(input: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides" };
   }
   const created = await prisma.demandeur.create({
-    data: { label: parsed.data.label, openOnSchoolHolidays: parsed.data.openOnSchoolHolidays },
+    data: {
+      label: parsed.data.label,
+      openOnSchoolHolidays: parsed.data.openOnSchoolHolidays,
+      structureLibre: parsed.data.structureLibre,
+    },
     select: { id: true },
   });
   revalidatePath("/configuration");
@@ -35,7 +41,7 @@ export async function createDemandeurAction(input: {
 
 export async function updateDemandeurAction(
   id: number,
-  input: { label: string; openOnSchoolHolidays: boolean },
+  input: { label: string; openOnSchoolHolidays: boolean; structureLibre: boolean },
 ): Promise<Result> {
   await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Demandeur introuvable" };
@@ -45,7 +51,11 @@ export async function updateDemandeurAction(
   }
   await prisma.demandeur.update({
     where: { id },
-    data: { label: parsed.data.label, openOnSchoolHolidays: parsed.data.openOnSchoolHolidays },
+    data: {
+      label: parsed.data.label,
+      openOnSchoolHolidays: parsed.data.openOnSchoolHolidays,
+      structureLibre: parsed.data.structureLibre,
+    },
   });
   revalidatePath("/configuration");
   return { ok: true };

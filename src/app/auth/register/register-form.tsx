@@ -9,14 +9,24 @@ import { upperCaseOnInput } from "@/lib/format";
 import { PWD_RULES } from "@/lib/password";
 import { useFormSubmit } from "@/lib/use-form-submit";
 import {
+  normaliserStructureLibre,
   PROFILE_MIN_ACCOMPAGNANTS_MSG,
   PROFILE_MIN_ENFANTS_MSG,
   profileCountOk,
+  STRUCTURE_LIBRE_HEADER,
+  STRUCTURE_LIBRE_MAX,
+  STRUCTURE_LIBRE_MSG,
 } from "@/schemas/user";
 import { type CaptchaHandle, CaptchaImage } from "../captcha-image";
 
 type Structure = { id: number; label: string };
-type Demandeur = { id: number; label: string; structures: Structure[] };
+type Demandeur = {
+  id: number;
+  label: string;
+  /** Catégorie fourre-tout : la structure se saisit au lieu de se choisir. */
+  structureLibre: boolean;
+  structures: Structure[];
+};
 type Niveau = { id: number; label: string; demandeurId: number | null };
 
 export function RegisterForm({
@@ -31,13 +41,21 @@ export function RegisterForm({
 
   const [demandeurId, setDemandeurId] = useState("");
   const [structureId, setStructureId] = useState("");
+  /** Libellé saisi lorsque la catégorie choisie est en structure libre. */
+  const [structureTexte, setStructureTexte] = useState("");
   const [niveau, setNiveau] = useState("");
   const [niveauOpen, setNiveauOpen] = useState(false);
   // Modale « Politique de confidentialité » (lien de l'encart RGPD).
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const comboRef = useRef<HTMLDivElement>(null);
 
-  const structures = demandeurs.find((d) => String(d.id) === demandeurId)?.structures ?? [];
+  const demandeurChoisi = demandeurs.find((d) => String(d.id) === demandeurId);
+  const structures = demandeurChoisi?.structures ?? [];
+  // Saisie libre : décidée par la catégorie (réglage du référentiel), et NON par
+  // « sa liste de structures est vide ». Une catégorie peut légitimement n'en avoir
+  // aucune sans pour autant demander à l'usager d'en inventer une — c'est le cas
+  // d'« Assistante maternelle », où la structure reste facultative.
+  const saisieLibre = demandeurChoisi?.structureLibre ?? false;
 
   // Niveaux applicables — port du legacy _niveauFilteredList :
   // - demandeur choisi → ses niveaux + les niveaux globaux (demandeurId null) ;
@@ -85,8 +103,12 @@ export function RegisterForm({
     const accompagnants = Number(form.get("accompagnants"));
 
     if (!demandeurId) return "Choisissez une catégorie.";
-    if (structures.length > 0 && !structureId)
+    const structureSaisie = normaliserStructureLibre(structureTexte);
+    if (saisieLibre) {
+      if (!structureSaisie) return STRUCTURE_LIBRE_MSG;
+    } else if (structures.length > 0 && !structureId) {
       return "Choisissez une structure pour cette catégorie.";
+    }
     if (!profileCountOk(enfants)) return PROFILE_MIN_ENFANTS_MSG;
     if (!profileCountOk(accompagnants)) return PROFILE_MIN_ACCOMPAGNANTS_MSG;
     if (!pwdValid) return "Le mot de passe ne respecte pas toutes les règles.";
@@ -106,13 +128,20 @@ export function RegisterForm({
       enfants,
       accompagnants,
       ...(demandeurId ? { demandeurId: Number(demandeurId) } : {}),
-      ...(structureId ? { structureId: Number(structureId) } : {}),
+      ...(!saisieLibre && structureId ? { structureId: Number(structureId) } : {}),
       // Le défi captcha (token signé + saisie) est transmis au middleware serveur
-      // via des en-têtes, hors du corps validé par Better Auth.
+      // via des en-têtes, hors du corps validé par Better Auth. La structure saisie
+      // librement emprunte le même chemin : c'est un libellé de référentiel, pas un
+      // champ du modèle User, et le corps n'accepte que les seconds.
+      // `encodeURIComponent` : un en-tête HTTP ne transporte que de l'ASCII, et les
+      // noms d'établissement sont pleins d'accents.
       fetchOptions: {
         headers: {
           "x-captcha-token": captcha.token,
           "x-captcha-answer": captcha.answer,
+          ...(saisieLibre
+            ? { [STRUCTURE_LIBRE_HEADER]: encodeURIComponent(structureSaisie) }
+            : {}),
         },
       },
     });
@@ -186,6 +215,7 @@ export function RegisterForm({
                 const newDem = e.target.value;
                 setDemandeurId(newDem);
                 setStructureId("");
+                setStructureTexte("");
                 // Efface le niveau s'il s'agit d'un niveau CONNU non applicable au
                 // nouveau demandeur ; un texte libre ou un niveau encore valide est
                 // conservé (port du legacy _refreshNiveauForDemandeur).
@@ -207,24 +237,41 @@ export function RegisterForm({
             </select>
           </div>
           <div className="field">
-            <label htmlFor="c-structure">
-              Structure {structures.length > 0 && <span className="required-star">*</span>}
+            <label htmlFor={saisieLibre ? "c-structure-libre" : "c-structure"}>
+              Structure{" "}
+              {(saisieLibre || structures.length > 0) && <span className="required-star">*</span>}
             </label>
-            <select
-              id="c-structure"
-              value={structureId}
-              onChange={(e) => setStructureId(e.target.value)}
-              disabled={!demandeurId}
-            >
-              <option value="">
-                {demandeurId ? "— choisir —" : "— Sélectionner d'abord une catégorie —"}
-              </option>
-              {structures.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
+            {/* Catégorie fourre-tout : aucune liste à proposer — et surtout pas celle
+                des structures déjà saisies par d'autres, qui exposerait publiquement
+                leurs déclarations. Champ de texte, donc. */}
+            {saisieLibre ? (
+              <input
+                id="c-structure-libre"
+                type="text"
+                required
+                autoComplete="off"
+                maxLength={STRUCTURE_LIBRE_MAX}
+                placeholder="Nom de votre structure"
+                value={structureTexte}
+                onChange={(e) => setStructureTexte(e.target.value)}
+              />
+            ) : (
+              <select
+                id="c-structure"
+                value={structureId}
+                onChange={(e) => setStructureId(e.target.value)}
+                disabled={!demandeurId}
+              >
+                <option value="">
+                  {demandeurId ? "— choisir —" : "— Sélectionner d'abord une catégorie —"}
                 </option>
-              ))}
-            </select>
+                {structures.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="field full uc-niveau-row">

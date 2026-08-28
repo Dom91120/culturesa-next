@@ -39,7 +39,8 @@ export type UserRow = {
   bookingCount: number;
 };
 
-export type Demandeur = { id: number; label: string };
+/** `structureLibre` : catégorie fourre-tout, dont la structure se saisit au lieu de se choisir. */
+export type Demandeur = { id: number; label: string; structureLibre: boolean };
 export type StructureRef = { id: number; label: string; demandeurId: number };
 export type NiveauRef = { id: number; label: string; demandeurId: number | null };
 export type ServiceRef = { id: string; label: string };

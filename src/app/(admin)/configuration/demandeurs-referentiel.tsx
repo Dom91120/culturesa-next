@@ -3,7 +3,12 @@
 import { DemandeursEditor } from "../demandeurs/demandeurs-editor";
 import { ReferentielEntry } from "./referentiel-entry";
 
-type Demandeur = { id: number; label: string; openOnSchoolHolidays: boolean };
+type Demandeur = {
+  id: number;
+  label: string;
+  openOnSchoolHolidays: boolean;
+  structureLibre: boolean;
+};
 
 /** Entrée « Demandeurs » du panneau Référentiels (modale + `DemandeursEditor`, mode tampon). */
 export function DemandeursReferentiel({ demandeurs }: { demandeurs: Demandeur[] }) {

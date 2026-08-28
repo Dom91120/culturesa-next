@@ -12,6 +12,7 @@ export default async function RegisterPage() {
       select: {
         id: true,
         label: true,
+        structureLibre: true,
         structures: { orderBy: { label: "asc" }, select: { id: true, label: true } },
       },
     }),
@@ -21,5 +22,12 @@ export default async function RegisterPage() {
     }),
   ]);
 
-  return <RegisterForm demandeurs={demandeurs} niveaux={niveaux} />;
+  // Les structures d'une catégorie en saisie libre ne sont PAS envoyées au
+  // navigateur : elles ont été déclarées une à une par les inscrits précédents, et
+  // cette page est publique. Les livrer reviendrait à publier la liste de qui s'est
+  // inscrit — le formulaire n'en a de toute façon aucun usage, puisqu'il affiche un
+  // champ de texte pour ces catégories.
+  const publics = demandeurs.map((d) => (d.structureLibre ? { ...d, structures: [] } : d));
+
+  return <RegisterForm demandeurs={publics} niveaux={niveaux} />;
 }

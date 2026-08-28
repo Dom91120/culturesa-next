@@ -4,13 +4,23 @@ import { RefEditor } from "@/components/ref-editor";
 import { Switch } from "@/components/switch";
 import { createDemandeurAction, deleteDemandeurAction, updateDemandeurAction } from "./actions";
 
-type Initial = { id: number; label: string; openOnSchoolHolidays: boolean };
-type Row = { id: number | null; label: string; openOnSchoolHolidays: boolean };
+type Initial = {
+  id: number;
+  label: string;
+  openOnSchoolHolidays: boolean;
+  structureLibre: boolean;
+};
+type Row = {
+  id: number | null;
+  label: string;
+  openOnSchoolHolidays: boolean;
+  structureLibre: boolean;
+};
 
 // minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : la 1re colonne ne se dimensionne PAS
 // sur le min-content de son contenu (l'input des lignes est plus large que le span de l'en-tête),
 // sinon les colonnes ne s'alignent plus entre en-tête et lignes quand la modale est étroite.
-const GRID = "minmax(0, 1fr) 190px 80px";
+const GRID = "minmax(0, 1fr) 190px 150px 80px";
 
 /**
  * Éditeur des demandeurs (modale du référentiel, Administration > Configuration).
@@ -32,8 +42,14 @@ export function DemandeursEditor({
         id: d.id,
         label: d.label,
         openOnSchoolHolidays: d.openOnSchoolHolidays,
+        structureLibre: d.structureLibre,
       })}
-      blankRow={() => ({ id: null, label: "", openOnSchoolHolidays: true })}
+      blankRow={() => ({
+        id: null,
+        label: "",
+        openOnSchoolHolidays: true,
+        structureLibre: false,
+      })}
       labels={{
         placeholder: "Nom du demandeur",
         header: "Demandeur",
@@ -41,31 +57,51 @@ export function DemandeursEditor({
         deleteTitle: "Supprimer ce demandeur",
         empty: "Aucun demandeur. Cliquez sur « Ajouter ».",
       }}
-      extraHeaders={[{ label: "Ouvert vacances scolaires", style: { textAlign: "center" } }]}
+      extraHeaders={[
+        { label: "Ouvert vacances scolaires", style: { textAlign: "center" } },
+        { label: "Structure saisie libre", style: { textAlign: "center" } },
+      ]}
       isDirty={(r, init) =>
-        init.label !== r.label.trim() || init.openOnSchoolHolidays !== r.openOnSchoolHolidays
+        init.label !== r.label.trim() ||
+        init.openOnSchoolHolidays !== r.openOnSchoolHolidays ||
+        init.structureLibre !== r.structureLibre
       }
       onCreate={(r) =>
         createDemandeurAction({
           label: r.label.trim(),
           openOnSchoolHolidays: r.openOnSchoolHolidays,
+          structureLibre: r.structureLibre,
         })
       }
       onUpdate={(id, r) =>
         updateDemandeurAction(id, {
           label: r.label.trim(),
           openOnSchoolHolidays: r.openOnSchoolHolidays,
+          structureLibre: r.structureLibre,
         })
       }
       onDelete={(id) => deleteDemandeurAction(id)}
       renderExtraCells={(r, patch) => (
-        <span style={{ display: "flex", justifyContent: "center" }}>
-          <Switch
-            size="sm"
-            on={r.openOnSchoolHolidays}
-            onChange={(v) => patch(r.key, { openOnSchoolHolidays: v })}
-          />
-        </span>
+        <>
+          <span style={{ display: "flex", justifyContent: "center" }}>
+            <Switch
+              size="sm"
+              on={r.openOnSchoolHolidays}
+              onChange={(v) => patch(r.key, { openOnSchoolHolidays: v })}
+            />
+          </span>
+          {/* Catégorie fourre-tout (« Autres ») : à l'inscription, l'usager TAPE le
+              nom de sa structure au lieu de le choisir. Le libellé rejoint alors le
+              référentiel sous cette catégorie — visible et modifiable dans l'éditeur
+              des structures, jamais proposé au public. */}
+          <span style={{ display: "flex", justifyContent: "center" }}>
+            <Switch
+              size="sm"
+              on={r.structureLibre}
+              onChange={(v) => patch(r.key, { structureLibre: v })}
+            />
+          </span>
+        </>
       )}
     />
   );

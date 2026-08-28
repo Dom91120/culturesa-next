@@ -421,6 +421,15 @@ model Demandeur {
   id                   Int     @id @default(autoincrement())
   label                String
   openOnSchoolHolidays Boolean @default(true)
+  /// Catégorie fourre-tout (« Autres ») : l'usager SAISIT sa structure à l'inscription
+  /// au lieu de la choisir dans une liste. Le libellé saisi devient une `Structure` de
+  /// cette catégorie — les écrans qui affichent une structure (agenda, éditions,
+  /// statistiques, exports) fonctionnent donc sans rien savoir de ce mode, et
+  /// l'administration peut renommer ou fusionner ces entrées comme les autres.
+  /// Ces structures ne sont JAMAIS proposées au public : le formulaire reste en
+  /// saisie libre pour cette catégorie (sans quoi chacun lirait la liste de ce que
+  /// les précédents ont déclaré).
+  structureLibre       Boolean @default(false)
 
   structures       Structure[]
   niveaux          Niveau[]

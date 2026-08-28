@@ -6,6 +6,7 @@ import {
   PROFILE_MIN_ACCOMPAGNANTS_MSG,
   PROFILE_MIN_ENFANTS_MSG,
   profileCountOk,
+  STRUCTURE_LIBRE_MAX,
 } from "@/schemas/user";
 import { createUserAction, sendPasswordResetAction, updateUserAction } from "./actions";
 import type { Demandeur, NiveauRef, ServiceRef, StructureRef, UserRow } from "./users-table";
@@ -47,6 +48,9 @@ export function UserModal({
   const [structureId, setStructureId] = useState<string>(
     user?.structureId != null ? String(user.structureId) : "",
   );
+  // Catégorie en saisie libre : le libellé actuel est repris tel quel, sans quoi
+  // rouvrir une fiche pour corriger un téléphone effacerait sa structure.
+  const [structureTexte, setStructureTexte] = useState<string>(user?.structureLabel ?? "");
   const [niveau, setNiveau] = useState(user?.niveau ?? "");
   const [niveauOpen, setNiveauOpen] = useState(false);
   const niveauComboRef = useRef<HTMLDivElement>(null);
@@ -69,6 +73,14 @@ export function UserModal({
   const visibleStructures = useMemo(
     () => (demandeurId ? structures.filter((s) => String(s.demandeurId) === demandeurId) : []),
     [structures, demandeurId],
+  );
+
+  // Saisie libre : réglage de la catégorie (Configuration > Demandeurs), et non
+  // « sa liste de structures est vide » — une catégorie peut n'en avoir aucune sans
+  // demander pour autant d'en saisir une.
+  const saisieLibre = useMemo(
+    () => demandeurs.find((d) => String(d.id) === demandeurId)?.structureLibre ?? false,
+    [demandeurs, demandeurId],
   );
 
   // Niveaux proposés dans le combobox : filtrés par catégorie (legacy _setNiveauField).
@@ -136,7 +148,11 @@ export function UserModal({
       accompagnants: accompagnants === "" ? 0 : Number(accompagnants),
       role: role as "utilisateur" | "gestionnaire" | "administrateur",
       demandeurId: demandeurId ? Number(demandeurId) : null,
-      structureId: structureId ? Number(structureId) : null,
+      // L'un OU l'autre selon la catégorie : un identifiant quand il y a une liste,
+      // le libellé saisi sinon — que le serveur rapproche d'une structure existante
+      // ou crée sous cette catégorie.
+      structureId: saisieLibre || !structureId ? null : Number(structureId),
+      structureLibre: saisieLibre ? structureTexte.trim() : "",
       services: serviceIds,
     };
     startTransition(async () => {
@@ -248,6 +264,7 @@ export function UserModal({
               setDemandeurId(e.target.value);
               // La structure dépend de la catégorie → la re-sélection est requise.
               setStructureId("");
+              setStructureTexte("");
             }}
           >
             <option value="">— Catégorie —</option>
@@ -259,23 +276,47 @@ export function UserModal({
           </select>
         </div>
         <div className="field">
-          <label htmlFor="uc-structure">Structure</label>
-          <select
-            id="uc-structure"
-            value={structureId}
-            disabled={!demandeurId}
-            autoComplete="off"
-            onChange={(e) => setStructureId(e.target.value)}
-          >
-            <option value="">
-              {demandeurId ? "— Aucune —" : "— Sélectionner d'abord une catégorie —"}
-            </option>
-            {visibleStructures.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.label}
+          <label htmlFor={saisieLibre ? "uc-structure-libre" : "uc-structure"}>Structure</label>
+          {/* Catégorie fourre-tout : saisie, avec les structures déjà déclarées en
+              suggestions. Le formulaire public, lui, n'affiche AUCUNE liste — il est
+              accessible à tous, et publier ces libellés reviendrait à publier la
+              liste des inscrits. Ici l'administration les voit déjà en clair. */}
+          {saisieLibre ? (
+            <>
+              <input
+                id="uc-structure-libre"
+                type="text"
+                list="uc-structures-connues"
+                autoComplete="off"
+                maxLength={STRUCTURE_LIBRE_MAX}
+                placeholder="Choisir ou saisir..."
+                value={structureTexte}
+                onChange={(e) => setStructureTexte(e.target.value)}
+              />
+              <datalist id="uc-structures-connues">
+                {visibleStructures.map((s) => (
+                  <option key={s.id} value={s.label} />
+                ))}
+              </datalist>
+            </>
+          ) : (
+            <select
+              id="uc-structure"
+              value={structureId}
+              disabled={!demandeurId}
+              autoComplete="off"
+              onChange={(e) => setStructureId(e.target.value)}
+            >
+              <option value="">
+                {demandeurId ? "— Aucune —" : "— Sélectionner d'abord une catégorie —"}
               </option>
-            ))}
-          </select>
+              {visibleStructures.map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Niveau (combobox texte libre) + Nb enfants + Nb accompagnants sur une ligne. */}

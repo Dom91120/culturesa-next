@@ -36,7 +36,7 @@ export default async function ConfigurationPage() {
     countSchoolHolidays(zone),
     prisma.demandeur.findMany({
       orderBy: { label: "asc" },
-      select: { id: true, label: true, openOnSchoolHolidays: true },
+      select: { id: true, label: true, openOnSchoolHolidays: true, structureLibre: true },
     }),
     listServicesForCurrentAdmin(),
     listStructures(),

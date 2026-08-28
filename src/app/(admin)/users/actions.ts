@@ -5,10 +5,12 @@ import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import {
   nomSchema,
+  normaliserStructureLibre,
   PROFILE_MIN_ACCOMPAGNANTS_MSG,
   PROFILE_MIN_ENFANTS_MSG,
   prenomSchema,
   profileCountOk,
+  STRUCTURE_LIBRE_MAX,
   telSchema,
 } from "@/schemas/user";
 import { AUDIT, recordAudit } from "@/server/audit";
@@ -22,6 +24,7 @@ import {
   hardDeleteEmptyUser,
   RgpdError,
 } from "@/server/services/rgpd";
+import { resolveStructureLibre } from "@/server/services/structures";
 
 const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
 
@@ -37,8 +40,36 @@ const baseUserSchema = z.object({
   role: z.enum(ROLES),
   demandeurId: z.coerce.number().int().positive().nullable().default(null),
   structureId: z.coerce.number().int().positive().nullable().default(null),
+  // Structure SAISIE, pour les catégories en saisie libre (« Autres »). La modale
+  // envoie l'un ou l'autre selon la catégorie, jamais les deux : `structureId` quand
+  // il y a une liste, ce libellé sinon.
+  structureLibre: z.string().trim().max(STRUCTURE_LIBRE_MAX).default(""),
   services: z.array(z.string().min(1)).default([]),
 });
+
+/**
+ * Identifiant de structure à écrire, le libellé saisi étant résolu si la catégorie
+ * est en saisie libre.
+ *
+ * Un libellé vide n'est PAS un refus ici, contrairement à l'inscription publique :
+ * l'administration modifie des fiches existantes (corriger un téléphone ne doit pas
+ * exiger de renseigner une structure au passage), et « aucune structure » reste un
+ * état légitime pour tout compte.
+ */
+async function structureIdAEcrire(d: {
+  demandeurId: number | null;
+  structureId: number | null;
+  structureLibre: string;
+}): Promise<number | null> {
+  if (d.demandeurId == null) return null;
+  const demandeur = await prisma.demandeur.findUnique({
+    where: { id: d.demandeurId },
+    select: { structureLibre: true },
+  });
+  if (!demandeur?.structureLibre) return d.structureId;
+  const label = normaliserStructureLibre(d.structureLibre);
+  return label ? await resolveStructureLibre(d.demandeurId, label) : null;
+}
 
 // Un compte « utilisateur » doit toujours déclarer au moins 1 enfant ET
 // 1 accompagnant — à la création comme à l'édition (on ne peut pas le repasser
@@ -150,6 +181,10 @@ export async function updateUserAction(
     if (refus) return refus;
   }
 
+  // Résolu AVANT la transaction : la création éventuelle de la structure ne doit pas
+  // allonger la transaction qui met à jour le compte.
+  const structureId = await structureIdAEcrire(d);
+
   try {
     await prisma.$transaction(async (tx) => {
       // Ne pas retirer le DERNIER administrateur (constat BAC6). La suppression et
@@ -178,7 +213,7 @@ export async function updateUserAction(
           accompagnants: d.accompagnants,
           role: d.role,
           demandeurId: d.demandeurId,
-          structureId: d.structureId,
+          structureId,
         },
       });
       // Hors gestionnaire : aucun service nominatif → on vide la liste.
@@ -216,6 +251,10 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionSt
   const d = parsed.data;
   const isManager = d.role === "gestionnaire";
 
+  // Résolu AVANT la création du compte : si le libellé saisi est impossible à
+  // enregistrer, autant échouer avant d'avoir créé un compte à demi renseigné.
+  const structureId = await structureIdAEcrire(d);
+
   let userId: string;
   try {
     const res = await auth.api.signUpEmail({
@@ -244,7 +283,7 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionSt
           accompagnants: d.accompagnants,
           role: d.role,
           demandeurId: d.demandeurId,
-          structureId: d.structureId,
+          structureId,
           rgpdOk: true,
         },
       });
