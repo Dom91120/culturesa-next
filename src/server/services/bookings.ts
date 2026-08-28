@@ -3,7 +3,7 @@ import { earliestBookableISO, todayParisISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
-import type { BookingCreateInput } from "@/schemas/booking";
+import { type BookingCreateInput, THEME_REQUIS_MSG } from "@/schemas/booking";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
@@ -174,6 +174,39 @@ export async function isValidationMode(
     select: { validation: true },
   });
   return setting?.validation ?? false;
+}
+
+/**
+ * Le thème est-il OBLIGATOIRE pour cet usager sur ce service ? Dérivé du demandeur
+ * EFFECTIF (le sien, sinon celui de sa structure), comme le mode validation.
+ *
+ * `themes` ET `themeRequired` : sans champ affiché, l'exigence porterait sur une
+ * saisie impossible — un réglage resté à vrai après extinction des thèmes bloquerait
+ * toute réservation sans que rien ne l'explique à l'écran.
+ */
+export async function isThemeRequired(
+  db: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+): Promise<boolean> {
+  const demId = await effectiveDemandeurId(db, userId);
+  if (demId == null) return false;
+  const setting = await db.serviceDemandeurSettings.findFirst({
+    where: { serviceId, demandeurId: demId },
+    select: { themes: true, themeRequired: true },
+  });
+  return !!setting?.themes && !!setting.themeRequired;
+}
+
+/** Refuse une réservation sans thème quand le demandeur effectif l'exige. */
+export async function assertThemeIfRequired(
+  db: Prisma.TransactionClient,
+  userId: string,
+  serviceId: string,
+  theme: string,
+): Promise<void> {
+  if (theme.trim()) return;
+  if (await isThemeRequired(db, userId, serviceId)) throw new BookingError(THEME_REQUIS_MSG);
 }
 
 /**

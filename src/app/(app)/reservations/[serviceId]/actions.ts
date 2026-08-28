@@ -25,6 +25,7 @@ import {
   assertPeriodOpenForUser,
   assertReservationLimits,
   assertSlotCapacity,
+  assertThemeIfRequired,
   BookingError,
   cancelUserBookingInTx,
   createUniqueBookingInTx,
@@ -120,6 +121,9 @@ async function reserveRecurringInTx(
     userId,
     periodId,
   });
+  // Thème obligatoire (réglage du demandeur EFFECTIF) : refus si la saisie est vide.
+  // Le formulaire l'annonce déjà, mais c'est ICI que la règle est tenue.
+  await assertThemeIfRequired(tx, userId, serviceId, theme);
   // Validation : validée d'emblée sauf si le demandeur EFFECTIF est en mode validation.
   const validated = !(await isValidationMode(tx, userId, serviceId));
   // Insertion partagée (booking + réservations-enfants + paramètres d'e-mail).
@@ -155,6 +159,7 @@ async function reservePonctuelInTx(
     where: { id: userId },
     select: { enfants: true },
   });
+  await assertThemeIfRequired(tx, userId, serviceId, args.theme);
   const validated = !(await isValidationMode(tx, userId, serviceId));
   const myEnfants = args.enfants > 0 ? args.enfants : (user?.enfants ?? 0);
   const myAcc = args.accompagnants > 0 ? args.accompagnants : 0;
@@ -408,6 +413,9 @@ async function updateInTx(
     throw new BookingError(parsedDetail.error.issues[0]?.message ?? "Données invalides.");
   }
   const { enfants: enf, accompagnants: acc, theme: themeLabel } = parsedDetail.data;
+  // Vider le thème d'une réservation existante revient à la laisser sans thème : même
+  // refus qu'à la création, sans quoi la règle se contournerait en deux temps.
+  await assertThemeIfRequired(tx, userId, serviceId, themeLabel);
   const b = await tx.booking.findFirst({
     where: { id: bookingId, userId, serviceId },
     select: {

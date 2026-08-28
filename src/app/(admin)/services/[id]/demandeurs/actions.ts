@@ -14,6 +14,7 @@ const rowSchema = z.object({
   demandeurId: z.number().int(),
   validation: z.boolean(),
   themes: z.boolean(),
+  themeRequired: z.boolean(),
 });
 
 const saveSchema = z.object({

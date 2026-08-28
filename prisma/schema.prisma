@@ -496,6 +496,9 @@ model ServiceDemandeurSettings {
   demandeurId Int
   validation  Boolean @default(false)
   themes      Boolean @default(false)
+  /// Le thème devient OBLIGATOIRE : l'usager ne peut pas enregistrer sans l'avoir
+  /// renseigné. Sans effet si `themes` est éteint — le champ n'est alors pas affiché.
+  themeRequired Boolean @default(false)
   // (La jauge est portée par CHAQUE CRÉNEAU — slots.jauge. Le mode récurrent et
   // l'alternance A/B sont GLOBAUX au service — Service.recurrentMode/semaineAb.)
 

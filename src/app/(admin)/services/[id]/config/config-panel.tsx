@@ -24,6 +24,7 @@ type DemRow = {
   demandeurId: number;
   validation: boolean;
   themes: boolean;
+  themeRequired: boolean;
 };
 type ThemeRow = { key: string; label: string };
 
@@ -52,6 +53,7 @@ function buildMatrix(rows: DemRow[]): DemandeurSettingRow[] {
       demandeurId: r.demandeurId,
       validation: r.validation,
       themes: r.themes,
+      themeRequired: r.themeRequired,
     }));
 }
 
@@ -118,6 +120,7 @@ export function ConfigPanel({
       demandeurId: r.demandeurId,
       validation: r.validation,
       themes: r.themes,
+      themeRequired: r.themeRequired,
     })),
   );
 
@@ -224,6 +227,7 @@ export function ConfigPanel({
         demandeurId: 0,
         validation: false,
         themes: false,
+        themeRequired: false,
       },
     ]);
   }
@@ -320,7 +324,7 @@ export function ConfigPanel({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) 84px 84px 32px",
+                gridTemplateColumns: "minmax(0, 1fr) 84px 84px 84px 32px",
                 gap: ".75rem",
                 alignItems: "center",
                 padding: "0 .75rem .5rem",
@@ -334,6 +338,13 @@ export function ConfigPanel({
               <span>Demandeur</span>
               <span style={{ textAlign: "center" }}>Validation</span>
               <span style={{ textAlign: "center" }}>Thèmes</span>
+              {/* Deux lignes resserrées : l'intitulé ne tient pas sur la largeur d'une
+                  colonne d'interrupteur, et l'élargir décalerait les trois autres. */}
+              <span style={{ textAlign: "center", lineHeight: 1.15 }}>
+                Thème
+                <br />
+                obligatoire
+              </span>
               <span />
             </div>
 
@@ -343,7 +354,7 @@ export function ConfigPanel({
                 className="mockup-row"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) 84px 84px 32px",
+                  gridTemplateColumns: "minmax(0, 1fr) 84px 84px 84px 32px",
                   gap: ".75rem",
                   alignItems: "center",
                   padding: ".55rem .75rem",
@@ -383,7 +394,23 @@ export function ConfigPanel({
                   <Switch on={r.validation} onChange={(v) => patch(r.key, { validation: v })} />
                 </span>
                 <span style={{ display: "flex", justifyContent: "center" }}>
-                  <Switch on={r.themes} onChange={(v) => patch(r.key, { themes: v })} />
+                  {/* Éteindre « Thèmes » retire le champ à l'usager : le rendre
+                      obligatoire n'aurait alors plus de sens, on retombe donc aussi
+                      l'obligation plutôt que de laisser un réglage sans effet visible
+                      qui se réveillerait à la réactivation. */}
+                  <Switch
+                    on={r.themes}
+                    onChange={(v) =>
+                      patch(r.key, { themes: v, ...(v ? {} : { themeRequired: false }) })
+                    }
+                  />
+                </span>
+                <span style={{ display: "flex", justifyContent: "center" }}>
+                  <Switch
+                    on={r.themeRequired}
+                    disabled={!r.themes}
+                    onChange={(v) => patch(r.key, { themeRequired: v })}
+                  />
                 </span>
                 <button
                   type="button"

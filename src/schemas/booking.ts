@@ -44,3 +44,10 @@ export const bookingCreateSchema = z
   })
   .refine(hasBothParticipants, hasBothParticipantsMsg);
 export type BookingCreateInput = z.infer<typeof bookingCreateSchema>;
+
+/**
+ * Refus « thème obligatoire » (réglage service × demandeur). Message UNIQUE : le
+ * formulaire l'affiche en toast avant l'envoi, le serveur le renvoie s'il est atteint
+ * malgré tout — deux formulations divergentes se remarqueraient tôt ou tard.
+ */
+export const THEME_REQUIS_MSG = "Veuillez renseigner le thème";

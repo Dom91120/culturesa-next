@@ -57,6 +57,7 @@ import { gaugeUnits } from "@/lib/gauge";
 import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { usePointerDrag } from "@/lib/use-pointer-drag";
+import { THEME_REQUIS_MSG } from "@/schemas/booking";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { commitDraft } from "./actions";
 
@@ -196,6 +197,7 @@ function ThemeField({
   themesMode,
   themes,
   onChange,
+  fieldId,
   big = false,
   multiline = false,
 }: {
@@ -204,6 +206,9 @@ function ThemeField({
   themesMode: "libre" | "liste";
   themes: string[];
   onChange: (v: string) => void;
+  // Identifiant DOM du contrôle focalisable : sert à AMENER LE CURSEUR sur le thème
+  // manquant quand l'enregistrement est refusé (cf. commitPending).
+  fieldId?: string;
   // Mobile : champ thème 2× plus gros.
   big?: boolean;
   // Le thème s'affiche sur plusieurs lignes (retour à la ligne au lieu de tronquer) — utilisé
@@ -272,6 +277,13 @@ function ThemeField({
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: picker custom (Échap géré globalement) */}
         <div
           ref={wrapRef}
+          id={fieldId}
+          // Focalisable au clavier ET par script : c'est ce contrôle que vise le curseur
+          // quand l'enregistrement est refusé faute de thème (mode « liste »). Un vrai
+          // <button> serait plus juste, mais il porte déjà un bouton chevron imbriqué —
+          // interdit dans un bouton — et sa refonte déborde de ce correctif.
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: picker custom, cible du focus
+          tabIndex={0}
           className={`slot-spots ${validated ? "theme-validated" : "theme-pending"}`}
           // Mobile : data-tip="" masque l'info-bulle du badge au tap/survol du picker thème.
           data-tip={big ? "" : undefined}
@@ -399,6 +411,7 @@ function ThemeField({
   return (
     <textarea
       ref={taRef}
+      id={fieldId}
       className={`slot-spots ${validated ? "theme-validated" : "theme-pending"}`}
       // Mobile : data-tip="" masque l'info-bulle du badge au tap/survol du champ thème.
       data-tip={big ? "" : undefined}
@@ -434,6 +447,16 @@ function ThemeField({
   );
 }
 
+/**
+ * Identifiant DOM du champ thème d'un badge. Deux origines possibles — une réservation
+ * enregistrée (son id) ou un ajout du brouillon (sa clé) —, d'où le préfixe : un
+ * brouillon et une réservation ne doivent jamais se disputer le même identifiant.
+ * Sert à AMENER LE CURSEUR sur le thème manquant quand l'enregistrement est refusé.
+ */
+function themeFieldId(ref: { kind: "booking"; id: number } | { kind: "draft"; key: string }) {
+  return ref.kind === "booking" ? `theme-bk-${ref.id}` : `theme-add-${ref.key}`;
+}
+
 // Badge « ma réservation » / sélection en brouillon — RENDU UNIQUE partagé par les
 // réservations existantes de l'usager ET les sélections en attente (pending add).
 // Les deux sont LE MÊME badge : seules la source des compteurs/thème et les callbacks
@@ -453,6 +476,7 @@ const MineBadge = memo(function MineBadge({
   themeMode,
   themesMode,
   themes,
+  themeFieldId,
   enfants,
   accompagnants,
   theme,
@@ -482,6 +506,8 @@ const MineBadge = memo(function MineBadge({
   themeMode: boolean;
   themesMode: "libre" | "liste";
   themes: string[];
+  // Identifiant DOM du champ thème, pour y amener le curseur en cas de refus.
+  themeFieldId?: string;
   enfants: number;
   accompagnants: number;
   theme: string;
@@ -532,6 +558,7 @@ const MineBadge = memo(function MineBadge({
         themesMode={themesMode}
         themes={themes}
         onChange={onSetTheme}
+        fieldId={themeFieldId}
         big={mobile}
         multiline={themeInMiddle}
       />
@@ -2246,7 +2273,37 @@ export function UserAgendaGrid({
   // d'échec au milieu du lot, le panier restant ne contient que ce qui n'a PAS été
   // appliqué — re-cliquer « Enregistrer » ne rejoue plus les annulations déjà
   // faites (« Réservation introuvable ») et le brouillon reste récupérable.
+  /**
+   * Thème obligatoire : rien ne part tant qu'un thème manque. On refuse AVANT l'appel
+   * serveur — qui applique la même règle — pour amener le curseur sur le champ fautif,
+   * ce qu'un aller-retour ne permettrait pas : le serveur ne sait pas de quel badge il
+   * s'agit, et le brouillon peut en contenir plusieurs.
+   *
+   * Portée : les ajouts ET les modifications (vider le thème d'une réservation existante
+   * revient à la laisser sans thème). Un retrait n'est pas concerné.
+   */
+  function themeManquant(): string | null {
+    if (!modes.themeRequired) return null;
+    const removalIds = new Set(pendingRemovals.map((r) => r.bookingId));
+    const add = pendingAdds.find((a) => !a.theme.trim());
+    if (add) return themeFieldId({ kind: "draft", key: add.key });
+    const update = Object.entries(pendingUpdates).find(
+      ([id, u]) => !removalIds.has(Number(id)) && !u.theme.trim(),
+    );
+    return update ? themeFieldId({ kind: "booking", id: Number(update[0]) }) : null;
+  }
+
   function commitPending() {
+    const fautif = themeManquant();
+    if (fautif) {
+      showToast(THEME_REQUIS_MSG, "danger");
+      // Deux temps : le badge d'abord amené à l'écran, le focus ensuite — un focus sur
+      // un élément hors vue ferait sauter la page sans que l'usager voie quoi.
+      const el = document.getElementById(fautif);
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      window.setTimeout(() => (el as HTMLElement | null)?.focus(), 120);
+      return;
+    }
     // Type de l'action en cours (le brouillon ne contient qu'UN élément, cf. verrou) →
     // détermine le toast de résultat : rouge pour une suppression, vert sinon.
     const summary =
@@ -2737,6 +2794,7 @@ export function UserAgendaGrid({
                     themeMode={modes.themeMode}
                     themesMode={service.themesMode}
                     themes={themes}
+                    themeFieldId={themeFieldId({ kind: "booking", id: mb.id })}
                     enfants={cur.enfants}
                     accompagnants={cur.accompagnants}
                     theme={cur.theme}
@@ -2801,6 +2859,7 @@ export function UserAgendaGrid({
                     themeMode={modes.themeMode}
                     themesMode={service.themesMode}
                     themes={themes}
+                    themeFieldId={themeFieldId({ kind: "draft", key: add.key })}
                     enfants={add.enfants}
                     accompagnants={add.accompagnants}
                     theme={add.theme}
