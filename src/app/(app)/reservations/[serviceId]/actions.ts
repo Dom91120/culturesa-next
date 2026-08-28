@@ -118,7 +118,6 @@ async function reserveRecurringInTx(
   await assertReservationLimits(tx, {
     serviceId,
     userId,
-    bookingType: "recurring",
     periodId,
   });
   // Validation : validée d'emblée sauf si le demandeur EFFECTIF est en mode validation.
@@ -356,7 +355,6 @@ async function moveInTx(
   await assertReservationLimits(tx, {
     serviceId,
     userId,
-    bookingType: target.ponctuel ? "unique" : "recurring",
     periodId: target.ponctuel ? (uniqueSlot?.periodId ?? 0) : (target.periodId ?? 0),
     excludeBookingId: bookingId,
   });

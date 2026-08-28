@@ -386,7 +386,6 @@ function limitsTx(opts: {
 const limitsBase = {
   serviceId: "s1",
   userId: "u1",
-  bookingType: "recurring" as const,
   periodId: 4,
 };
 
@@ -405,7 +404,7 @@ describe("assertReservationLimits", () => {
     expect(count).not.toHaveBeenCalled();
   });
 
-  it("récurrent : limite PAR PÉRIODE atteinte → refus", async () => {
+  it("limite PAR PÉRIODE atteinte → refus", async () => {
     const { tx } = limitsTx({
       exercice: { id: 1, maxReservations: 10, maxReservationsPeriod: 2 },
       counts: [2],
@@ -415,7 +414,7 @@ describe("assertReservationLimits", () => {
     );
   });
 
-  it("récurrent : limite ANNUELLE (exercice) atteinte → refus", async () => {
+  it("limite ANNUELLE (exercice) atteinte → refus", async () => {
     const { tx } = limitsTx({
       exercice: { id: 1, maxReservations: 3, maxReservationsPeriod: 2 },
       counts: [1, 3],
@@ -433,24 +432,35 @@ describe("assertReservationLimits", () => {
     await expect(assertReservationLimits(tx, limitsBase)).resolves.toBeUndefined();
   });
 
-  it("ponctuel : compte les STANDALONE via le periodId du CRÉNEAU", async () => {
+  it("compte les DEUX natures ensemble, miroirs exclus", async () => {
+    // Le défaut corrigé : comptées séparément, « 1 par an » en laissait passer deux —
+    // une récurrente ET une ponctuelle, sur deux périodes différentes. Le réglage
+    // annonce un nombre de RÉSERVATIONS, pas un nombre par nature.
     const { tx, count } = limitsTx({
       exercice: { id: 1, maxReservations: 10, maxReservationsPeriod: 10 },
       counts: [0, 0],
     });
-    await assertReservationLimits(tx, { ...limitsBase, bookingType: "unique" });
-    // Par période : ponctuelles standalone dont le créneau porte la période visée.
+    await assertReservationLimits(tx, limitsBase);
+
+    // Par période : récurrentes rattachées à la période + ponctuelles dont le CRÉNEAU
+    // la porte (elles stockent periodId à null).
     expect(count).toHaveBeenNthCalledWith(1, {
       where: expect.objectContaining({
-        bookingType: "unique",
+        // Une série compte pour UNE réservation, pas pour ses quarante séances.
         parentBookingId: null,
-        slot: { periodId: 4 },
+        OR: [
+          { bookingType: "recurring", periodId: { in: [4] } },
+          { bookingType: "unique", slot: { periodId: { in: [4] } } },
+        ],
       }),
     });
-    // Par exercice : créneaux de TOUTES les périodes de l'exercice.
+    // Par exercice : TOUTES ses périodes, mêmes deux natures.
     expect(count).toHaveBeenNthCalledWith(2, {
       where: expect.objectContaining({
-        slot: { periodId: { in: [4, 5] } },
+        OR: [
+          { bookingType: "recurring", periodId: { in: [4, 5] } },
+          { bookingType: "unique", slot: { periodId: { in: [4, 5] } } },
+        ],
       }),
     });
   });

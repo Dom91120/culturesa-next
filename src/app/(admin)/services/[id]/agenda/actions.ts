@@ -32,6 +32,8 @@ import {
   assertSlotCapacity,
   BookingError,
   effectiveOpenOnSchoolHolidays,
+  limiteReservationAtteinte,
+  MESSAGE_LIMITE_GESTIONNAIRE,
   mapBookingError,
   resolveEffectiveDemandeurId,
 } from "@/server/services/bookings";
@@ -1075,8 +1077,28 @@ const createSchema = z
     accompagnants: bookingAccompagnantsSchema.default(0),
     theme: bookingThemeSchema.default(""),
     week: z.enum(["", "A", "B"]).default(""),
+    // Confirmation d'un dépassement de maximum déjà annoncé (cf. AVERTISSEMENT ci-dessous).
+    force: z.boolean().default(false),
   })
   .refine(hasBothParticipants, hasBothParticipantsMsg);
+
+// ── Maxima de réservation côté GESTIONNAIRE : avertir, pas refuser ──
+// L'usager est bloqué net (assertReservationLimits) ; le gestionnaire, lui, tient un
+// guichet — un cas particulier arrive par téléphone et doit rester traitable sans
+// toucher aux réglages de l'exercice. Il voit donc le dépassement AVANT de créer, et
+// confirme (`force`). Le décompte est le même que pour l'usager : un avertissement qui
+// ne dirait pas la même chose que le refus ne servirait à rien.
+async function avertissementMaxima(
+  serviceId: string,
+  userId: string,
+  periodId: number,
+  force: boolean,
+): Promise<{ ok: false; error: string; needsConfirm: true } | null> {
+  if (force) return null;
+  const atteinte = await limiteReservationAtteinte(prisma, { serviceId, userId, periodId });
+  if (!atteinte) return null;
+  return { ok: false, error: MESSAGE_LIMITE_GESTIONNAIRE[atteinte], needsConfirm: true };
+}
 
 /** Crée une réservation récurrente (clic sur un créneau vide de l'agenda). */
 export async function createRecurringBookingAction(input: {
@@ -1089,13 +1111,16 @@ export async function createRecurringBookingAction(input: {
   accompagnants: number;
   theme: string;
   week: "" | "A" | "B";
-}): Promise<{ ok: boolean; error?: string }> {
+  force?: boolean;
+}): Promise<{ ok: boolean; error?: string; needsConfirm?: boolean }> {
   await requireServiceManager(input.serviceId);
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
   }
   const d = parsed.data;
+  const avert = await avertissementMaxima(d.serviceId, d.userId, d.periodId, d.force);
+  if (avert) return avert;
   let mail: BookingConfirmationParams | null = null;
   try {
     await prisma.$transaction(
@@ -1154,6 +1179,7 @@ const createUniqueSchema = z
     enfants: bookingEnfantsSchema.default(0),
     accompagnants: bookingAccompagnantsSchema.default(0),
     theme: bookingThemeSchema.default(""),
+    force: z.boolean().default(false),
   })
   .refine(hasBothParticipants, hasBothParticipantsMsg);
 
@@ -1170,7 +1196,8 @@ export async function createUniqueBookingAction(input: {
   enfants: number;
   accompagnants: number;
   theme: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  force?: boolean;
+}): Promise<{ ok: boolean; error?: string; needsConfirm?: boolean }> {
   await requireServiceManager(input.serviceId);
   const parsed = createUniqueSchema.safeParse(input);
   if (!parsed.success) {
@@ -1186,6 +1213,9 @@ export async function createUniqueBookingAction(input: {
       endTime: true,
       slotDate: true,
       slotDay: true,
+      // La ponctuelle porte sa période par son CRÉNEAU (elle stocke periodId à null) :
+      // c'est elle qui désigne l'exercice, donc les maxima applicables.
+      periodId: true,
       service: { select: { label: true } },
     },
   });
@@ -1196,6 +1226,8 @@ export async function createUniqueBookingAction(input: {
   if (slot.slotDate && slot.slotDate.toISOString().slice(0, 10) < todayParisISO()) {
     return { ok: false, error: "Ce créneau est passé." };
   }
+  const avert = await avertissementMaxima(d.serviceId, d.userId, slot.periodId ?? 0, d.force);
+  if (avert) return avert;
   try {
     await prisma.$transaction(
       async (tx) => {
@@ -1314,6 +1346,9 @@ export async function copyBookingAction(input: {
   ) {
     return { ok: false, error: "Réservation non copiable (séance pointée ou miroir)." };
   }
+  // `force` : un coller n'a pas d'écran où confirmer un dépassement de maximum — le
+  // renvoyer en « à confirmer » se lirait comme un refus sans issue. Le geste vient
+  // d'un gestionnaire qui a déjà la main sur ces maxima ; il passe donc, comme avant.
   const res =
     target.data.kind === "recurring"
       ? await createRecurringBookingAction({
@@ -1326,6 +1361,7 @@ export async function copyBookingAction(input: {
           accompagnants: src.accompagnants,
           theme: src.themeLabel ?? "",
           week: target.data.week,
+          force: true,
         })
       : await createUniqueBookingAction({
           serviceId: input.serviceId,
@@ -1334,6 +1370,7 @@ export async function copyBookingAction(input: {
           enfants: src.enfants,
           accompagnants: src.accompagnants,
           theme: src.themeLabel ?? "",
+          force: true,
         });
   if (res.ok) {
     // La réservation collée CONSERVE la date de dépôt (createdAt) de la source : un

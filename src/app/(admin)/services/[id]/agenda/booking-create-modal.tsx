@@ -67,7 +67,8 @@ export function BookingCreateModal({
     enfants: number;
     accompagnants: number;
     theme: string;
-  }) => Promise<{ ok: boolean; error?: string | null }>;
+    force?: boolean;
+  }) => Promise<{ ok: boolean; error?: string | null; needsConfirm?: boolean }>;
   onClose: () => void;
 }) {
   const [cUser, setCUser] = useState("");
@@ -81,6 +82,10 @@ export function BookingCreateModal({
   const [cAccompagnants, setCAccompagnants] = useState("1");
   const [cTheme, setCTheme] = useState("");
   const [cError, setCError] = useState<string | null>(null);
+  // Dépassement de maximum annoncé par le serveur : la création n'a PAS eu lieu, elle
+  // attend un second clic. Le gestionnaire n'est pas bloqué comme l'usager — il tient
+  // un guichet —, mais il ne franchit plus la limite sans le savoir.
+  const [cAvertissement, setCAvertissement] = useState<string | null>(null);
 
   // Sélection d'un usager (Demandeur) : préremplit Enfant/Adulte avec SON PROFIL
   // (ex. Isabelle ADJANI : 9 enfants + 1 accompagnant), au lieu du défaut 1/1 —
@@ -94,7 +99,7 @@ export function BookingCreateModal({
     setCAccompagnants(String(Math.max(1, u?.accompagnants ?? 0)));
   }
 
-  function submit() {
+  function submit(force = false) {
     if (!cUser) {
       setCError("Choisissez un usager.");
       return;
@@ -108,13 +113,23 @@ export function BookingCreateModal({
       setCError("Au moins 1 enfant et 1 accompagnant sont requis.");
       return;
     }
+    setCError(null);
     void onSubmit({
       userId: cUser,
       enfants: nEnfants,
       accompagnants: nAccompagnants,
       theme: cTheme,
+      force,
     }).then((res) => {
-      if (!res.ok) setCError(res.error ?? "Échec.");
+      if (res.ok) return;
+      // Maximum dépassé : on ANNONCE et on attend le second clic, au lieu d'afficher
+      // une erreur qui laisserait croire que la création est impossible.
+      if (res.needsConfirm) {
+        setCAvertissement(res.error ?? "Maximum de réservations atteint pour cet usager.");
+        return;
+      }
+      setCAvertissement(null);
+      setCError(res.error ?? "Échec.");
     });
   }
 
@@ -321,12 +336,27 @@ export function BookingCreateModal({
           {cError}
         </p>
       )}
+      {cAvertissement && (
+        <p
+          style={{
+            display: "block",
+            fontSize: ".78rem",
+            lineHeight: 1.5,
+            color: "var(--warn)",
+            margin: ".2rem 0 0",
+          }}
+        >
+          ⚠️ {cAvertissement} Confirmez pour créer quand même.
+        </p>
+      )}
       <div className="btn-row">
         <button type="button" className="btn btn-ghost" onClick={onClose}>
           Annuler
         </button>
-        <button type="button" className="btn btn-primary" onClick={submit}>
-          Réserver
+        {/* Le libellé change après l'avertissement : le second clic n'est pas une
+            simple répétition du premier, il passe outre un maximum. */}
+        <button type="button" className="btn btn-primary" onClick={() => submit(!!cAvertissement)}>
+          {cAvertissement ? "Réserver quand même" : "Réserver"}
         </button>
       </div>
     </ModalOverlay>

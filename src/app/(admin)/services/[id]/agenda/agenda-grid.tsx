@@ -2121,7 +2121,9 @@ export function AgendaGrid({
     enfants: number;
     accompagnants: number;
     theme: string;
-  }): Promise<{ ok: boolean; error?: string | null }> {
+    // Dépassement de maximum déjà annoncé et confirmé dans la modale.
+    force?: boolean;
+  }): Promise<{ ok: boolean; error?: string | null; needsConfirm?: boolean }> {
     if (!createCtx) return { ok: false, error: "Contexte de création perdu." };
     // Créneau ponctuel : réservation ponctuelle (pas de période ni de jour).
     if (createCtx.ponctuel) {
@@ -2132,8 +2134,9 @@ export function AgendaGrid({
         enfants: form.enfants,
         accompagnants: form.accompagnants,
         theme: form.theme,
+        force: form.force,
       });
-      if (!res.ok) return { ok: false, error: res.error };
+      if (!res.ok) return { ok: false, error: res.error, needsConfirm: res.needsConfirm };
       setCreateCtx(null);
       router.refresh();
       return { ok: true };
@@ -2153,8 +2156,9 @@ export function AgendaGrid({
       accompagnants: form.accompagnants,
       theme: form.theme,
       week: effectiveWeek ?? "",
+      force: form.force,
     });
-    if (!res.ok) return { ok: false, error: res.error };
+    if (!res.ok) return { ok: false, error: res.error, needsConfirm: res.needsConfirm };
     setCreateCtx(null);
     router.refresh();
     return { ok: true };
