@@ -43,7 +43,33 @@ export const ROLES_2FA_REQUIS: ReadonlySet<Role> = new Set<Role>(["administrateu
 /** Chemin de l'écran d'enrôlement — hors du périmètre du garde, par construction. */
 export const CHEMIN_ENROLEMENT = "/mon-compte/securite";
 
+/**
+ * Dérogation de DÉVELOPPEMENT (jamais en production).
+ *
+ * L'exigence prend la forme d'une redirection vers l'enrôlement : sur un poste de
+ * développement, elle impose d'enregistrer un secret TOTP DE PLUS dans son
+ * application d'authentification — distinct de celui du serveur, les bases et les
+ * secrets différant — et de le refaire à chaque base repartie de zéro ou restaurée
+ * depuis un dump.
+ *
+ * D'où cette échappatoire, taillée pour ne JAMAIS pouvoir s'ouvrir sur une
+ * installation réelle. Deux conditions cumulées :
+ *   - `NODE_ENV` différent de « production » : un build servi par `npm run start`
+ *     l'ignore, y compris en local ;
+ *   - `DEV_SKIP_2FA` valant EXACTEMENT « true ». Comme pour `ALLOW_INSECURE_COOKIES`
+ *     (A5), ni « 1 » ni « TRUE » : une échappatoire trop accueillante finit ouverte
+ *     par accident, et qui se trompe de valeur doit voir que ça n'a pas pris.
+ *
+ * Elle ne lève QUE l'exigence d'enrôlement. Un compte réellement enrôlé
+ * (`twoFactorEnabled`) se voit toujours réclamer son code à la connexion : c'est
+ * Better Auth qui l'impose, et cette fonction n'a aucune prise dessus.
+ */
+export function derogation2FADev(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV !== "production" && env.DEV_SKIP_2FA === "true";
+}
+
 /** Ce rôle doit-il disposer d'un second facteur pour accéder à l'administration ? */
-export function exige2FA(role: Role | undefined): boolean {
-  return !!role && ROLES_2FA_REQUIS.has(role);
+export function exige2FA(role: Role | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (!role || !ROLES_2FA_REQUIS.has(role)) return false;
+  return !derogation2FADev(env);
 }
