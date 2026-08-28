@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendMailOrQueue } from "@/server/mailer";
 import { prisma } from "@/server/db";
+import { sendMailOrQueue } from "@/server/mailer";
 import { isDigestDue, sendManagerDigest } from "./manager-notice";
 
 // Périphérie remplacée : base, envoi, gabarits. Ce qui est testé ici est la RÈGLE
@@ -49,9 +49,9 @@ describe("isDigestDue — mode « each » (Unitaires)", () => {
     const now = paris("2026-08-28T10:00:00Z");
     // Y compris à la seconde qui suit le dernier envoi — c'est tout l'objet du mode :
     // la seule chose qui empêche un doublon est le curseur, pas une échéance.
-    expect(isDigestDue(cfg({ mode: "each", lastSentAt: new Date(now.getTime() - 1000) }), now)).toBe(
-      true,
-    );
+    expect(
+      isDigestDue(cfg({ mode: "each", lastSentAt: new Date(now.getTime() - 1000) }), now),
+    ).toBe(true);
     expect(isDigestDue(cfg({ mode: "each", lastSentAt: null }), now)).toBe(true);
   });
 
