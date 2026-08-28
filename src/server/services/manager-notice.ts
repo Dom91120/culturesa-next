@@ -23,9 +23,19 @@ import { getMailTemplate } from "@/server/services/mail-templates";
 //  Configuration PAR SERVICE (colonnes `Service.mgrNotice*`, réglées dans
 //  Paramètres > Réservations) :
 //    - none   : aucune
+//    - each   : unitaires — un e-mail PAR réservation, sans attendre d'échéance
 //    - hours  : toutes les N heures
 //    - daily  : quotidienne à H h
 //    - weekly : hebdomadaire le <jour> à H h
+//
+//  `each` est le seul mode où rien ne s'accumule : l'échéance est toujours atteinte,
+//  et chaque réservation part dans son propre e-mail plutôt que dans une liste. Il
+//  emprunte néanmoins le MÊME chemin que les autres — le balayage du cron —, et non
+//  un envoi greffé sur la création de réservation : une notification qui dépendrait
+//  du chemin d'écriture emprunté (usager, administration, récurrence, auto-validation)
+//  finirait par en oublier un. La contrepartie est la granularité du cron : « sans
+//  attendre » signifie « sans attendre d'échéance de regroupement », soit au plus
+//  tard au passage suivant (15 min par défaut, cf. Tâches planifiées).
 //
 //  Déclenché à chaque passage du cron auto-validate (~15 min) : pour chaque
 //  service dont l'échéance est atteinte, on envoie à ses gestionnaires ce qui s'est
@@ -34,14 +44,14 @@ import { getMailTemplate } from "@/server/services/mail-templates";
 //  une seconde colonne n'apporterait rien qu'un risque de dérive.
 // ════════════════════════════════════════════════════════════
 
-export type NoticeMode = "none" | "hours" | "daily" | "weekly";
+export type NoticeMode = "none" | "each" | "hours" | "daily" | "weekly";
 // Jours : alias de la source unique DAYS (schemas/config). Réexporté car consommé
 // par config/actions.ts (notification gestionnaires) via z.enum(WEEKDAYS).
 export const WEEKDAYS = DAYS;
 type Weekday = (typeof DAYS)[number];
 
 function normalizeMode(v: string): NoticeMode {
-  return v === "hours" || v === "daily" || v === "weekly" ? v : "none";
+  return v === "each" || v === "hours" || v === "daily" || v === "weekly" ? v : "none";
 }
 function normalizeWeekday(v: string): Weekday {
   return (WEEKDAYS as readonly string[]).includes(v) ? (v as Weekday) : "lun";
@@ -58,8 +68,11 @@ type DueConfig = {
 // Calendrier Europe/Paris (heure murale, DST) : source unique dans lib/paris-time.
 
 /** Le digest d'un service est-il dû à `now`, vu son mode et son dernier envoi ? */
-function isDigestDue(cfg: DueConfig, now: Date): boolean {
+export function isDigestDue(cfg: DueConfig, now: Date): boolean {
   if (cfg.mode === "none") return false;
+  // Unitaires : jamais d'attente, l'échéance est toujours atteinte. Le curseur suffit
+  // à ne pas renvoyer deux fois la même réservation.
+  if (cfg.mode === "each") return true;
   if (cfg.mode === "hours") {
     if (!cfg.lastSentAt) return true; // baseline posée par sendManagerDigest
     return now.getTime() - cfg.lastSentAt.getTime() >= cfg.intervalHours * 3_600_000;
@@ -216,14 +229,20 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
       let sentForService = false;
       for (const d of digests) {
         if (d.rows.length === 0) continue;
-        const liste = d.grouped
-          ? await buildGroupedNoticeList(svc.id, d.rows)
-          : await buildNoticeList(svc.id, d.rows);
-        const vars = { service: svc.label, nombre: String(d.rows.length) };
-        const built = buildTemplatedMail(d.tpl, vars, appUrl, { liste });
-        for (const to of managers) {
-          await sendMailOrQueue({ to, ...built });
-          emails += 1;
+        // Unitaires : un lot PAR réservation, donc un e-mail par réservation. Les
+        // autres modes n'en font qu'un, portant la liste entière. Même gabarit dans
+        // les deux cas : `{{nombre}}` vaut alors 1 et `{{liste}}` tient sur une ligne.
+        const lots: NoticeRow[][] = cfg.mode === "each" ? d.rows.map((r) => [r]) : [d.rows];
+        for (const lot of lots) {
+          const liste = d.grouped
+            ? await buildGroupedNoticeList(svc.id, lot)
+            : await buildNoticeList(svc.id, lot);
+          const vars = { service: svc.label, nombre: String(lot.length) };
+          const built = buildTemplatedMail(d.tpl, vars, appUrl, { liste });
+          for (const to of managers) {
+            await sendMailOrQueue({ to, ...built });
+            emails += 1;
+          }
         }
         sentForService = true;
       }

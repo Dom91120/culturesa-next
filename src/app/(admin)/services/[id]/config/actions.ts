@@ -36,7 +36,7 @@ const validationSettingsSchema = z.object({
   validationBloquante: z.boolean(),
   autoValidationDelay: z.coerce.number().int(),
   // Notification gestionnaires (digest des auto-validations).
-  mgrNoticeMode: z.enum(["none", "hours", "daily", "weekly"]),
+  mgrNoticeMode: z.enum(["none", "each", "hours", "daily", "weekly"]),
   mgrNoticeIntervalHours: z.coerce.number().int().min(1).max(168),
   mgrNoticeHour: z.coerce.number().int().min(0).max(23),
   mgrNoticeWeekday: z.enum(WEEKDAYS),

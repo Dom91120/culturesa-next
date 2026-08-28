@@ -18,7 +18,7 @@ const hhmm = (n: number) => `${String(n).padStart(2, "0")}:00`;
 const hourOf = (s: string, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, Number.parseInt(s, 10) || lo));
 
-type NoticeMode = "none" | "hours" | "daily" | "weekly";
+type NoticeMode = "none" | "each" | "hours" | "daily" | "weekly";
 
 type Props = {
   serviceId: string;
@@ -88,7 +88,9 @@ export function ServiceValidationSettings(props: Props) {
   const [autoValidationDelay, setAutoValidationDelay] = useState(props.autoValidationDelay);
   // Mode de notification initial (résolu une fois ; partagé par l'état et la ref d'auto-save).
   const initialMgrMode = (
-    ["hours", "daily", "weekly"].includes(props.mgrNoticeMode) ? props.mgrNoticeMode : "none"
+    ["each", "hours", "daily", "weekly"].includes(props.mgrNoticeMode)
+      ? props.mgrNoticeMode
+      : "none"
   ) as NoticeMode;
   const [mgrMode, setMgrMode] = useState<NoticeMode>(initialMgrMode);
   const [mgrInterval, setMgrInterval] = useState(props.mgrNoticeIntervalHours);
@@ -231,6 +233,26 @@ export function ServiceValidationSettings(props: Props) {
               style={{ accentColor: "var(--accent)" }}
             />
             Aucune
+          </label>
+
+          {/* Unitaires : rien ne s'accumule — chaque réservation part dans son propre
+              e-mail, sans attendre d'échéance de regroupement. Seul mode sans champ
+              associé, d'où le repère en gris à la place. */}
+          <label style={radioRow}>
+            <input
+              type="radio"
+              name="mgr-notice"
+              checked={mgrMode === "each"}
+              onChange={() => {
+                setMgrMode("each");
+                save({ mgrNoticeMode: "each" });
+              }}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            Unitaires
+            <span style={{ color: "var(--muted)" }}>
+              — chaque notification est envoyée sans attendre
+            </span>
           </label>
 
           <label style={radioRow}>

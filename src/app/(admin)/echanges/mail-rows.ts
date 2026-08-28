@@ -114,13 +114,13 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
   manager_digest: {
     label: "Auto-validations",
     description:
-      "Récapitulatif des réservations validées automatiquement, envoyé aux gestionnaires du service (rôle gestionnaire, via leur rattachement). Fréquence réglée par service (Paramètres > Réservations).",
+      "Récapitulatif des réservations validées automatiquement, envoyé aux gestionnaires du service (rôle gestionnaire, via leur rattachement). Fréquence réglée par service (Paramètres > Réservations) ; en mode « Unitaires », un e-mail par réservation au lieu d'un récapitulatif.",
     recipient: "Les gestionnaires du service",
   },
   manager_new_bookings: {
     label: "Nouvelles réservations",
     description:
-      "Récapitulatif des réservations déposées depuis la dernière notification — demandes en attente ET confirmées, groupées par nature dans la liste —, envoyé aux gestionnaires du service. Même fréquence que « Auto-validations » (Paramètres > Réservations).",
+      "Récapitulatif des réservations déposées depuis la dernière notification — demandes en attente ET confirmées, groupées par nature dans la liste —, envoyé aux gestionnaires du service. Même fréquence que « Auto-validations » (Paramètres > Réservations) ; en mode « Unitaires », un e-mail par réservation au lieu d'un récapitulatif.",
     recipient: "Les gestionnaires du service",
   },
 };

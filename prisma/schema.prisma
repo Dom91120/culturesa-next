@@ -51,8 +51,11 @@ enum Pointage {
 }
 
 // Mode de notification des gestionnaires (digest des auto-validations).
+// `each` = « Unitaires » : un e-mail par réservation, sans regroupement ni attente
+// d'échéance — le seul mode où rien ne s'accumule.
 enum MgrNoticeMode {
   none
+  each
   hours
   daily
   weekly
