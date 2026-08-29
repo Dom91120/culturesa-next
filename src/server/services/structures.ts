@@ -21,6 +21,32 @@ export function deleteStructure(id: number) {
   return prisma.structure.delete({ where: { id } });
 }
 
+// Clé de rapprochement anti-doublon : espaces normalisés + casse pliée — même esprit
+// que le rapprochement de la saisie libre, en rattrapant EN PLUS les espaces
+// irréguliers déjà en base (qu'un `equals insensitive` SQL ne verrait pas).
+const cleDoublon = (label: string) => label.replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * Doublon de référentiel : une AUTRE structure de la même catégorie dont le libellé
+ * ne se distingue ni par la casse ni par les espaces (« École  Verte » ≡ « école
+ * verte »). Garde-fou de la modale d'administration — la saisie libre a le sien
+ * (resolveStructureLibre), la création admin n'en avait aucun : deux « Gambetta »
+ * identiques à l'œil ont été créés en production (2026-08). Comparaison en mémoire
+ * sur la liste de la catégorie (référentiel court).
+ */
+export async function structureEnDoublon(
+  demandeurId: number,
+  label: string,
+  excludeId?: number,
+): Promise<boolean> {
+  const jumelles = await prisma.structure.findMany({
+    where: { demandeurId, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    select: { label: true },
+  });
+  const cle = cleDoublon(label);
+  return jumelles.some((s) => cleDoublon(s.label) === cle);
+}
+
 /**
  * Structure SAISIE (catégorie `structureLibre`, ex. « Autres ») → identifiant.
  *
