@@ -4006,7 +4006,9 @@ export function AgendaGrid({
                 setDetail(null);
                 router.refresh();
               }}
-              run={runResult}
+              // Confirmation de suppression : cible réelle (parente pour une occurrence
+              // récurrente) — confirmDeleteBooking referme la fiche après coup.
+              onDelete={() => setDeleteTarget(actionBooking(bk))}
             />
           );
         })()}

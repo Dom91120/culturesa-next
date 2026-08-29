@@ -3,11 +3,7 @@
 import { useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
 import { formatTel } from "@/lib/format";
-import {
-  setBookingPointageAction,
-  setBookingValidatedAction,
-  updateBookingDetailAction,
-} from "./actions";
+import { setBookingPointageAction, updateBookingDetailAction } from "./actions";
 import { plural } from "./agenda-format";
 import type { Booking } from "./agenda-grid";
 import { OccurrencesField } from "./occurrences-field";
@@ -26,8 +22,13 @@ const FIELD_TITLE_STYLE: React.CSSProperties = {
  * - Demandeur en lecture seule.
  * - Participants : 2 compteurs (Enfants + Adultes/Accompagnants).
  * - Thème : champ libre (themesMode "libre") ou <select> (themesMode "liste").
- * - Verrou : une réservation pointée n'est pas modifiable (édition désactivée),
- *   mais les actions secondaires (pointage / suppression) restent accessibles.
+ * - Verrou : une réservation pointée n'est pas modifiable (édition désactivée) ; SEUL le
+ *   motif d'absence reste saisissable (le pointage n'est pas gouverné par ce verrou).
+ * - Boutons : uniquement ceux du FORMULAIRE (Enregistrer / Annuler / Supprimer, selon les
+ *   droits). Valider/dévalider et pointer passent EXCLUSIVEMENT par les modes validation
+ *   et pointage de la grille (décision Dom 2026-08-29 — plus de rangée d'actions ici).
+ * - Champs : un champ modifiable garde le chrome input ; un champ figé est un aplat sans
+ *   liseré (`.bdet-form` dans app-legacy.css).
  * - `canEdit` / `editBookingId` : l'édition des participants et du thème est découplée du
  *   mode consultation (`readOnly`). Pour une réservation RÉCURRENTE non validée, la fiche
  *   reste en consultation (actions de gestion masquées) mais les compteurs sont modifiables
@@ -51,7 +52,7 @@ export function BookingDetailModal({
   notice,
   onClose,
   onSaved,
-  run,
+  onDelete,
 }: {
   booking: Booking;
   serviceId: string;
@@ -72,15 +73,16 @@ export function BookingDetailModal({
   notice: string | null;
   onClose: () => void;
   onSaved: () => void;
-  // Exécuteur d'action du parent (contrat { ok, error } : un échec affiche un toast).
-  run: (p: Promise<{ ok: boolean; error?: string }>) => void;
+  // Ouvre la confirmation de suppression (le parent connaît la cible réelle : la
+  // PARENTE pour une occurrence récurrente).
+  onDelete: () => void;
 }) {
   const [, startTransition] = useTransition();
   const [enfants, setEnfants] = useState(String(booking.enfants));
   const [accompagnants, setAccompagnants] = useState(String(booking.accompagnants));
   const [theme, setTheme] = useState(booking.theme);
-  // Motif d'absence (en-tête) : saisi ici, enregistré au blur/Entrée via l'action de
-  // pointage — n'existe que sur une occurrence pointée absente.
+  // Motif d'absence : champ du formulaire, enregistré par le bouton « Enregistrer »
+  // comme les autres — n'existe que sur une occurrence pointée absente.
   const [motif, setMotif] = useState(booking.pointageMotif);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -88,6 +90,13 @@ export function BookingDetailModal({
   const locked = booking.pointage != null;
   // Édition effective des participants / du thème.
   const editable = canEdit && !locked;
+  // Motif saisissable dès que la séance est absente : le pointage (et son motif) n'est
+  // pas gouverné par le verrou — la fiche d'une occurrence pointée est justement en
+  // consultation (readOnly), brancher sur readOnly le rendait insaisissable.
+  const motifEditable = booking.pointage === "absent";
+  // Suppression : action de gestion — jamais en consultation ni sur une résa
+  // verrouillée par le pointage (mêmes règles que la croix des badges).
+  const canDelete = !readOnly && !locked;
   // Le champ thème n'apparaît que si le service est en mode thèmes (liste) OU si la
   // réservation a déjà un thème non vide (rester fidèle au legacy sans le masquer à tort).
   const showTheme = themesMode === "liste" || booking.theme.trim() !== "";
@@ -95,49 +104,58 @@ export function BookingDetailModal({
   const themeOptions =
     themesMode === "liste" && theme && !themes.includes(theme) ? [theme, ...themes] : themes;
 
-  const dirty =
+  const detailDirty =
     Number(enfants) !== booking.enfants ||
     Number(accompagnants) !== booking.accompagnants ||
     theme !== booking.theme;
+  const motifDirty = motifEditable && motif.trim() !== booking.pointageMotif.trim();
+  const dirty = (editable && detailDirty) || motifDirty;
 
   function reset() {
     setEnfants(String(booking.enfants));
     setAccompagnants(String(booking.accompagnants));
     setTheme(booking.theme);
+    setMotif(booking.pointageMotif);
     setError(null);
   }
 
+  // Enregistre ce qui a changé ET est modifiable : détail (participants/thème, sur la
+  // cible d'édition) puis motif d'absence (sur l'occurrence, via l'action de pointage —
+  // le pointage est déjà « absent », seul le motif bouge).
   function save() {
-    if (!dirty || !editable) return;
+    if (!dirty) return;
     setSaving(true);
     setError(null);
     startTransition(async () => {
-      const res = await updateBookingDetailAction({
-        bookingId: editBookingId,
-        serviceId,
-        enfants: Number(enfants) || 0,
-        accompagnants: Number(accompagnants) || 0,
-        theme,
-      });
-      setSaving(false);
-      if (!res.ok) {
-        setError(res.error ?? "Échec.");
-        return;
+      if (editable && detailDirty) {
+        const res = await updateBookingDetailAction({
+          bookingId: editBookingId,
+          serviceId,
+          enfants: Number(enfants) || 0,
+          accompagnants: Number(accompagnants) || 0,
+          theme,
+        });
+        if (!res.ok) {
+          setSaving(false);
+          setError(res.error ?? "Échec.");
+          return;
+        }
       }
+      if (motifDirty) {
+        const res = await setBookingPointageAction(booking.id, serviceId, "absent", motif.trim());
+        if (!res.ok) {
+          setSaving(false);
+          setError(res.error ?? "Échec.");
+          return;
+        }
+      }
+      setSaving(false);
       onSaved();
     });
   }
 
   const nEnf = Number(enfants) || 0;
   const nAcc = Number(accompagnants) || 0;
-
-  // Enregistre le motif d'absence s'il a changé (blur / Entrée). Passe par l'action
-  // de pointage : « absent » + motif — le pointage est déjà absent, seul le motif bouge.
-  function saveMotif() {
-    const m = motif.trim();
-    if (m === booking.pointageMotif.trim()) return;
-    run(setBookingPointageAction(booking.id, serviceId, "absent", m));
-  }
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -222,9 +240,6 @@ export function BookingDetailModal({
             {booking.pointage === "present" ? "P" : "A"}
           </span>
         )}
-        {/* Motif d'absence : toujours éditable — le pointage (et son motif) n'est pas
-            gouverné par le verrou, et la fiche d'une occurrence pointée est justement
-            en consultation (readOnly) : brancher sur readOnly le rendait insaisissable. */}
       </div>
 
       {/* La phrase « Réservation pointée — édition verrouillée. » est remplacée par le
@@ -235,11 +250,11 @@ export function BookingDetailModal({
         </p>
       )}
 
-      <div className="form-grid">
+      {/* `.bdet-form` : distinction visuelle modifiable / figé (cf. app-legacy.css). */}
+      <div className="form-grid bdet-form">
         {/* Motif d'absence : PREMIER champ de la fiche, uniquement quand la séance est
-            pointée absente. Enregistré au blur / à Entrée via l'action de pointage
-            (le pointage et son motif ne sont pas gouvernés par le verrou d'édition). */}
-        {booking.pointage === "absent" && (
+            pointée absente. Enregistré par le bouton « Enregistrer » (Entrée = raccourci). */}
+        {motifEditable && (
           <div className="field full">
             <label htmlFor="bdet-motif" style={FIELD_TITLE_STYLE}>
               Motif de l'absence
@@ -248,9 +263,8 @@ export function BookingDetailModal({
               id="bdet-motif"
               value={motif}
               onChange={(e) => setMotif(e.target.value)}
-              onBlur={saveMotif}
               onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Enter") save();
               }}
               maxLength={255}
             />
@@ -370,74 +384,34 @@ export function BookingDetailModal({
         </p>
       )}
 
-      {editable && (
+      {/* Boutons du FORMULAIRE uniquement (valider/dévalider et pointer passent par les
+          modes de la grille) : Supprimer à gauche selon les droits, Annuler/Enregistrer
+          à droite dès qu'un champ de la fiche est modifiable. */}
+      {(editable || motifEditable || canDelete) && (
         <div className="btn-row">
+          {canDelete && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ marginRight: "auto" }}
+              onClick={onDelete}
+            >
+              🗑 Supprimer
+            </button>
+          )}
           {dirty && (
             <button type="button" className="btn btn-ghost" onClick={reset}>
               Annuler
             </button>
           )}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!dirty || saving}
-            onClick={save}
-          >
-            💾 Enregistrer
-          </button>
-        </div>
-      )}
-
-      {/* Actions secondaires — masquées en consultation (lecture seule), SAUF sur une
-          occurrence pointée : sa fiche passe en consultation À CAUSE du verrou pointage,
-          or le pointage lui-même n'est pas gouverné par ce verrou — sans cette exception,
-          la fiche ouverte depuis le macaron A n'offrait plus ni Présent/Absent ni
-          Effacer (Valider, lui, reste grisé tant que la séance est pointée). */}
-      {(!readOnly || locked) && (
-        <div
-          className="btn-row"
-          style={{
-            marginTop: ".75rem",
-            paddingTop: ".6rem",
-            borderTop: "1px solid var(--border)",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ fontSize: ".72rem" }}
-            disabled={locked}
-            onClick={() =>
-              run(setBookingValidatedAction(booking.id, serviceId, !booking.validated))
-            }
-          >
-            {booking.validated ? "↩ Dévalider" : "✓ Valider"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ fontSize: ".72rem" }}
-            onClick={() => run(setBookingPointageAction(booking.id, serviceId, "present"))}
-          >
-            ✅ Présent
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ fontSize: ".72rem" }}
-            onClick={() => run(setBookingPointageAction(booking.id, serviceId, "absent"))}
-          >
-            ❌ Absent
-          </button>
-          {booking.pointage && (
+          {(editable || motifEditable) && (
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ fontSize: ".72rem" }}
-              onClick={() => run(setBookingPointageAction(booking.id, serviceId, null))}
+              className="btn btn-primary"
+              disabled={!dirty || saving}
+              onClick={save}
             >
-              ⚪ Effacer le pointage
+              💾 Enregistrer
             </button>
           )}
         </div>

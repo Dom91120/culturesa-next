@@ -2547,6 +2547,23 @@ textarea.theme-pending:focus::placeholder {
   min-height: 1.25rem;
   word-break: break-word;
 }
+/* Fiche réservation — distinction MODIFIABLE / figé (Dom 2026-08-29) : un champ
+   éditable garde le chrome input (liseré + fond qui se détache de la modale) ; un
+   champ figé (lecture seule ou désactivé) devient un aplat gris SANS liseré. */
+.bdet-form input:not(:disabled):not(:focus),
+.bdet-form select:not(:disabled):not(:focus) {
+  background: var(--surface);
+}
+.bdet-form input:disabled,
+.bdet-form select:disabled {
+  background: var(--surface2);
+  border-color: transparent;
+  color: var(--text);
+  opacity: 1;
+}
+.bdet-form .bdet-readonly {
+  border-color: transparent;
+}
 .cap-input {
   width: 42px;
   font-size: 0.78rem;
