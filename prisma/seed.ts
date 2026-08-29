@@ -413,6 +413,21 @@ async function main() {
   ];
   for (const b of demoBookings) {
     const userId = userIds[b.user];
+    // Snapshot fiche usager (comme bookingUserSnapshot en prod) : les stats de démo
+    // lisent structureLabel/demandeurLabel/niveauLabel sur la réservation.
+    const fiche = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        niveau: true,
+        structure: { select: { label: true } },
+        demandeur: { select: { label: true } },
+      },
+    });
+    const snapshot = {
+      structureLabel: fiche?.structure?.label ?? "",
+      demandeurLabel: fiche?.demandeur?.label ?? "",
+      niveauLabel: (fiche?.niveau ?? "").trim(),
+    };
     await prisma.booking.upsert({
       where: {
         uq_recurring: {
@@ -423,7 +438,7 @@ async function main() {
           week: b.week,
         },
       },
-      update: { enfants: b.enfants, themeLabel: b.theme, validated: true },
+      update: { enfants: b.enfants, themeLabel: b.theme, ...snapshot, validated: true },
       create: {
         bookingType: "recurring",
         userId,
@@ -433,6 +448,7 @@ async function main() {
         week: b.week,
         enfants: b.enfants,
         themeLabel: b.theme,
+        ...snapshot,
         validated: true,
         autoValidateFrom: new Date(),
       },

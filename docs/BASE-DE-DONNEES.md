@@ -294,6 +294,7 @@ Réservation. Une **récurrente** (parente) génère des **enfants** datés (un 
 | week | texte | "" | | parité A/B ("" / A / B) |
 | parentBookingId | entier? | | ↗ `bookings` (Cascade, self) | parent (pour un enfant) |
 | themeLabel | texte | "" | | thème |
+| structureLabel / demandeurLabel / niveauLabel | texte | "" | | snapshot fiche usager à la création (structure / catégorie / niveau) — les stats lisent ces colonnes, pas la fiche courante |
 | enfants / accompagnants | smallint | 0 | | effectifs |
 | validated | booléen | false | | validée |
 | autoValidateFrom | horodatage? | | | départ du décompte d'auto-validation |

@@ -428,6 +428,11 @@ async function updateInTx(
       slotId: true,
       periodId: true,
       week: true,
+      // Snapshot fiche usager de la CRÉATION : propagé tel quel aux enfants
+      // (l'édition ne re-snapshote pas).
+      structureLabel: true,
+      demandeurLabel: true,
+      niveauLabel: true,
       validated: true,
     },
   });
@@ -470,6 +475,9 @@ async function updateInTx(
       periodId: b.periodId,
       week: b.week,
       themeLabel,
+      structureLabel: b.structureLabel,
+      demandeurLabel: b.demandeurLabel,
+      niveauLabel: b.niveauLabel,
       enfants: enf,
       accompagnants: acc,
       validated: b.validated,

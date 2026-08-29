@@ -531,6 +531,14 @@ model Booking {
   week            String      @default("")
   parentBookingId Int?
   themeLabel      String      @default("")
+  // Snapshot de la fiche usager À LA CRÉATION (même principe que themeLabel) :
+  // structure, catégorie (demandeur) et niveau au moment de la réservation. Les
+  // statistiques lisent CES colonnes — un changement ultérieur de la fiche (Mon
+  // compte, admin) ne réécrit plus la répartition des exercices passés.
+  // "" = non renseigné à la création.
+  structureLabel  String      @default("")
+  demandeurLabel  String      @default("")
+  niveauLabel     String      @default("")
   enfants         Int         @default(0) @db.SmallInt
   accompagnants   Int         @default(0) @db.SmallInt
   validated       Boolean     @default(false)

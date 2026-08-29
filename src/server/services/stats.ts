@@ -171,14 +171,12 @@ export async function getServiceStats(
           jauge: true,
         },
       },
-      user: {
-        select: {
-          niveau: true,
-          structure: { select: { label: true } },
-          // Repli « structures » : demandeur si l'usager n'a pas de structure.
-          demandeur: { select: { label: true } },
-        },
-      },
+      // Snapshot fiche usager posé À LA CRÉATION de la réservation (cf.
+      // bookingUserSnapshot) : la répartition structures/niveaux ne bouge plus quand
+      // la fiche change (Mon compte, admin) après coup.
+      structureLabel: true,
+      demandeurLabel: true,
+      niveauLabel: true,
     },
   });
   // Filtre type : miroir = récurrente, ponctuel autonome = ponctuelle.
@@ -189,8 +187,10 @@ export async function getServiceStats(
     (b) =>
       b.slot.slotDate != null && typePass(b) && inRange(ymd(b.slot.slotDate), dateFrom, dateTo),
   );
+  // Repli « structures » : catégorie (demandeur) si l'usager n'avait pas de structure
+  // à la réservation — mêmes replis qu'avant, mais sur le snapshot.
   const structOf = (b: (typeof occAll)[number]): string =>
-    b.user.structure?.label || b.user.demandeur?.label || "(sans structure)";
+    b.structureLabel || b.demandeurLabel || "(sans structure)";
   const sessionKeyOf = (b: (typeof occAll)[number], dateStr: string): string =>
     `${b.slot.parentSlotId ?? b.slot.id}|${dateStr}`;
 
@@ -227,7 +227,7 @@ export async function getServiceStats(
     const dk = dayKeyOf(b.slot.slotDay, b.slot.slotDate);
     if (dk) dayMap.set(dk, (dayMap.get(dk) ?? 0) + 1);
     structMap.set(structOf(b), (structMap.get(structOf(b)) ?? 0) + 1);
-    const niv = b.user.niveau?.trim() || "(aucun)";
+    const niv = b.niveauLabel.trim() || "(aucun)";
     niveauMap.set(niv, (niveauMap.get(niv) ?? 0) + 1);
     // Thème : seules les occurrences ayant EFFECTIVEMENT un thème saisi comptent (pas de
     // catégorie "(sans thème)" — sur un service sans thèmes, ça noierait le panneau).

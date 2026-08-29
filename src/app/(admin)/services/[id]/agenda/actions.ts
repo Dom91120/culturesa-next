@@ -32,6 +32,7 @@ import {
 import {
   assertSlotCapacity,
   BookingError,
+  bookingUserSnapshot,
   effectiveOpenOnSchoolHolidays,
   limiteReservationAtteinte,
   MESSAGE_LIMITE_GESTIONNAIRE,
@@ -1294,6 +1295,7 @@ export async function createUniqueBookingAction(input: {
             enfants: d.enfants,
             accompagnants: d.accompagnants,
             themeLabel: d.theme,
+            ...(await bookingUserSnapshot(tx, d.userId)),
             validated: true,
             autoValidateFrom: new Date(),
           },

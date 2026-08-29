@@ -465,6 +465,33 @@ export async function assertNotSchoolHolidayForUser(
 }
 
 /**
+ * Snapshot « fiche usager » posé sur la réservation À LA CRÉATION (même principe que
+ * themeLabel) : structure, catégorie (demandeur) et niveau tels qu'au moment de la
+ * réservation. Les statistiques lisent ces colonnes — un changement ultérieur de la
+ * fiche (Mon compte, admin) ne réécrit plus la répartition des exercices passés.
+ * À étaler dans le `data` de chaque booking.create ; les réservations-enfants
+ * héritent du snapshot de leur parent (recurring-children).
+ */
+export async function bookingUserSnapshot(
+  tx: Prisma.TransactionClient,
+  userId: string,
+): Promise<{ structureLabel: string; demandeurLabel: string; niveauLabel: string }> {
+  const u = await tx.user.findUnique({
+    where: { id: userId },
+    select: {
+      niveau: true,
+      structure: { select: { label: true } },
+      demandeur: { select: { label: true } },
+    },
+  });
+  return {
+    structureLabel: u?.structure?.label ?? "",
+    demandeurLabel: u?.demandeur?.label ?? "",
+    niveauLabel: (u?.niveau ?? "").trim(),
+  };
+}
+
+/**
  * Crée une réservation pour un créneau ponctuel, en garantissant l'absence de
  * surbooking. La transaction est SÉRIALISABLE : deux réservations concurrentes
  * sur la dernière place en feront échouer une (à réessayer), jamais les deux.
@@ -562,6 +589,7 @@ export async function createUniqueBookingInTx(
       enfants: input.enfants,
       accompagnants: input.accompagnants,
       themeLabel: input.themeLabel,
+      ...(await bookingUserSnapshot(tx, userId)),
       validated,
       autoValidateFrom: new Date(),
     },

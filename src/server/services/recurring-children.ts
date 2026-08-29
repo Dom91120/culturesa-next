@@ -25,6 +25,10 @@ type ParentForSync = {
   periodId: number | null; // période de la récurrente (null/≤0 = aucune → pas d'enfants)
   week: string; // "" | "A" | "B"
   themeLabel: string;
+  // Snapshot fiche usager de la création (cf. bookingUserSnapshot) — hérité par les enfants.
+  structureLabel: string;
+  demandeurLabel: string;
+  niveauLabel: string;
   enfants: number;
   accompagnants: number;
   validated: boolean;
@@ -41,6 +45,9 @@ export const PARENT_FOR_SYNC_SELECT = {
   periodId: true,
   week: true,
   themeLabel: true,
+  structureLabel: true,
+  demandeurLabel: true,
+  niveauLabel: true,
   enfants: true,
   accompagnants: true,
   validated: true,
@@ -234,6 +241,9 @@ export async function syncRecurringChildren(
         data: {
           parentBookingId: parent.id,
           themeLabel: parent.themeLabel,
+          structureLabel: parent.structureLabel,
+          demandeurLabel: parent.demandeurLabel,
+          niveauLabel: parent.niveauLabel,
           enfants: parent.enfants,
           accompagnants: parent.accompagnants,
           validated: parent.validated,
@@ -256,6 +266,9 @@ export async function syncRecurringChildren(
           week: "",
           parentBookingId: parent.id,
           themeLabel: parent.themeLabel,
+          structureLabel: parent.structureLabel,
+          demandeurLabel: parent.demandeurLabel,
+          niveauLabel: parent.niveauLabel,
           enfants: parent.enfants,
           accompagnants: parent.accompagnants,
           validated: parent.validated,

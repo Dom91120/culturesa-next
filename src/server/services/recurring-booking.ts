@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { BookingConfirmationParams } from "@/server/services/booking-mail";
-import { BookingError } from "@/server/services/bookings";
+import { BookingError, bookingUserSnapshot } from "@/server/services/bookings";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 
 // ════════════════════════════════════════════════════════════
@@ -125,6 +125,7 @@ export async function insertRecurringBookingInTx(
       enfants: params.enfants,
       accompagnants: params.accompagnants,
       themeLabel: params.theme,
+      ...(await bookingUserSnapshot(tx, params.userId)),
       validated: params.validated,
       autoValidateFrom: new Date(),
     },

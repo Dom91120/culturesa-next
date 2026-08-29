@@ -1,5 +1,9 @@
 import { todayParisISO } from "@/lib/booking-delay";
-import { getSchoolZone, syncRecurringChildren } from "@/server/services/recurring-children";
+import {
+  getSchoolZone,
+  PARENT_FOR_SYNC_SELECT,
+  syncRecurringChildren,
+} from "@/server/services/recurring-children";
 import "dotenv/config";
 import { prisma } from "@/server/db";
 
@@ -12,18 +16,8 @@ async function main() {
   const zone = await getSchoolZone();
   const parents = await prisma.booking.findMany({
     where: { bookingType: "recurring", parentBookingId: null },
-    select: {
-      id: true,
-      userId: true,
-      serviceId: true,
-      slotId: true,
-      periodId: true,
-      week: true,
-      themeLabel: true,
-      enfants: true,
-      accompagnants: true,
-      validated: true,
-    },
+    // Source unique des champs attendus par syncRecurringChildren (ParentForSync).
+    select: PARENT_FOR_SYNC_SELECT,
   });
 
   let created = 0;

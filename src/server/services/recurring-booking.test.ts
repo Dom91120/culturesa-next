@@ -147,7 +147,13 @@ describe("insertRecurringBookingInTx", () => {
       id: 1740,
       ...data,
     }));
-    return { tx: fakeTx({ booking: { create } }), create };
+    // Fiche usager lue par bookingUserSnapshot (snapshot structure/catégorie/niveau).
+    const findUnique = vi.fn(async () => ({
+      niveau: "CE1",
+      structure: { label: "École Jean Jaurès" },
+      demandeur: { label: "Scolaire" },
+    }));
+    return { tx: fakeTx({ booking: { create }, user: { findUnique } }), create };
   }
 
   it("crée la réservation depuis la CIBLE (période/parité du créneau, jamais du client)", async () => {
@@ -164,6 +170,10 @@ describe("insertRecurringBookingInTx", () => {
         enfants: 2,
         accompagnants: 1,
         themeLabel: "Contes",
+        // Snapshot fiche usager posé à la création (bookingUserSnapshot).
+        structureLabel: "École Jean Jaurès",
+        demandeurLabel: "Scolaire",
+        niveauLabel: "CE1",
         validated: true,
       }),
     });
