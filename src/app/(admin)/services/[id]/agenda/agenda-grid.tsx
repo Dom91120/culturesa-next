@@ -161,7 +161,7 @@ const BATCH_DISMISS_MS = 10000;
 // Champs date de la barre de création (plage d'un créneau récurrent) : même gabarit
 // compact que le champ Capacité voisin, largeur au besoin réel d'une date.
 const CREATE_DATE_STYLE: React.CSSProperties = {
-  width: 85,
+  width: 86,
   fontSize: ".62rem",
   padding: ".12rem .2rem",
   background: "var(--surface2)",
