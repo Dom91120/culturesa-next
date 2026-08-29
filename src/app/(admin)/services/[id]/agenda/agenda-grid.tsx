@@ -158,6 +158,11 @@ type Block = AgendaBlockBase<Booking>;
 // non visibles à l'écran.
 const BATCH_DISMISS_MS = 10000;
 
+// Flèches de la navigation SEMAINE : 1rem, contre les .7rem de `.periode-nav
+// .ex-arrow`. Réglé ici et non sur la classe — celle-ci sert aussi aux flèches
+// d'exercice, juste à côté, qui gardent leur taille.
+const ARROW_STYLE: React.CSSProperties = { fontSize: "1rem", padding: "0 .2rem" };
+
 // Champs date de la barre de création (plage d'un créneau récurrent) : même gabarit
 // compact que le champ Capacité voisin, largeur au besoin réel d'une date.
 const CREATE_DATE_STYLE: React.CSSProperties = {
@@ -3008,6 +3013,7 @@ export function AgendaGrid({
           <button
             type="button"
             className="ex-arrow"
+            style={ARROW_STYLE}
             disabled={!canWeekPrev}
             onClick={() => canWeekPrev && shiftWeek(-1)}
           >
@@ -3055,6 +3061,7 @@ export function AgendaGrid({
           <button
             type="button"
             className="ex-arrow"
+            style={ARROW_STYLE}
             disabled={!canWeekNext}
             onClick={() => canWeekNext && shiftWeek(1)}
           >
