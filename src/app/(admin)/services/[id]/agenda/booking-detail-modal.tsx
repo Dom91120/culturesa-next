@@ -151,15 +151,18 @@ export function BookingDetailModal({
         {/* Verrouillée : le cadenas REMPLACE le bloc-note (retour Dom 2026-08-29),
             en plus grand — c'est lui qui porte l'explication du verrou (l'ancienne
             ligne « Réservation pointée — édition verrouillée. » est supprimée). */}
-        <span>
+        {/* Icône + libellé en inline-flex centré : l'émoji (corps 1.3rem) et le texte
+            partagent le même axe vertical que le reste de la ligne (chip, date,
+            pastille) — plus de vertical-align au jugé. */}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: ".3rem" }}>
           <span
             title={locked ? "Réservation pointée — édition verrouillée" : undefined}
             aria-label={locked ? "Édition verrouillée" : undefined}
-            style={{ fontSize: "1.3rem", verticalAlign: "-.15em", marginRight: ".15rem" }}
+            style={{ fontSize: "1.3rem", lineHeight: 1 }}
           >
             {locked ? "🔒" : "📋"}
-          </span>{" "}
-          Réservation :
+          </span>
+          <span>Réservation :</span>
         </span>
         {periodTag && (
           <span
@@ -192,7 +195,14 @@ export function BookingDetailModal({
           <span
             className={booking.pointage === "present" ? "indic_p" : "indic_a"}
             title={booking.pointage === "present" ? "Présent" : "Absent"}
-            style={{ fontSize: "1rem", padding: "3px 6px", borderRadius: 6 }}
+            style={{
+              fontSize: "1rem",
+              padding: "3px 6px",
+              borderRadius: 6,
+              display: "inline-flex",
+              alignItems: "center",
+              lineHeight: 1,
+            }}
           >
             {booking.pointage === "present" ? "P" : "A"}
           </span>
