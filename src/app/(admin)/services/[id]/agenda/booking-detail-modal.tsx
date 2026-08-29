@@ -225,32 +225,6 @@ export function BookingDetailModal({
         {/* Motif d'absence : toujours éditable — le pointage (et son motif) n'est pas
             gouverné par le verrou, et la fiche d'une occurrence pointée est justement
             en consultation (readOnly) : brancher sur readOnly le rendait insaisissable. */}
-        {booking.pointage === "absent" && (
-          <label
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: ".5rem",
-              flex: "1 1 260px",
-            }}
-          >
-            {/* Libellé À GAUCHE du champ (retour Dom : pas en placeholder), même
-                style que les titres de champs de la fiche. */}
-            <span style={{ ...FIELD_TITLE_STYLE, whiteSpace: "nowrap" }}>
-              Motif de l'absence
-            </span>
-            <input
-              value={motif}
-              onChange={(e) => setMotif(e.target.value)}
-              onBlur={saveMotif}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              }}
-              maxLength={255}
-              style={{ fontSize: ".72rem", padding: ".2rem .45rem", flex: 1 }}
-            />
-          </label>
-        )}
       </div>
 
       {/* La phrase « Réservation pointée — édition verrouillée. » est remplacée par le
@@ -262,6 +236,26 @@ export function BookingDetailModal({
       )}
 
       <div className="form-grid">
+        {/* Motif d'absence : PREMIER champ de la fiche, uniquement quand la séance est
+            pointée absente. Enregistré au blur / à Entrée via l'action de pointage
+            (le pointage et son motif ne sont pas gouvernés par le verrou d'édition). */}
+        {booking.pointage === "absent" && (
+          <div className="field full">
+            <label htmlFor="bdet-motif" style={FIELD_TITLE_STYLE}>
+              Motif de l'absence
+            </label>
+            <input
+              id="bdet-motif"
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              onBlur={saveMotif}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              maxLength={255}
+            />
+          </div>
+        )}
         {/* Champs en lecture seule : titre rendu en <span> (pas un <label>, qui doit être
             associé à un contrôle) — même style que le titre « Participants » plus bas.
 
