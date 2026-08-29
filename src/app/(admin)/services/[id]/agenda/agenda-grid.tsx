@@ -60,6 +60,7 @@ import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor } from "@/lib/gauge";
 import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
+import { resolveSlotRange } from "@/lib/slot-range";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
 import type { BatchUpdatedItem } from "./actions";
@@ -156,6 +157,18 @@ type Block = AgendaBlockBase<Booking>;
 // suspendue au survol/focus. Un peu généreuse : l'annulation porte sur des semaines
 // non visibles à l'écran.
 const BATCH_DISMISS_MS = 10000;
+
+// Champs date de la barre de création (plage d'un créneau récurrent) : même gabarit
+// compact que le champ Capacité voisin, largeur au besoin réel d'une date.
+const CREATE_DATE_STYLE: React.CSSProperties = {
+  width: 85,
+  fontSize: ".62rem",
+  padding: ".12rem .2rem",
+  background: "var(--surface2)",
+  color: "var(--text)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--rad-sm)",
+};
 
 type Detail = { booking: Booking } | null;
 type CreateCtx = {
@@ -359,6 +372,12 @@ export function AgendaGrid({
   const [capStr, setCapStr] = useState(String(service.capacity));
   const createCap = Math.max(1, Number.parseInt(capStr, 10) || service.capacity);
   const [capSaved, setCapSaved] = useState(false);
+  // Plage des créneaux RÉCURRENTS créés (vide = toute la période). Contrairement à la
+  // capacité, elle n'est pas mémorisée sur le service : elle vaut pour le geste en
+  // cours, et la reconduire d'une session à l'autre créerait des créneaux tronqués
+  // sans que personne l'ait demandé.
+  const [createStart, setCreateStart] = useState("");
+  const [createEnd, setCreateEnd] = useState("");
   const capSaveTimer = useRef<number | null>(null);
   const capFlashTimer = useRef<number | null>(null);
   // Au démontage : annule les timers en attente (sinon l'autosave débounce part
@@ -945,6 +964,7 @@ export function AgendaGrid({
         mondayStr,
         sundayStr,
         realweek: true,
+        periodBounds: coveringPeriod,
         effectivePeriodId,
         effectiveWeek,
         abMode,
@@ -967,6 +987,7 @@ export function AgendaGrid({
       abMode,
       effectivePeriodId,
       effectiveWeek,
+      coveringPeriod,
       gridStartMin,
       service.capacity,
       service.gaugeAccompagnants,
@@ -1271,6 +1292,8 @@ export function AgendaGrid({
                 capacity: createCap,
                 demandeurIds: createDemIds,
                 jauge: jaugeMode,
+                dateStart: createStart,
+                dateEnd: createEnd,
               }),
             ),
           ),
@@ -1372,6 +1395,8 @@ export function AgendaGrid({
               capacity: createCap,
               demandeurIds: createDemIds,
               jauge: jaugeMode,
+              dateStart: createStart,
+              dateEnd: createEnd,
             }),
           ),
         ),
@@ -3059,6 +3084,39 @@ export function AgendaGrid({
           {/* Capacité / jauge / demandeurs par défaut des créneaux créés (mode création). */}
           {creationMode && (
             <>
+              {/* Plage du créneau RÉCURRENT créé : par défaut toute la période, d'où
+                  deux champs vides. Bornés aux dates de la période active — saisir
+                  au-delà n'aurait aucun effet, le créneau étant rogné sur elle.
+                  Affichés en création seulement, comme la capacité par défaut : ce sont
+                  des valeurs du geste, pas un réglage du service. */}
+              {createKind === "rec" && (
+                <span
+                  style={{ display: "inline-flex", alignItems: "center", gap: ".2rem" }}
+                  data-tip="Plage du créneau récurrent (vide = toute la période)"
+                >
+                  <input
+                    id="create-range-start"
+                    type="date"
+                    aria-label="Début du créneau récurrent"
+                    value={createStart}
+                    min={coveringPeriod?.dateStart || undefined}
+                    max={coveringPeriod?.dateEnd || undefined}
+                    onChange={(e) => setCreateStart(e.target.value)}
+                    style={CREATE_DATE_STYLE}
+                  />
+                  <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>→</span>
+                  <input
+                    id="create-range-end"
+                    type="date"
+                    aria-label="Fin du créneau récurrent"
+                    value={createEnd}
+                    min={createStart || coveringPeriod?.dateStart || undefined}
+                    max={coveringPeriod?.dateEnd || undefined}
+                    onChange={(e) => setCreateEnd(e.target.value)}
+                    style={CREATE_DATE_STYLE}
+                  />
+                </span>
+              )}
               <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
                 <input
                   id="create-cap"
@@ -3983,6 +4041,26 @@ export function AgendaGrid({
               initialCapacity={String(slot?.capacity ?? service.capacity)}
               initialJauge={slot?.jauge ?? false}
               initialDemIds={slotDemandeurs[capModal.slotId] ?? []}
+              // Plage : proposée uniquement pour un récurrent (un ponctuel porte sa
+              // date). Les valeurs affichées sont les dates EFFECTIVES — bornes du
+              // créneau rognées sur la période, repli sur la période entière si le
+              // recouvrement est vide : l'admin voit ce que le créneau fait vraiment,
+              // pas ce qui a été saisi un jour.
+              recurringRange={
+                recurSlot
+                  ? resolveSlotRange({
+                      periodStart: coveringPeriod?.dateStart ?? "",
+                      periodEnd: coveringPeriod?.dateEnd ?? "",
+                      slotStart: recurSlot.dateStart,
+                      slotEnd: recurSlot.dateEnd,
+                    })
+                  : null
+              }
+              periodRange={
+                coveringPeriod?.dateStart && coveringPeriod?.dateEnd
+                  ? { start: coveringPeriod.dateStart, end: coveringPeriod.dateEnd }
+                  : null
+              }
               serviceDemandeurs={serviceDemandeurs}
               onClose={() => setCapModal(null)}
               onSaved={() => {

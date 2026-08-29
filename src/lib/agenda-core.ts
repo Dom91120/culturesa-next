@@ -8,6 +8,7 @@ import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeUnits } from "@/lib/gauge";
 import { slotWeekTag } from "@/lib/iso-week";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
+import { slotRunsOn } from "@/lib/slot-range";
 
 // Parité A/B : convention unique de l'app (lib/iso-week) — ré-exportée pour que
 // les grilles n'aient qu'un seul point d'import du socle.
@@ -98,6 +99,10 @@ export type Slot = {
   jauge: boolean;
   // Renseigné uniquement pour les créneaux ponctuels projetés (slots virtuels).
   slotDate?: string | null;
+  // Plage propre d'un créneau RÉCURRENT dans sa période (« YYYY-MM-DD »), nulle =
+  // toute la période. Cf. lib/slot-range : la période reste la borne extérieure.
+  dateStart?: string | null;
+  dateEnd?: string | null;
 };
 
 // Créneau ponctuel (daté) tel que chargé pour l'agenda.
@@ -732,6 +737,8 @@ export function buildBlocksByDay<
   realweek: boolean;
   effectivePeriodId: number | null;
   effectiveWeek: "A" | "B" | null;
+  /** Bornes de la période active : servent aux créneaux à plage restreinte. */
+  periodBounds?: { dateStart?: string | null; dateEnd?: string | null } | null;
   abMode: boolean;
   gridStartMin: number;
   serviceCapacity: number;
@@ -758,6 +765,7 @@ export function buildBlocksByDay<
     realweek,
     effectivePeriodId,
     effectiveWeek,
+    periodBounds,
     abMode,
     gridStartMin,
     serviceCapacity,
@@ -803,6 +811,21 @@ export function buildBlocksByDay<
   const slotMatchesWeek = (slot: Slot): boolean => {
     if (!abMode || effectiveWeek == null) return true;
     return parseWeeks(slot.weeks).includes(effectiveWeek);
+  };
+
+  // Le créneau tourne-t-il à la DATE RÉELLE de ce jour de la semaine affichée ?
+  // Sans plage propre (cas de l'immense majorité), rien à calculer.
+  const slotRunsOnDay = (slot: Slot, dayKey: string | null): boolean => {
+    if (!slot.dateStart && !slot.dateEnd) return true;
+    if (!mondayStr || !dayKey) return true;
+    const dayYmd = ymd(addDays(mondayStr, DAY_OFFSET[dayKey] ?? 0));
+    return slotRunsOn({
+      dateYmd: dayYmd,
+      periodStart: periodBounds?.dateStart,
+      periodEnd: periodBounds?.dateEnd,
+      slotStart: slot.dateStart,
+      slotEnd: slot.dateEnd,
+    });
   };
 
   // Réservations groupées par dayKey|slotId (filtrées période + semaine).
@@ -871,6 +894,10 @@ export function buildBlocksByDay<
   for (const slot of allSlots) {
     if (effectivePeriodId != null && slot.periodId !== effectivePeriodId) continue;
     if (!slotMatchesWeek(slot)) continue;
+    // Créneau récurrent restreint à une PARTIE de sa période : il ne tourne que sur
+    // ses propres semaines. Rien à voir avec le grisage de la colonne — le jour reste
+    // ouvert (il appartient à la période), c'est CE créneau qui n'y est pas encore.
+    if (!slotRunsOnDay(slot, slot.slotDay)) continue;
     // Modèle « un slot = un jour » : le créneau s'affiche sur SON jour (slotDay),
     // avec repli sur serviceCapacity si la capacité n'est pas fixée. Capacité 0 = fermé.
     const dayKey = slot.slotDay;

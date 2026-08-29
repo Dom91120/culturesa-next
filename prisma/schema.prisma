@@ -273,6 +273,13 @@ model Slot {
   // CHECK ck_slots_recurrent_complet (SQL brut, NOT VALID — migration 20260724190000,
   // inexprimable en Prisma) : un récurrent DOIT avoir periodId ET slotDay.
   slotDay      DayOfWeek?
+  /// Créneau RÉCURRENT limité à une partie de sa période (ex. activité qui démarre
+  /// après la Toussaint). Nulles = toute la période. La période reste la borne
+  /// extérieure : les dates sont rognées sur elle, et si le recouvrement devient vide
+  /// (période déplacée ailleurs) le créneau retombe sur la période entière plutôt que
+  /// de devenir invisible. Source unique de la règle : lib/slot-range.ts.
+  dateStart    DateTime?  @db.Date
+  dateEnd      DateTime?  @db.Date
   capacity     Int?
   periodId     Int?
   parentSlotId String?

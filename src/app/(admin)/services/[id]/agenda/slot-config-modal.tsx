@@ -20,6 +20,8 @@ export function SlotConfigModal({
   initialCapacity,
   initialJauge,
   initialDemIds,
+  recurringRange,
+  periodRange,
   serviceDemandeurs,
   onClose,
   onSaved,
@@ -40,12 +42,21 @@ export function SlotConfigModal({
   // « A une jauge » du créneau (slots.jauge) — modifiable ici, propagé aux miroirs.
   initialJauge: boolean;
   initialDemIds: number[];
+  // Plage EFFECTIVE d'un créneau récurrent (déjà rognée sur la période) — null pour
+  // un ponctuel, qui porte sa propre date.
+  recurringRange: { start: string; end: string } | null;
+  // Bornes de la période, pour brider les champs date.
+  periodRange: { start: string; end: string } | null;
   serviceDemandeurs: { id: number; label: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const isLot = applyToLot && (batchCount ?? 0) > 1;
   const [capValue, setCapValue] = useState(initialCapacity);
+  // Plage éditable : préremplie avec les dates EFFECTIVES. Les vider rend le créneau
+  // à toute sa période.
+  const [rangeStart, setRangeStart] = useState(recurringRange?.start ?? "");
+  const [rangeEnd, setRangeEnd] = useState(recurringRange?.end ?? "");
   const [jauge, setJauge] = useState(initialJauge);
   const [capDemIds, setCapDemIds] = useState<number[]>(initialDemIds);
   const [capError, setCapError] = useState<string | null>(null);
@@ -66,6 +77,7 @@ export function SlotConfigModal({
         jauge,
         demandeurIds: capDemIds,
         wholeLot: isLot,
+        ...(recurringRange ? { dateStart: rangeStart, dateEnd: rangeEnd } : {}),
       });
       if (res && !res.ok) {
         setCapError(res.error ?? "Échec de l'enregistrement.");
@@ -89,6 +101,41 @@ export function SlotConfigModal({
           capsule (18×36) EST la bascule de la jauge : un clic la fait passer
           d'activée (couleur) à inactivée (grisée). Propagé aux miroirs pour un
           récurrent. */}
+      {/* Plage du créneau récurrent. Les dates affichées sont les dates EFFECTIVES :
+          si la période a été déplacée sous le créneau, il est revenu à la période
+          entière et cela se lit ici — plutôt que de garder à l'écran une restriction
+          qui ne s'applique plus. Vider les deux champs rend le créneau à sa période. */}
+      {recurringRange && (
+        <div
+          className="form-grid"
+          style={{ gridTemplateColumns: "1fr 1fr", marginBottom: ".75rem" }}
+        >
+          <div className="field">
+            <label htmlFor="slot-range-start">Début (dans la période)</label>
+            <input
+              id="slot-range-start"
+              type="date"
+              value={rangeStart}
+              min={periodRange?.start}
+              max={periodRange?.end}
+              onChange={(e) => setRangeStart(e.target.value)}
+              style={{ height: 21, boxSizing: "border-box", fontSize: ".78rem" }}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="slot-range-end">Fin</label>
+            <input
+              id="slot-range-end"
+              type="date"
+              value={rangeEnd}
+              min={rangeStart || periodRange?.start}
+              max={periodRange?.end}
+              onChange={(e) => setRangeEnd(e.target.value)}
+              style={{ height: 21, boxSizing: "border-box", fontSize: ".78rem" }}
+            />
+          </div>
+        </div>
+      )}
       <div className="form-grid" style={{ gridTemplateColumns: "10rem minmax(0, 1fr)" }}>
         {/* Contenu centré verticalement dans la rangée (face au bloc jauge, plus haut). */}
         <div className="field" style={{ justifyContent: "center" }}>

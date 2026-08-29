@@ -117,6 +117,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
           periodId: true,
           weeks: true,
           jauge: true,
+          dateStart: true,
+          dateEnd: true,
         },
       }),
       // Créneaux ponctuels (datés) : affichés dans l'agenda en mode « Semaine réelle »
@@ -264,6 +266,9 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     periodId: s.periodId,
     weeks: s.weeks ?? null,
     jauge: s.jauge,
+    // Plage propre du créneau récurrent (nulle = toute la période).
+    dateStart: toDateInput(s.dateStart),
+    dateEnd: toDateInput(s.dateEnd),
   }));
 
   const uniqueSlotsData = uniqueSlots.map((s) => ({

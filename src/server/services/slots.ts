@@ -2,6 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { parseWeeks } from "@/lib/agenda-core";
 import { mirrorDates } from "@/lib/mirror-dates";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
+import { resolveSlotRange } from "@/lib/slot-range";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
@@ -215,15 +216,26 @@ export function buildMirrorRows(args: {
     slotDay: string | null;
     capacity: number | null;
     jauge: boolean;
+    // Bornes PROPRES du créneau (nulles = toute la période), cf. lib/slot-range.
+    dateStart?: Date | null;
+    dateEnd?: Date | null;
   };
   ctx: MirrorContext;
   serviceCapacity: number;
 }): Prisma.SlotCreateManyInput[] {
   const { serviceId, periodId, slot, ctx, serviceCapacity } = args;
   if (!slot.slotDay || !DAYS.includes(slot.slotDay as DayKey)) return [];
+  // Plage EFFECTIVE : bornes du créneau rognées sur la période, repli sur la période
+  // entière si le recouvrement est vide. Règle unique — lib/slot-range.
+  const range = resolveSlotRange({
+    periodStart: ctx.startDate,
+    periodEnd: ctx.endDate,
+    slotStart: slot.dateStart ? toISO(slot.dateStart) : null,
+    slotEnd: slot.dateEnd ? toISO(slot.dateEnd) : null,
+  });
   const wanted = computeWantedMirrors({
-    startDate: ctx.startDate,
-    endDate: ctx.endDate,
+    startDate: range.start,
+    endDate: range.end,
     activeDays: ctx.activeDays,
     holidaySet: ctx.holidaySet,
     openOnHolidays: ctx.openOnHolidays,
@@ -297,6 +309,8 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
       jauge: true,
       startTime: true,
       endTime: true,
+      dateStart: true,
+      dateEnd: true,
     },
   });
 
@@ -319,7 +333,9 @@ export async function regenerateRecurringMirrorsForPeriodInTx(
       const booked = await tx.booking.count({ where: { slotId: { in: toDelete } } });
       if (booked > 0) {
         throw new SlotMutationError(
-          "Des réservations existent sur des dates désormais hors période — annulez-les d'abord.",
+          // Le rétrécissement peut venir de la PÉRIODE comme de la plage propre d'un
+          // créneau : le message ne nomme donc plus la seule période.
+          "Des réservations existent sur des dates qui ne seraient plus proposées — annulez-les d'abord.",
         );
       }
       await tx.slot.deleteMany({ where: { id: { in: toDelete } } });
@@ -350,6 +366,10 @@ export async function addRecurringSlot(
     demandeurIds?: number[];
     // « A une jauge » : mode jauge de l'agenda au moment de la création.
     jauge?: boolean;
+    // Plage propre du créneau dans sa période (« YYYY-MM-DD »), vide = toute la
+    // période. Rognée sur la période à la génération (cf. lib/slot-range).
+    dateStart?: string | null;
+    dateEnd?: string | null;
   },
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const service = await prisma.service.findUnique({
@@ -373,6 +393,12 @@ export async function addRecurringSlot(
     exerciceId: period.exerciceId,
   });
   const weeks = normalizeWeeks(input.weeks);
+  // Bornes stockées TELLES QUE SAISIES : le rognage sur la période est fait à la
+  // lecture (génération des miroirs, grilles), pas à l'écriture — sinon un
+  // élargissement ultérieur de la période ne rendrait pas au créneau ce qu'on lui
+  // aurait coupé.
+  const dateStart = input.dateStart ? fromISO(input.dateStart) : null;
+  const dateEnd = input.dateEnd ? fromISO(input.dateEnd) : null;
   const slId = newRecurId();
   const demandeurIds = normalizeDemandeurIds(input.demandeurIds);
   try {
@@ -389,6 +415,8 @@ export async function addRecurringSlot(
           slotDay: input.dayKey,
           capacity: input.capacity,
           jauge: input.jauge ?? false,
+          dateStart,
+          dateEnd,
         },
       });
       // Demandeurs autorisés posés dans la même transaction : un échec ici annule
@@ -411,6 +439,8 @@ export async function addRecurringSlot(
           slotDay: input.dayKey,
           capacity: input.capacity,
           jauge: input.jauge ?? false,
+          dateStart,
+          dateEnd,
         },
         ctx,
         serviceCapacity: service.capacity,
@@ -458,8 +488,17 @@ export async function copyRecurringWeek(
   const slots = await prisma.slot.findMany({
     where: { serviceId, periodId, slotType: "recurring" },
   });
+  // La plage entre dans la signature : deux créneaux de mêmes horaires mais de plages
+  // différentes (sept.-oct. et nov.-déc.) ne sont pas des doublons.
   const sig = (s: (typeof slots)[number]) =>
-    [s.startTime, s.endTime, s.slotDay ?? "", s.capacity ?? ""].join("|");
+    [
+      s.startTime,
+      s.endTime,
+      s.slotDay ?? "",
+      s.capacity ?? "",
+      s.dateStart ? toISO(s.dateStart) : "",
+      s.dateEnd ? toISO(s.dateEnd) : "",
+    ].join("|");
 
   // Signatures déjà présentes sur toWeek (anti-doublon).
   const existingOnTo = new Set(slots.filter((s) => parseWeeks(s.weeks).includes(toWeek)).map(sig));
@@ -504,8 +543,12 @@ export async function copyRecurringWeek(
               weeks: toWeek,
               slotDay: s.slotDay,
               capacity: s.capacity,
-              // La copie A↔B conserve la jauge du créneau source.
+              // La copie A↔B conserve la jauge ET la plage du créneau source : copier
+              // un créneau restreint doit donner un créneau restreint, sinon la copie
+              // ouvrirait des dates que la source n'avait pas.
               jauge: s.jauge,
+              dateStart: s.dateStart,
+              dateEnd: s.dateEnd,
             },
           });
           // Un seul createMany par créneau copié (pipeline unique buildMirrorRows).
@@ -520,6 +563,8 @@ export async function copyRecurringWeek(
               slotDay: s.slotDay,
               capacity: s.capacity,
               jauge: s.jauge,
+              dateStart: s.dateStart,
+              dateEnd: s.dateEnd,
             },
             ctx,
             serviceCapacity: service.capacity,
@@ -939,6 +984,10 @@ export async function moveRecurringSlot(
             slotDay: toDayKey,
             capacity: capVal,
             jauge: slot.jauge,
+            // Déplacer un créneau ne change pas sa plage : les miroirs régénérés
+            // restent bornés comme avant.
+            dateStart: slot.dateStart,
+            dateEnd: slot.dateEnd,
           },
           ctx,
           serviceCapacity: service.capacity,

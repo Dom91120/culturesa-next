@@ -755,6 +755,8 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         periodId: true,
         weeks: true,
         jauge: true,
+        dateStart: true,
+        dateEnd: true,
       },
     }),
     prisma.slot.findMany({
@@ -921,7 +923,15 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       disponibilite: toDateInput(p.disponibilite),
       exerciceId: p.exerciceId,
     })),
-    slots: visibleRecur.map((s) => ({ ...s, weeks: s.weeks ?? null })),
+    slots: visibleRecur.map((s) => ({
+      ...s,
+      weeks: s.weeks ?? null,
+      // Plage propre du créneau (nulle = toute la période) : la grille usager doit
+      // l'appliquer comme la grille admin, sans quoi un créneau restreint resterait
+      // réservable hors de sa plage.
+      dateStart: toDateInput(s.dateStart),
+      dateEnd: toDateInput(s.dateEnd),
+    })),
     uniqueSlots: visibleUnique.map((s) => ({
       id: s.id,
       startTime: s.startTime,

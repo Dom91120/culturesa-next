@@ -19,6 +19,7 @@ import {
   recurringSlotCreateSchema,
   slotDateSchema,
   slotMoveTimesSchema,
+  slotRangeSchema,
   uniqueSlotBatchCreateSchema,
 } from "@/schemas/slot";
 import { prisma } from "@/server/db";
@@ -56,6 +57,8 @@ import {
   moveRecurringSlot,
   moveUniqueSlot,
   moveUniqueSlotBatch,
+  regenerateRecurringMirrorsForPeriodInTx,
+  SlotMutationError,
 } from "@/server/services/slots";
 
 // Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
@@ -249,6 +252,10 @@ export async function saveSlotConfigAction(input: {
   // true (mode « Création multiple ») → la config s'applique à tout le lot ; false/absent
   // (ponctuel/récurrent) → au seul créneau. Le SCOPE suit le mode courant, pas le batchId.
   wholeLot?: boolean;
+  // Plage d'un créneau RÉCURRENT (« YYYY-MM-DD », vide = toute la période). Ignorée
+  // pour un ponctuel, qui porte déjà sa date.
+  dateStart?: string | null;
+  dateEnd?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   const { serviceId, slotId, capacity, demandeurIds } = input;
@@ -263,9 +270,19 @@ export async function saveSlotConfigAction(input: {
   // ci-dessous ne serve qu'aux erreurs inattendues, loggées et non avalées — audit B2).
   const ref = await prisma.slot.findFirst({
     where: { id: slotId, serviceId },
-    select: { id: true, batchId: true },
+    select: { id: true, batchId: true, slotType: true, periodId: true },
   });
   if (!ref) return { ok: false, error: "Créneau introuvable." };
+  // Plage : seulement pour un récurrent, et validée ici (le client borne déjà les
+  // champs sur la période, mais une action serveur voit des entrées brutes).
+  const rangeParsed = slotRangeSchema.safeParse({
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+  });
+  if (!rangeParsed.success) {
+    return { ok: false, error: rangeParsed.error.issues[0]?.message ?? "Dates invalides." };
+  }
+  const isRecurring = ref.slotType === "recurring";
   // Mode « Création multiple » (wholeLot) + créneau en lot (batchId) → la config s'applique
   // à TOUT le lot ; sinon au seul créneau (récurrent : + propagation jauge à ses miroirs).
   const targetIds =
@@ -280,6 +297,24 @@ export async function saveSlotConfigAction(input: {
   try {
     await prisma.$transaction(async (tx) => {
       await tx.slot.updateMany({ where: { id: { in: targetIds } }, data: { capacity, jauge } });
+      // Plage du récurrent : écrite TELLE QUE SAISIE (le rognage sur la période se
+      // fait à la lecture), puis miroirs régénérés — c'est ce qui ajoute ou retire
+      // les dates. La régénération porte sur toute la période : elle passe par le
+      // garde-fou qui refuse de supprimer une date déjà réservée.
+      if (isRecurring && ref.periodId) {
+        await tx.slot.update({
+          where: { id: slotId },
+          data: {
+            dateStart: rangeParsed.data.dateStart
+              ? new Date(`${rangeParsed.data.dateStart}T00:00:00Z`)
+              : null,
+            dateEnd: rangeParsed.data.dateEnd
+              ? new Date(`${rangeParsed.data.dateEnd}T00:00:00Z`)
+              : null,
+          },
+        });
+        await regenerateRecurringMirrorsForPeriodInTx(tx, serviceId, ref.periodId);
+      }
       // Miroirs d'un récurrent : la jauge suit le parent (cf. addRecurringSlot).
       await tx.slot.updateMany({ where: { parentSlotId: { in: targetIds } }, data: { jauge } });
       await tx.slotDemandeur.deleteMany({ where: { slotId: { in: targetIds } } });
@@ -292,6 +327,9 @@ export async function saveSlotConfigAction(input: {
       }
     });
   } catch (e) {
+    // Refus métier de la régénération (une date réservée disparaîtrait) : message
+    // utile, pas un « échec » opaque.
+    if (e instanceof SlotMutationError) return { ok: false, error: e.message };
     console.error("[agenda] saveSlotConfig", e);
     return { ok: false, error: "Échec de l'enregistrement." };
   }
@@ -469,6 +507,9 @@ export async function createRecurringSlotAction(input: {
   demandeurIds?: number[];
   // « A une jauge » : mode jauge de l'agenda au moment de la création.
   jauge?: boolean;
+  // Plage du créneau dans sa période (« YYYY-MM-DD »), vide = toute la période.
+  dateStart?: string | null;
+  dateEnd?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(input.serviceId);
   // Validation de la frontière : horaires (HH:MM, fin > début), capacité (entier ≥ 1),
@@ -486,6 +527,8 @@ export async function createRecurringSlotAction(input: {
     capacity: d.capacity,
     demandeurIds: d.demandeurIds,
     jauge: d.jauge,
+    dateStart: d.dateStart,
+    dateEnd: d.dateEnd,
   });
   revalidatePath(`/services/${input.serviceId}/agenda`);
   return res.ok ? { ok: true } : { ok: false, error: res.error };

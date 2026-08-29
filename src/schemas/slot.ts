@@ -47,6 +47,20 @@ const hoursOrderedMsg = {
   path: ["endTime"] as (string | number)[],
 };
 
+// Borne de plage d'un créneau récurrent : date valide, ou vide (= toute la période).
+const slotRangeBound = z
+  .string()
+  .regex(DATE_RE, "Date invalide (format AAAA-MM-JJ).")
+  .or(z.literal(""))
+  .nullish()
+  .transform((v) => v || null);
+
+/** Plage d'un créneau récurrent, éditée depuis la modale (les deux bornes ensemble). */
+export const slotRangeSchema = z.object({
+  dateStart: slotRangeBound,
+  dateEnd: slotRangeBound,
+});
+
 export const recurringSlotCreateSchema = z
   .object({
     serviceId: stringIdSchema,
@@ -60,6 +74,10 @@ export const recurringSlotCreateSchema = z
     capacity,
     demandeurIds,
     jauge,
+    // Plage du créneau dans sa période : vide = toute la période. La cohérence
+    // (début ≤ fin, rognage sur la période) est résolue à la lecture — lib/slot-range.
+    dateStart: slotRangeBound,
+    dateEnd: slotRangeBound,
   })
   .refine(hoursOrdered, hoursOrderedMsg);
 
