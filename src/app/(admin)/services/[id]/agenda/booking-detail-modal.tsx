@@ -218,18 +218,30 @@ export function BookingDetailModal({
             gouverné par le verrou, et la fiche d'une occurrence pointée est justement
             en consultation (readOnly) : brancher sur readOnly le rendait insaisissable. */}
         {booking.pointage === "absent" && (
-          <input
-            value={motif}
-            onChange={(e) => setMotif(e.target.value)}
-            onBlur={saveMotif}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          <label
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: ".5rem",
+              flex: "1 1 260px",
             }}
-            maxLength={255}
-            placeholder="Motif de l'absence…"
-            aria-label="Motif de l'absence"
-            style={{ fontSize: ".72rem", padding: ".2rem .45rem", flex: "1 1 160px" }}
-          />
+          >
+            {/* Libellé À GAUCHE du champ (retour Dom : pas en placeholder), même
+                style que les titres de champs de la fiche. */}
+            <span style={{ ...FIELD_TITLE_STYLE, whiteSpace: "nowrap" }}>
+              Motif de l'absence
+            </span>
+            <input
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              onBlur={saveMotif}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              maxLength={255}
+              style={{ fontSize: ".72rem", padding: ".2rem .45rem", flex: 1 }}
+            />
+          </label>
         )}
       </div>
 
