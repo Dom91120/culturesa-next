@@ -202,12 +202,13 @@ export function BookingDetailModal({
               display: "inline-flex",
               alignItems: "center",
               lineHeight: 1,
-              // En bout de ligne : la marge droite retombe sur le padding de la boîte
-              // (1.25rem), symétrique de la marge gauche du cadenas. Les 4px évitent
-              // que le coin de la pastille touche le bouton × (mesuré : 2px de
-              // chevauchement à ras du bord).
+              // En bout de ligne, marge droite alignée OPTIQUEMENT sur la marge gauche
+              // du cadenas : le glyphe émoji porte ~4px de blanc interne et un aplat
+              // rouge réclame plus d'air qu'un glyphe — 8px au-delà du padding de la
+              // boîte pour un rendu symétrique (mesuré/comparé, retour Dom 2026-08-29).
+              // Écarte aussi la pastille du bouton × (2px de chevauchement à ras du bord).
               marginLeft: "auto",
-              marginRight: 4,
+              marginRight: 8,
             }}
           >
             {booking.pointage === "present" ? "P" : "A"}
