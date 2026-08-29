@@ -2711,7 +2711,7 @@ export function AgendaGrid({
                     <div
                       className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}`}
                       style={{ ...badgeStyle(bk.validated), position: "relative" }}
-                      data-tip={badgeTitle(bk)}
+                      data-tip={badgeTitle(bk, lockedByPointage(actionBooking(bk)))}
                     >
                       {/* La pastille P/A doit aussi apparaître sur les badges
                         de la pile (cf. legacy), pas seulement dans la modale. */}
@@ -2774,7 +2774,7 @@ export function AgendaGrid({
                       // créneau) tienne compte de l'ombre, plutôt que de centrer la seule boîte.
                       marginBottom: 6,
                     }}
-                    data-tip={badgeTitle(bk)}
+                    data-tip={badgeTitle(bk, locked)}
                     // Clic droit → menu « Copier » (récurrent en Semaine réelle inclus :
                     // copie/coupe la réservation récurrente, résolue à la parente au collage).
                     onContextMenu={(e) => {

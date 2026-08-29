@@ -4,12 +4,17 @@
 //   Tel : <tel>      (si renseigné)
 //   <email>
 //   <N enfants M adulte(s)>
-export function badgeTitle(bk: {
-  tel: string;
-  email: string;
-  enfants: number;
-  accompagnants: number;
-}): string {
+//   Verrouillée…      (si verrou pointage — sinon le badge change juste de curseur
+//                      sans dire pourquoi, cf. incident du 2026-08-29)
+export function badgeTitle(
+  bk: {
+    tel: string;
+    email: string;
+    enfants: number;
+    accompagnants: number;
+  },
+  locked = false,
+): string {
   const lines: string[] = [];
   if (bk.tel.trim()) lines.push(`Tel : ${bk.tel.trim()}`);
   lines.push(bk.email);
@@ -18,6 +23,7 @@ export function badgeTitle(bk: {
       bk.accompagnants > 1 ? "s" : ""
     }`,
   );
+  if (locked) lines.push("Verrouillée : séance pointée (dépointer pour modifier)");
   return lines.join("\n");
 }
 

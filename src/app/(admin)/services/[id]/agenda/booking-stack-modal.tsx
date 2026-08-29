@@ -363,7 +363,7 @@ export function BookingStackModal({
                       ? 0.4
                       : 1,
                 }}
-                data-tip={badgeTitle(bk)}
+                data-tip={badgeTitle(bk, lockedByPointage(bk))}
                 onDragStart={
                   lockedByPointage(bk)
                     ? undefined
