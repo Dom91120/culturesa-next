@@ -2219,13 +2219,11 @@ export function AgendaGrid({
         (u) => u.parentSlotId === slotId && u.slotDate && dayKeyFromYmd(u.slotDate) === dayKey,
       )
       .map((u) => u.slotDate)
-      .filter((d) => {
-        if (!abMode || effectiveWeek == null) return true;
-        // Convention UNIQUE de l'app : semaine ISO impaire = A (lib/iso-week).
-        // effectiveWeek (= parité de la semaine affichée) suit cette même convention →
-        // comparaison directe, le jour en cours est inclus.
-        return slotWeekTag(d) === effectiveWeek;
-      })
+      // Pas de filtre de parité ici : les miroirs d'un créneau sont générés SELON SA
+      // PROPRE cadence (mirror-dates, allowedWeeks) — un créneau « semaine A » n'a que
+      // des dates A, un créneau « toutes semaines » les a toutes. Filtrer en plus sur
+      // la parité de la SEMAINE AFFICHÉE amputait de moitié la liste d'un créneau
+      // toutes semaines, selon la semaine où on l'ouvrait.
       .sort();
 
   // Métadonnées affichées dans l'info-bulle « Journées concernées » d'un créneau
@@ -3967,9 +3965,12 @@ export function AgendaGrid({
               themes={themes}
               // « Créneaux concernés » = occurrences qui seront EFFECTIVEMENT créées :
               // miroirs du slot ≥ aujourd'hui (le gestionnaire ne crée pas le passé),
-              // de la semaine A/B effective (en mode A/B), et hors vacances scolaires
-              // si l'EXERCICE de la date ferme les vacances ou si le demandeur
-              // sélectionné est fermé.
+              // hors vacances scolaires si l'EXERCICE de la date ferme les vacances ou
+              // si le demandeur sélectionné est fermé.
+              // La cadence A/B est DÉJÀ portée par les miroirs (générés selon la
+              // cadence du créneau) : la refiltrer sur la parité de la semaine
+              // affichée n'ajoutait rien pour un créneau A ou B, et cachait une date
+              // sur deux d'un créneau « toutes semaines ».
               occurrenceDatesFor={(selUser) => {
                 const todayISO = ymd(new Date());
                 return uniqueSlots
@@ -3980,9 +3981,7 @@ export function AgendaGrid({
                     const closedOnSchool =
                       !openingForYmd(d).openOnSchoolHolidays ||
                       selUser?.openOnSchoolHolidays === false;
-                    if (closedOnSchool && inSchoolHolidayRange(d, schoolHolidays)) return false;
-                    if (!abMode || effectiveWeek == null) return true;
-                    return slotWeekTag(d) === effectiveWeek;
+                    return !(closedOnSchool && inSchoolHolidayRange(d, schoolHolidays));
                   })
                   .sort();
               }}
