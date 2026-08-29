@@ -17,6 +17,10 @@ export function badgeTitle(
     // n'a de sens que sur une séance absente.
     pointage?: string | null;
     pointageMotif?: string;
+    // Pour la formulation du verrou : occurrence (parentBookingId) ou parente
+    // récurrente (bookingType) → « récurrente » ; ponctuelle autonome sinon.
+    parentBookingId?: number | null;
+    bookingType?: string;
   },
   locked = false,
 ): string {
@@ -30,7 +34,15 @@ export function badgeTitle(
   );
   const motif = bk.pointageMotif?.trim();
   if (bk.pointage === "absent" && motif) lines.push(`Absent : ${motif}`);
-  if (locked) lines.push("Verrouillée : séance pointée (dépointer pour modifier)");
+  if (locked) {
+    // Même formulation que l'infobulle du cadenas de la fiche (retour Dom 2026-08-29).
+    const recurrente = bk.parentBookingId != null || bk.bookingType === "recurring";
+    lines.push(
+      recurrente
+        ? "Réservation récurrente pointée : l'édition est verrouillée"
+        : "Réservation pointée : l'édition est verrouillée",
+    );
+  }
   return lines.join("\n");
 }
 

@@ -68,6 +68,10 @@ export default async function PointagesPage({
               </td>
               <td style={{ ...td, textAlign: "center" }}>
                 {a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}
+                {/* Motif d'absence saisi dans la fiche : sous l'état, en discret. */}
+                {a.pointage === "absent" && a.pointageMotif.trim() !== "" && (
+                  <div style={{ fontSize: ".7rem", color: "var(--muted)" }}>{a.pointageMotif}</div>
+                )}
               </td>
               <td style={td} />
             </tr>

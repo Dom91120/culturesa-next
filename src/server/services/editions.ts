@@ -42,6 +42,8 @@ export type SessionAttendee = {
   accompagnants: number;
   theme: string;
   pointage: "present" | "absent" | null;
+  // Motif d'absence saisi dans la fiche (vide sinon) — feuille de pointage.
+  pointageMotif: string;
   statut: string;
 };
 
@@ -83,6 +85,7 @@ export async function listDatedSessions(
       accompagnants: true,
       themeLabel: true,
       pointage: true,
+      pointageMotif: true,
       validated: true,
       slot: { select: { startTime: true, endTime: true, slotDate: true } },
       user: {
@@ -128,6 +131,7 @@ export async function listDatedSessions(
       accompagnants: b.accompagnants,
       theme: b.themeLabel,
       pointage: b.pointage,
+      pointageMotif: b.pointageMotif,
       statut: b.validated ? "Validée" : "En attente",
     });
   }
