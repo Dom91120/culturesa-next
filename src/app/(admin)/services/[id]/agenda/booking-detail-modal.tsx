@@ -388,8 +388,12 @@ export function BookingDetailModal({
         </div>
       )}
 
-      {/* Actions secondaires — masquées en consultation (lecture seule). */}
-      {!readOnly && (
+      {/* Actions secondaires — masquées en consultation (lecture seule), SAUF sur une
+          occurrence pointée : sa fiche passe en consultation À CAUSE du verrou pointage,
+          or le pointage lui-même n'est pas gouverné par ce verrou — sans cette exception,
+          la fiche ouverte depuis le macaron A n'offrait plus ni Présent/Absent ni
+          Effacer (Valider, lui, reste grisé tant que la séance est pointée). */}
+      {(!readOnly || locked) && (
         <div
           className="btn-row"
           style={{
