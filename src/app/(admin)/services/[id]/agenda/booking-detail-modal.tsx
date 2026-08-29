@@ -192,7 +192,7 @@ export function BookingDetailModal({
           <span
             className={booking.pointage === "present" ? "indic_p" : "indic_a"}
             title={booking.pointage === "present" ? "Présent" : "Absent"}
-            style={{ fontSize: "1.3rem", padding: "4px 7px", borderRadius: 7 }}
+            style={{ fontSize: "1rem", padding: "3px 6px", borderRadius: 6 }}
           >
             {booking.pointage === "present" ? "P" : "A"}
           </span>
