@@ -104,6 +104,12 @@ type Exercice = {
 // plus petit côté du créneau ≈ 50 px : N ≈ pixels × 2.)
 const bu = (n: number) => `calc(var(--bu) * ${n})`;
 
+// Flèches de la navigation SEMAINE : 1rem (contre les .7rem de `.periode-nav
+// .ex-arrow`), sans padding vertical pour ne pas épaissir la ligne. Réglé ici et non
+// sur la classe, que partagent la barre d'exercice et le panneau Périodes. Même
+// gabarit que la nav de l'agenda admin.
+const WEEK_ARROW_STYLE: React.CSSProperties = { fontSize: "1rem", padding: "0 .2rem" };
+
 // Bouton − / + d'un compteur de jauge (sans cercle, remplace les anciennes flèches ▲▼).
 // Clic-maintenu : 1er pas immédiat, puis répétition (90 ms) après un délai de 400 ms
 // tant que le bouton reste enfoncé. La répétition appelle TOUJOURS le `onClick` courant
@@ -3150,29 +3156,51 @@ export function UserAgendaGrid({
             <button
               type="button"
               className="ex-arrow"
+              style={WEEK_ARROW_STYLE}
               disabled={!canWeekPrev}
               onClick={() => canWeekPrev && shiftWeek(-1)}
             >
-              ◀
+              ◂
             </button>
             <span
               className="ex-nav-label"
-              // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
-              // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police et
-              // gabarit HARMONISÉS sur la nav de l'agenda admin (8rem, police de l'app).
-              style={{ width: "8rem", textAlign: "center" }}
+              // Largeur FIGÉE : les flèches ne bougent plus d'une semaine à l'autre.
+              // 6.25rem = 100 px, calibrés sur la semaine la plus large de l'année
+              // (« 23 mars ‣ 27 mars », 98,5 px mesurés — mars est le seul mois long
+              // que l'abréviation française ne tronque pas). Gabarit HARMONISÉ sur la
+              // nav de l'agenda admin.
+              style={{ width: "6.25rem", letterSpacing: "-.05em", textAlign: "center" }}
             >
-              {mondayStr
-                ? `${shortDateFmt.format(addDays(mondayStr, firstDayOffset))} → ${shortDateFmt.format(addDays(mondayStr, lastDayOffset))}`
-                : "…"}
+              {mondayStr ? (
+                <>
+                  {shortDateFmt.format(addDays(mondayStr, firstDayOffset))}
+                  {/* Séparateur « ‣ » et non « → » : 4,6 px contre 13,5 px. Grossi (le
+                      glyphe est dessiné bien plus petit que la hauteur d'x) et descendu,
+                      sans toucher à la hauteur de ligne. */}
+                  <span
+                    style={{
+                      fontSize: "1.35em",
+                      lineHeight: 0,
+                      position: "relative",
+                      top: ".12em",
+                    }}
+                  >
+                    {" ‣ "}
+                  </span>
+                  {shortDateFmt.format(addDays(mondayStr, lastDayOffset))}
+                </>
+              ) : (
+                "…"
+              )}
             </span>
             <button
               type="button"
               className="ex-arrow"
+              style={WEEK_ARROW_STYLE}
               disabled={!canWeekNext}
               onClick={() => canWeekNext && shiftWeek(1)}
             >
-              ▶
+              ▸
             </button>
             {todayInVisiblePeriods && (
               <button
