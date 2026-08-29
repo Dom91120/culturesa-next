@@ -2806,9 +2806,11 @@ export function AgendaGrid({
                     }}
                   >
                     {/* Croix de suppression (survol) — masquée si la résa est verrouillée
-                      (pointée / occurrence pointée). Récurrent en Semaine réelle : supprime
-                      la réservation récurrente (toutes occurrences) via la parente. */}
-                    {!locked && (
+                      (pointée / occurrence pointée), et en modes VALIDATION et POINTAGE :
+                      ces modes enchaînent les clics rapides, une croix au survol y est un
+                      risque de suppression accidentelle (Dom 2026-08-29). Récurrent en
+                      Semaine réelle : supprime la réservation récurrente via la parente. */}
+                    {!locked && !validation && !pointageMode && (
                       <button
                         type="button"
                         className="planning-name-tag-close"

@@ -405,9 +405,11 @@ export function BookingStackModal({
                 }}
               >
                 <PointagePill pointage={bk.pointage} />
-                {/* Croix masquée si verrouillée (pointée / occurrence pointée). Récurrent
-                      en Semaine réelle : supprime la réservation récurrente (via la parente). */}
-                {!lockedByPointage(bk) && (
+                {/* Croix masquée si verrouillée (pointée / occurrence pointée), et en modes
+                      validation/pointage — mêmes règles que les badges de la grille (clics
+                      rapides = pas de croix de suppression au survol). Récurrent en Semaine
+                      réelle : supprime la réservation récurrente (via la parente). */}
+                {!lockedByPointage(bk) && !validation && !pointageMode && (
                   <button
                     type="button"
                     className="planning-name-tag-close"
