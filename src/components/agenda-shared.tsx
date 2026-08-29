@@ -227,8 +227,21 @@ export function AgendaLegendSwatch({
 // .indic_a). Le pointage n'existe que sur les réservations ponctuelles datées,
 // donc cette pastille n'apparaît qu'en « Semaine réelle ». Le badge parent doit
 // être `position: relative` pour l'ancrer.
-export function PointagePill({ pointage }: { pointage: Pointage }) {
+// `onClick` (optionnel) : la pastille devient un vrai bouton et N'EST PLUS
+// transparente au clic — en mode pointage, cliquer le macaron A ouvre la fiche
+// pour saisir le motif d'absence au lieu de cycler le pointage (Dom 2026-08-29).
+export function PointagePill({
+  pointage,
+  onClick,
+  clickLabel,
+}: {
+  pointage: Pointage;
+  onClick?: () => void;
+  clickLabel?: string;
+}) {
   if (!pointage) return null;
+  const cls = pointage === "present" ? "indic_p" : "indic_a";
+  const letter = pointage === "present" ? "P" : "A";
   return (
     <span
       style={{
@@ -242,9 +255,22 @@ export function PointagePill({ pointage }: { pointage: Pointage }) {
         zIndex: 1,
       }}
     >
-      <span className={pointage === "present" ? "indic_p" : "indic_a"}>
-        {pointage === "present" ? "P" : "A"}
-      </span>
+      {onClick ? (
+        <button
+          type="button"
+          className={cls}
+          aria-label={clickLabel}
+          style={{ border: "none", cursor: "pointer" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+        >
+          {letter}
+        </button>
+      ) : (
+        <span className={cls}>{letter}</span>
+      )}
     </span>
   );
 }

@@ -2826,7 +2826,17 @@ export function AgendaGrid({
                         ×
                       </button>
                     )}
-                    <PointagePill pointage={bk.pointage} />
+                    {/* Mode pointage : cliquer le macaron A ouvre la fiche (saisie du
+                        motif d'absence) au lieu de cycler le pointage du badge. */}
+                    <PointagePill
+                      pointage={bk.pointage}
+                      onClick={
+                        pointageMode && bk.pointage === "absent"
+                          ? () => setDetail({ booking: bk })
+                          : undefined
+                      }
+                      clickLabel="Saisir le motif de l'absence"
+                    />
                     {primaryLabel && (
                       <span style={{ fontSize: ".62rem", fontWeight: 700 }}>{primaryLabel}</span>
                     )}
