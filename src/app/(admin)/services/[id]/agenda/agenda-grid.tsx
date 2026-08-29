@@ -3075,7 +3075,12 @@ export function AgendaGrid({
             </button>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: ".4rem" }}>
+        {/* Groupe de droite de l'en-tête (cases à cocher, ou réglages de création).
+            `marginLeft: auto` : quand la ligne devient trop étroite et que ce groupe
+            passe à la ligne suivante, il reste plaqué à DROITE. Sans lui, la ligne
+            n'ayant plus qu'un seul élément, `space-between` du conteneur le renvoie
+            à gauche — sous le titre, loin de la colonne où l'œil l'attend. */}
+        <div style={{ display: "flex", alignItems: "center", gap: ".4rem", marginLeft: "auto" }}>
           {/* Hors création : cases à cocher (masquer horaires / validation / pointage),
               à gauche du bouton Imprimer. */}
           {!creationMode && (
