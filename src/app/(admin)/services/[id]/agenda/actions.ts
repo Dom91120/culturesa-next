@@ -210,8 +210,10 @@ export async function setBookingPointageAction(
   serviceId: string,
   pointage: "present" | "absent" | null,
   // Motif d'absence (fiche réservation). `undefined` = ne pas toucher au motif
-  // existant (clic rapide du mode pointage) ; une chaîne = l'enregistrer. Ignoré
-  // (motif vidé) dès que le pointage n'est pas « absent ».
+  // stocké ; une chaîne = l'enregistrer (pointage « absent » uniquement). Retirer
+  // ou basculer le pointage CONSERVE le motif en base : il n'est plus affiché
+  // (tous les affichages sont conditionnés à pointage = absent) mais réapparaît
+  // si le gestionnaire réactive l'absence (décision Dom 2026-08-29).
   motif?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(serviceId);
@@ -245,11 +247,9 @@ export async function setBookingPointageAction(
   await prisma.booking.update({
     where: { id: id.data },
     data:
-      pointage === "absent"
-        ? motif === undefined
-          ? { pointage }
-          : { pointage, pointageMotif: motif.trim().slice(0, 255) }
-        : { pointage, pointageMotif: "" },
+      pointage === "absent" && motif !== undefined
+        ? { pointage, pointageMotif: motif.trim().slice(0, 255) }
+        : { pointage },
   });
   revalidatePath(`/services/${serviceId}/agenda`);
   return { ok: true };
