@@ -139,9 +139,7 @@ export function RegisterForm({
         headers: {
           "x-captcha-token": captcha.token,
           "x-captcha-answer": captcha.answer,
-          ...(saisieLibre
-            ? { [STRUCTURE_LIBRE_HEADER]: encodeURIComponent(structureSaisie) }
-            : {}),
+          ...(saisieLibre ? { [STRUCTURE_LIBRE_HEADER]: encodeURIComponent(structureSaisie) } : {}),
         },
       },
     });

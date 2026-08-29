@@ -70,17 +70,20 @@ describe("dérogation de développement — DEV_SKIP_2FA", () => {
     expect(exige2FA("administrateur", prod)).toBe(true);
   });
 
-  it.each(["1", "TRUE", "yes", "on", ""])(
-    "valeur « %s » : sans effet, comme pour ALLOW_INSECURE_COOKIES",
-    (v) => {
-      // Une échappatoire trop accueillante finit ouverte par accident ; celui qui
-      // écrit autre chose que « true » doit constater que ça n'a pas pris.
-      expect(derogation2FADev(env({ NODE_ENV: "development", DEV_SKIP_2FA: v }))).toBe(false);
-      expect(exige2FA("administrateur", env({ NODE_ENV: "development", DEV_SKIP_2FA: v }))).toBe(
-        true,
-      );
-    },
-  );
+  it.each([
+    "1",
+    "TRUE",
+    "yes",
+    "on",
+    "",
+  ])("valeur « %s » : sans effet, comme pour ALLOW_INSECURE_COOKIES", (v) => {
+    // Une échappatoire trop accueillante finit ouverte par accident ; celui qui
+    // écrit autre chose que « true » doit constater que ça n'a pas pris.
+    expect(derogation2FADev(env({ NODE_ENV: "development", DEV_SKIP_2FA: v }))).toBe(false);
+    expect(exige2FA("administrateur", env({ NODE_ENV: "development", DEV_SKIP_2FA: v }))).toBe(
+      true,
+    );
+  });
 
   it("absente : le second facteur reste exigé en développement", () => {
     expect(derogation2FADev(env({ NODE_ENV: "development" }))).toBe(false);
