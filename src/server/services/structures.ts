@@ -1,5 +1,6 @@
 import type { StructureInput } from "@/schemas/referentiels";
 import { prisma } from "@/server/db";
+import { currentExerciceIdsAllServices } from "@/server/services/exercice";
 
 export function listStructures() {
   return prisma.structure.findMany({
@@ -45,4 +46,44 @@ export async function resolveStructureLibre(demandeurId: number, label: string):
     select: { id: true },
   });
   return creee.id;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Changement de structure par l'USAGER (« Mon compte »)
+//
+//  L'usager peut changer sa catégorie et sa structure depuis « Mon compte », à une
+//  condition : n'avoir aucune réservation sur un exercice en cours. Le détail du
+//  raisonnement (pourquoi c'est acceptable alors que la catégorie commande l'accès)
+//  est dans `updateAffiliationAction` — mon-compte/actions.ts.
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * L'usager a-t-il au moins une réservation sur un exercice EN COURS ?
+ *
+ * Deuxième condition du changement libre : la structure est lue À L'AFFICHAGE
+ * (agenda, éditions, statistiques, exports), jamais figée sur la réservation. En
+ * changer alors que des séances de l'année sont déjà posées les réétiquetterait
+ * rétroactivement — une feuille de pointage de septembre afficherait la nouvelle
+ * école. Tant qu'il n'y a rien à réétiqueter, le changement est sans effet de bord.
+ *
+ * Récurrentes rattachées par `booking.periodId`, ponctuelles par le `periodId` de
+ * leur CRÉNEAU (elles stockent periodId à null) — même forme que le décompte des
+ * maxima.
+ */
+export async function aReservationSurExerciceCourant(userId: string): Promise<boolean> {
+  const exoIds = await currentExerciceIdsAllServices();
+  if (exoIds.length === 0) return false;
+  const periodes = await prisma.period.findMany({
+    where: { exerciceId: { in: exoIds } },
+    select: { id: true },
+  });
+  const periodIds = periodes.map((p) => p.id);
+  if (periodIds.length === 0) return false;
+  const n = await prisma.booking.count({
+    where: {
+      userId,
+      OR: [{ periodId: { in: periodIds } }, { slot: { periodId: { in: periodIds } } }],
+    },
+  });
+  return n > 0;
 }

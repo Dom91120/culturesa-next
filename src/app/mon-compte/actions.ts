@@ -11,11 +11,13 @@ import {
   profileCountOk,
   telSchema,
 } from "@/schemas/user";
+import { AUDIT, recordAudit } from "@/server/audit";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import { rateLimit } from "@/server/rate-limit";
 import { requestAccountDeletion } from "@/server/services/account-deletion";
 import { RgpdError } from "@/server/services/rgpd";
+import { aReservationSurExerciceCourant } from "@/server/services/structures";
 
 // Identité : fragments partagés (schemas/user) — les plafonds locaux (80) divergeaient
 // de l'admin (100) : un prénom saisi par l'admin devenait non ré-enregistrable ici.
@@ -68,6 +70,113 @@ export async function updateProfileAction(
   }
 
   await prisma.user.update({ where: { id: session.user.id }, data });
+  revalidatePath("/mon-compte");
+  return { ok: true };
+}
+
+/**
+ * Changement de CATÉGORIE et de STRUCTURE par l'usager lui-même.
+ *
+ * ── Pourquoi c'est acceptable ──
+ * La catégorie commande l'accès aux services, les créneaux ouverts, le mode
+ * validation, le thème obligatoire et l'ouverture pendant les vacances. La laisser
+ * changer semble donc une élévation de privilège — mais elle est DÉJÀ auto-déclarée :
+ * le formulaire d'inscription publique fait choisir sa catégorie librement. Refuser
+ * ici ne protégerait rien (il suffirait de recréer un compte) ; cela obligerait juste
+ * l'usager qui déménage d'école à écrire au service. Ce qui protège réellement reste
+ * en place : le mode validation par demandeur, et le verrou `/update-user` qui
+ * interdit d'écrire ces champs par la porte de derrière (audit 2026-07-14) — ce
+ * changement passe par CETTE action, avec ses contrôles.
+ *
+ * ── La condition ──
+ * Aucune réservation sur un exercice EN COURS. Catégorie et structure sont lues à
+ * l'affichage (agenda, éditions, statistiques, exports), jamais figées sur la
+ * réservation : en changer alors que des séances de l'année sont posées les
+ * réétiquetterait rétroactivement — une feuille de pointage de septembre afficherait
+ * la nouvelle école. Tant qu'il n'y a rien à réétiqueter, le changement est net.
+ *
+ * Contrôles revérifiés ICI : le formulaire les applique déjà, mais une server action
+ * voit des entrées brutes.
+ */
+export async function updateAffiliationAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await requireUser();
+  const entier = (v: FormDataEntryValue | null): number | null => {
+    const brut = String(v ?? "").trim();
+    if (brut === "") return null;
+    const n = Number.parseInt(brut, 10);
+    return Number.isInteger(n) && n > 0 ? n : Number.NaN;
+  };
+  const demandeurId = entier(formData.get("demandeurId"));
+  const structureId = entier(formData.get("structureId"));
+  if (Number.isNaN(demandeurId) || Number.isNaN(structureId)) {
+    return { ok: false, error: "Valeurs invalides." };
+  }
+
+  if (await aReservationSurExerciceCourant(session.user.id)) {
+    return {
+      ok: false,
+      error:
+        "Vous avez des réservations sur l'exercice en cours : contactez le service pour changer de catégorie ou de structure.",
+    };
+  }
+
+  // La catégorie doit exister (id forgé → 400 propre plutôt qu'une violation de FK).
+  if (demandeurId !== null) {
+    const existe = await prisma.demandeur.findUnique({
+      where: { id: demandeurId },
+      select: { id: true },
+    });
+    if (!existe) return { ok: false, error: "Catégorie inconnue." };
+  }
+  // La structure doit appartenir à la catégorie choisie : sans ce contrôle, on
+  // pourrait se rattacher à l'école d'une autre catégorie, et le demandeur EFFECTIF
+  // (repli sur la structure) ne serait plus celui affiché.
+  if (structureId !== null) {
+    const st = await prisma.structure.findUnique({
+      where: { id: structureId },
+      select: { demandeurId: true },
+    });
+    if (!st) return { ok: false, error: "Structure inconnue." };
+    if (demandeurId !== null && st.demandeurId !== demandeurId) {
+      return { ok: false, error: "Cette structure n'appartient pas à la catégorie choisie." };
+    }
+  }
+
+  const avant = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      email: true,
+      demandeur: { select: { label: true } },
+      structure: { select: { label: true } },
+    },
+  });
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { demandeurId, structureId },
+  });
+  const apres = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { demandeur: { select: { label: true } }, structure: { select: { label: true } } },
+  });
+  // Trace : un changement d'affiliation déplace l'accès aux services. Il est fait par
+  // l'usager, donc sans regard d'un gestionnaire — le journal est le seul endroit où
+  // il reste visible.
+  await recordAudit(AUDIT.USER_AFFILIATION_CHANGED, {
+    target: avant?.email ?? session.user.id,
+    details: {
+      avant: {
+        categorie: avant?.demandeur?.label ?? null,
+        structure: avant?.structure?.label ?? null,
+      },
+      apres: {
+        categorie: apres?.demandeur?.label ?? null,
+        structure: apres?.structure?.label ?? null,
+      },
+    },
+  });
   revalidatePath("/mon-compte");
   return { ok: true };
 }

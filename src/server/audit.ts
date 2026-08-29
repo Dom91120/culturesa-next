@@ -39,6 +39,10 @@ export const AUDIT = {
   USER_PASSWORD_RESET_SENT: "user.password_reset_sent",
   // Retirer un second facteur abaisse la protection d un compte privilegie.
   USER_2FA_RESET: "user.two_factor_reset",
+  // Changement de catégorie/structure par l'USAGER lui-même (« Mon compte ») : la
+  // catégorie commande l'accès aux services, le mode validation et le thème
+  // obligatoire — un changement en libre-service doit laisser une trace.
+  USER_AFFILIATION_CHANGED: "user.affiliation_changed",
   // ── Sauvegardes ──
   BACKUP_CREATED: "backup.created",
   BACKUP_RESTORED: "backup.restored",

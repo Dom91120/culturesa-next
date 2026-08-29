@@ -28,6 +28,7 @@ const ACTION_LABELS: Record<string, string> = {
   "user.deleted": "🗑️ Compte supprimé",
   "user.password_reset_sent": "✉️ Lien de mot de passe envoyé",
   "user.two_factor_reset": "🔓 Double authentification réinitialisée",
+  "user.affiliation_changed": "🏫 Catégorie / structure changée par l'usager",
   "backup.created": "💾 Sauvegarde créée",
   "backup.restored": "♻️ Base restaurée",
   "backup.deleted": "🗑️ Sauvegarde supprimée",

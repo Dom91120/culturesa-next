@@ -680,6 +680,27 @@ export async function currentExerciceIdForService(serviceId: string): Promise<nu
 }
 
 /**
+ * Ids des exercices COURANTS de TOUS les services, en une requête — même règle que
+ * `currentExerciceIdForService`, appliquée service par service. Pour les traitements
+ * qui raisonnent sur l'ensemble des services (profil usager : « a-t-il une
+ * réservation sur l'exercice en cours ? ») sans payer une requête par service.
+ */
+export async function currentExerciceIdsAllServices(): Promise<number[]> {
+  const rows = await prisma.exercice.findMany({
+    select: { id: true, serviceId: true, dateStart: true },
+  });
+  const parService = new Map<string, { id: number; dateStart: Date | null }[]>();
+  for (const r of rows) {
+    // Exercice sans service (donnée legacy) : aucun « courant » à en tirer.
+    if (!r.serviceId) continue;
+    parService.set(r.serviceId, [...(parService.get(r.serviceId) ?? []), r]);
+  }
+  return [...parService.values()]
+    .map((list) => list.slice().sort(byMostRecentExercice)[0]?.id)
+    .filter((id): id is number => id != null);
+}
+
+/**
  * Clause `where` des périodes ÉLIGIBLES d'un service (SOURCE UNIQUE, partagée par
  * agenda / stats / éditions) : périodes de l'exercice COURANT, ou de TOUS les
  * exercices si le service « affiche les exercices précédents ». Évite que ce filtre —
