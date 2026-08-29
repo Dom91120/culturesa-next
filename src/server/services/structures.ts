@@ -60,11 +60,13 @@ export async function resolveStructureLibre(demandeurId: number, label: string):
 /**
  * L'usager a-t-il au moins une réservation sur un exercice EN COURS ?
  *
- * Deuxième condition du changement libre : la structure est lue À L'AFFICHAGE
- * (agenda, éditions, statistiques, exports), jamais figée sur la réservation. En
- * changer alors que des séances de l'année sont déjà posées les réétiquetterait
- * rétroactivement — une feuille de pointage de septembre afficherait la nouvelle
- * école. Tant qu'il n'y a rien à réétiqueter, le changement est sans effet de bord.
+ * Deuxième condition du changement libre : les documents OPÉRATIONNELS (agenda,
+ * éditions, feuilles de pointage) lisent la fiche VIVANTE — seules les statistiques
+ * lisent le snapshot posé sur la réservation (bookings.structureLabel…, 2026-08-29).
+ * Changer de structure alors que des séances de l'année sont déjà posées
+ * réétiquetterait ces documents — une feuille de pointage de septembre afficherait
+ * la nouvelle école. Tant qu'il n'y a rien à réétiqueter, le changement est sans
+ * effet de bord.
  *
  * Récurrentes rattachées par `booking.periodId`, ponctuelles par le `periodId` de
  * leur CRÉNEAU (elles stockent periodId à null) — même forme que le décompte des

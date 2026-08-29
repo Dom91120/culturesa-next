@@ -89,11 +89,12 @@ export async function updateProfileAction(
  * changement passe par CETTE action, avec ses contrôles.
  *
  * ── La condition ──
- * Aucune réservation sur un exercice EN COURS. Catégorie et structure sont lues à
- * l'affichage (agenda, éditions, statistiques, exports), jamais figées sur la
- * réservation : en changer alors que des séances de l'année sont posées les
- * réétiquetterait rétroactivement — une feuille de pointage de septembre afficherait
- * la nouvelle école. Tant qu'il n'y a rien à réétiqueter, le changement est net.
+ * Aucune réservation sur un exercice EN COURS. Les statistiques lisent désormais le
+ * snapshot posé sur la réservation (bookings.structureLabel…, 2026-08-29), mais les
+ * documents opérationnels (agenda, éditions, feuilles de pointage) lisent toujours
+ * la fiche VIVANTE : en changer alors que des séances de l'année sont posées les
+ * réétiquetterait — une feuille de pointage de septembre afficherait la nouvelle
+ * école. Tant qu'il n'y a rien à réétiqueter, le changement est net.
  *
  * Contrôles revérifiés ICI : le formulaire les applique déjà, mais une server action
  * voit des entrées brutes.
