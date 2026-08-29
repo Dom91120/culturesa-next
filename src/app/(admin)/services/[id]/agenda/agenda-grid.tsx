@@ -2968,7 +2968,10 @@ export function AgendaGrid({
           marginBottom: ".4rem",
         }}
       >
-        <div className="panel-title" style={{ marginBottom: 0 }}>
+        {/* Interlettrage resserré : ce titre partage sa ligne avec la navigation
+            semaine et les réglages de création — inline plutôt que sur `.panel-title`,
+            qui sert de titre à tous les panneaux de l'application. */}
+        <div className="panel-title" style={{ marginBottom: 0, letterSpacing: "-.02em" }}>
           <span className="dot" />
           Agenda
           {/* Barre d'exercice toujours présente (parité legacy, y compris en ponctuel) :
