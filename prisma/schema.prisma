@@ -553,6 +553,9 @@ model Booking {
   // notification des gestionnaires (cf. services/manager-notice.ts).
   autoValidatedAt  DateTime? @db.Timestamptz
   pointage         Pointage?
+  // Motif d'absence (facultatif, saisi dans la fiche réservation) : ne porte du sens
+  // que lorsque pointage = absent ; vidé quand le pointage passe à présent ou s'efface.
+  pointageMotif    String    @default("")
 
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)

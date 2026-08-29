@@ -140,6 +140,8 @@ export type Booking = AgendaBookingCore & {
   structure: string;
   /** Niveau déclaré par l'usager (texte libre du profil) — affiché dans la fiche. */
   niveau: string;
+  /** Motif d'absence de l'occurrence (sens uniquement si pointage = absent). */
+  pointageMotif: string;
   // Date de dépôt ISO (vide sur un enfant côté payload, réhydratée depuis la parente).
   createdAt: string;
 };

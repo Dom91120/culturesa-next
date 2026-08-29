@@ -58,6 +58,9 @@ export async function GET(req: Request) {
             themeLabel: true,
             validated: true,
             pointage: true,
+            // Motif d'absence : saisi par le gestionnaire mais rattaché à l'usager —
+            // il fait partie des données restituables (RGPD art. 15).
+            pointageMotif: true,
             createdAt: true,
           },
         },

@@ -300,6 +300,7 @@ Réservation. Une **récurrente** (parente) génère des **enfants** datés (un 
 | autoValidateFrom | horodatage? | | | départ du décompte d'auto-validation |
 | autoValidatedAt | horodatage? | | | date d'auto-validation (null = jamais) |
 | pointage | `Pointage`? | | | présence relevée |
+| pointageMotif | texte | "" | | motif d'absence (sens uniquement si pointage = absent ; vidé sinon et à l'anonymisation) |
 | createdAt | horodatage | now() | | |
 
 **Unique** `uq_recurring (userId, serviceId, slotId, periodId, week)`.

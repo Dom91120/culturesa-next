@@ -158,6 +158,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
           themeLabel: true,
           validated: true,
           pointage: true,
+          pointageMotif: true,
           createdAt: true,
           user: {
             select: {
@@ -244,6 +245,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       theme: b.themeLabel ?? "",
       validated: b.validated,
       pointage: b.pointage,
+      pointageMotif: b.pointageMotif,
       name: child ? "" : `${b.user.nom} ${b.user.prenom}`.trim() || "—",
       tel: child ? "" : (b.user.tel ?? ""),
       email: child ? "" : (b.user.email ?? ""),

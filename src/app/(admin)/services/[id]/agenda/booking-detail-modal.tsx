@@ -79,6 +79,9 @@ export function BookingDetailModal({
   const [enfants, setEnfants] = useState(String(booking.enfants));
   const [accompagnants, setAccompagnants] = useState(String(booking.accompagnants));
   const [theme, setTheme] = useState(booking.theme);
+  // Motif d'absence (en-tête) : saisi ici, enregistré au blur/Entrée via l'action de
+  // pointage — n'existe que sur une occurrence pointée absente.
+  const [motif, setMotif] = useState(booking.pointageMotif);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -128,6 +131,14 @@ export function BookingDetailModal({
   const nEnf = Number(enfants) || 0;
   const nAcc = Number(accompagnants) || 0;
 
+  // Enregistre le motif d'absence s'il a changé (blur / Entrée). Passe par l'action
+  // de pointage : « absent » + motif — le pointage est déjà absent, seul le motif bouge.
+  function saveMotif() {
+    const m = motif.trim();
+    if (m === booking.pointageMotif.trim()) return;
+    run(setBookingPointageAction(booking.id, serviceId, "absent", m));
+  }
+
   return (
     <ModalOverlay onClose={onClose}>
       <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">
@@ -138,6 +149,16 @@ export function BookingDetailModal({
         style={{ display: "flex", alignItems: "center", gap: ".5rem", flexWrap: "wrap" }}
       >
         <span>📋 Réservation :</span>
+        {/* Cadenas : même prédicat que le verrou d'édition (réservation pointée). */}
+        {locked && (
+          <span
+            title="Réservation pointée — édition verrouillée"
+            aria-label="Édition verrouillée"
+            style={{ fontSize: ".85rem" }}
+          >
+            🔒
+          </span>
+        )}
         {periodTag && (
           <span
             className="period-btn active"
@@ -163,6 +184,37 @@ export function BookingDetailModal({
         >
           {dayHour}
         </span>
+        {/* Pastille P/A inline (mêmes classes que les badges de la grille). */}
+        {booking.pointage && (
+          <span
+            className={booking.pointage === "present" ? "indic_p" : "indic_a"}
+            title={booking.pointage === "present" ? "Présent" : "Absent"}
+          >
+            {booking.pointage === "present" ? "P" : "A"}
+          </span>
+        )}
+        {/* Motif d'absence : éditable en gestion, simple lecture en consultation. */}
+        {booking.pointage === "absent" &&
+          (readOnly ? (
+            booking.pointageMotif.trim() !== "" && (
+              <span style={{ fontSize: ".72rem", fontWeight: 500, color: "var(--muted)" }}>
+                Motif : {booking.pointageMotif}
+              </span>
+            )
+          ) : (
+            <input
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              onBlur={saveMotif}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              maxLength={255}
+              placeholder="Motif de l'absence…"
+              aria-label="Motif de l'absence"
+              style={{ fontSize: ".72rem", padding: ".2rem .45rem", flex: "1 1 160px" }}
+            />
+          ))}
       </div>
 
       {(locked || notice) && (

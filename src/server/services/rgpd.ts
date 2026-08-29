@@ -122,6 +122,11 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
       },
     });
 
+    // Motifs d'absence : texte libre saisi par le gestionnaire, potentiellement
+    // sensible (« enfant malade »…) — vidé par minimisation ; l'historique métier
+    // (pointage P/A, effectifs, thème) reste intact pour les statistiques.
+    await tx.booking.updateMany({ where: { userId }, data: { pointageMotif: "" } });
+
     // Déconnexion : on révoque toutes les sessions actives.
     await tx.session.deleteMany({ where: { userId } });
     // Verrouillage : suppression des comptes d'authentification (identifiants/mot de

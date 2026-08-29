@@ -209,6 +209,10 @@ export async function setBookingPointageAction(
   bookingId: number,
   serviceId: string,
   pointage: "present" | "absent" | null,
+  // Motif d'absence (fiche réservation). `undefined` = ne pas toucher au motif
+  // existant (clic rapide du mode pointage) ; une chaîne = l'enregistrer. Ignoré
+  // (motif vidé) dès que le pointage n'est pas « absent ».
+  motif?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
@@ -231,7 +235,15 @@ export async function setBookingPointageAction(
   if (b.slot.slotDate != null && b.slot.slotDate.toISOString().slice(0, 10) > todayParisISO()) {
     return { ok: false, error: "Impossible de pointer une séance qui n'a pas encore eu lieu." };
   }
-  await prisma.booking.update({ where: { id: id.data }, data: { pointage } });
+  await prisma.booking.update({
+    where: { id: id.data },
+    data:
+      pointage === "absent"
+        ? motif === undefined
+          ? { pointage }
+          : { pointage, pointageMotif: motif.trim().slice(0, 255) }
+        : { pointage, pointageMotif: "" },
+  });
   revalidatePath(`/services/${serviceId}/agenda`);
   return { ok: true };
 }
