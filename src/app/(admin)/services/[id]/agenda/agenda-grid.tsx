@@ -1228,6 +1228,18 @@ export function AgendaGrid({
     const p = coveringPeriod;
     const replicate = override ? override.replicate : createKind === "multi";
     if (!replicate || !p?.dateStart || !p.dateEnd) return [single];
+    // Plage de création : elle borne le GESTE DE CRÉATION, et lui seul. Un
+    // élargissement (`override`, glisser horizontal depuis un créneau existant) suit
+    // la portée de SA SOURCE — le tronquer sur des champs de la barre, qui parlent
+    // d'autre chose, amputerait silencieusement un geste sans rapport.
+    const bornes = override
+      ? { start: p.dateStart, end: p.dateEnd }
+      : resolveSlotRange({
+          periodStart: p.dateStart,
+          periodEnd: p.dateEnd,
+          slotStart: createStart,
+          slotEnd: createEnd,
+        });
     // Parité effective : celle imposée (élargissement) ou celle de la semaine affichée.
     const parity = override
       ? override.parity
@@ -1235,15 +1247,15 @@ export function AgendaGrid({
         ? realWeekParity
         : null;
     const dates: string[] = [];
-    let monday = ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`)));
+    let monday = ymd(mondayOf(new Date(`${bornes.start}T00:00:00`)));
     // ≤ 120 itérations : garde-fou large (une période ≈ 53 semaines au plus).
-    for (let guard = 0; guard < 120 && monday <= p.dateEnd; guard++) {
+    for (let guard = 0; guard < 120 && monday <= bornes.end; guard++) {
       const weekMonday = monday;
       monday = ymd(addDays(monday, 7));
       // Filtre de parité : uniquement la parité voulue (A/B) ; null = toutes les semaines.
       if (parity && slotWeekTag(weekMonday) !== parity) continue;
       const d = ymd(addDays(weekMonday, off));
-      if (d < p.dateStart || d > p.dateEnd) continue;
+      if (d < bornes.start || d > bornes.end) continue;
       const o = openingForYmd(d);
       if (
         !o.activeDays
@@ -3082,20 +3094,33 @@ export function AgendaGrid({
           {/* Capacité / jauge / demandeurs par défaut des créneaux créés (mode création). */}
           {creationMode && (
             <>
-              {/* Plage du créneau RÉCURRENT créé : par défaut toute la période, d'où
-                  deux champs vides. Bornés aux dates de la période active — saisir
-                  au-delà n'aurait aucun effet, le créneau étant rogné sur elle.
-                  Affichés en création seulement, comme la capacité par défaut : ce sont
-                  des valeurs du geste, pas un réglage du service. */}
-              {createKind === "rec" && (
+              {/* Plage des créneaux créés : par défaut toute la période, d'où deux
+                  champs vides. Bornés aux dates de la période active — saisir au-delà
+                  n'aurait aucun effet. Affichés en création seulement, comme la
+                  capacité par défaut : ce sont des valeurs du geste.
+
+                  Deux PORTÉES selon le type, d'où le libellé variable :
+                   • récurrent → propriété DURABLE du créneau (les miroirs s'y
+                     régénèrent, et elle se corrige ensuite dans la modale créneau) ;
+                   • multiple  → simple filtre des dates créées, qui disparaît une fois
+                     le lot posé (chaque ponctuel EST sa date, il n'y a rien à
+                     régénérer ; on rectifie en supprimant des créneaux).
+                  Un ponctuel isolé n'a qu'une date : les champs n'y ont pas d'objet. */}
+              {(createKind === "rec" || createKind === "multi") && (
                 <span
                   style={{ display: "inline-flex", alignItems: "center", gap: ".2rem" }}
-                  data-tip="Plage du créneau récurrent (vide = toute la période)"
+                  data-tip={
+                    createKind === "rec"
+                      ? "Plage du créneau récurrent (vide = toute la période)"
+                      : "Limiter les dates créées (vide = toute la période)"
+                  }
                 >
                   <input
                     id="create-range-start"
                     type="date"
-                    aria-label="Début du créneau récurrent"
+                    aria-label={
+                      createKind === "rec" ? "Début du créneau récurrent" : "Première date créée"
+                    }
                     value={createStart}
                     min={coveringPeriod?.dateStart || undefined}
                     max={coveringPeriod?.dateEnd || undefined}
@@ -3106,7 +3131,9 @@ export function AgendaGrid({
                   <input
                     id="create-range-end"
                     type="date"
-                    aria-label="Fin du créneau récurrent"
+                    aria-label={
+                      createKind === "rec" ? "Fin du créneau récurrent" : "Dernière date créée"
+                    }
                     value={createEnd}
                     min={createStart || coveringPeriod?.dateStart || undefined}
                     max={coveringPeriod?.dateEnd || undefined}
