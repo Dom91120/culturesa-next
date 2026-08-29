@@ -156,7 +156,15 @@ export function BookingDetailModal({
             pastille) — plus de vertical-align au jugé. */}
         <span style={{ display: "inline-flex", alignItems: "center", gap: ".3rem" }}>
           <span
-            title={locked ? "Réservation pointée — édition verrouillée" : undefined}
+            // Formulation « récurrente » réservée aux occurrences d'une récurrente :
+            // une ponctuelle autonome pointée est verrouillée au même titre.
+            title={
+              locked
+                ? booking.parentBookingId != null
+                  ? "Réservation récurrente pointée : l'édition est verrouillée"
+                  : "Réservation pointée : l'édition est verrouillée"
+                : undefined
+            }
             aria-label={locked ? "Édition verrouillée" : undefined}
             style={{ fontSize: "1.3rem", lineHeight: 1 }}
           >
