@@ -2998,7 +2998,9 @@ export function AgendaGrid({
           </span>
         </div>
         {/* Navigation semaine : centrée sur la même ligne que le titre et le sélecteur.
-            gap resserré : flèches ◀ ▶ au plus près du libellé (largeur figée). */}
+            gap resserré : flèches au plus près du libellé (largeur figée).
+            Petits triangles ◂ ▸ (et non ◀ ▶) : même dessin, moins large — cette barre
+            partage sa ligne avec le titre et le sélecteur de période. */}
         <div className="periode-nav" style={{ margin: "0 auto", gap: ".1rem" }}>
           <button
             type="button"
@@ -3006,17 +3008,46 @@ export function AgendaGrid({
             disabled={!canWeekPrev}
             onClick={() => canWeekPrev && shiftWeek(-1)}
           >
-            ◀
+            ◂
           </button>
           <span
             className="ex-nav-label"
             // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
-            // les flèches ◀ ▶ ne bougent plus d'une semaine à l'autre. Police inchangée.
-            style={{ width: "8rem", textAlign: "center" }}
+            // les flèches ne bougent plus d'une semaine à l'autre. L'interlettrage
+            // resserré permet de tenir en 6rem sans changer la police.
+            // 6.25rem = 100 px : la semaine la plus large de l'année (« 23 mars ‣ 27
+            // mars », 98,5 px mesurés — mars ne s'abrège pas, contrairement à « sept. »
+            // ou « janv. ») tient sans déborder, avec 1,5 px de réserve.
+            style={{ width: "6.25rem", letterSpacing: "-.05em", textAlign: "center" }}
           >
-            {mondayStr
-              ? `${shortDateFmt.format(addDays(mondayStr, firstDayOffset))} → ${shortDateFmt.format(addDays(mondayStr, lastDayOffset))}`
-              : "…"}
+            {/* Séparateur « ‣ » et non « → » : 4,6 px contre 13,5 px dans la police du
+                libellé. C'est ce qui fait tenir la semaine la plus longue de l'année
+                dans la boîte figée de 96 px — avec la flèche, elle débordait de 5 px.
+                Grossi (1.35em) car le glyphe est dessiné bien plus petit que la
+                hauteur d'x ; `lineHeight: 0` empêche ce grossissement de pousser la
+                hauteur de la ligne. */}
+            {mondayStr ? (
+              <>
+                {shortDateFmt.format(addDays(mondayStr, firstDayOffset))}
+                <span
+                  style={{
+                    fontSize: "1.35em",
+                    lineHeight: 0,
+                    // Descendu de ~1,5 px : le glyphe est dessiné haut dans sa boîte,
+                    // et grossi il tirait l'œil au-dessus de la ligne des dates.
+                    // Décalage PUREMENT visuel (position relative) : la hauteur de la
+                    // ligne ne bouge pas.
+                    position: "relative",
+                    top: ".12em",
+                  }}
+                >
+                  {" ‣ "}
+                </span>
+                {shortDateFmt.format(addDays(mondayStr, lastDayOffset))}
+              </>
+            ) : (
+              "…"
+            )}
           </span>
           <button
             type="button"
@@ -3024,7 +3055,7 @@ export function AgendaGrid({
             disabled={!canWeekNext}
             onClick={() => canWeekNext && shiftWeek(1)}
           >
-            ▶
+            ▸
           </button>
           {todayInVisiblePeriods && (
             <button
