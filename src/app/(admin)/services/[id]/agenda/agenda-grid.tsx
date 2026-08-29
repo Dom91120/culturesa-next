@@ -3978,13 +3978,14 @@ export function AgendaGrid({
             ? !parentBk.validated && !lockedByPointage(parentBk)
             : !readOnly;
           const editBookingId = isRecurring ? parentBk.id : bk.id;
-          const notice = !isRecurring
-            ? null
-            : canEdit
+          // Bandeau : seule l'info de PORTÉE reste (récurrente éditable → la modif vaut
+          // pour toutes les occurrences). Les anciennes phrases d'état (« validée —
+          // dévalidez-la… », « Consultation… ») sont supprimées : l'état est déjà dit
+          // par le cadenas et par le rendu figé des champs (retour Dom 2026-08-29).
+          const notice =
+            isRecurring && canEdit
               ? "Réservation récurrente — les participants et le thème s'appliquent à toutes les occurrences."
-              : parentBk.validated
-                ? "Réservation récurrente validée — dévalidez-la pour modifier les participants."
-                : "Consultation — réservation récurrente.";
+              : null;
           return (
             <BookingDetailModal
               booking={bk}
