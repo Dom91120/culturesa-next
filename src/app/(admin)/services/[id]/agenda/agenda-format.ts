@@ -4,6 +4,7 @@
 //   Tel : <tel>      (si renseigné)
 //   <email>
 //   <N enfants M adulte(s)>
+//   Absent : <motif>  (si la séance est pointée absente avec un motif saisi)
 //   Verrouillée…      (si verrou pointage — sinon le badge change juste de curseur
 //                      sans dire pourquoi, cf. incident du 2026-08-29)
 export function badgeTitle(
@@ -12,6 +13,10 @@ export function badgeTitle(
     email: string;
     enfants: number;
     accompagnants: number;
+    // Pointage de la réservation SURVOLÉE (l'occurrence, pas la parente) — le motif
+    // n'a de sens que sur une séance absente.
+    pointage?: string | null;
+    pointageMotif?: string;
   },
   locked = false,
 ): string {
@@ -23,6 +28,8 @@ export function badgeTitle(
       bk.accompagnants > 1 ? "s" : ""
     }`,
   );
+  const motif = bk.pointageMotif?.trim();
+  if (bk.pointage === "absent" && motif) lines.push(`Absent : ${motif}`);
   if (locked) lines.push("Verrouillée : séance pointée (dépointer pour modifier)");
   return lines.join("\n");
 }
