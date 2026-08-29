@@ -148,17 +148,19 @@ export function BookingDetailModal({
         className="modal-title"
         style={{ display: "flex", alignItems: "center", gap: ".5rem", flexWrap: "wrap" }}
       >
-        <span>📋 Réservation :</span>
-        {/* Cadenas : même prédicat que le verrou d'édition (réservation pointée). */}
-        {locked && (
+        {/* Verrouillée : le cadenas REMPLACE le bloc-note (retour Dom 2026-08-29),
+            en plus grand — c'est lui qui porte l'explication du verrou (l'ancienne
+            ligne « Réservation pointée — édition verrouillée. » est supprimée). */}
+        <span>
           <span
-            title="Réservation pointée — édition verrouillée"
-            aria-label="Édition verrouillée"
-            style={{ fontSize: ".85rem" }}
+            title={locked ? "Réservation pointée — édition verrouillée" : undefined}
+            aria-label={locked ? "Édition verrouillée" : undefined}
+            style={{ fontSize: "1.3rem", verticalAlign: "-.15em", marginRight: ".15rem" }}
           >
-            🔒
-          </span>
-        )}
+            {locked ? "🔒" : "📋"}
+          </span>{" "}
+          Réservation :
+        </span>
         {periodTag && (
           <span
             className="period-btn active"
@@ -184,42 +186,41 @@ export function BookingDetailModal({
         >
           {dayHour}
         </span>
-        {/* Pastille P/A inline (mêmes classes que les badges de la grille). */}
+        {/* Pastille P/A inline — mêmes classes que les badges de la grille, doublée
+            pour l'en-tête (la taille badge .52rem y est illisible). */}
         {booking.pointage && (
           <span
             className={booking.pointage === "present" ? "indic_p" : "indic_a"}
             title={booking.pointage === "present" ? "Présent" : "Absent"}
+            style={{ fontSize: "1.3rem", padding: "4px 7px", borderRadius: 7 }}
           >
             {booking.pointage === "present" ? "P" : "A"}
           </span>
         )}
-        {/* Motif d'absence : éditable en gestion, simple lecture en consultation. */}
-        {booking.pointage === "absent" &&
-          (readOnly ? (
-            booking.pointageMotif.trim() !== "" && (
-              <span style={{ fontSize: ".72rem", fontWeight: 500, color: "var(--muted)" }}>
-                Motif : {booking.pointageMotif}
-              </span>
-            )
-          ) : (
-            <input
-              value={motif}
-              onChange={(e) => setMotif(e.target.value)}
-              onBlur={saveMotif}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              }}
-              maxLength={255}
-              placeholder="Motif de l'absence…"
-              aria-label="Motif de l'absence"
-              style={{ fontSize: ".72rem", padding: ".2rem .45rem", flex: "1 1 160px" }}
-            />
-          ))}
+        {/* Motif d'absence : toujours éditable — le pointage (et son motif) n'est pas
+            gouverné par le verrou, et la fiche d'une occurrence pointée est justement
+            en consultation (readOnly) : brancher sur readOnly le rendait insaisissable. */}
+        {booking.pointage === "absent" && (
+          <input
+            value={motif}
+            onChange={(e) => setMotif(e.target.value)}
+            onBlur={saveMotif}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            maxLength={255}
+            placeholder="Motif de l'absence…"
+            aria-label="Motif de l'absence"
+            style={{ fontSize: ".72rem", padding: ".2rem .45rem", flex: "1 1 160px" }}
+          />
+        )}
       </div>
 
-      {(locked || notice) && (
+      {/* La phrase « Réservation pointée — édition verrouillée. » est remplacée par le
+          cadenas du titre (retour Dom 2026-08-29) ; seul le bandeau contextuel reste. */}
+      {notice && (
         <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".2rem 0 .6rem" }}>
-          {locked ? "Réservation pointée — édition verrouillée." : notice}
+          {notice}
         </p>
       )}
 

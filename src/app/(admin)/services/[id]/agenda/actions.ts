@@ -222,7 +222,7 @@ export async function setBookingPointageAction(
   // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
   const b = await prisma.booking.findFirst({
     where: { id: id.data, serviceId },
-    select: { bookingType: true, slot: { select: { slotDate: true } } },
+    select: { bookingType: true, pointage: true, slot: { select: { slotDate: true } } },
   });
   if (!b) return { ok: false, error: "Réservation introuvable." };
   if (b.bookingType === "recurring") {
@@ -231,8 +231,15 @@ export async function setBookingPointageAction(
   // Pas de pointage AVANT la séance (jour de la séance accepté — on n'est pas à
   // l'heure près). Validée ou non, peu importe : le pointage constate le réel.
   // L'effacement est bloqué au même titre que la pose : aucune action de pointage
-  // sur une séance future.
-  if (b.slot.slotDate != null && b.slot.slotDate.toISOString().slice(0, 10) > todayParisISO()) {
+  // sur une séance future. EXCEPTION : préciser le motif d'une séance DÉJÀ absente
+  // ne change pas l'état du pointage — sans quoi le motif d'une absence enregistrée
+  // en base sur une séance à venir resterait insaisissable dans la fiche.
+  const motifSeul = pointage === "absent" && b.pointage === "absent";
+  if (
+    !motifSeul &&
+    b.slot.slotDate != null &&
+    b.slot.slotDate.toISOString().slice(0, 10) > todayParisISO()
+  ) {
     return { ok: false, error: "Impossible de pointer une séance qui n'a pas encore eu lieu." };
   }
   await prisma.booking.update({
