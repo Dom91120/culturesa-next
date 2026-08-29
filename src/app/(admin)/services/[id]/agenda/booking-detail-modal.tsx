@@ -202,6 +202,12 @@ export function BookingDetailModal({
               display: "inline-flex",
               alignItems: "center",
               lineHeight: 1,
+              // En bout de ligne : la marge droite retombe sur le padding de la boîte
+              // (1.25rem), symétrique de la marge gauche du cadenas. Les 4px évitent
+              // que le coin de la pastille touche le bouton × (mesuré : 2px de
+              // chevauchement à ras du bord).
+              marginLeft: "auto",
+              marginRight: 4,
             }}
           >
             {booking.pointage === "present" ? "P" : "A"}
