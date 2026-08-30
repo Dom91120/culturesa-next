@@ -2934,17 +2934,40 @@ textarea.theme-pending:focus::placeholder {
     border-top: none;
     flex-direction: row !important;
   }
-  /* Côté USAGER (bandeau à menu sandwich) : la ligne utilisateur est INTÉGRÉE au
-     menu déplié plutôt qu'affichée en permanence — une rangée de gagnée en hauteur
-     (demande Dom 2026-08-30). Le shell admin mobile, sans menu sandwich, garde sa
-     ligne visible (`:has` distingue les deux). */
-  #service-sidebar-wrap:has(#mobile-services-toggle):not(.mobile-open) .user-bar {
-    display: none;
+  /* Côté USAGER (bandeau à menu sandwich) : le bloc utilisateur est INDÉPENDANT du
+     menu sandwich — avatar compact ancré en HAUT-DROITE de la rangée burger (+ la
+     bascule de thème), menu utilisateur déroulé dessous, aligné à droite (demande
+     Dom 2026-08-30, v2 : il était d'abord intégré au menu sandwich déplié). Le
+     shell admin mobile, sans menu sandwich, garde sa ligne en flux (`:has`). */
+  #service-sidebar-wrap:has(#mobile-services-toggle) {
+    /* `relative` (et non static) : ancre l'absolu du bloc utilisateur. */
+    position: relative !important;
   }
-  #service-sidebar-wrap.mobile-open .user-bar {
-    border-top: 1px solid var(--border) !important;
-    margin-top: 0.4rem;
-    padding-top: 0.4rem !important;
+  #service-sidebar-wrap:has(#mobile-services-toggle) .user-bar {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.55rem;
+    padding: 0 !important;
+    gap: 0.1rem;
+  }
+  /* Compact : avatar seul (ni nom, ni rôle, ni flèche). */
+  #service-sidebar-wrap:has(#mobile-services-toggle) .user-ident {
+    display: none !important;
+  }
+  #service-sidebar-wrap:has(#mobile-services-toggle) .user-pill-wrap {
+    flex: none !important;
+  }
+  #service-sidebar-wrap:has(#mobile-services-toggle) .user-bar .user-pill {
+    padding: 0.15rem !important;
+  }
+  /* Le burger réserve la place des deux boutons superposés à sa droite. */
+  #service-sidebar-wrap:has(#mobile-services-toggle) #mobile-services-toggle {
+    padding-right: 4.5rem;
+  }
+  /* Menu déroulé sous l'avatar, calé au bord droit (à gauche, il déborderait). */
+  #service-sidebar-wrap:has(#mobile-services-toggle) #user-menu {
+    left: auto !important;
+    right: 0 !important;
   }
   .user-pill-wrap {
     flex: 1 !important;
