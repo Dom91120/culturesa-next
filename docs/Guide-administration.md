@@ -200,5 +200,5 @@ docker compose up -d --build      # reconstruit et redéploie (migrations auto)
   pas une sauvegarde fiable.
 - **Compte administrateur** : sécurisez/renommez le compte de démo avant la mise en
   production.
-- **Réseau** : ports 80 et 443 (TCP) et 443 (UDP, HTTP/3) ouverts ; le conteneur `app`
-  tourne en utilisateur non-root.
+- **Réseau** : l'app est publiée en local (`127.0.0.1:3000`, conteneur non-root) ; les
+  ports 80/443 relèvent du **proxy TLS externe** s'il y en a un (cf. §1).

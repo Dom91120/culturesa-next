@@ -181,20 +181,26 @@ confiés</strong>. Chaque service dispose des onglets <strong>Agenda</strong>, <
 <li><strong>Déplacer, copier ou supprimer</strong> des créneaux.</li>
 <li><strong>Gérer les réservations</strong> : ajouter, modifier, annuler ou valider une réservation pour un
 usager.</li>
-<li><strong>Pointage</strong> : marquer chaque participant <strong>Présent</strong> ou <strong>Absent</strong> après la séance.</li>
+<li><strong>Pointage</strong> : marquer chaque participant <strong>Présent</strong> ou <strong>Absent</strong> après la séance. En cas
+d&#39;absence, un clic sur le macaron <strong>A</strong> du badge ouvre la fiche de la réservation pour saisir
+un <strong>motif d&#39;absence</strong> (facultatif) — il apparaît ensuite dans l&#39;infobulle du badge et sur la
+feuille de pointage des Éditions, et il est conservé si le pointage est effacé puis remis.</li>
 </ul>
 <blockquote>
 <p>Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un
 autre créneau pour le déplacer.</p>
 </blockquote>
-<p>L&#39;agenda s&#39;affiche en deux modes : <strong>Modèle de période</strong> (les créneaux récurrents, gabarit de la
-période) et <strong>Semaine réelle</strong> (les éléments datés : réservations, pointages, créneaux ponctuels).</p>
+<p>L&#39;agenda affiche une <strong>semaine datée</strong> : créneaux récurrents et ponctuels, réservations et
+pointages s&#39;y gèrent au même endroit, semaine après semaine (flèches ◀ ▶ et onglets de période).</p>
 <p><img src="img/06-agenda-admin.png" alt="Agenda d&#39;administration d&#39;un service"></p>
 <p><em>Figure 6 — Agenda d&#39;administration d&#39;un service</em></p>
 <h3 id="éditions-listes-et-suivi">Éditions — listes et suivi</h3>
-<p>L&#39;onglet <strong>Éditions</strong> présente le tableau de <strong>toutes les réservations</strong> (période, date, créneau,
-demandeur, participant, thème, nombre d&#39;enfants, statut, pointage). Il propose un <strong>export CSV</strong>,
-une vue <strong>Planning</strong> hebdomadaire et la saisie des <strong>Pointages</strong>.</p>
+<p>L&#39;onglet <strong>Éditions</strong> présente la <strong>liste des inscrits</strong> (les usagers ayant réservé sur
+l&#39;exercice — identité, structure, niveau et contact ; les comptes anonymisés sont masqués par
+défaut), le tableau de <strong>toutes les réservations</strong> (période, date, créneau, demandeur,
+participant, thème, nombre d&#39;enfants, statut, pointage) avec <strong>export CSV</strong>, une vue
+<strong>Planning</strong> hebdomadaire et la <strong>feuille de pointage</strong> (avec les motifs d&#39;absence). Chaque
+écran s&#39;imprime en <strong>PDF</strong>.</p>
 <p><img src="img/07-editions-liste.png" alt="Liste des réservations (Éditions) et export CSV"></p>
 <p><em>Figure 7 — Liste des réservations (Éditions) et export CSV</em></p>
 <h3 id="statistiques">Statistiques</h3>
@@ -239,8 +245,8 @@ du nouvel exercice (reconduction des périodes et créneaux avec dates décalée
 ce drapeau ; la case reste modifiable à la main ensuite.</p>
 </blockquote>
 <h3 id="paramètres-configuration-accès-et-thèmes">Paramètres — Configuration (accès et thèmes)</h3>
-<p>La configuration définit les <strong>paramètres globaux</strong> du service — <strong>créneaux récurrents</strong> (active la
-vue « Modèle de période » de l&#39;agenda), <strong>alternance Semaine A/B</strong> (sans effet si les créneaux
+<p>La configuration définit les <strong>paramètres globaux</strong> du service — <strong>créneaux récurrents</strong> (autorise
+les créneaux qui se répètent chaque semaine), <strong>alternance Semaine A/B</strong> (sans effet si les créneaux
 récurrents sont désactivés) et <strong>prise en compte des accompagnants</strong> dans la jauge — puis, <strong>pour
 chaque demandeur</strong>, la <strong>validation</strong> et les <strong>thèmes</strong>. Le mode des thèmes peut être <strong>« libre »</strong>
 (texte saisi par l&#39;usager) ou <strong>« liste »</strong> (choix imposé).</p>

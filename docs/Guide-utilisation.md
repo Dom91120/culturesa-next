@@ -1,8 +1,9 @@
 <!-- SOURCE UNIQUE de la doc fonctionnelle (texte + captures dans docs/img/).
      Après toute modification : `pnpm gen:docs` régénère la page d'aide de l'app
      (public/aide/guide-utilisation.html, captures incluses).
-     Pas de livrable Word : pour un document imprimable, ouvrir la page d'aide et
-     « Imprimer → Enregistrer en PDF » depuis le navigateur. -->
+     Livrables Word : docs/Guide-utilisation.docx et Guide-administration-CultuResa.docx
+     sont générés depuis les Markdown par `pnpm gen:docs:word` (demande Dom 2026-08-30) —
+     à relancer après toute modification notable. -->
 
 # Guide d'utilisation — CultuRésa
 
@@ -170,9 +171,12 @@ pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶
 
 ### Éditions — listes et suivi
 
-L'onglet **Éditions** présente le tableau de **toutes les réservations** (période, date, créneau,
-demandeur, participant, thème, nombre d'enfants, statut, pointage). Il propose un **export CSV**,
-une vue **Planning** hebdomadaire et la saisie des **Pointages**.
+L'onglet **Éditions** présente la **liste des inscrits** (les usagers ayant réservé sur
+l'exercice — identité, structure, niveau et contact ; les comptes anonymisés sont masqués par
+défaut), le tableau de **toutes les réservations** (période, date, créneau, demandeur,
+participant, thème, nombre d'enfants, statut, pointage) avec **export CSV**, une vue
+**Planning** hebdomadaire et la **feuille de pointage** (avec les motifs d'absence). Chaque
+écran s'imprime en **PDF**.
 
 ![Liste des réservations (Éditions) et export CSV](img/07-editions-liste.png)
 
