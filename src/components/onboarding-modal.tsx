@@ -416,7 +416,9 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
               Pour commencer, choisissez le service qui vous intéresse{" "}
               {isMobile ? (
                 <>
-                  via le <strong>menu ☰</strong> en haut de l'écran{"\u00A0"}:
+                  {/* Sans « en haut de l'écran » (Dom 2026-08-30) : la maquette juste dessous
+                      montre l'emplacement, et la phrase tient sur une ligne de moins. */}
+                  via le <strong>menu ☰</strong>{"\u00A0"}:
                 </>
               ) : (
                 <>
