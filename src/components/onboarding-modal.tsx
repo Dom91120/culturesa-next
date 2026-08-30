@@ -481,6 +481,11 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
             En <strong>« Semaine réelle »</strong>, activez le <strong>« Mode pointage »</strong>{" "}
             pour marquer la présence ou l'absence à chaque réservation, semaine après semaine.
           </p>
+          <p style={{ margin: 0 }}>
+            En cas d'absence, cliquez sur le macaron <strong>A</strong> du badge pour ouvrir la
+            fiche et saisir un <strong>motif d'absence</strong> — il est repris dans l'infobulle
+            du badge et sur la feuille de pointage.
+          </p>
         </>
       ),
       image: <PointageModeShot />,

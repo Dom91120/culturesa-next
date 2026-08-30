@@ -153,7 +153,10 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
 - **Déplacer, copier ou supprimer** des créneaux.
 - **Gérer les réservations** : ajouter, modifier, annuler ou valider une réservation pour un
   usager.
-- **Pointage** : marquer chaque participant **Présent** ou **Absent** après la séance.
+- **Pointage** : marquer chaque participant **Présent** ou **Absent** après la séance. En cas
+  d'absence, un clic sur le macaron **A** du badge ouvre la fiche de la réservation pour saisir
+  un **motif d'absence** (facultatif) — il apparaît ensuite dans l'infobulle du badge et sur la
+  feuille de pointage des Éditions, et il est conservé si le pointage est effacé puis remis.
 
 > Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un
 > autre créneau pour le déplacer.
