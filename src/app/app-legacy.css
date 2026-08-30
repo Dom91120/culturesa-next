@@ -2934,6 +2934,18 @@ textarea.theme-pending:focus::placeholder {
     border-top: none;
     flex-direction: row !important;
   }
+  /* Côté USAGER (bandeau à menu sandwich) : la ligne utilisateur est INTÉGRÉE au
+     menu déplié plutôt qu'affichée en permanence — une rangée de gagnée en hauteur
+     (demande Dom 2026-08-30). Le shell admin mobile, sans menu sandwich, garde sa
+     ligne visible (`:has` distingue les deux). */
+  #service-sidebar-wrap:has(#mobile-services-toggle):not(.mobile-open) .user-bar {
+    display: none;
+  }
+  #service-sidebar-wrap.mobile-open .user-bar {
+    border-top: 1px solid var(--border) !important;
+    margin-top: 0.4rem;
+    padding-top: 0.4rem !important;
+  }
   .user-pill-wrap {
     flex: 1 !important;
   }
