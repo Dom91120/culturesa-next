@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ModalOverlay } from "@/components/agenda-shared";
 import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
@@ -34,6 +35,10 @@ const ROLE_LABELS: Record<string, string> = {
 export function UserBar({ user }: { user: { name: string; email: string; role?: string } }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Guide d'utilisation : affiché DANS l'app, en modale à ascenseur (demande Dom
+  // 2026-08-30 — remplace l'ouverture dans un nouvel onglet). Version selon le rôle :
+  // l'usager reçoit la déclinaison filtrée, gestionnaires/admins le guide complet.
+  const [guideOpen, setGuideOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -113,7 +118,7 @@ export function UserBar({ user }: { user: { name: string; email: string; role?: 
             type="button"
             onClick={() => {
               setMenuOpen(false);
-              window.open("/aide/guide-utilisation.html", "_blank", "noopener");
+              setGuideOpen(true);
             }}
           >
             📖 Guide d&apos;utilisation
@@ -127,6 +132,49 @@ export function UserBar({ user }: { user: { name: string; email: string; role?: 
       <span className="user-bar-actions">
         <ThemeToggle />
       </span>
+
+      {/* Guide en modale à ascenseur : la page d'aide (autonome, avec ses styles et sa
+          feuille print) est embarquée en iframe — elle porte son propre défilement. */}
+      {guideOpen && (
+        <ModalOverlay
+          onClose={() => setGuideOpen(false)}
+          boxStyle={{
+            width: "min(94vw, 940px)",
+            maxWidth: 940,
+            height: "88vh",
+            padding: 0,
+            overflow: "hidden",
+          }}
+        >
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() => setGuideOpen(false)}
+            aria-label="Fermer"
+            // Par-dessus l'iframe : fond opaque pour rester lisible sur la page d'aide.
+            style={{
+              background: "var(--surface2)",
+              border: "1px solid var(--border)",
+              borderRadius: "50%",
+              width: 26,
+              height: 26,
+              lineHeight: 1,
+              zIndex: 2,
+            }}
+          >
+            ×
+          </button>
+          <iframe
+            src={
+              user.role === "utilisateur"
+                ? "/aide/guide-usager.html"
+                : "/aide/guide-utilisation.html"
+            }
+            title="Guide d'utilisation"
+            style={{ display: "block", width: "100%", height: "100%", border: "none" }}
+          />
+        </ModalOverlay>
+      )}
     </div>
   );
 }

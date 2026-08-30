@@ -40,6 +40,7 @@ const lastCommitTs = (file) =>
   Number(execSync(`git log -1 --format=%ct -- "${file}"`).toString().trim() || 0);
 for (const [md, docx] of [
   ["docs/Guide-utilisation.md", "docs/Guide-utilisation.docx"],
+  ["docs/Guide-utilisation.md", "docs/Guide-usager.docx"],
   ["docs/Guide-administration.md", "docs/Guide-administration-CultuResa.docx"],
 ]) {
   if (lastCommitTs(md) > lastCommitTs(docx)) {

@@ -44,7 +44,8 @@ describe("directives conservées — la CSP ne doit pas s'affaiblir ailleurs", (
     ["font-src", "'self'"],
     ["connect-src", "'self'"],
     ["frame-ancestors", "'none'"],
-    ["frame-src", "'none'"],
+    // 'self' : le guide (/aide) s'affiche en iframe même origine (modale de l'app).
+    ["frame-src", "'self'"],
     ["object-src", "'none'"],
     ["base-uri", "'self'"],
     ["form-action", "'self'"],

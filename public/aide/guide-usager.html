@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guide de l'usager — CultuRésa</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2430; --muted: #5b6472; --accent: #2f8f5b;
+    --border: #e3e7ee; --surface2: #f6f8fb; --code: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --fg: #e6e9ef; --muted: #9aa4b2; --accent: #4fbf82;
+      --border: #2a2f3a; --surface2: #1a1f27; --code: #1c222b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  main { max-width: 820px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .4rem; }
+  h2 { font-size: 1.35rem; margin: 2.4rem 0 .8rem; padding-bottom: .35rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.08rem; margin: 1.8rem 0 .5rem; }
+  p, li { color: var(--fg); }
+  a { color: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+  blockquote {
+    margin: 1rem 0; padding: .6rem 1rem; border-left: 3px solid var(--accent);
+    background: var(--surface2); color: var(--muted); border-radius: 0 6px 6px 0;
+  }
+  blockquote p { margin: .2rem 0; }
+  code { background: var(--code); padding: .1em .35em; border-radius: 4px; font-size: .92em; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+  th, td { border: 1px solid var(--border); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+  th { background: var(--surface2); }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: .25rem 0; }
+  /* Captures d'écran : cadrées, bordure douce, légende (l'italique qui suit) centrée. */
+  img { display: block; max-width: 100%; height: auto; margin: 1rem auto .3rem; border: 1px solid var(--border); border-radius: 8px; }
+  img + em { display: block; text-align: center; font-size: .82rem; color: var(--muted); margin-bottom: 1.4rem; }
+  /* Impression / export PDF (option « Imprimer → Enregistrer en PDF » du navigateur). */
+  @media print {
+    :root { --bg: #fff; --fg: #000; --muted: #444; --border: #bbb; --surface2: #f2f2f2; }
+    main { max-width: none; padding: 0; }
+    h2 { break-after: avoid; }
+    h3 { break-after: avoid; }
+    img, table, blockquote { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+<h1 id="guide-de-l39usager-culturésa">Guide de l&#39;usager — CultuRésa</h1>
+<p>Réservation d&#39;activités culturelles.</p>
+<p>CultuRésa est l&#39;application de réservation d&#39;activités culturelles. Elle permet aux <strong>usagers</strong>
+de réserver des créneaux d&#39;activités proposées par différents services (médiathèque,
+conservatoire, ludothèque, maison des enfants, maison des arts…), aux <strong>gestionnaires</strong>
+d&#39;organiser ces activités et de suivre la présence, et aux <strong>administrateurs</strong> de piloter
+l&#39;ensemble du système.</p>
+<p>Ce guide est organisé par profil d&#39;utilisateur. Chaque section décrit ce que vous pouvez faire
+dans l&#39;application. Pour l&#39;installation et l&#39;exploitation serveur, voir le
+<span>Guide d&#39;administration</span> et le <span>runbook d&#39;exploitation</span>.</p>
+<blockquote>
+<p>Une <strong>présentation interactive</strong> (fenêtre de bienvenue) reprend l&#39;essentiel de ce guide à la
+première connexion, adaptée au rôle. On peut la revoir à tout moment via le menu utilisateur →
+<strong>« Revoir la présentation »</strong>.</p>
+</blockquote>
+<h3 id="les-trois-profils">Les trois profils</h3>
+<table>
+<thead>
+<tr>
+<th>Profil</th>
+<th>Ce qu&#39;il peut faire</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Usager</strong></td>
+<td>Réserver des créneaux d&#39;activités, gérer ses réservations, modifier son compte.</td>
+</tr>
+<tr>
+<td><strong>Gestionnaire</strong></td>
+<td>Tout ce que fait l&#39;usager, plus la gestion des services qui lui sont confiés : créneaux, réservations, pointage, statistiques et paramètres.</td>
+</tr>
+<tr>
+<td><strong>Administrateur</strong></td>
+<td>Tout ce que fait le gestionnaire, sur tous les services, plus la gestion des utilisateurs, des référentiels, de la messagerie et du RGPD.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="pour-tous-les-utilisateurs">Pour tous les utilisateurs</h2>
+<h3 id="se-connecter">Se connecter</h3>
+<p>Sur la page de connexion, saisissez votre adresse e-mail et votre mot de passe, puis cliquez
+sur <strong>« Connexion »</strong>. Les liens <strong>« Créer un compte »</strong> et <strong>« Mot de passe oublié ? »</strong> sont
+accessibles depuis cet écran.</p>
+<p><img src="img/01-page-connexion.png" alt="Page de connexion"></p>
+<p><em>Figure 1 — Page de connexion</em></p>
+<h3 id="créer-un-compte">Créer un compte</h3>
+<p>L&#39;inscription se fait en renseignant votre identité (nom, prénom, e-mail, téléphone), puis en
+choisissant votre <strong>catégorie</strong> (le demandeur : établissement ou organisme), votre <strong>structure</strong>
+et votre <strong>niveau</strong>. Le nombre d&#39;enfants et d&#39;accompagnants est obligatoire : au moins 1 de
+chaque (champs marqués d&#39;un astérisque). L&#39;acceptation de la politique de confidentialité (RGPD)
+et la recopie d&#39;un code de sécurité sont également demandées.</p>
+<p>Un e-mail de vérification vous est ensuite envoyé pour <strong>activer votre compte</strong>.</p>
+<p><img src="img/02-creation-compte.png" alt="Formulaire de création de compte"></p>
+<p><em>Figure 2 — Formulaire de création de compte</em></p>
+<h3 id="gérer-son-compte">Gérer son compte</h3>
+<p>Depuis <strong>« Mon compte »</strong>, vous pouvez modifier vos informations personnelles, changer votre mot
+de passe et demander la suppression de votre compte :</p>
+<ul>
+<li><strong>Mon profil</strong> — nom, prénom, e-mail, téléphone.</li>
+<li><strong>Changer mon mot de passe</strong> — avec rappel des règles de sécurité (12 caractères, majuscule,
+minuscule, chiffre, caractère spécial).</li>
+<li><strong>Supprimer mon compte</strong> — conformément au RGPD, vos données sont anonymisées de façon
+irréversible après un délai de grâce (e-mail de confirmation valable 24 h).</li>
+</ul>
+<p><img src="img/03-mon-compte.png" alt="Écran « Mon compte »"></p>
+<p><em>Figure 3 — Écran « Mon compte »</em></p>
+<hr>
+<h2 id="pour-les-usagers-réserver-une-activité">Pour les usagers — réserver une activité</h2>
+<h3 id="première-connexion">Première connexion</h3>
+<p>À la première connexion, une <strong>fenêtre de bienvenue</strong> présente l&#39;essentiel pour démarrer. Vous
+pouvez la parcourir avec <strong>« Suivant »</strong> ou la fermer avec <strong>« Passer »</strong>.</p>
+<p><img src="img/04-fenetre-bienvenue.png" alt="Fenêtre de bienvenue (première connexion)"></p>
+<p><em>Figure 4 — Fenêtre de bienvenue (première connexion)</em></p>
+<h3 id="l39agenda-de-réservation">L&#39;agenda de réservation</h3>
+<p>Sélectionnez un service dans le <strong>menu de gauche</strong> pour ouvrir son agenda. La vue présente une
+semaine type avec les créneaux disponibles.</p>
+<ul>
+<li><strong>Semaines A / B</strong> — pour les activités en alternance, basculez entre la semaine A (semaines
+impaires) et la semaine B (semaines paires).</li>
+<li><strong>Période / exercice</strong> — un bandeau indique l&#39;année scolaire ou la période en cours.</li>
+<li><strong>Indicateurs</strong> — chaque créneau affiche le nombre de places, son statut (en attente de
+validation, validée) et, le cas échéant, « Clôturé ».</li>
+<li><strong>Légende</strong> — un rappel précise le nombre de séances réservables et les conditions du service
+(récurrent, semaines A/B, validation, thèmes, jauge, jours fériés, vacances scolaires).</li>
+</ul>
+<p><img src="img/05-agenda-usager.png" alt="Agenda de réservation côté usager"></p>
+<p><em>Figure 5 — Agenda de réservation côté usager</em></p>
+<h3 id="réserver-modifier-annuler">Réserver, modifier, annuler</h3>
+<ol>
+<li>Cliquez sur un <strong>créneau disponible</strong> dans l&#39;agenda.</li>
+<li>Renseignez les informations demandées : éventuel <strong>thème</strong>, nombre d&#39;<strong>enfants</strong> et
+d&#39;<strong>accompagnants</strong>.</li>
+<li>Cliquez sur <strong>« Enregistrer »</strong> pour confirmer. Un e-mail de confirmation vous est envoyé.</li>
+</ol>
+<p>Vous pouvez <strong>annuler</strong> une réservation tant qu&#39;elle n&#39;est pas verrouillée. Si le service active
+le <strong>verrouillage des réservations validées</strong>, une réservation validée ne peut plus être annulée
+ni déplacée. Un bouton permet aussi d&#39;<strong>imprimer votre liste</strong> de réservations.</p>
+<h3 id="règles-appliquées-automatiquement">Règles appliquées automatiquement</h3>
+<p>Lors d&#39;une réservation, l&#39;application vérifie automatiquement :</p>
+<ul>
+<li>la <strong>capacité</strong> du créneau (selon que les accompagnants comptent ou non dans la jauge) ;</li>
+<li>votre <strong>droit d&#39;accès</strong> au service, selon votre demandeur ;</li>
+<li>le <strong>nombre maximum de réservations</strong> autorisé (par service et par période) ;</li>
+<li>les <strong>jours de fermeture</strong> : un créneau en période de vacances scolaires n&#39;est réservable que
+si le service <strong>et</strong> le demandeur sont ouverts ce jour-là ;</li>
+<li>le <strong>délai de réservation</strong> : les créneaux trop proches dans le temps ne sont pas réservables.</li>
+</ul>
+<h3 id="rappels-automatiques">Rappels automatiques</h3>
+<p>Vous recevez des rappels par e-mail avant vos créneaux : un rappel <strong>7 jours avant</strong> (J-7) et un
+rappel <strong>la veille</strong> (J-1).</p>
+<hr>
+<h2 id="notions-clés">Notions clés</h2>
+<ul>
+<li><strong>Demandeur</strong> — l&#39;établissement ou l&#39;organisme auquel un usager est rattaché. Il conditionne
+l&#39;accès aux services et les jours d&#39;ouverture.</li>
+<li><strong>Structure</strong> — unité organisationnelle sous un demandeur ; rattacher un usager à une structure
+lui fait hériter du demandeur.</li>
+<li><strong>Niveau</strong> — classification (par demandeur) utilisée dans le profil et les statistiques.</li>
+<li><strong>Service</strong> — une activité culturelle, avec ses propres créneaux, périodes, règles et e-mails.</li>
+<li><strong>Période / Exercice</strong> — une période est une plage de dates (saison, semestre) ; l&#39;exercice
+correspond à l&#39;année (ex. « 2025-2026 »).</li>
+<li><strong>Créneau</strong> — un créneau récurrent se répète chaque semaine ; un créneau ponctuel correspond à
+une date précise (un créneau = un jour).</li>
+<li><strong>Semaines A / B</strong> — alternance pour les activités bi-hebdomadaires : semaine impaire = A,
+semaine paire = B.</li>
+<li><strong>Validation / verrouillage</strong> — une réservation validée peut être verrouillée (selon le réglage
+du service), empêchant toute annulation ou déplacement côté usager.</li>
+<li><strong>Jauge</strong> — la capacité d&#39;un créneau ; selon le service, les accompagnants y sont comptés ou non.</li>
+<li><strong>Vacances scolaires</strong> — récupérées depuis le calendrier officiel selon la zone ; un jour de
+vacances n&#39;est réservable que si le service et le demandeur sont ouverts.</li>
+</ul>
+<hr>
+<h2 id="automatismes-en-arrière-plan">Automatismes en arrière-plan</h2>
+<p>Plusieurs traitements s&#39;exécutent automatiquement, sans intervention :</p>
+<ul>
+<li><strong>Validation automatique</strong> des réservations après un délai paramétré, avec récapitulatif envoyé
+aux gestionnaires.</li>
+<li><strong>Rappels de réservation</strong> envoyés aux usagers (J-7 et J-1).</li>
+<li><strong>Conservation des données</strong> : anonymisation des comptes inactifs après l&#39;avis de suppression.</li>
+</ul>
+<hr>
+
+</main>
+</body>
+</html>

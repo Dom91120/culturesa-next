@@ -1,9 +1,11 @@
 <!-- SOURCE UNIQUE de la doc fonctionnelle (texte + captures dans docs/img/).
-     Après toute modification : `pnpm gen:docs` régénère la page d'aide de l'app
-     (public/aide/guide-utilisation.html, captures incluses).
-     Livrables Word : docs/Guide-utilisation.docx et Guide-administration-CultuResa.docx
-     sont générés depuis les Markdown par `pnpm gen:docs:word` (demande Dom 2026-08-30) —
-     à relancer après toute modification notable. -->
+     Après toute modification : `pnpm gen:docs` régénère les pages d'aide de l'app
+     (public/aide/guide-utilisation.html COMPLET + guide-usager.html FILTRÉ usager
+     via scripts/guide-usager-filter.cjs, captures incluses — affichées en modale
+     par le menu utilisateur, version selon le rôle).
+     Livrables Word : Guide-utilisation.docx, Guide-usager.docx (même filtre) et
+     Guide-administration-CultuResa.docx via `pnpm gen:docs:word` (Dom 2026-08-30) —
+     à relancer après toute modification notable ; `pnpm docs:check` surveille tout. -->
 
 # Guide d'utilisation — CultuRésa
 

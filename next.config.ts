@@ -73,6 +73,14 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Guide d'utilisation (/aide/*.html) : affiché en MODALE via iframe MÊME
+        // ORIGINE (menu utilisateur). Cette règle, plus spécifique et déclarée en
+        // dernier, remplace le DENY global pour ce seul chemin — l'embarquement
+        // par un site tiers reste refusé (SAMEORIGIN).
+        source: "/aide/:path*",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
     ];
   },
   experimental: {

@@ -26,13 +26,24 @@ const {
   WidthType,
 } = require("docx");
 
-// Sans argument : les deux guides, avec leurs couvertures respectives.
+const { filtrerGuideUsager } = require("./guide-usager-filter.cjs");
+
+// Sans argument : les trois guides, avec leurs couvertures respectives. Le 5e champ
+// (optionnel) est un filtre appliqué au markdown — la déclinaison USAGER est extraite
+// de la même source que le guide complet.
 const PRESETS = [
   [
     "docs/Guide-utilisation.md",
     "docs/Guide-utilisation.docx",
     "Guide d'utilisation",
     "Usagers, gestionnaires et administrateurs",
+  ],
+  [
+    "docs/Guide-utilisation.md",
+    "docs/Guide-usager.docx",
+    "Guide de l'usager",
+    "Réserver et suivre vos activités",
+    filtrerGuideUsager,
   ],
   [
     "docs/Guide-administration.md",
@@ -43,10 +54,11 @@ const PRESETS = [
 ];
 const jobs = process.argv[2] ? [process.argv.slice(2)] : PRESETS;
 
-async function generate([mdPath, outPath, coverTitle, coverSubtitle]) {
+async function generate([mdPath, outPath, coverTitle, coverSubtitle, filtre]) {
   const mdDir = path.dirname(path.resolve(mdPath));
   let md = fs.readFileSync(mdPath, "utf8");
   md = md.replace(/<!--[\s\S]*?-->/g, ""); // commentaires HTML (en-tête source unique)
+  if (filtre) md = filtre(md);
 
 // ── Inline : **gras**, `code`, [texte](url), *italique* ────────────────────────────
 function inlineRuns(text, base = {}) {

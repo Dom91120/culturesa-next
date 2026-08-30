@@ -1,17 +1,22 @@
-// Génère la page d'aide servie dans l'app à partir de la source markdown UNIQUE.
-//   docs/Guide-utilisation.md (+ docs/img/*)  →  public/aide/guide-utilisation.html (+ public/aide/img/*)
-// Relancer après toute modif du guide :  pnpm gen:docs
-// Pas de livrable Word : pour un document imprimable, ouvrir la page d'aide et
-// « Imprimer → Enregistrer en PDF » (une feuille de style print dédiée est incluse).
+// Génère les pages d'aide servies dans l'app à partir de la source markdown UNIQUE :
+//   docs/Guide-utilisation.md (+ docs/img/*)
+//     → public/aide/guide-utilisation.html  (guide COMPLET, gestionnaires/admins)
+//     → public/aide/guide-usager.html       (déclinaison USAGER, sections filtrées)
+//     → public/aide/img/*
+// Relancer après toute modif du guide :  pnpm gen:docs (aussi lancé par `pnpm build`).
+// Livrables Word : `pnpm gen:docs:word` (mêmes sources, mêmes déclinaisons).
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marked } from "marked";
 
+const require = createRequire(import.meta.url);
+const { filtrerGuideUsager } = require("./guide-usager-filter.cjs");
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcMd = join(root, "docs", "Guide-utilisation.md");
 const srcImg = join(root, "docs", "img");
-const outHtml = join(root, "public", "aide", "guide-utilisation.html");
 const outImg = join(root, "public", "aide", "img");
 
 // Slug façon GitHub : minuscules, on retire emojis/ponctuation, espaces → tirets.
@@ -27,27 +32,29 @@ const slug = (text) =>
     .replace(/-+/g, "-");
 
 // On retire le commentaire mainteneur en tête du .md (note de régénération) avant le rendu.
-const md = readFileSync(srcMd, "utf8").replace(/^<!--[\s\S]*?-->\s*/, "");
-const body = marked
-  .parse(md, { mangle: false, headerIds: true })
-  // Réinjecte les id d'en-têtes (ancres internes).
-  .replace(
-    /<(h[1-6])>(.*?)<\/\1>/g,
-    (_m, tag, inner) => `<${tag} id="${slug(inner)}">${inner}</${tag}>`,
-  )
-  // Les liens inter-documents (.md) ne sont pas servis dans /aide : on neutralise le
-  // lien tout en gardant le libellé (les ancres internes #… restent fonctionnelles).
-  .replace(/<a href="[^"#][^"]*\.md[^"]*">(.*?)<\/a>/g, "<span>$1</span>")
-  // marked percent-encode les accents dans les href d'ancres ; on les redécode pour
-  // qu'ils correspondent EXACTEMENT aux id d'en-têtes (UTF-8 brut) réinjectés ci-dessus.
-  .replace(/href="#([^"]+)"/g, (_m, frag) => `href="#${decodeURIComponent(frag)}"`);
+const mdComplet = readFileSync(srcMd, "utf8").replace(/^<!--[\s\S]*?-->\s*/, "");
 
-const html = `<!doctype html>
+const renderBody = (md) =>
+  marked
+    .parse(md, { mangle: false, headerIds: true })
+    // Réinjecte les id d'en-têtes (ancres internes).
+    .replace(
+      /<(h[1-6])>(.*?)<\/\1>/g,
+      (_m, tag, inner) => `<${tag} id="${slug(inner)}">${inner}</${tag}>`,
+    )
+    // Les liens inter-documents (.md) ne sont pas servis dans /aide : on neutralise le
+    // lien tout en gardant le libellé (les ancres internes #… restent fonctionnelles).
+    .replace(/<a href="[^"#][^"]*\.md[^"]*">(.*?)<\/a>/g, "<span>$1</span>")
+    // marked percent-encode les accents dans les href d'ancres ; on les redécode pour
+    // qu'ils correspondent EXACTEMENT aux id d'en-têtes (UTF-8 brut) réinjectés ci-dessus.
+    .replace(/href="#([^"]+)"/g, (_m, frag) => `href="#${decodeURIComponent(frag)}"`);
+
+const pageHtml = (title, body) => `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Guide d'utilisation — CultuRésa</title>
+<title>${title}</title>
 <style>
   :root {
     --bg: #ffffff; --fg: #1f2430; --muted: #5b6472; --accent: #2f8f5b;
@@ -104,9 +111,17 @@ ${body}
 </html>
 `;
 
-mkdirSync(dirname(outHtml), { recursive: true });
-writeFileSync(outHtml, html, "utf8");
-console.log(`✓ ${outHtml}`);
+// Les deux déclinaisons : guide complet + guide de l'usager (sections filtrées).
+const outputs = [
+  ["guide-utilisation.html", "Guide d'utilisation — CultuRésa", mdComplet],
+  ["guide-usager.html", "Guide de l'usager — CultuRésa", filtrerGuideUsager(mdComplet)],
+];
+for (const [file, title, md] of outputs) {
+  const out = join(root, "public", "aide", file);
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, pageHtml(title, renderBody(md)), "utf8");
+  console.log(`✓ ${out}`);
+}
 
 // Copie les captures d'écran référencées par le guide (chemins relatifs `img/…`).
 if (existsSync(srcImg)) {

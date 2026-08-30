@@ -54,7 +54,10 @@ export function buildCsp(nonce: string, dev = false): string {
     "font-src 'self'",
     "connect-src 'self'",
     "frame-ancestors 'none'",
-    "frame-src 'none'",
+    // 'self' (et non 'none') : le guide d'utilisation (/aide/*.html, page statique
+    // même origine) s'affiche en MODALE via iframe (demande Dom 2026-08-30). Aucun
+    // cadre tiers n'est autorisé pour autant.
+    "frame-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
