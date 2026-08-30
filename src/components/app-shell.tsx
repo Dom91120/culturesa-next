@@ -14,12 +14,24 @@ import { initialsOf } from "@/lib/format";
 //  l'identique, caractère pour caractère, dans les deux fichiers.
 // ════════════════════════════════════════════════════════════
 
+/** Libellé français du rôle, affiché sous le nom (micro-capitales). */
+const ROLE_LABELS: Record<string, string> = {
+  administrateur: "Administrateur",
+  gestionnaire: "Gestionnaire",
+  utilisateur: "Usager",
+};
+
 /**
- * Barre utilisateur (haut de page) : pilule avatar + menu (Mon compte, Revoir la
- * présentation, Guide, Déconnexion) + bascule de thème. Autonome : porte son état
- * d'ouverture, la fermeture au clic extérieur et la déconnexion.
+ * Bloc utilisateur en PIED DE SIDEBAR (déplacé du haut de page — il y chevauchait
+ * les onglets d'administration ; style inspiré de SoftInventory, demande Dom
+ * 2026-08-30) : bloc d'identité (avatar dégradé + nom + rôle + chevron) servant de
+ * bouton au menu qui se déploie VERS LE HAUT (Mon compte, Sécurité, Revoir la
+ * présentation, Guide, Déconnexion), flanqué du bouton thème en icône.
+ * Autonome : porte son état d'ouverture, la fermeture au clic extérieur et la
+ * déconnexion. Sur mobile (≤ 640px), le bloc devient une rangée compacte de la
+ * barre horizontale et le menu s'ouvre vers le bas.
  */
-export function UserBar({ user }: { user: { name: string; email: string } }) {
+export function UserBar({ user }: { user: { name: string; email: string; role?: string } }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -49,10 +61,18 @@ export function UserBar({ user }: { user: { name: string; email: string } }) {
           onClick={() => setMenuOpen((o) => !o)}
         >
           <div className="avatar">{initialsOf(user.name, user.email)}</div>
-          <span id="user-display-name" style={{ fontSize: ".78rem", color: "var(--text)" }}>
-            {user.name || user.email}
+          {/* Couleurs portées par le CSS (.user-bar vit dans la SIDEBAR, toujours
+              sombre — var(--text) du thème clair y serait illisible). */}
+          <span className="user-ident">
+            <span className="user-ident-name">
+              <span id="user-display-name">{user.name || user.email}</span>
+              <span className="user-caret">▾</span>
+            </span>
+            {/* Rôle en micro-capitales ; repli sur l'e-mail si non fourni. */}
+            <span className="user-ident-role">
+              {ROLE_LABELS[user.role ?? ""] ?? user.email}
+            </span>
           </span>
-          <span style={{ fontSize: ".6rem", color: "var(--muted)" }}>▾</span>
         </button>
         <div id="user-menu" className={menuOpen ? "open" : ""}>
           <button
@@ -100,7 +120,10 @@ export function UserBar({ user }: { user: { name: string; email: string } }) {
           </button>
         </div>
       </div>
-      <ThemeToggle />
+      {/* Bascule de thème en icône, à droite du bloc d'identité. */}
+      <span className="user-bar-actions">
+        <ThemeToggle />
+      </span>
     </div>
   );
 }

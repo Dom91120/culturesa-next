@@ -24,7 +24,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
   return (
     <UserShell
-      user={{ name: session.user.name ?? "", email: session.user.email }}
+      user={{
+        name: session.user.name ?? "",
+        email: session.user.email,
+        // Côté réservations, un gestionnaire/admin garde son libellé de rôle.
+        role: (session.user as { role?: string }).role ?? "utilisateur",
+      }}
       services={services.map((s) => ({ id: s.id, label: s.label, icon: s.icon }))}
     >
       {children}

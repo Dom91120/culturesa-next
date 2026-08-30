@@ -12,7 +12,7 @@ export function UserShell({
   services,
   children,
 }: {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role?: string };
   services: ServiceItem[];
   children: React.ReactNode;
 }) {
@@ -46,8 +46,6 @@ export function UserShell({
 
   return (
     <>
-      <UserBar user={user} />
-
       <main>
         <div className="app-layout">
           <div
@@ -115,6 +113,9 @@ export function UserShell({
                 <span className="sb-label">Mon compte</span>
               </button>
             </div>
+
+            {/* Barre utilisateur épinglée en BAS de la sidebar (cf. UserBar). */}
+            <UserBar user={user} />
           </div>
 
           <div className="app-main">{children}</div>

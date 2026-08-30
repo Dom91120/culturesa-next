@@ -33,7 +33,7 @@ export function ConnectedShell({
   isAdmin,
   children,
 }: {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role?: string };
   services: ServiceItem[];
   // Seuls les administrateurs voient l'« Administration » (Configuration, Utilisateurs,
   // Messagerie, RGPD) ; les gestionnaires se limitent à leurs services.
@@ -118,8 +118,6 @@ export function ConnectedShell({
 
   return (
     <>
-      <UserBar user={user} />
-
       <main>
         <div className="app-layout">
           <div
@@ -172,6 +170,9 @@ export function ConnectedShell({
                 <span className="sb-label">Mon compte</span>
               </button>
             </div>
+
+            {/* Barre utilisateur épinglée en BAS de la sidebar (cf. UserBar). */}
+            <UserBar user={user} />
           </div>
 
           <div className="app-main">

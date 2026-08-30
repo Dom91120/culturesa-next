@@ -26,7 +26,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <ConnectedShell
-      user={{ name: session.user.name ?? "", email: session.user.email }}
+      user={{
+        name: session.user.name ?? "",
+        email: session.user.email,
+        role: isAdmin ? "administrateur" : "gestionnaire",
+      }}
       services={services}
       isAdmin={isAdmin}
     >

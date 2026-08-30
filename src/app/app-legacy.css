@@ -146,52 +146,138 @@ header {
   color: var(--muted);
 }
 
-/* ── User bar ───────────────────────────────────────────── */
+/* ── User bar ───────────────────────────────────────────────────────────────────
+   Épinglée en BAS de la sidebar (déplacée du haut de page — elle y chevauchait les
+   onglets d'administration, demande Dom 2026-08-30). La sidebar est TOUJOURS sombre
+   (thème clair compris) : couleurs posées en dur ici, pas via les variables du thème.
+   Sur mobile (media query en fin de fichier), elle redevient flottante en haut à
+   droite, au-dessus de la barre horizontale de services. */
 .user-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  position: fixed;
-  top: 0.4rem;
-  right: 1rem;
+  gap: 0.25rem;
+  margin-top: auto; /* bas de la sidebar (conteneur en colonne flex) */
+  padding: 0.55rem 0.45rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 0.82rem;
   color: var(--muted);
-  z-index: 200;
 }
+/* Bloc d'identité = bouton du menu : avatar + nom + rôle, pleine largeur, survol
+   discret (façon SoftInventory). */
 .user-bar .user-pill {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  height: 32px;
-  padding: 0 0.65rem 0 0.35rem;
-  border-radius: 99px;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0.3rem 0.4rem;
+  border-radius: 8px;
   cursor: pointer;
   user-select: none;
   color: inherit;
   font: inherit;
+  text-align: left;
+}
+.user-bar .user-pill:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.user-bar .avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 0.68rem;
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 55%, #123c2a)
+  );
+}
+.user-ident {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.3;
+}
+.user-ident-name {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.user-bar #user-display-name {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #e2e6f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-bar .user-caret {
+  font-size: 0.52rem;
+  color: #98a0b3;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.user-pill-wrap:has(#user-menu.open) .user-caret {
+  transform: rotate(180deg);
+}
+.user-ident-role {
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8b93a7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Icônes thème + déconnexion, à droite du bloc d'identité. */
+.user-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+.user-bar .btn-theme {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: #98a0b3;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: 0.15s;
+}
+.user-bar .btn-theme:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+  border-color: transparent;
 }
 .user-pill-wrap {
   position: relative;
+  flex: 1;
+  min-width: 0;
 }
-/* Le nom utilisateur est masqué par défaut, affiché quand le menu est ouvert (i.e. au clic sur le pill) */
-#user-display-name {
-  display: none;
-}
-.user-pill-wrap:has(#user-menu.open) #user-display-name {
-  display: inline;
-}
+/* Menu : se déploie VERS LE HAUT, par-dessus la navigation de la sidebar (absolu,
+   largeur du pied). Fond opaque + ombre : la liste des services reste dessous. */
 #user-menu {
   display: none;
   position: absolute;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 8px);
   left: 0;
+  right: 0;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--rad-sm);
-  min-width: 100%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   z-index: 500;
   overflow: hidden;
 }
@@ -382,6 +468,9 @@ main {
   overflow-y: auto;
   overflow-x: hidden;
   border-radius: var(--radius);
+  /* Colonne flex : la user-bar (margin-top auto) s'épingle en bas. */
+  display: flex;
+  flex-direction: column;
   transition:
     width 0.18s ease,
     min-width 0.18s ease,
@@ -409,6 +498,33 @@ main {
   width: 52px !important;
   min-width: 52px !important;
   max-width: 52px !important;
+}
+/* User-bar en sidebar repliée : avatar puis icônes empilés, ni nom ni rôle ; le
+   menu passe en `fixed` À DROITE du rail (52px de large ne peuvent pas le porter,
+   et l'overflow de la sidebar rognerait un absolu qui déborde). */
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .user-bar {
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.15rem 0;
+}
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .user-pill-wrap {
+  flex: none;
+}
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .user-bar .user-pill {
+  padding: 0.25rem;
+}
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .user-ident {
+  display: none;
+}
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .user-bar-actions {
+  flex-direction: column;
+}
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #user-menu {
+  position: fixed;
+  left: 58px;
+  bottom: 10px;
+  right: auto;
+  min-width: 185px;
 }
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sb-label {
   display: none !important;
@@ -2801,23 +2917,58 @@ textarea.theme-pending:focus::placeholder {
 }
 
 @media (max-width: 640px) {
-  /* User bar plus compacte sur mobile : remontée, pill et bouton thème à 24px, avatar réduit. */
+  /* User bar sur mobile : la sidebar devient une barre horizontale (fond de PAGE,
+     plus le fond sombre) — le bloc reste dans le flux, en rangée compacte sous le
+     bandeau, et reprend les couleurs du THÈME ; le menu s'ouvre vers le BAS
+     (au-dessus, il sortirait de l'écran). */
+  /* La préférence « sidebar repliée » (html.sb-collapsed) ne s'applique pas au
+     bandeau mobile : on neutralise ses règles (!important — leurs sélecteurs à
+     double id sont plus spécifiques), sinon le bloc s'empilait en colonne, nom
+     et rôle masqués, menu en fixed à côté d'un rail inexistant. */
   .user-bar {
-    top: 0.2rem;
+    margin: 0;
+    padding: 0.15rem 0.1rem !important;
+    border-top: none;
+    flex-direction: row !important;
+  }
+  .user-pill-wrap {
+    flex: 1 !important;
   }
   .user-bar .user-pill {
-    height: 28px;
-    padding: 0 0.55rem 0 0.3rem;
+    padding: 0.25rem 0.4rem !important;
+  }
+  .user-ident {
+    display: flex !important;
+  }
+  .user-bar-actions {
+    flex-direction: row !important;
+  }
+  .user-bar .user-pill:hover {
+    background: var(--surface2);
+  }
+  .user-bar #user-display-name {
+    color: var(--text);
+  }
+  .user-bar .user-caret,
+  .user-bar .btn-theme {
+    color: var(--muted);
+  }
+  .user-ident-role {
+    color: var(--muted);
+  }
+  #user-menu {
+    position: absolute !important;
+    top: calc(100% + 4px) !important;
+    bottom: auto !important;
+    left: 0 !important;
+    right: auto !important;
+    min-width: 185px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   }
   .user-bar .avatar {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     font-size: 0.58rem;
-  }
-  .btn-theme {
-    width: 28px;
-    height: 28px;
-    font-size: 0.85rem;
   }
   /* Cadre : sidebar empilée en haut (barre horizontale de services), contenu pleine largeur. */
   .app-layout {
@@ -2836,6 +2987,15 @@ textarea.theme-pending:focus::placeholder {
     padding: 0.05rem 0.5rem;
     /* Pas de fond sur mobile (couvre aussi la surcharge html.light, plus spécifique). */
     background: none !important;
+  }
+  /* La préférence « sidebar repliée » mémorisée (html.sb-collapsed) n'a pas de sens
+     sur le bandeau mobile — sans cette parade, son sélecteur plus spécifique
+     imposait ses 52px de large au bandeau entier (même spécificité ici : c'est
+     l'ordre source, cette règle étant après, qui tranche). */
+  :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
   }
   #sidebar-toggle {
     display: none !important;
