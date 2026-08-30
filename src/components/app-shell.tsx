@@ -86,17 +86,20 @@ export function UserBar({ user }: { user: { name: string; email: string; role?: 
           </button>
           {/* Accès direct à l'enrôlement au second facteur (constat A6) : sans
               entrée de menu, la page ne serait atteignable que par la redirection
-              du garde — donc invisible pour un usager qui souhaite l'activer de
-              lui-même, et introuvable pour un gestionnaire déjà enrôlé. */}
-          <button
-            type="button"
-            onClick={() => {
-              router.push("/mon-compte/securite");
-              setMenuOpen(false);
-            }}
-          >
-            🔐 Sécurité
-          </button>
+              du garde — introuvable pour un gestionnaire déjà enrôlé. Masquée pour
+              les USAGERS (demande Dom 2026-08-30) : le second facteur concerne les
+              comptes gestionnaire/administrateur. */}
+          {user.role !== "utilisateur" && (
+            <button
+              type="button"
+              onClick={() => {
+                router.push("/mon-compte/securite");
+                setMenuOpen(false);
+              }}
+            >
+              🔐 Sécurité
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
