@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { initialActionState } from "@/lib/action-state";
 import { upperCaseOnInput } from "@/lib/format";
+import { STRUCTURE_LIBRE_MAX } from "@/schemas/user";
 import { updateAffiliationAction, updateProfileAction } from "./actions";
 
 type Role = "utilisateur" | "gestionnaire" | "administrateur";
@@ -48,7 +49,14 @@ function ReadonlyField({ label, children }: { label: string; children: React.Rea
   );
 }
 
-type DemandeurOpt = { id: number; label: string; structures: { id: number; label: string }[] };
+type DemandeurOpt = {
+  id: number;
+  label: string;
+  /** Catégorie fourre-tout : la structure se SAISIT au lieu de se choisir (la page ne
+   * livre d'ailleurs pas ses structures au navigateur, comme à l'inscription). */
+  structureLibre: boolean;
+  structures: { id: number; label: string }[];
+};
 
 /**
  * Catégorie + structure, modifiables par l'usager tant qu'il n'a rien réservé sur un
@@ -72,6 +80,9 @@ function AffiliationFields({
   const [structureId, setStructureId] = useState(
     profile.structureId != null ? String(profile.structureId) : "",
   );
+  // Libellé saisi quand la catégorie choisie est en SAISIE LIBRE — pré-rempli avec la
+  // structure actuelle de l'usager (c'est la sienne : pas de fuite), vidé au changement.
+  const [structureTexte, setStructureTexte] = useState(profile.structure ?? "");
   const dash = <span style={{ color: "var(--muted)" }}>—</span>;
 
   if (!modifiable) {
@@ -91,7 +102,11 @@ function AffiliationFields({
 
   // Cascade : la structure suit la catégorie choisie (une structure appartient à une
   // seule catégorie ; le serveur refuse tout couple incohérent).
-  const structures = demandeurs.find((d) => String(d.id) === demandeurId)?.structures ?? [];
+  const demandeurChoisi = demandeurs.find((d) => String(d.id) === demandeurId);
+  const structures = demandeurChoisi?.structures ?? [];
+  // Catégorie en saisie libre → champ TEXTE obligatoire à la place du sélecteur,
+  // comme à l'inscription (le serveur rapproche/crée via resolveStructureLibre).
+  const saisieLibre = demandeurChoisi?.structureLibre ?? false;
 
   return (
     <form action={action}>
@@ -104,8 +119,9 @@ function AffiliationFields({
             value={demandeurId}
             onChange={(e) => {
               setDemandeurId(e.target.value);
-              // La structure dépend de la catégorie → la re-sélection est requise.
+              // La structure dépend de la catégorie → la re-sélection/saisie est requise.
               setStructureId("");
+              setStructureTexte("");
             }}
           >
             <option value="">— Aucune —</option>
@@ -117,23 +133,37 @@ function AffiliationFields({
           </select>
         </div>
         <div className="field">
-          <label htmlFor="p-structure">Structure</label>
-          <select
-            id="p-structure"
-            name="structureId"
-            value={structureId}
-            disabled={!demandeurId || structures.length === 0}
-            onChange={(e) => setStructureId(e.target.value)}
-          >
-            <option value="">
-              {demandeurId ? "— Aucune —" : "— Choisissez d'abord une catégorie —"}
-            </option>
-            {structures.map((st) => (
-              <option key={st.id} value={st.id}>
-                {st.label}
+          <label htmlFor={saisieLibre ? "p-structure-libre" : "p-structure"}>
+            Structure{saisieLibre && <span className="required-star">*</span>}
+          </label>
+          {saisieLibre ? (
+            <input
+              id="p-structure-libre"
+              name="structureTexte"
+              required
+              maxLength={STRUCTURE_LIBRE_MAX}
+              placeholder="Nom de votre structure"
+              value={structureTexte}
+              onChange={(e) => setStructureTexte(e.target.value)}
+            />
+          ) : (
+            <select
+              id="p-structure"
+              name="structureId"
+              value={structureId}
+              disabled={!demandeurId || structures.length === 0}
+              onChange={(e) => setStructureId(e.target.value)}
+            >
+              <option value="">
+                {demandeurId ? "— Aucune —" : "— Choisissez d'abord une catégorie —"}
               </option>
-            ))}
-          </select>
+              {structures.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
       {state?.error && (

@@ -5,10 +5,12 @@ import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import {
   nomSchema,
+  normaliserStructureLibre,
   PROFILE_MIN_ACCOMPAGNANTS_MSG,
   PROFILE_MIN_ENFANTS_MSG,
   prenomSchema,
   profileCountOk,
+  STRUCTURE_LIBRE_MSG,
   telSchema,
 } from "@/schemas/user";
 import { AUDIT, recordAudit } from "@/server/audit";
@@ -17,7 +19,10 @@ import { requireUser } from "@/server/guards";
 import { rateLimit } from "@/server/rate-limit";
 import { requestAccountDeletion } from "@/server/services/account-deletion";
 import { RgpdError } from "@/server/services/rgpd";
-import { aReservationSurExerciceCourant } from "@/server/services/structures";
+import {
+  aReservationSurExerciceCourant,
+  resolveStructureLibre,
+} from "@/server/services/structures";
 
 // Identité : fragments partagés (schemas/user) — les plafonds locaux (80) divergeaient
 // de l'admin (100) : un prénom saisi par l'admin devenait non ré-enregistrable ici.
@@ -111,7 +116,7 @@ export async function updateAffiliationAction(
     return Number.isInteger(n) && n > 0 ? n : Number.NaN;
   };
   const demandeurId = entier(formData.get("demandeurId"));
-  const structureId = entier(formData.get("structureId"));
+  let structureId = entier(formData.get("structureId"));
   if (Number.isNaN(demandeurId) || Number.isNaN(structureId)) {
     return { ok: false, error: "Valeurs invalides." };
   }
@@ -125,17 +130,27 @@ export async function updateAffiliationAction(
   }
 
   // La catégorie doit exister (id forgé → 400 propre plutôt qu'une violation de FK).
+  let saisieLibre = false;
   if (demandeurId !== null) {
-    const existe = await prisma.demandeur.findUnique({
+    const dem = await prisma.demandeur.findUnique({
       where: { id: demandeurId },
-      select: { id: true },
+      select: { structureLibre: true },
     });
-    if (!existe) return { ok: false, error: "Catégorie inconnue." };
+    if (!dem) return { ok: false, error: "Catégorie inconnue." };
+    saisieLibre = dem.structureLibre;
   }
-  // La structure doit appartenir à la catégorie choisie : sans ce contrôle, on
-  // pourrait se rattacher à l'école d'une autre catégorie, et le demandeur EFFECTIF
-  // (repli sur la structure) ne serait plus celui affiché.
-  if (structureId !== null) {
+  if (saisieLibre && demandeurId !== null) {
+    // Catégorie en SAISIE LIBRE (même contrat que l'inscription) : le libellé saisi est
+    // obligatoire, normalisé puis rapproché/créé via resolveStructureLibre (insensible à
+    // la casse). Un éventuel structureId soumis est IGNORÉ — la page ne livre pas ces
+    // structures au navigateur, un id ne peut donc venir que d'une requête forgée.
+    const label = normaliserStructureLibre(formData.get("structureTexte"));
+    if (!label) return { ok: false, error: STRUCTURE_LIBRE_MSG };
+    structureId = await resolveStructureLibre(demandeurId, label);
+  } else if (structureId !== null) {
+    // La structure doit appartenir à la catégorie choisie : sans ce contrôle, on
+    // pourrait se rattacher à l'école d'une autre catégorie, et le demandeur EFFECTIF
+    // (repli sur la structure) ne serait plus celui affiché.
     const st = await prisma.structure.findUnique({
       where: { id: structureId },
       select: { demandeurId: true },

@@ -30,10 +30,10 @@ export default async function MonComptePage() {
   });
 
   // Catégorie / structure modifiables par l'usager TANT QU'IL N'A RIEN RÉSERVÉ sur un
-  // exercice en cours : ces deux libellés sont lus à l'affichage (agenda, éditions,
-  // statistiques), jamais figés sur la réservation — les changer après coup
-  // réétiquetterait des séances déjà posées. Le contrôle est refait dans l'action.
-  const [modifiable, demandeurs] = await Promise.all([
+  // exercice en cours : les documents opérationnels (agenda, éditions, pointage) lisent
+  // la fiche vivante — les changer après coup réétiquetterait des séances déjà posées.
+  // Le contrôle est refait dans l'action.
+  const [modifiable, demandeursBruts] = await Promise.all([
     user?.role === "utilisateur"
       ? aReservationSurExerciceCourant(session.user.id).then((a) => !a)
       : Promise.resolve(false),
@@ -42,10 +42,18 @@ export default async function MonComptePage() {
       select: {
         id: true,
         label: true,
+        structureLibre: true,
         structures: { orderBy: { label: "asc" }, select: { id: true, label: true } },
       },
     }),
   ]);
+  // Les structures d'une catégorie en SAISIE LIBRE ne sont pas envoyées au navigateur
+  // (même règle que l'inscription) : déclarées une à une par les inscrits précédents,
+  // les livrer publierait la liste de qui s'est inscrit. Le formulaire affiche un champ
+  // de texte pour ces catégories et n'en a aucun usage.
+  const demandeurs = demandeursBruts.map((d) =>
+    d.structureLibre ? { ...d, structures: [] } : d,
+  );
 
   const profile = {
     prenom: user?.prenom ?? "",
