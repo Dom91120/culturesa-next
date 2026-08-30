@@ -28,15 +28,15 @@ function SidebarShot() {
       height={300}
       // La capture est déjà une carte aux coins arrondis (fond transparent autour) :
       // pas de bordure/borderRadius ajoutés, qui déborderaient des coins.
-      // Hauteur FIXE (largeur au ratio) calibrée sur l'espace que laisse le texte de
-      // l'étape dans le corps à hauteur commune (cf. OnboardingModal) : cette page ne
-      // dépasse plus les autres (maquette Dom 2026-08-30).
+      // Hauteur FIXE (largeur au ratio) : posée À CÔTÉ du texte de l'étape services,
+      // elle tient dans les 150px du corps — la page ne dépasse plus les autres
+      // (retour Dom 2026-08-30 : se caler sur les pages les MOINS hautes).
       style={{
         display: "block",
-        height: 200,
+        height: 142,
         width: "auto",
         maxWidth: "100%",
-        margin: ".55rem auto 0",
+        flexShrink: 0,
       }}
     />
   );
@@ -296,7 +296,13 @@ function BurgerMock({ label }: { label: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
       <div
-        style={{ display: "flex", alignItems: "center", gap: ".5rem", width: "100%", maxWidth: 250 }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: ".5rem",
+          width: "100%",
+          maxWidth: 250,
+        }}
       >
         <span
           style={{
@@ -372,41 +378,49 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
     },
     {
       title: "Plusieurs services à votre disposition 🏛️",
+      // DESKTOP : capture de la sidebar À CÔTÉ du texte (rangée) et non dessous —
+      // l'étape tient dans les 150px communs du corps, la modale ne grandit plus
+      // (retour Dom 2026-08-30 : se caler sur les pages les MOINS hautes). MOBILE :
+      // colonne, maquette du bandeau sandwich sous le texte (slot image).
       body: (
-        <>
-          <p style={P}>
-            Vous pouvez réserver des activités auprès {names.length > 1 ? "de " : "du "}
-            <strong>{names.length > 1 ? "plusieurs services" : "service"}</strong>
-            {names.length ? "\u00A0:" : "."}
-          </p>
-          {/* Un service PAR LIGNE (mobile comme desktop — demande Dom 2026-08-30),
+        <div style={isMobile ? undefined : { display: "flex", gap: "1.25rem" }}>
+          <div style={isMobile ? undefined : { flex: 1, minWidth: 0 }}>
+            <p style={P}>
+              Vous pouvez réserver des activités auprès {names.length > 1 ? "de " : "du "}
+              <strong>{names.length > 1 ? "plusieurs services" : "service"}</strong>
+              {names.length ? "\u00A0:" : "."}
+            </p>
+            {/* Un service PAR LIGNE (mobile comme desktop — demande Dom 2026-08-30),
               plutôt que l'énumération en ligne qui formait un pavé. */}
-          {names.length > 0 && (
-            <ul style={{ margin: "0 0 .55rem", paddingLeft: "1.15rem" }}>
-              {names.map((n) => (
-                <li key={n} style={{ margin: "0 0 .15rem" }}>
-                  <strong>{n}</strong>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p style={{ margin: 0 }}>
-            {/* Espace INSÉCABLE avant les deux-points : le « : » ne part plus seul à
-                la ligne (typographie française, demande Dom 2026-08-30). */}
-            Pour commencer, choisissez le service qui vous intéresse{" "}
-            {isMobile ? (
-              <>
-                via le <strong>menu ☰</strong> en haut de l'écran{"\u00A0"}:
-              </>
-            ) : (
-              <>
-                dans le <strong>menu de gauche</strong>{"\u00A0"}:
-              </>
+            {names.length > 0 && (
+              <ul style={{ margin: "0 0 .55rem", paddingLeft: "1.15rem" }}>
+                {names.map((n) => (
+                  <li key={n} style={{ margin: "0 0 .15rem" }}>
+                    <strong>{n}</strong>
+                  </li>
+                ))}
+              </ul>
             )}
-          </p>
-        </>
+            <p style={{ margin: 0 }}>
+              {/* Espace INSÉCABLE avant les deux-points : le « : » ne part plus seul à
+                la ligne (typographie française, demande Dom 2026-08-30). */}
+              Pour commencer, choisissez le service qui vous intéresse{" "}
+              {isMobile ? (
+                <>
+                  via le <strong>menu ☰</strong> en haut de l'écran{"\u00A0"}:
+                </>
+              ) : (
+                <>
+                  dans le <strong>menu de gauche</strong>
+                  {"\u00A0"}:
+                </>
+              )}
+            </p>
+          </div>
+          {!isMobile && <SidebarShot />}
+        </div>
       ),
-      image: isMobile ? <BurgerMock label={names[0] ?? "Médiathèque"} /> : <SidebarShot />,
+      image: isMobile ? <BurgerMock label={names[0] ?? "Médiathèque"} /> : undefined,
     },
     {
       title: "Créer une réservation 📆",
@@ -484,8 +498,8 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
         <>
           <p style={P}>
             L'agenda de chaque service affiche une <strong>semaine datée</strong> : créneaux
-            récurrents et ponctuels, réservations et pointages s'y gèrent au même endroit,
-            semaine après semaine. Naviguez avec les flèches ◀ ▶ et les onglets de période.
+            récurrents et ponctuels, réservations et pointages s'y gèrent au même endroit, semaine
+            après semaine. Naviguez avec les flèches ◀ ▶ et les onglets de période.
           </p>
         </>
       ),
@@ -534,13 +548,13 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       body: (
         <>
           <p style={P}>
-            Dans l'agenda, activez le <strong>« Mode pointage »</strong> pour marquer la
-            présence ou l'absence à chaque réservation, semaine après semaine.
+            Dans l'agenda, activez le <strong>« Mode pointage »</strong> pour marquer la présence ou
+            l'absence à chaque réservation, semaine après semaine.
           </p>
           <p style={{ margin: 0 }}>
             En cas d'absence, cliquez sur le macaron <strong>A</strong> du badge pour ouvrir la
-            fiche et saisir un <strong>motif d'absence</strong> — il est repris dans l'infobulle
-            du badge et sur la feuille de pointage.
+            fiche et saisir un <strong>motif d'absence</strong> — il est repris dans l'infobulle du
+            badge et sur la feuille de pointage.
           </p>
         </>
       ),
@@ -556,8 +570,9 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
           </p>
           <p style={{ margin: 0 }}>
             <strong>« Éditions 📋 »</strong> imprime et exporte la liste des inscrits, la liste des
-            réservations, le planning et les feuilles de pointage. <strong>« Statistiques 📈 »</strong> synthétise la
-            fréquentation de votre service, exportable en CSV.
+            réservations, le planning et les feuilles de pointage.{" "}
+            <strong>« Statistiques 📈 »</strong> synthétise la fréquentation de votre service,
+            exportable en CSV.
           </p>
         </>
       ),
@@ -649,7 +664,6 @@ export function OnboardingModal({
             // Hauteur COMMUNE à toutes les étapes sur desktop (la modale ne « saute »
             // plus d'une page à l'autre — maquette Dom 2026-08-30) ; sur mobile, la
             // hauteur reste au contenu (écrans trop variés pour une valeur fixe).
-            height: isMobile ? undefined : 350,
             minHeight: 150,
             display: "flex",
             flexDirection: "column",
