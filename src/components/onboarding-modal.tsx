@@ -292,6 +292,61 @@ function EditIcon() {
   );
 }
 
+/** Maquette du bandeau MOBILE (menu sandwich + avatar) : repère visuel de l'étape
+ *  « services » dans la version mobile de la présentation — la capture de la sidebar
+ *  desktop n'y correspond à rien. HTML/CSS (suit le thème), comme les autres mocks. */
+function BurgerMock({ label }: { label: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: ".5rem", width: "100%", maxWidth: 250 }}
+      >
+        <span
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: ".5rem",
+            background: "var(--surface2)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: ".3rem .7rem",
+            fontSize: ".82rem",
+            fontWeight: 600,
+          }}
+        >
+          <span aria-hidden>☰</span>
+          <span style={{ flex: 1, textAlign: "left", whiteSpace: "nowrap", overflow: "hidden" }}>
+            {label}
+          </span>
+          <span style={{ color: "var(--muted)", fontSize: ".7rem" }} aria-hidden>
+            ▾
+          </span>
+        </span>
+        <span
+          aria-hidden
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: "50%",
+            background:
+              "linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #123c2a))",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: ".6rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          AB
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /* ── Contenu des étapes ──────────────────────────────────────────────────────────────── */
 
 const P: React.CSSProperties = { margin: "0 0 .55rem" };
@@ -307,8 +362,11 @@ function QuotaNote() {
 }
 
 /** Étapes « usager » : enrichies (multi-services + illustrations). Dépend des services et de
- *  la présence d'une jauge (créneau AVEC ou SANS compteurs de participants). */
-function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
+ *  la présence d'une jauge (créneau AVEC ou SANS compteurs de participants).
+ *  `isMobile` = VERSION MOBILE de la présentation (demande Dom 2026-08-30) : les repères
+ *  desktop (menu de gauche, impression — options masquées sur smartphone) laissent place
+ *  aux repères mobiles (menu ☰, maquette du bandeau). */
+function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boolean): Step[] {
   const names = services.map((s) => s.label);
   return [
     {
@@ -331,12 +389,20 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
             .
           </p>
           <p style={{ margin: 0 }}>
-            Pour commencer, choisissez le service qui vous intéresse dans le{" "}
-            <strong>menu de gauche</strong> :
+            Pour commencer, choisissez le service qui vous intéresse{" "}
+            {isMobile ? (
+              <>
+                via le <strong>menu ☰</strong> en haut de l'écran :
+              </>
+            ) : (
+              <>
+                dans le <strong>menu de gauche</strong> :
+              </>
+            )}
           </p>
         </>
       ),
-      image: <SidebarShot />,
+      image: isMobile ? <BurgerMock label={names[0] ?? "Médiathèque"} /> : <SidebarShot />,
     },
     {
       title: "Créer une réservation 📆",
@@ -369,8 +435,15 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean): Step[] {
           <p style={P}>Vos réservations apparaissent directement sur l'agenda :</p>
           <LegendMock />
           <p style={{ ...P, margin: ".55rem 0 0" }}>
-            Vous pouvez les annuler si besoin, et imprimer votre liste <PrinterIcon /> depuis
-            l'écran Réservations.
+            {isMobile ? (
+              // Mobile : pas de mention de l'impression, ses options sont masquées.
+              <>Vous pouvez les annuler si besoin.</>
+            ) : (
+              <>
+                Vous pouvez les annuler si besoin, et imprimer votre liste <PrinterIcon /> depuis
+                l'écran Réservations.
+              </>
+            )}
           </p>
         </>
       ),
@@ -523,6 +596,16 @@ export function OnboardingModal({
 }) {
   const [visible, setVisible] = useState(open);
   const [step, setStep] = useState(0);
+  // Version MOBILE de la présentation (même seuil que le reste de l'app) : textes et
+  // illustrations adaptés — le contenu suit si l'écran change en cours de route.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   // Ré-ouverture à la demande depuis le user-menu (« Revoir la présentation ») : on
   // repart de la 1re étape. Le listener reste actif même quand la modale est masquée.
@@ -537,7 +620,8 @@ export function OnboardingModal({
 
   if (!visible) return null;
 
-  const steps = variant === "usager" ? usagerSteps(services, hasGauge) : STAFF_STEPS[variant];
+  const steps =
+    variant === "usager" ? usagerSteps(services, hasGauge, isMobile) : STAFF_STEPS[variant];
   const cur = steps[step];
   const isLast = step >= steps.length - 1;
   const finish = () => {
