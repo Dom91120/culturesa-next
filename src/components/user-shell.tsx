@@ -101,17 +101,8 @@ export function UserShell({
                 </p>
               )}
 
-              {/* « Mon compte » en dernière position de la sidebar (comme le shell admin). */}
-              <button
-                type="button"
-                className={`sidebar-compte-btn${pathname === "/mon-compte" ? " active" : ""}`}
-                style={{ marginTop: ".6rem" }}
-                title={effCollapsed ? "Mon compte" : undefined}
-                onClick={() => router.push("/mon-compte")}
-              >
-                <span className="sb-icon">👤</span>
-                <span className="sb-label">Mon compte</span>
-              </button>
+              {/* (Plus d'entrée « Mon compte » ici : elle vit dans le menu du bloc
+                  utilisateur ci-dessous — elle figurait en double, Dom 2026-08-30.) */}
             </div>
 
             {/* Barre utilisateur épinglée en BAS de la sidebar (cf. UserBar). */}
