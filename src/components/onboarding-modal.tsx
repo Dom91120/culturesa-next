@@ -374,7 +374,13 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
   return [
     {
       title: "Bienvenue sur CultuRésa 👋",
-      body: "Réservez vos activités culturelles en quelques clics. Voici l'essentiel pour démarrer…",
+      // Deux lignes (maquette Dom 2026-08-30) : l'accroche, puis l'annonce à la ligne.
+      body: (
+        <>
+          <p style={P}>Réservez vos activités culturelles en quelques clics.</p>
+          <p style={{ margin: 0 }}>Voici l'essentiel pour démarrer…</p>
+        </>
+      ),
     },
     {
       title: "Plusieurs services à votre disposition 🏛️",
