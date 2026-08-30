@@ -374,7 +374,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
   return [
     {
       title: "Bienvenue sur CultuRésa 👋",
-      body: "Réservez vos activités culturelles en quelques clics. Voici l'essentiel pour démarrer.",
+      body: "Réservez vos activités culturelles en quelques clics. Voici l'essentiel pour démarrer…",
     },
     {
       title: "Plusieurs services à votre disposition 🏛️",
