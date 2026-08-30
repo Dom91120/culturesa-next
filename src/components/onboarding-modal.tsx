@@ -418,7 +418,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
                 <>
                   {/* Sans « en haut de l'écran » (Dom 2026-08-30) : la maquette juste dessous
                       montre l'emplacement, et la phrase tient sur une ligne de moins. */}
-                  via le <strong>menu ☰</strong>{"\u00A0"}:
+                  via le <strong>menu ☰</strong>
                 </>
               ) : (
                 <>
