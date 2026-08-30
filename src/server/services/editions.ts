@@ -159,12 +159,19 @@ export type Inscrit = {
  * inscrits ». Scope exercice via le CRÉNEAU (slot.periodId, comme les autres éditions :
  * booking.periodId est null pour ponctuels et enfants). Fiche VIVANTE (document
  * opérationnel, pas de l'historique — cf. décision snapshot stats) ; tri nom/prénom.
+ * Les comptes ANONYMISÉS (RGPD) sont exclus par défaut — plus ni nom ni contact, ils
+ * n'informent que pour recouper un effectif (`withAnonymized`, case de l'écran).
  */
-export async function listInscrits(serviceId: string, periodIds?: number[]): Promise<Inscrit[]> {
+export async function listInscrits(
+  serviceId: string,
+  periodIds?: number[],
+  withAnonymized = false,
+): Promise<Inscrit[]> {
   const rows = await prisma.booking.findMany({
     where: {
       serviceId,
       ...(periodIds ? { slot: { periodId: { in: periodIds } } } : {}),
+      ...(withAnonymized ? {} : { user: { anonymizedAt: null } }),
     },
     distinct: ["userId"],
     select: {

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { formatTel } from "@/lib/format";
 import { prisma } from "@/server/db";
 import { listInscrits } from "@/server/services/editions";
+import { AnonymisesToggle } from "../anonymises-toggle";
 import { ExerciceNav } from "../exercice-nav";
 import { PrintButton } from "../print-button";
 import { resolveEditionExercice } from "../range";
@@ -17,7 +18,7 @@ export default async function EditionsInscritsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ exercice?: string }>;
+  searchParams: Promise<{ exercice?: string; anonymises?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -29,11 +30,13 @@ export default async function EditionsInscritsPage({
   if (!service) notFound();
   const { exercices, selected } = exo;
 
-  const inscrits = await listInscrits(id, selected?.periodIds);
+  // Comptes anonymisés (RGPD) exclus par défaut ; case « afficher… » → anonymises=1.
+  const withAnonymized = sp.anonymises === "1";
+  const inscrits = await listInscrits(id, selected?.periodIds, withAnonymized);
 
   const pdfHref = `/services/${id}/editions/pdf?kind=inscrits${
     selected ? `&exercice=${selected.id}` : ""
-  }`;
+  }${withAnonymized ? "&anonymises=1" : ""}`;
 
   const linkBtn: React.CSSProperties = {
     fontSize: ".7rem",
@@ -89,6 +92,7 @@ export default async function EditionsInscritsPage({
           className="no-print"
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
         >
+          <AnonymisesToggle />
           <PrintButton iconOnly href={pdfHref} title="Imprimer (PDF)" />
         </div>
       </div>
