@@ -3119,8 +3119,10 @@ export function UserAgendaGrid({
         <div className="panel-title res-title" style={{ marginBottom: 0 }}>
           <span className="dot" />
           Réservations
-          {/* Exercice en cours : même rendu inline que le titre de l'Agenda admin. */}
-          {currentExerciceId != null && (
+          {/* Exercice en cours : même rendu inline que le titre de l'Agenda admin.
+              Masqué sur MOBILE — à 375px, « 2026-2027 » passait sous la nav de
+              semaine (l'info reste lisible via les onglets de période dessous). */}
+          {currentExerciceId != null && !isMobile && (
             <span className="exercice-nav-inline">
               <span className="ex-nav-label">
                 {exercices.find((e) => e.id === currentExerciceId)?.label}
@@ -3128,19 +3130,24 @@ export function UserAgendaGrid({
             </span>
           )}
         </div>
-        {/* Navigation semaine (Semaine réelle) : centrée sur la même ligne que le
-            titre et le sélecteur. */}
+        {/* Navigation semaine (Semaine réelle) : centrée en absolu sur la ligne de
+            titre (desktop). Sur MOBILE, elle reste DANS LE FLUX, calée à droite par
+            le space-between — centrée en absolu, elle chevauchait le titre. */}
         <div
           className="periode-nav"
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            // Neutralise la marge asymétrique de .periode-nav qui décalerait le
-            // centrage vertical (sinon la nav n'est pas au même niveau que le titre).
-            margin: 0,
-          }}
+          style={
+            isMobile
+              ? { margin: 0 }
+              : {
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  // Neutralise la marge asymétrique de .periode-nav qui décalerait le
+                  // centrage vertical (sinon la nav n'est pas au même niveau que le titre).
+                  margin: 0,
+                }
+          }
         >
           {/* Groupe ◀ label ▶ : shrink-wrappé et positionné (relative) → « Aujourd'hui »
                 s'ancre en left:100% de CE groupe (juste après ▶), sans compter dans le
@@ -3211,15 +3218,18 @@ export function UserAgendaGrid({
                 className="btn btn-ghost pn-today"
                 // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
                 // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
+                // Sur MOBILE, la nav est calée au bord droit : « Aujourd'hui » s'ancre
+                // à sa GAUCHE (à droite, il sortirait de l'écran).
                 style={{
                   padding: ".05rem .45rem",
                   fontSize: ".64rem",
                   position: "absolute",
-                  left: "100%",
                   top: "50%",
                   transform: "translateY(-50%)",
-                  marginLeft: ".4rem",
                   whiteSpace: "nowrap",
+                  ...(isMobile
+                    ? { right: "100%", marginRight: ".4rem" }
+                    : { left: "100%", marginLeft: ".4rem" }),
                 }}
                 onClick={() => {
                   // Retour à la semaine courante : on verrouille sur la période
