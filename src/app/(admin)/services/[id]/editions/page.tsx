@@ -29,6 +29,14 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
     action: string;
   }[] = [
     {
+      icon: "👥",
+      label: "Liste des inscrits",
+      description:
+        "Les usagers ayant réservé sur l'exercice — identité, structure, niveau et contact.",
+      href: `/services/${id}/editions/inscrits`,
+      action: "Ouvrir",
+    },
+    {
       icon: "📋",
       label: "Liste des réservations",
       description:
@@ -49,14 +57,6 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
       label: "Pointages",
       description: "Feuille de présence par séance, à imprimer pour relever les présences.",
       href: `/services/${id}/editions/pointages`,
-      action: "Ouvrir",
-    },
-    {
-      icon: "👥",
-      label: "Liste des inscrits",
-      description:
-        "Les usagers ayant réservé sur l'exercice — identité, structure, niveau et contact.",
-      href: `/services/${id}/editions/inscrits`,
       action: "Ouvrir",
     },
   ];
