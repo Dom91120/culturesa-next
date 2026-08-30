@@ -3522,13 +3522,17 @@ export function UserAgendaGrid({
             })()}
           </p>
         </div>
-        {/* 2e ligne : état « en attente » à gauche, boutons d'action à droite. */}
+        {/* 2e ligne : état « en attente » à gauche, boutons d'action à droite.
+            MOBILE : le plancher de 306px de la zone gauche déborderait des 375px —
+            la ligne se replie (légende pleine largeur, boutons dessous à droite). */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             width: "100%",
+            flexWrap: isMobile ? "wrap" : undefined,
+            rowGap: isMobile ? ".3rem" : undefined,
           }}
         >
           {/* Zone gauche commune aux deux lignes : 50 % de la ligne (2 × 25 % pour le
@@ -3538,9 +3542,9 @@ export function UserAgendaGrid({
               display: "inline-flex",
               alignItems: "center",
               flexShrink: 0,
-              width: "50%",
+              width: isMobile ? "100%" : "50%",
               // Somme des planchers : libellé (160) + légende (130) + marge (1rem).
-              minWidth: 306,
+              minWidth: isMobile ? 0 : 306,
             }}
           >
             {/* Largeur fixe commune aux deux lignes de légende : les items « Récurrent »
@@ -3605,6 +3609,8 @@ export function UserAgendaGrid({
               justifyContent: "flex-end",
               gap: ".6rem",
               flexWrap: "wrap",
+              // Mobile : après repli sous la légende, reste calée à droite.
+              marginLeft: isMobile ? "auto" : undefined,
             }}
           >
             <button
@@ -3635,13 +3641,18 @@ export function UserAgendaGrid({
             </button>
           </div>
         </div>
-        {/* 3e ligne : état « validée » à gauche, compteur du brouillon à droite. */}
+        {/* 3e ligne : état « validée » à gauche, compteur du brouillon à droite.
+            MOBILE : repli comme la 2e ligne (le nowrap du compteur élargissait le
+            viewport de mise en page à ~484px et TRONQUAIT tout le bord droit,
+            modales comprises). */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             width: "100%",
+            flexWrap: isMobile ? "wrap" : undefined,
+            rowGap: isMobile ? ".3rem" : undefined,
           }}
         >
           {/* Zone gauche commune aux deux lignes : 50 % de la ligne (2 × 25 % pour le
@@ -3651,9 +3662,9 @@ export function UserAgendaGrid({
               display: "inline-flex",
               alignItems: "center",
               flexShrink: 0,
-              width: "50%",
+              width: isMobile ? "100%" : "50%",
               // Somme des planchers : libellé (160) + légende (130) + marge (1rem).
-              minWidth: 306,
+              minWidth: isMobile ? 0 : 306,
             }}
           >
             {/* Même largeur fixe que la ligne « en attente » ci-dessus → colonnes alignées. */}
@@ -3716,7 +3727,10 @@ export function UserAgendaGrid({
               color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
               margin: 0,
               textAlign: "right",
-              whiteSpace: "nowrap",
+              // Mobile : autorisé à se replier (le nowrap débordait du viewport) et
+              // calé à droite après le passage à la ligne.
+              whiteSpace: isMobile ? "normal" : "nowrap",
+              marginLeft: isMobile ? "auto" : undefined,
             }}
           >
             {(() => {
