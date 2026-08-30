@@ -518,6 +518,9 @@ main {
 }
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .user-bar-actions {
   flex-direction: column;
+  /* Lune/soleil AU-DESSUS de l'avatar-menu (demande Dom) : l'avatar reste ainsi
+     tout en bas, à la place qu'il occupe aussi en sidebar dépliée. */
+  order: -1;
 }
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) #user-menu {
   position: fixed;
