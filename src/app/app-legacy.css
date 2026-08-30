@@ -3002,6 +3002,10 @@ textarea.theme-pending:focus::placeholder {
     padding: 0.05rem 0.5rem;
     /* Pas de fond sur mobile (couvre aussi la surcharge html.light, plus spécifique). */
     background: none !important;
+    /* Pas de rognage non plus : le bandeau (hauteur auto) n'a rien à faire défiler,
+       et l'overflow hérité de la sidebar desktop AMPUTAIT le menu utilisateur, qui
+       s'ouvre vers le bas SOUS le bord du bandeau. */
+    overflow: visible;
   }
   /* La préférence « sidebar repliée » mémorisée (html.sb-collapsed) n'a pas de sens
      sur le bandeau mobile — sans cette parade, son sélecteur plus spécifique
