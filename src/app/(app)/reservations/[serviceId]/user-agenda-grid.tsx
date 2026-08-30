@@ -3110,7 +3110,10 @@ export function UserAgendaGrid({
           // ligne) ; desktop : wrap autorisé.
           flexWrap: isMobile ? "nowrap" : "wrap",
           // Sur mobile, pas de marge autour de la ligne de titre (ni dessus ni dessous).
-          margin: isMobile ? "0" : "2rem 0 .75rem",
+          // Desktop : plus de marge HAUTE non plus — les 2rem dégageaient l'ancienne
+          // user-bar flottante en haut à droite, partie vivre en pied de sidebar
+          // (2026-08-30) ; l'écran remonte d'autant.
+          margin: isMobile ? "0" : "0 0 .75rem",
         }}
       >
         <div className="panel-title res-title" style={{ marginBottom: 0 }}>
