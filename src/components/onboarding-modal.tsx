@@ -638,7 +638,8 @@ export function OnboardingModal({
         <div
           style={{
             fontSize: ".88rem",
-            lineHeight: 1.6,
+            // 1,45 : plus dense que le 1,6 d'origine, jugé trop aéré (Dom 2026-08-30).
+            lineHeight: 1.45,
             color: "var(--text)",
             minHeight: 150,
             display: "flex",
