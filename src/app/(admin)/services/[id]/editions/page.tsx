@@ -51,6 +51,14 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
       href: `/services/${id}/editions/pointages`,
       action: "Ouvrir",
     },
+    {
+      icon: "👥",
+      label: "Liste des inscrits",
+      description:
+        "Les usagers ayant réservé sur l'exercice — identité, structure, niveau et contact.",
+      href: `/services/${id}/editions/inscrits`,
+      action: "Ouvrir",
+    },
   ];
 
   return (

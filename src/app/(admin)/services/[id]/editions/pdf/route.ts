@@ -16,6 +16,7 @@ const KIND_TITLES: Record<string, string> = {
   liste: "Liste des réservations",
   planning: "Planning",
   pointages: "Pointages",
+  inscrits: "Liste des inscrits",
 };
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -70,7 +71,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       const headerFootStyle =
         "font-family:'Instrument Sans',Arial,sans-serif;width:100%;box-sizing:border-box;padding:0 8mm;color:#444;";
       const pdf = await page.pdf({
-        landscape: true,
+        // Tableaux larges (liste, planning, pointages) en paysage ; la liste des
+        // inscrits (5 colonnes de contact) tient en portrait.
+        landscape: kind !== "inscrits",
         printBackground: true,
         preferCSSPageSize: false,
         margin: { top: "16mm", bottom: "14mm", left: "8mm", right: "8mm" },

@@ -144,6 +144,56 @@ export async function listDatedSessions(
   return sessions;
 }
 
+export type Inscrit = {
+  nom: string;
+  prenom: string;
+  structure: string; // structure de l'usager (repli sur la catégorie)
+  demandeur: string; // catégorie
+  niveau: string;
+  email: string;
+  tel: string;
+};
+
+/**
+ * Usagers DISTINCTS ayant au moins une réservation du service — édition « Liste des
+ * inscrits ». Scope exercice via le CRÉNEAU (slot.periodId, comme les autres éditions :
+ * booking.periodId est null pour ponctuels et enfants). Fiche VIVANTE (document
+ * opérationnel, pas de l'historique — cf. décision snapshot stats) ; tri nom/prénom.
+ */
+export async function listInscrits(serviceId: string, periodIds?: number[]): Promise<Inscrit[]> {
+  const rows = await prisma.booking.findMany({
+    where: {
+      serviceId,
+      ...(periodIds ? { slot: { periodId: { in: periodIds } } } : {}),
+    },
+    distinct: ["userId"],
+    select: {
+      user: {
+        select: {
+          nom: true,
+          prenom: true,
+          email: true,
+          tel: true,
+          niveau: true,
+          structure: { select: { label: true } },
+          demandeur: { select: { label: true } },
+        },
+      },
+    },
+  });
+  return rows
+    .map((r) => ({
+      nom: r.user.nom,
+      prenom: r.user.prenom,
+      structure: r.user.structure?.label ?? "",
+      demandeur: r.user.demandeur?.label ?? "",
+      niveau: r.user.niveau ?? "",
+      email: r.user.email ?? "",
+      tel: r.user.tel ?? "",
+    }))
+    .sort((a, b) => a.nom.localeCompare(b.nom) || a.prenom.localeCompare(b.prenom));
+}
+
 /** « Lundi 18/06/2026 » pour un ponctuel daté ; jour de semaine pour un récurrent. */
 function jourDateOf(bookingType: string, slotDate: Date | null, slotDay: string | null): string {
   if (bookingType === "unique") {
