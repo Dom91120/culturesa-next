@@ -12,12 +12,6 @@ export const ONBOARDING_REPLAY_EVENT = "culturesa:onboarding-replay";
 type Step = { title: string; body: ReactNode; image?: ReactNode };
 type ServiceLite = { label: string };
 
-/** Énumération française : « A », « A et B », « A, B et C ». */
-function listFr(items: string[]): string {
-  if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} et ${items[items.length - 1]}`;
-}
-
 /* ── Illustrations ────────────────────────────────────────────────────────────────────
    Le menu de gauche est une vraie capture (public/onboarding/services-sidebar.png) : la barre
    est toujours sombre (thèmes clair et sombre), donc cohérente partout. Les autres visuels
@@ -380,14 +374,19 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
           <p style={P}>
             Vous pouvez réserver des activités auprès {names.length > 1 ? "de " : "du "}
             <strong>{names.length > 1 ? "plusieurs services" : "service"}</strong>
-            {names.length ? (
-              <>
-                {" "}
-                : <strong>{listFr(names)}</strong>
-              </>
-            ) : null}
-            .
+            {names.length ? " :" : "."}
           </p>
+          {/* Un service PAR LIGNE (mobile comme desktop — demande Dom 2026-08-30),
+              plutôt que l'énumération en ligne qui formait un pavé. */}
+          {names.length > 0 && (
+            <ul style={{ margin: "0 0 .55rem", paddingLeft: "1.15rem" }}>
+              {names.map((n) => (
+                <li key={n} style={{ margin: "0 0 .15rem" }}>
+                  <strong>{n}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
           <p style={{ margin: 0 }}>
             Pour commencer, choisissez le service qui vous intéresse{" "}
             {isMobile ? (
