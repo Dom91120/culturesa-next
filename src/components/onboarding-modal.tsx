@@ -28,11 +28,14 @@ function SidebarShot() {
       height={300}
       // La capture est déjà une carte aux coins arrondis (fond transparent autour) :
       // pas de bordure/borderRadius ajoutés, qui déborderaient des coins.
+      // Hauteur FIXE (largeur au ratio) calibrée sur l'espace que laisse le texte de
+      // l'étape dans le corps à hauteur commune (cf. OnboardingModal) : cette page ne
+      // dépasse plus les autres (maquette Dom 2026-08-30).
       style={{
         display: "block",
-        width: "100%",
-        maxWidth: 205,
-        height: "auto",
+        height: 200,
+        width: "auto",
+        maxWidth: "100%",
         margin: ".55rem auto 0",
       }}
     />
@@ -643,6 +646,10 @@ export function OnboardingModal({
             // le 1,6 d'origine puis le 1,45 restaient trop aérés à son goût).
             lineHeight: 1.15,
             color: "var(--text)",
+            // Hauteur COMMUNE à toutes les étapes sur desktop (la modale ne « saute »
+            // plus d'une page à l'autre — maquette Dom 2026-08-30) ; sur mobile, la
+            // hauteur reste au contenu (écrans trop variés pour une valeur fixe).
+            height: isMobile ? undefined : 350,
             minHeight: 150,
             display: "flex",
             flexDirection: "column",
