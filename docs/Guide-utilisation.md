@@ -161,8 +161,8 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
 > Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un
 > autre créneau pour le déplacer.
 
-L'agenda s'affiche en deux modes : **Modèle de période** (les créneaux récurrents, gabarit de la
-période) et **Semaine réelle** (les éléments datés : réservations, pointages, créneaux ponctuels).
+L'agenda affiche une **semaine datée** : créneaux récurrents et ponctuels, réservations et
+pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶ et onglets de période).
 
 ![Agenda d'administration d'un service](img/06-agenda-admin.png)
 
@@ -230,8 +230,8 @@ Cela permet de **préparer le prochain exercice longtemps à l'avance** :
 
 ### Paramètres — Configuration (accès et thèmes)
 
-La configuration définit les **paramètres globaux** du service — **créneaux récurrents** (active la
-vue « Modèle de période » de l'agenda), **alternance Semaine A/B** (sans effet si les créneaux
+La configuration définit les **paramètres globaux** du service — **créneaux récurrents** (autorise
+les créneaux qui se répètent chaque semaine), **alternance Semaine A/B** (sans effet si les créneaux
 récurrents sont désactivés) et **prise en compte des accompagnants** dans la jauge — puis, **pour
 chaque demandeur**, la **validation** et les **thèmes**. Le mode des thèmes peut être **« libre »**
 (texte saisi par l'usager) ou **« liste »** (choix imposé).

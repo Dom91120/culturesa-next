@@ -119,27 +119,6 @@ function SlotCreateShot() {
   );
 }
 
-/** Bascule d'affichage de l'agenda : « Modèle de période » / « Semaine réelle ». public/onboarding/period-model.png. */
-function ViewModeShot() {
-  return (
-    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
-      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
-      <img
-        src="/onboarding/period-model.png"
-        alt="Bascule « Modèle de période » / « Semaine réelle » de l'agenda"
-        style={{
-          display: "block",
-          width: "100%",
-          maxWidth: 240,
-          height: "auto",
-          borderRadius: 8,
-          border: "1px solid var(--border)",
-        }}
-      />
-    </div>
-  );
-}
-
 /** Barre d'options de l'agenda avec « Mode validation » coché. public/onboarding/validation-mode.png. */
 function ValidationModeShot() {
   return (
@@ -177,14 +156,14 @@ function ReservationCreateShot() {
   );
 }
 
-/** Barre d'options en « Semaine réelle » avec « Mode pointage » coché. public/onboarding/pointage-mode.png. */
+/** Barre d'options de l'agenda avec « Mode pointage » coché. public/onboarding/pointage-mode.png. */
 function PointageModeShot() {
   return (
     <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
       {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
       <img
         src="/onboarding/pointage-mode.png"
-        alt="Barre d'options de l'agenda en Semaine réelle, « Mode pointage » activé"
+        alt="Barre d'options de l'agenda, « Mode pointage » activé"
         style={{
           display: "block",
           width: "100%",
@@ -421,18 +400,18 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       ),
     },
     {
-      title: "Travaillez en « Modèle de période » ou en « Semaine réelle »",
+      // La bascule « Modèle de période » / « Semaine réelle » a été retirée : l'agenda
+      // n'a plus qu'une vue, la semaine datée (cf. agenda-grid, vue unique).
+      title: "Un agenda unique, semaine par semaine 🗓️",
       body: (
         <>
           <p style={P}>
-            L'agenda de chaque service s'affiche de deux façons. En{" "}
-            <strong>« Modèle de période »</strong>, vous mettez en place les créneaux récurrents qui
-            se répètent chaque semaine de la période. En <strong>« Semaine réelle »</strong>, vous
-            travaillez sur des éléments datés : réservations, pointages et créneaux ponctuels.
+            L'agenda de chaque service affiche une <strong>semaine datée</strong> : créneaux
+            récurrents et ponctuels, réservations et pointages s'y gèrent au même endroit,
+            semaine après semaine. Naviguez avec les flèches ◀ ▶ et les onglets de période.
           </p>
         </>
       ),
-      image: <ViewModeShot />,
     },
     {
       title: "Créer les créneaux 🗓️",
@@ -478,8 +457,8 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       body: (
         <>
           <p style={P}>
-            En <strong>« Semaine réelle »</strong>, activez le <strong>« Mode pointage »</strong>{" "}
-            pour marquer la présence ou l'absence à chaque réservation, semaine après semaine.
+            Dans l'agenda, activez le <strong>« Mode pointage »</strong> pour marquer la
+            présence ou l'absence à chaque réservation, semaine après semaine.
           </p>
           <p style={{ margin: 0 }}>
             En cas d'absence, cliquez sur le macaron <strong>A</strong> du badge pour ouvrir la
