@@ -13,12 +13,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // tolérante : si la colonne n'existe pas encore (migration non appliquée), on désactive
   // l'onboarding au lieu de casser la page.
   let needsOnboarding = false;
+  // Rôle lu EN BASE (pas depuis la session : une session fraîchement créée peut porter
+  // un rôle vide → le pied de sidebar affichait l'e-mail au lieu du libellé de rôle).
+  let role = "utilisateur";
   try {
     const me = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { onboardedAt: true },
+      select: { onboardedAt: true, role: true },
     });
     needsOnboarding = !me?.onboardedAt;
+    role = me?.role ?? "utilisateur";
   } catch {
     needsOnboarding = false;
   }
@@ -28,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         name: session.user.name ?? "",
         email: session.user.email,
         // Côté réservations, un gestionnaire/admin garde son libellé de rôle.
-        role: (session.user as { role?: string }).role ?? "utilisateur",
+        role,
       }}
       services={services.map((s) => ({ id: s.id, label: s.label, icon: s.icon }))}
     >
