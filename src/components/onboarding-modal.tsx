@@ -638,8 +638,9 @@ export function OnboardingModal({
         <div
           style={{
             fontSize: ".88rem",
-            // 1,45 : plus dense que le 1,6 d'origine, jugé trop aéré (Dom 2026-08-30).
-            lineHeight: 1.45,
+            // 1,15 : l'interligne par défaut de Microsoft Word (Dom 2026-08-30 —
+            // le 1,6 d'origine puis le 1,45 restaient trop aérés à son goût).
+            lineHeight: 1.15,
             color: "var(--text)",
             minHeight: 150,
             display: "flex",
