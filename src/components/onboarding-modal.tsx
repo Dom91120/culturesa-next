@@ -374,7 +374,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
           <p style={P}>
             Vous pouvez réserver des activités auprès {names.length > 1 ? "de " : "du "}
             <strong>{names.length > 1 ? "plusieurs services" : "service"}</strong>
-            {names.length ? " :" : "."}
+            {names.length ? "\u00A0:" : "."}
           </p>
           {/* Un service PAR LIGNE (mobile comme desktop — demande Dom 2026-08-30),
               plutôt que l'énumération en ligne qui formait un pavé. */}
@@ -388,14 +388,16 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
             </ul>
           )}
           <p style={{ margin: 0 }}>
+            {/* Espace INSÉCABLE avant les deux-points : le « : » ne part plus seul à
+                la ligne (typographie française, demande Dom 2026-08-30). */}
             Pour commencer, choisissez le service qui vous intéresse{" "}
             {isMobile ? (
               <>
-                via le <strong>menu ☰</strong> en haut de l'écran :
+                via le <strong>menu ☰</strong> en haut de l'écran{"\u00A0"}:
               </>
             ) : (
               <>
-                dans le <strong>menu de gauche</strong> :
+                dans le <strong>menu de gauche</strong>{"\u00A0"}:
               </>
             )}
           </p>
