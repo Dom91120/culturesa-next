@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-old-space-size=12288 next dev",
-    "prebuild": "node scripts/gen-guide-html.mjs",
-    "build": "prisma generate && next build",
+    "build": "node scripts/gen-guide-html.mjs && prisma generate && next build",
     "start": "next start",
     "lint": "biome check .",
     "format": "biome format --write .",
@@ -21,7 +20,8 @@
     "db:init": "tsx prisma/seed-init.ts",
     "postinstall": "prisma generate",
     "gen:docs": "node scripts/gen-guide-html.mjs",
-    "gen:docs:word": "node scripts/gen-guide-docx.cjs"
+    "gen:docs:word": "node scripts/gen-guide-docx.cjs",
+    "docs:check": "node scripts/check-docs.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",

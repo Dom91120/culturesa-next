@@ -195,8 +195,8 @@ model Service {
   icon                  String?
   // (Le « délai limite de réservation » est désormais porté PAR EXERCICE, cf. Exercice.)
   showPreviousExercices Boolean    @default(false)
-  // Le service propose des créneaux RÉCURRENTS (vue « Modèle de période » de
-  // l'agenda admin). Réglage GLOBAL du service — l'ex-colonne « Mode »
+  // Le service propose des créneaux RÉCURRENTS (créneaux qui se répètent chaque
+  // semaine dans l'agenda admin). Réglage GLOBAL du service — l'ex-colonne « Mode »
   // (recurrent/ponctuel) de la matrice demandeurs a été supprimée : le type d'une
   // réservation découle du TYPE DU CRÉNEAU, plus du demandeur.
   recurrentMode         Boolean    @default(true)
