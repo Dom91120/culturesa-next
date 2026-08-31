@@ -203,6 +203,15 @@ export function AgendaAllDayRow({
   );
 }
 
+/** Icône calendrier des créneaux libres (agenda usager) : l'emoji 📆 changeait
+ * de dessin selon la plateforme (Google y écrit « July 17 » en dur sur Android) —
+ * on sert donc le SVG de l'emoji Windows (version détaillée fournie par Dom,
+ * public/calendar.svg) via <img> : ses filtres/dégradés portent des id internes
+ * qui entreraient en collision si le SVG était inliné plusieurs fois. */
+export function CalendarGlyph({ size = 24 }: { size?: number }) {
+  return <img src="/calendar.svg" width={size} height={size} alt="" aria-hidden="true" />;
+}
+
 /** Item de légende « pastille créneau » (récurrent jaune / ponctuel vert) — même
  * vocabulaire visuel dans les deux grilles (classes .agenda-legend-* du legacy). */
 export function AgendaLegendSwatch({

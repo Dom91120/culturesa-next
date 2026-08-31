@@ -19,6 +19,7 @@ import {
   AgendaLegendSwatch,
   AgendaTimeColumn,
   AgendaWeekHeader,
+  CalendarGlyph,
   PrintIconButton,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
@@ -2963,7 +2964,6 @@ export function UserAgendaGrid({
                     <span
                       className="slot-icon"
                       style={{
-                        fontSize: slotIconPx,
                         lineHeight: 1,
                         width: slotIconPx,
                         height: slotIconPx,
@@ -2972,7 +2972,9 @@ export function UserAgendaGrid({
                         justifyContent: "center",
                       }}
                     >
-                      📆
+                      {/* SVG plutôt qu'emoji 📆 : rendu identique sur toutes les
+                          plateformes (l'emoji Google affiche « July 17 » en dur). */}
+                      <CalendarGlyph size={slotIconPx} />
                     </span>
                   )}
                   <span
