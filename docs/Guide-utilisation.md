@@ -175,10 +175,11 @@ pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶
 
 L'onglet **Éditions** présente la **liste des inscrits** (les usagers ayant réservé sur
 l'exercice — identité, structure, niveau et contact ; les comptes anonymisés sont masqués par
-défaut), le tableau de **toutes les réservations** (période, date, créneau, demandeur,
-participant, thème, nombre d'enfants, statut, pointage) avec **export CSV**, une vue
-**Planning** hebdomadaire et la **feuille de pointage** (avec les motifs d'absence). Chaque
-écran s'imprime en **PDF**.
+défaut), la **liste des créneaux ouverts** (l'offre de réservation du service : jour, horaires,
+type, période, places et demandeurs de chaque créneau, avec total et rupture par demandeur), le
+tableau de **toutes les réservations** (période, date, créneau, demandeur, participant, thème,
+nombre d'enfants, statut, pointage) avec **export CSV**, une vue **Planning** hebdomadaire et la
+**feuille de pointage** (avec les motifs d'absence). Chaque écran s'imprime en **PDF**.
 
 ![Liste des réservations (Éditions) et export CSV](img/07-editions-liste.png)
 

@@ -2,9 +2,10 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-// Case à cocher « avec ruptures » (sous-totaux par semaine/mois/période). OFF par défaut
+// Case à cocher « avec ruptures » (sous-totaux par semaine/mois/période — libellé
+// surchargeable, ex. « rupture par demandeur » des créneaux ouverts). OFF par défaut
 // (param `ruptures=1` absent). Toggle en conservant les autres paramètres d'URL.
-export function RupturesToggle() {
+export function RupturesToggle({ label = "avec ruptures" }: { label?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -32,7 +33,7 @@ export function RupturesToggle() {
       }}
     >
       <input type="checkbox" checked={on} onChange={toggle} style={{ cursor: "pointer" }} />
-      avec ruptures
+      {label}
     </label>
   );
 }

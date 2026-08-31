@@ -98,9 +98,7 @@ export default async function EditionsInscritsPage({
       </div>
 
       {inscrits.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucun inscrit sur cet exercice.
-        </p>
+        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>Aucun inscrit sur cet exercice.</p>
       ) : (
         <>
           <div className="admin-table-wrap">

@@ -17,6 +17,7 @@ const KIND_TITLES: Record<string, string> = {
   planning: "Planning",
   pointages: "Pointages",
   inscrits: "Liste des inscrits",
+  creneaux: "Liste des créneaux ouverts",
 };
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -72,8 +73,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         "font-family:'Instrument Sans',Arial,sans-serif;width:100%;box-sizing:border-box;padding:0 8mm;color:#444;";
       const pdf = await page.pdf({
         // Tableaux larges (liste, planning, pointages) en paysage ; la liste des
-        // inscrits (5 colonnes de contact) tient en portrait.
-        landscape: kind !== "inscrits",
+        // inscrits (5 colonnes de contact) et celle des créneaux ouverts (6 colonnes
+        // courtes) tiennent en portrait.
+        landscape: !["inscrits", "creneaux"].includes(kind),
         printBackground: true,
         preferCSSPageSize: false,
         margin: { top: "16mm", bottom: "14mm", left: "8mm", right: "8mm" },

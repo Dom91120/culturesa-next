@@ -1,4 +1,4 @@
-import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
+import { DAY_NAMES, ISO_DAY_KEYS, parseWeeks } from "@/lib/agenda-core";
 import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import { prisma } from "@/server/db";
 
@@ -199,6 +199,79 @@ export async function listInscrits(
       tel: r.user.tel ?? "",
     }))
     .sort((a, b) => a.nom.localeCompare(b.nom) || a.prenom.localeCompare(b.prenom));
+}
+
+export type OpenSlot = {
+  jour: string; // « Lundi » (récurrent) ou « Lundi 18/06/2026 » (ponctuel)
+  creneau: string; // « HH:MM – HH:MM » ou « Journée entière »
+  type: string; // « Récurrent », « Récurrent — semaine A », « Ponctuel »
+  recurrent: boolean;
+  periode: string;
+  places: number | null; // capacité du créneau (null = non renseignée)
+  demandeurs: string[]; // catégories autorisées ; vide = ouvert à toutes
+};
+
+/**
+ * Créneaux OUVERTS d'un service — édition « Liste des créneaux ouverts » : l'OFFRE de
+ * réservation telle que configurée dans l'agenda admin, une ligne par créneau (récurrents
+ * et ponctuels autonomes ; les MIROIRS des récurrents sont exclus — ce sont des
+ * occurrences, pas des créneaux). Scope exercice via slot.periodId, comme les autres
+ * éditions. Tri : récurrents d'abord (jour de semaine puis horaire), puis ponctuels
+ * (date puis horaire).
+ */
+export async function listOpenSlots(serviceId: string, periodIds?: number[]): Promise<OpenSlot[]> {
+  const slots = await prisma.slot.findMany({
+    where: {
+      serviceId,
+      parentSlotId: null,
+      ...(periodIds ? { periodId: { in: periodIds } } : {}),
+    },
+    select: {
+      slotType: true,
+      slotDay: true,
+      slotDate: true,
+      startTime: true,
+      endTime: true,
+      weeks: true,
+      capacity: true,
+      period: { select: { label: true } },
+      demandeurs: { select: { demandeur: { select: { label: true } } } },
+    },
+  });
+
+  const dayOrder = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
+  return slots
+    .map((s) => {
+      const recurrent = s.slotType === "recurring";
+      // Récurrent limité à une parité : suffixe « — semaine A/B » (cf. parseWeeks).
+      const weeks = parseWeeks(s.weeks);
+      const weekSuffix = recurrent && weeks.length === 1 ? ` — semaine ${weeks[0]}` : "";
+      const start = s.startTime ? s.startTime.slice(0, 5) : "";
+      const end = s.endTime ? s.endTime.slice(0, 5) : "";
+      return {
+        jour: recurrent
+          ? (DAY_NAMES[s.slotDay ?? ""] ?? s.slotDay ?? "—")
+          : jourDateOf("unique", s.slotDate, null),
+        creneau: start && end ? `${start} – ${end}` : "Journée entière",
+        type: recurrent ? `Récurrent${weekSuffix}` : "Ponctuel",
+        recurrent,
+        periode: s.period?.label ?? "—",
+        places: s.capacity,
+        demandeurs: s.demandeurs.map((d) => d.demandeur.label).sort((a, b) => a.localeCompare(b)),
+        // Clés de tri internes (non exportées).
+        _day: recurrent ? dayOrder.indexOf(s.slotDay ?? "") : 99,
+        _date: s.slotDate?.toISOString().slice(0, 10) ?? "",
+        _start: s.startTime,
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(b.recurrent) - Number(a.recurrent) ||
+        a._day - b._day ||
+        a._date.localeCompare(b._date) ||
+        a._start.localeCompare(b._start),
+    )
+    .map(({ _day, _date, _start, ...row }) => row);
 }
 
 /** « Lundi 18/06/2026 » pour un ponctuel daté ; jour de semaine pour un récurrent. */

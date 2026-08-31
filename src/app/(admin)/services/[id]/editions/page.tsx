@@ -37,6 +37,14 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
       action: "Ouvrir",
     },
     {
+      icon: "🕒",
+      label: "Liste des créneaux ouverts",
+      description:
+        "L'offre de réservation du service : les créneaux proposés sur l'exercice, avec horaires, places et demandeurs.",
+      href: `/services/${id}/editions/creneaux`,
+      action: "Ouvrir",
+    },
+    {
       icon: "📋",
       label: "Liste des réservations",
       description:
