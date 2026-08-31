@@ -3522,278 +3522,291 @@ export function UserAgendaGrid({
             })()}
           </p>
         </div>
-        {/* 2e ligne : état « en attente » à gauche, boutons d'action à droite.
-            MOBILE : le plancher de 306px de la zone gauche déborderait des 375px —
-            la ligne se replie (légende pleine largeur, boutons dessous à droite). */}
+        {/* Ligne légende + actions : bloc légende 2×2 à gauche (⏳/récurrent puis
+            ✔/ponctuel), bloc actions à droite (boutons du brouillon puis compteur).
+            flex-wrap : quand la place manque (smartphone étroit), le bloc actions
+            passe EN ENTIER sous la légende, calé à droite — la légende reste un
+            bloc 2×2 contigu à toutes les largeurs, même rendu qu'en mode étroit. */}
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
             width: "100%",
-            flexWrap: isMobile ? "wrap" : undefined,
-            rowGap: isMobile ? ".3rem" : undefined,
+            rowGap: ".4rem",
           }}
         >
-          {/* Zone gauche commune aux deux lignes : 50 % de la ligne (2 × 25 % pour le
-              libellé d'état et la légende Créneau), bornée par la somme des min-width. */}
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              flexShrink: 0,
-              width: isMobile ? "100%" : "50%",
-              // Somme des planchers : libellé (160) + légende (130) + marge (1rem).
-              minWidth: isMobile ? 0 : 306,
-            }}
-          >
-            {/* Largeur fixe commune aux deux lignes de légende : les items « Récurrent »
-                et « Ponctuel » qui suivent démarrent sur la même colonne. */}
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: ".45rem",
-                // 25 % de la ligne (50 % de la zone gauche), plancher 160px → les légendes
-                // qui suivent démarrent sur la même colonne ; repli au besoin, interligne
-                // minimal.
-                width: "50%",
-                minWidth: 160,
-                lineHeight: 1,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 34,
-                  height: 20,
-                  borderRadius: "var(--rad-sm)",
-                  background: "#ffe6a7",
-                  boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  className="slot-icon"
-                  style={{ fontSize: ".85rem", lineHeight: 1, color: "#b2a478" }}
-                >
-                  ⏳
-                </span>
-              </span>
-              Demande en attente de validation
-            </span>
-            {/* Légende « Créneau récurrent » (même rendu que l'agenda admin), à droite. */}
-            <AgendaLegendSwatch
-              kind="rec"
-              style={{
-                marginLeft: "1rem",
-                letterSpacing: "-0.02em",
-                // 25 % de la ligne (moitié restante de la zone gauche, marge déduite),
-                // plancher 130px ; repli au besoin, interligne minimal.
-                width: "calc(50% - 1rem)",
-                minWidth: 130,
-                lineHeight: 1.1,
-              }}
-            >
-              Créneau récurrent
-            </AgendaLegendSwatch>
-          </span>
-          {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
+          {/* Bloc légende 2×2 : grandit jusqu'à la moitié de la ligne ; plancher
+              203px = somme des planchers des 2 colonnes (libellé 106 + légende 90
+              + marge .4rem) — le plus étroit possible en .7rem avec l'état sur
+              3 lignes max, pour garder les boutons à côté le plus longtemps
+              possible (dès 375px). Le max() garde la moitié de ligne prioritaire
+              sur les grands écrans. */}
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              gap: ".6rem",
-              flexWrap: "wrap",
-              // Mobile : après repli sous la légende, reste calée à droite.
-              marginLeft: isMobile ? "auto" : undefined,
+              flexDirection: "column",
+              // Interligne resserré entre les 2 lignes du bloc légende.
+              gap: ".2rem",
+              flex: "1 1 203px",
+              maxWidth: "max(50%, 203px)",
+              fontSize: ".7rem",
             }}
           >
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ padding: ".22rem .6rem", fontSize: ".66rem" }}
-              onClick={clearPending}
-              disabled={pendingCount === 0}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              // Une suppression en attente → « Supprimer → » en rouge danger.
-              style={{
-                padding: ".22rem .6rem",
-                fontSize: ".66rem",
-                ...(isDeletion
-                  ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }
-                  : {}),
-              }}
-              // Enregistrement DIRECT → toast vert (création/modif/déplacement) ou rouge.
-              onClick={commitPending}
-              disabled={pendingCount === 0 || committing}
-            >
-              {isDeletion ? "Supprimer →" : "Enregistrer →"}
-            </button>
-          </div>
-        </div>
-        {/* 3e ligne : état « validée » à gauche, compteur du brouillon à droite.
-            MOBILE : repli comme la 2e ligne (le nowrap du compteur élargissait le
-            viewport de mise en page à ~484px et TRONQUAIT tout le bord droit,
-            modales comprises). */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            width: "100%",
-            flexWrap: isMobile ? "wrap" : undefined,
-            rowGap: isMobile ? ".3rem" : undefined,
-          }}
-        >
-          {/* Zone gauche commune aux deux lignes : 50 % de la ligne (2 × 25 % pour le
-              libellé d'état et la légende Créneau), bornée par la somme des min-width. */}
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              flexShrink: 0,
-              width: isMobile ? "100%" : "50%",
-              // Somme des planchers : libellé (160) + légende (130) + marge (1rem).
-              minWidth: isMobile ? 0 : 306,
-            }}
-          >
-            {/* Même largeur fixe que la ligne « en attente » ci-dessus → colonnes alignées. */}
+            {/* 1re ligne du bloc : état « en attente » + légende « récurrent ». */}
             <span
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: ".45rem",
-                // 25 % de la ligne (50 % de la zone gauche), plancher 160px → les légendes
-                // qui suivent démarrent sur la même colonne ; repli au besoin, interligne
-                // minimal.
-                width: "50%",
-                minWidth: 160,
-                lineHeight: 1,
-                letterSpacing: "-0.02em",
+                width: "100%",
               }}
             >
+              {/* Largeur fixe commune aux deux lignes de légende : les items « Récurrent »
+                et « Ponctuel » qui suivent démarrent sur la même colonne. */}
               <span
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  width: 34,
-                  height: 20,
-                  borderRadius: "var(--rad-sm)",
-                  background: "#c8e8b8",
-                  boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-                  flexShrink: 0,
+                  gap: ".45rem",
+                  // Moitié du bloc légende, plancher 106px (pastille 34 + espace +
+                  // « Demande en » / « attente de » en .7rem : l'état s'étale sur
+                  // 3 lignes maximum, pas 4) → les légendes qui suivent démarrent
+                  // sur la même colonne ; interligne minimal.
+                  width: "50%",
+                  minWidth: 106,
+                  lineHeight: 0.95,
+                  letterSpacing: "-0.02em",
                 }}
               >
                 <span
-                  className="slot-icon"
-                  style={{ fontSize: ".85rem", lineHeight: 1, color: "#3e7e2f" }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 34,
+                    height: 20,
+                    borderRadius: "var(--rad-sm)",
+                    background: "#ffe6a7",
+                    boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+                    flexShrink: 0,
+                  }}
                 >
-                  ✔
+                  <span
+                    className="slot-icon"
+                    style={{ fontSize: ".85rem", lineHeight: 1, color: "#b2a478" }}
+                  >
+                    ⏳
+                  </span>
                 </span>
+                Demande en attente de validation
               </span>
-              Réservation validée
+              {/* Légende « Créneau récurrent » (même rendu que l'agenda admin), à droite. */}
+              <AgendaLegendSwatch
+                kind="rec"
+                style={{
+                  marginLeft: ".4rem",
+                  letterSpacing: "-0.02em",
+                  // Moitié restante du bloc légende (marge déduite), plancher 90px
+                  // (pastille 30 + espace + « récurrent » en .7rem) ; repli,
+                  // interligne minimal.
+                  width: "calc(50% - .4rem)",
+                  minWidth: 90,
+                  lineHeight: 0.95,
+                }}
+              >
+                Créneau récurrent
+              </AgendaLegendSwatch>
             </span>
-            {/* Légende « Créneau ponctuel » (même rendu que l'agenda admin), à droite. */}
-            <AgendaLegendSwatch
-              kind="uniq"
+            {/* 2e ligne du bloc : état « validée » + légende « ponctuel ». */}
+            <span
               style={{
-                marginLeft: "1rem",
-                letterSpacing: "-0.02em",
-                // 25 % de la ligne (moitié restante de la zone gauche, marge déduite),
-                // plancher 130px ; repli au besoin, interligne minimal.
-                width: "calc(50% - 1rem)",
-                minWidth: 130,
-                lineHeight: 1.1,
+                display: "inline-flex",
+                alignItems: "center",
+                width: "100%",
               }}
             >
-              Créneau ponctuel
-            </AgendaLegendSwatch>
-          </span>
-          {/* Compteur du brouillon (aligné à droite). */}
-          <p
+              {/* Même largeur fixe que la ligne « en attente » ci-dessus → colonnes alignées. */}
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: ".45rem",
+                  // Moitié du bloc légende, plancher 106px (pastille 34 + espace +
+                  // « Demande en » / « attente de » en .7rem : l'état s'étale sur
+                  // 3 lignes maximum, pas 4) → les légendes qui suivent démarrent
+                  // sur la même colonne ; interligne minimal.
+                  width: "50%",
+                  minWidth: 106,
+                  lineHeight: 0.95,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 34,
+                    height: 20,
+                    borderRadius: "var(--rad-sm)",
+                    background: "#c8e8b8",
+                    boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    className="slot-icon"
+                    style={{ fontSize: ".85rem", lineHeight: 1, color: "#3e7e2f" }}
+                  >
+                    ✔
+                  </span>
+                </span>
+                Réservation validée
+              </span>
+              {/* Légende « Créneau ponctuel » (même rendu que l'agenda admin), à droite. */}
+              <AgendaLegendSwatch
+                kind="uniq"
+                style={{
+                  marginLeft: ".4rem",
+                  letterSpacing: "-0.02em",
+                  // Moitié restante du bloc légende (marge déduite), plancher 90px
+                  // (pastille 30 + espace + « récurrent » en .7rem) ; repli,
+                  // interligne minimal.
+                  width: "calc(50% - .4rem)",
+                  minWidth: 90,
+                  lineHeight: 0.95,
+                }}
+              >
+                Créneau ponctuel
+              </AgendaLegendSwatch>
+            </span>
+          </div>
+          {/* Bloc actions, calé à droite : boutons du brouillon puis compteur.
+              Centré verticalement sur la hauteur du bloc légende (sans effet
+              quand il se replie dessous : sa ligne fait alors sa hauteur). */}
+          <div
             style={{
-              fontSize: ".75rem",
-              color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
-              margin: 0,
-              textAlign: "right",
-              // Mobile : autorisé à se replier (le nowrap débordait du viewport) et
-              // calé à droite après le passage à la ligne.
-              whiteSpace: isMobile ? "normal" : "nowrap",
-              marginLeft: isMobile ? "auto" : undefined,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              alignSelf: "center",
+              gap: ".4rem",
+              marginLeft: "auto",
+              // Jamais plus large que la ligne : un compteur long se replie au lieu
+              // d'élargir le viewport mobile (l'ancien nowrap tronquait le bord droit).
+              maxWidth: "100%",
             }}
           >
-            {(() => {
-              // Ajout en attente → avertissement --danger à la place du compteur :
-              // nombre d'occurrences réellement réservées sur la période citée
-              // (récurrent : miroirs à venir du créneau parent — la parité A/B est
-              // déjà portée par les miroirs ; ponctuel : sa seule date). Le verrou
-              // « une seule action » garantit qu'il n'y a rien d'autre à afficher
-              // en même temps.
-              const add = pendingAdds[0];
-              if (add) {
-                const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
-                const n = add.ponctuel
-                  ? 1
-                  : uniqueSlots.filter((u) => u.parentSlotId === add.slotId && u.slotDate >= today)
-                      .length;
-                // Période citée : celle de l'ajout (récurrent), sinon celle du
-                // créneau ponctuel daté.
-                const periodId = add.ponctuel
-                  ? uniqSlotById.get(add.slotId)?.periodId
-                  : add.periodId;
-                const periodLabel = periods.find((p) => p.id === periodId)?.label ?? "la période";
-                return (
-                  // whiteSpace normal : le <p> conteneur est en nowrap — ce message,
-                  // plus long que les compteurs, se replie sur 2 lignes quand la
-                  // place vient à manquer au lieu de déborder.
-                  <span
-                    style={{
-                      color: "var(--danger)",
-                      fontWeight: "bold",
-                      whiteSpace: "normal",
-                      display: "inline-block",
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    Ceci réservera {n} occurrence{n > 1 ? "s" : ""} sur {periodLabel}
-                  </span>
-                );
-              }
-              return pendingCount > 0
-                ? [
-                    pendingAdds.length > 0
-                      ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
-                      : "",
-                    pendingRemovals.length > 0
-                      ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
-                      : "",
-                    Object.keys(pendingUpdates).length > 0
-                      ? `${Object.keys(pendingUpdates).length} élément${
-                          Object.keys(pendingUpdates).length > 1 ? "s" : ""
-                        } à modifier`
-                      : "",
-                    Object.keys(pendingMoves).length > 0
-                      ? `${Object.keys(pendingMoves).length} élément${
-                          Object.keys(pendingMoves).length > 1 ? "s" : ""
-                        } à déplacer`
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                : "Aucune modification en attente";
-            })()}
-          </p>
+            {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: ".6rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: ".22rem .6rem", fontSize: ".66rem" }}
+                onClick={clearPending}
+                disabled={pendingCount === 0}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                // Une suppression en attente → « Supprimer → » en rouge danger.
+                style={{
+                  padding: ".22rem .6rem",
+                  fontSize: ".66rem",
+                  ...(isDeletion
+                    ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }
+                    : {}),
+                }}
+                // Enregistrement DIRECT → toast vert (création/modif/déplacement) ou rouge.
+                onClick={commitPending}
+                disabled={pendingCount === 0 || committing}
+              >
+                {isDeletion ? "Supprimer →" : "Enregistrer →"}
+              </button>
+            </div>
+            {/* Compteur du brouillon (sous les boutons, aligné à droite). En .7rem
+                comme la légende : « Aucune modification en attente » reste assez
+                court pour laisser le bloc actions à côté de la légende dès 375px. */}
+            <p
+              style={{
+                fontSize: ".7rem",
+                color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
+                margin: 0,
+                textAlign: "right",
+              }}
+            >
+              {(() => {
+                // Ajout en attente → avertissement --danger à la place du compteur :
+                // nombre d'occurrences réellement réservées sur la période citée
+                // (récurrent : miroirs à venir du créneau parent — la parité A/B est
+                // déjà portée par les miroirs ; ponctuel : sa seule date). Le verrou
+                // « une seule action » garantit qu'il n'y a rien d'autre à afficher
+                // en même temps.
+                const add = pendingAdds[0];
+                if (add) {
+                  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+                  const n = add.ponctuel
+                    ? 1
+                    : uniqueSlots.filter(
+                        (u) => u.parentSlotId === add.slotId && u.slotDate >= today,
+                      ).length;
+                  // Période citée : celle de l'ajout (récurrent), sinon celle du
+                  // créneau ponctuel daté.
+                  const periodId = add.ponctuel
+                    ? uniqSlotById.get(add.slotId)?.periodId
+                    : add.periodId;
+                  const periodLabel = periods.find((p) => p.id === periodId)?.label ?? "la période";
+                  return (
+                    // Message plus long que les compteurs : se replie sur plusieurs
+                    // lignes quand la place vient à manquer au lieu de déborder.
+                    <span
+                      style={{
+                        color: "var(--danger)",
+                        fontWeight: "bold",
+                        whiteSpace: "normal",
+                        display: "inline-block",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      Ceci réservera {n} occurrence{n > 1 ? "s" : ""} sur {periodLabel}
+                    </span>
+                  );
+                }
+                return pendingCount > 0
+                  ? [
+                      pendingAdds.length > 0
+                        ? `${pendingAdds.length} élément${pendingAdds.length > 1 ? "s" : ""} à réserver`
+                        : "",
+                      pendingRemovals.length > 0
+                        ? `${pendingRemovals.length} élément${pendingRemovals.length > 1 ? "s" : ""} à supprimer`
+                        : "",
+                      Object.keys(pendingUpdates).length > 0
+                        ? `${Object.keys(pendingUpdates).length} élément${
+                            Object.keys(pendingUpdates).length > 1 ? "s" : ""
+                          } à modifier`
+                        : "",
+                      Object.keys(pendingMoves).length > 0
+                        ? `${Object.keys(pendingMoves).length} élément${
+                            Object.keys(pendingMoves).length > 1 ? "s" : ""
+                          } à déplacer`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "Aucune modification en attente";
+              })()}
+            </p>
+          </div>
         </div>
       </div>
 
