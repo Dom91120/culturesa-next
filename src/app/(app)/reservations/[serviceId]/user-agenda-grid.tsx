@@ -3735,14 +3735,19 @@ export function UserAgendaGrid({
               </button>
             </div>
             {/* Compteur du brouillon (sous les boutons, aligné à droite). En .7rem
-                comme la légende : « Aucune modification en attente » reste assez
-                court pour laisser le bloc actions à côté de la légende dès 375px. */}
+                comme la légende. width 0 + minWidth 100% : le compteur ne compte
+                PAS dans la largeur intrinsèque du bloc actions (fixée par les
+                boutons) mais s'étale ensuite sur toute cette largeur — un message
+                long (« Ceci réservera… ») se replie sous les boutons au lieu de
+                pousser tout le bloc sous la légende. */}
             <p
               style={{
                 fontSize: ".7rem",
                 color: pendingCount > 0 ? "var(--warn)" : "var(--muted)",
                 margin: 0,
                 textAlign: "right",
+                width: 0,
+                minWidth: "100%",
               }}
             >
               {(() => {
