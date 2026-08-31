@@ -3,20 +3,27 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 // Case à cocher « avec ruptures » (sous-totaux par semaine/mois/période — libellé
-// surchargeable, ex. « rupture par demandeur » des créneaux ouverts). OFF par défaut
-// (param `ruptures=1` absent). Toggle en conservant les autres paramètres d'URL.
-export function RupturesToggle({ label = "avec ruptures" }: { label?: string }) {
+// surchargeable, ex. « rupture par demandeur » des créneaux ouverts). Défaut = OFF
+// (`defaultOn` pour les écrans cochés d'office, ex. créneaux ouverts) ; le param
+// `ruptures=1|0` devient explicite au premier clic. Toggle en conservant les autres
+// paramètres d'URL.
+export function RupturesToggle({
+  label = "avec ruptures",
+  defaultOn = false,
+}: {
+  label?: string;
+  defaultOn?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const on = params.get("ruptures") === "1";
+  const raw = params.get("ruptures");
+  const on = raw == null ? defaultOn : raw === "1";
 
   const toggle = () => {
     const p = new URLSearchParams(params.toString());
-    if (on) p.delete("ruptures");
-    else p.set("ruptures", "1");
-    const qs = p.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    p.set("ruptures", on ? "0" : "1");
+    router.push(`${pathname}?${p.toString()}`);
   };
 
   return (

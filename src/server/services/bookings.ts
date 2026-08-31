@@ -687,6 +687,11 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       themesMode: true,
       gaugeAccompagnants: true,
       validationBloquante: true,
+      // Alerte « plus de place » : réglage, texte personnalisé éventuel et e-mail
+      // de contact proposé dans la modale.
+      fullPeriodNotice: true,
+      fullPeriodNoticeText: true,
+      contactEmail: true,
     },
   });
   if (!service) return null;
@@ -940,6 +945,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       maxReservationsPeriod: visibleExo?.maxReservationsPeriod ?? 1,
       gaugeAccompagnants: service.gaugeAccompagnants,
       validationBloquante: service.validationBloquante,
+      fullPeriodNotice: service.fullPeriodNotice,
+      fullPeriodNoticeText: service.fullPeriodNoticeText,
+      contactEmail: service.contactEmail,
     },
     periods: periods.map((p) => ({
       id: p.id,

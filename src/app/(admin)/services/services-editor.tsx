@@ -17,10 +17,10 @@ import type { ActionState } from "@/lib/action-state";
 import { deleteServicesAction, saveServiceFromModalAction } from "./actions";
 import { ICON_CATEGORIES } from "./legacy-icons";
 
-type Initial = { id: string; label: string; icon: string | null };
-type Row = { id: string | null; label: string; icon: string | null };
+type Initial = { id: string; label: string; icon: string | null; contactEmail: string | null };
+type Row = { id: string | null; label: string; icon: string | null; contactEmail: string };
 
-const GRID = "40px 1fr 80px";
+const GRID = "40px 1.1fr 1fr 80px";
 
 /** `ActionState` est nullable (contrat `useActionState`) ; `useBufferedRows` attend un résultat non-nul. */
 function toRefResult(res: ActionState): RefActionResult {
@@ -43,14 +43,30 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
   const { rows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
     useBufferedRows<string, Initial, Row>({
       initial,
-      fromInitial: (s) => ({ id: s.id, label: s.label, icon: s.icon }),
+      fromInitial: (s) => ({
+        id: s.id,
+        label: s.label,
+        icon: s.icon,
+        contactEmail: s.contactEmail ?? "",
+      }),
       isValid: (r) => r.label.trim() !== "",
       isDirty: (r, init) =>
-        init.label !== r.label.trim() || (init.icon ?? null) !== (r.icon ?? null),
+        init.label !== r.label.trim() ||
+        (init.icon ?? null) !== (r.icon ?? null) ||
+        (init.contactEmail ?? "") !== r.contactEmail.trim(),
       onCreate: (r) =>
-        saveServiceFromModalAction({ label: r.label.trim(), icon: r.icon }).then(toRefResult),
+        saveServiceFromModalAction({
+          label: r.label.trim(),
+          icon: r.icon,
+          contactEmail: r.contactEmail.trim() || null,
+        }).then(toRefResult),
       onUpdate: (id, r) =>
-        saveServiceFromModalAction({ id, label: r.label.trim(), icon: r.icon }).then(toRefResult),
+        saveServiceFromModalAction({
+          id,
+          label: r.label.trim(),
+          icon: r.icon,
+          contactEmail: r.contactEmail.trim() || null,
+        }).then(toRefResult),
       onDelete: (id) => deleteServicesAction([id]).then(toRefResult),
       onSyncReset: () => {
         setConfirmKey(null);
@@ -59,7 +75,7 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
     });
 
   function add() {
-    addRow({ id: null, label: "", icon: null });
+    addRow({ id: null, label: "", icon: null, contactEmail: "" });
     setConfirmKey(null);
   }
   function remove(key: string) {
@@ -74,6 +90,7 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
       <RefColumnHeaders gridTemplate={GRID}>
         <span style={{ textAlign: "center" }}>Icône</span>
         <span style={{ paddingLeft: ".5rem" }}>Service</span>
+        <span style={{ paddingLeft: ".5rem" }}>E-mail de contact</span>
         <span style={{ textAlign: "center" }}>Action</span>
       </RefColumnHeaders>
 
@@ -113,7 +130,7 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
 
             {confirming ? (
               <RefDeleteConfirm
-                gridColumn="2 / 4"
+                gridColumn="2 / 5"
                 message="Supprimer ce service et toutes ses données ?"
                 onConfirm={() => remove(r.key)}
                 onCancel={() => setConfirmKey(null)}
@@ -129,6 +146,25 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
                   style={{
                     fontSize: ".8rem",
                     fontWeight: 600,
+                    color: "var(--text)",
+                    border: "none",
+                    background: "transparent",
+                    outline: "none",
+                    borderRadius: "var(--rad-sm)",
+                    padding: ".2rem .5rem",
+                    width: "100%",
+                  }}
+                />
+                {/* E-mail générique de contact (facultatif) : proposé aux usagers pour
+                    joindre les gestionnaires (modale « plus de place disponible »). */}
+                <input
+                  type="email"
+                  className="dem-ghost"
+                  value={r.contactEmail}
+                  placeholder="E-mail de contact"
+                  onChange={(e) => patch(r.key, { contactEmail: e.target.value })}
+                  style={{
+                    fontSize: ".78rem",
                     color: "var(--text)",
                     border: "none",
                     background: "transparent",

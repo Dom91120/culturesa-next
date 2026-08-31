@@ -33,6 +33,8 @@ export default async function ConfigPage({ params }: { params: Promise<{ id: str
         initialThemeMode={themesData.mode}
         initialThemes={themesData.themes}
         initialGaugeAccompagnants={service.gaugeAccompagnants}
+        initialFullPeriodNotice={service.fullPeriodNotice}
+        initialFullPeriodNoticeText={service.fullPeriodNoticeText ?? ""}
         validationBloquante={service.validationBloquante}
         autoValidationDelay={service.autoValidationDelay}
         mgrNoticeMode={service.mgrNoticeMode}

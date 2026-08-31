@@ -207,6 +207,16 @@ model Service {
   // Jauge : compter (ou non) les accompagnants dans les places consommées.
   // true par défaut = comportement historique (enfants + accompagnants).
   gaugeAccompagnants    Boolean    @default(true)
+  // E-mail générique de contact du service (référentiel Services) : proposé aux
+  // usagers pour joindre les gestionnaires (modale « plus de place disponible »).
+  contactEmail          String?
+  // Alerte « plus de place » : à l'arrivée sur l'agenda usager ou sur une période,
+  // si plus aucune occurrence de la période affichée n'est réservable, une modale
+  // l'invite à contacter le service. Désactivable dans Paramètres > Configuration.
+  fullPeriodNotice      Boolean    @default(true)
+  // Texte personnalisé de l'alerte (remplace le message par défaut ; la ligne
+  // « contacter le service » avec l'e-mail reste ajoutée automatiquement).
+  fullPeriodNoticeText  String?
 
   // Réglages du mode « Création de créneau » de l'agenda, mémorisés d'une visite à
   // l'autre. Comme `capacity`, ce sont des défauts DU SERVICE (partagés par ses

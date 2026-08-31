@@ -15,20 +15,25 @@ export async function saveServiceFromModalAction(input: {
   id?: string;
   label: string;
   icon: string | null;
+  contactEmail: string | null;
 }): Promise<ActionState> {
   // Référentiel des services (onglet Administration) → réservé aux administrateurs.
   await requireRole("administrateur");
-  const parsed = serviceCreateSchema.safeParse({ label: input.label });
+  const parsed = serviceCreateSchema.safeParse({
+    label: input.label,
+    contactEmail: input.contactEmail?.trim() ?? "",
+  });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message };
   const icon = input.icon?.trim() ? input.icon.trim().slice(0, 16) : null;
+  const contactEmail = parsed.data.contactEmail || null;
 
   if (input.id) {
     const id = stringIdSchema.safeParse(input.id);
     if (!id.success) return { ok: false, error: "Service introuvable" };
-    await svc.updateServiceBasics(id.data, { label: parsed.data.label, icon });
+    await svc.updateServiceBasics(id.data, { label: parsed.data.label, icon, contactEmail });
   } else {
     const created = await svc.createService(parsed.data.label, 0);
-    if (icon) await svc.updateServiceBasics(created.id, { icon });
+    if (icon || contactEmail) await svc.updateServiceBasics(created.id, { icon, contactEmail });
   }
   revalidatePath("/configuration");
   return { ok: true };

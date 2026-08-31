@@ -43,7 +43,12 @@ export default async function ConfigurationPage() {
     listNiveaux(),
   ]);
   const demandeurOptions = demandeurs.map((d) => ({ id: d.id, label: d.label }));
-  const services = servicesRaw.map((s) => ({ id: s.id, label: s.label, icon: s.icon }));
+  const services = servicesRaw.map((s) => ({
+    id: s.id,
+    label: s.label,
+    icon: s.icon,
+    contactEmail: s.contactEmail,
+  }));
   const structures = structuresRaw.map((s) => ({
     id: s.id,
     label: s.label,

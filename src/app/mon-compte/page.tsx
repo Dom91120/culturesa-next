@@ -51,9 +51,7 @@ export default async function MonComptePage() {
   // (même règle que l'inscription) : déclarées une à une par les inscrits précédents,
   // les livrer publierait la liste de qui s'est inscrit. Le formulaire affiche un champ
   // de texte pour ces catégories et n'en a aucun usage.
-  const demandeurs = demandeursBruts.map((d) =>
-    d.structureLibre ? { ...d, structures: [] } : d,
-  );
+  const demandeurs = demandeursBruts.map((d) => (d.structureLibre ? { ...d, structures: [] } : d));
 
   const profile = {
     prenom: user?.prenom ?? "",

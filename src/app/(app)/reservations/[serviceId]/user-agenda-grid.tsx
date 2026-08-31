@@ -20,6 +20,7 @@ import {
   AgendaTimeColumn,
   AgendaWeekHeader,
   CalendarGlyph,
+  ModalOverlay,
   PrintIconButton,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
@@ -74,6 +75,11 @@ type Service = {
   maxReservationsPeriod: number;
   gaugeAccompagnants: boolean;
   validationBloquante: boolean;
+  // Alerte « plus de place » (réglage service) : texte personnalisé éventuel et
+  // e-mail de contact proposés dans la modale.
+  fullPeriodNotice: boolean;
+  fullPeriodNoticeText: string | null;
+  contactEmail: string | null;
 };
 type Period = {
   id: number;
@@ -1684,20 +1690,75 @@ export function UserAgendaGrid({
   // isSlotClosed, réserver un récurrent ne matérialise que ses miroirs) + ponctuels.
   // Filtres communs « jour ouvert » : jours actifs, fériés, vacances scolaires,
   // parité A/B, capacité configurée (le rendu grise ces dates via isDayDisabled).
+  // Jour « ouvert » pour la grille : jour actif de l'exercice, férié et vacances
+  // scolaires selon ses réglages (partagé par l'ancre par défaut et bookableScan).
+  const dayOpen = (d: string, dk: string): boolean => {
+    const o = openingForYmd(d);
+    if (
+      !o.activeDays
+        .split(",")
+        .map((s) => s.trim())
+        .includes(dk)
+    )
+      return false;
+    if (!o.openOnHolidays && isFrenchHoliday(d)) return false;
+    return o.openOnSchoolHolidays || !isSchoolHoliday(d);
+  };
+
+  // Balayage des occurrences DATÉES (miroirs des récurrents + ponctuels) : signale
+  // s'il existe au moins une occurrence OFFERTE (jour ouvert, parité, capacité > 0)
+  // et retourne la prochaine encore RÉSERVABLE (délai, dispo de période, place
+  // restante). `periodId` restreint le balayage à UNE période (alerte « plus de
+  // place » de la période affichée) ; sans lui, toutes les périodes chargées (ancre
+  // par défaut, règle 1). Offert mais plus rien de réservable = tout est complet,
+  // clos ou hors délai.
+  function bookableScan(periodId?: number): {
+    hasOffered: boolean;
+    nextBookable: string | null;
+  } {
+    const bookedBySlot = new Map<string, Booking[]>();
+    for (const b of bookings) {
+      const arr = bookedBySlot.get(b.slotId);
+      if (arr) arr.push(b);
+      else bookedBySlot.set(b.slotId, [b]);
+    }
+    // Places occupées d'un créneau daté, selon sa jauge (même règle que les blocs).
+    const usedOn = (slotId: string, jauge: boolean): number => {
+      const list = bookedBySlot.get(slotId) ?? [];
+      return jauge
+        ? list.reduce(
+            (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
+            0,
+          )
+        : list.length;
+    };
+    let hasOffered = false;
+    let nextBookable: string | null = null;
+    for (const u of uniqueSlots) {
+      const d = u.slotDate;
+      if (!d) continue;
+      const parent = u.parentSlotId ? recurSlotById.get(u.parentSlotId) : null;
+      if (u.parentSlotId && !parent) continue; // miroir orphelin
+      if (!dayOpen(d, dayKeyFromYmd(d))) continue;
+      if (parent && abMode && !parseWeeks(parent.weeks).includes(slotWeekTag(d))) continue;
+      const capacity = (parent ? parent.capacity : u.capacity) ?? service.capacity;
+      if (capacity <= 0) continue;
+      const pid = parent ? parent.periodId : u.periodId;
+      if (periodId != null && pid !== periodId) continue; // hors de la période ciblée
+      hasOffered = true;
+      // Réservable = délai respecté, période ouverte (Dispo), place restante.
+      if (d < earliestFor(d)) continue;
+      if (nextBookable && d >= nextBookable) continue; // déjà une occurrence plus proche
+      const dispo = pid != null ? dispoByPeriod.get(pid) : null;
+      if (dispo && todayIso < dispo) continue;
+      if (usedOn(u.id, parent ? parent.jauge : u.jauge) >= capacity) continue;
+      nextBookable = d;
+    }
+    return { hasOffered, nextBookable };
+  }
+
   function defaultAnchorMonday(): string {
     const todayMonday = ymd(mondayOf(new Date()));
-    const dayOpen = (d: string, dk: string): boolean => {
-      const o = openingForYmd(d);
-      if (
-        !o.activeDays
-          .split(",")
-          .map((s) => s.trim())
-          .includes(dk)
-      )
-        return false;
-      if (!o.openOnHolidays && isFrenchHoliday(d)) return false;
-      return o.openOnSchoolHolidays || !isSchoolHoliday(d);
-    };
     let nextVisible: string | null = null; // règle 2 : prochaine affichée (≥ lundi courant)
     let lastVisible: string | null = null; // règle 3 : dernière affichée (< lundi courant)
     const noteVisible = (d: string) => {
@@ -1722,45 +1783,17 @@ export function UserAgendaGrid({
         if (dayOpen(d, s.slotDay as string)) noteVisible(d);
       }
     }
-    // Règle 1 sur les occurrences datées (+ règles 2/3 pour les ponctuels autonomes).
-    const bookedBySlot = new Map<string, Booking[]>();
-    for (const b of bookings) {
-      const arr = bookedBySlot.get(b.slotId);
-      if (arr) arr.push(b);
-      else bookedBySlot.set(b.slotId, [b]);
-    }
-    // Places occupées d'un créneau daté, selon sa jauge (même règle que les blocs).
-    const usedOn = (slotId: string, jauge: boolean): number => {
-      const list = bookedBySlot.get(slotId) ?? [];
-      return jauge
-        ? list.reduce(
-            (sum, b) => sum + gaugeUnits(b.enfants, b.accompagnants, service.gaugeAccompagnants),
-            0,
-          )
-        : list.length;
-    };
-    let nextBookable: string | null = null; // règle 1 : prochaine occurrence réservable
+    // Règles 2/3 pour les ponctuels autonomes (les miroirs sont couverts par la
+    // boucle des récurrents ci-dessus ; leur réservabilité relève de bookableScan).
     for (const u of uniqueSlots) {
       const d = u.slotDate;
-      if (!d) continue;
-      const parent = u.parentSlotId ? recurSlotById.get(u.parentSlotId) : null;
-      if (u.parentSlotId && !parent) continue; // miroir orphelin
+      if (!d || u.parentSlotId) continue;
       if (!dayOpen(d, dayKeyFromYmd(d))) continue;
-      if (parent && abMode && !parseWeeks(parent.weeks).includes(slotWeekTag(d))) continue;
-      const capacity = (parent ? parent.capacity : u.capacity) ?? service.capacity;
-      if (capacity <= 0) continue;
-      // Règles 2/3 : les ponctuels autonomes ne sont couverts que par leur date.
-      if (!parent) noteVisible(d);
-      // Règle 1 : réservable = délai respecté, période ouverte (Dispo), place restante.
-      if (d < earliestFor(d)) continue;
-      if (nextBookable && d >= nextBookable) continue; // déjà une occurrence plus proche
-      const pid = parent ? parent.periodId : u.periodId;
-      const dispo = pid != null ? dispoByPeriod.get(pid) : null;
-      if (dispo && todayIso < dispo) continue;
-      if (usedOn(u.id, parent ? parent.jauge : u.jauge) >= capacity) continue;
-      nextBookable = d;
+      if ((u.capacity ?? service.capacity) <= 0) continue;
+      noteVisible(d);
     }
-    const target = nextBookable ?? nextVisible ?? lastVisible;
+    // Règle 1 : prochaine occurrence réservable (balayage partagé).
+    const target = bookableScan().nextBookable ?? nextVisible ?? lastVisible;
     return target ? ymd(mondayOf(new Date(`${target}T00:00:00`))) : todayMonday;
   }
 
@@ -1791,6 +1824,28 @@ export function UserAgendaGrid({
     snapshot: () => ({ exerciceId: currentExerciceId, anchorMonday }),
     deps: [currentExerciceId, anchorMonday],
   });
+
+  // Alerte « plus de place » (réglage service) : à l'ARRIVÉE sur l'agenda et à
+  // chaque NAVIGATION vers une période (pastilles ou ◀/▶), si la période AFFICHÉE
+  // propose bien des créneaux mais plus AUCUN n'est réservable (tout est complet,
+  // clos ou hors délai), une modale --warn invite l'usager à contacter le service.
+  // Une seule fois PAR PÉRIODE et par visite (ref) — pas de ré-affichage au fil
+  // des rafraîchissements ni des allers-retours. anchorMonday démarre à null →
+  // effectivePeriodId vaut -1 tant que la vue n'est pas restaurée : la première
+  // évaluation porte déjà sur la bonne période.
+  const [fullNoticeOpen, setFullNoticeOpen] = useState(false);
+  const fullNoticeShownFor = useRef(new Set<number>());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: réévaluée uniquement quand la période affichée change.
+  useEffect(() => {
+    if (!service.fullPeriodNotice) return;
+    if (effectivePeriodId == null || effectivePeriodId <= 0) return;
+    if (fullNoticeShownFor.current.has(effectivePeriodId)) return;
+    const { hasOffered, nextBookable } = bookableScan(effectivePeriodId);
+    if (hasOffered && !nextBookable) {
+      fullNoticeShownFor.current.add(effectivePeriodId);
+      setFullNoticeOpen(true);
+    }
+  }, [effectivePeriodId]);
 
   // Verrouille la période active en semaine réelle (hook partagé, cf. agenda-hooks).
   useCoveringPeriodLock(true, coveringPeriod, rwPeriodId, setRwPeriodId);
@@ -3859,6 +3914,63 @@ export function UserAgendaGrid({
             </span>
           ))}
         </div>
+      )}
+
+      {/* Alerte « plus de place » : modale --warn affichée à l'arrivée quand plus
+          aucune occurrence n'est réservable (cf. effet bookableScan ci-dessus). */}
+      {fullNoticeOpen && (
+        <ModalOverlay
+          onClose={() => setFullNoticeOpen(false)}
+          labelledBy="full-notice-title"
+          boxStyle={{ maxWidth: 440, width: "92%", borderTop: "4px solid var(--warn)" }}
+        >
+          <div style={{ textAlign: "center", padding: ".25rem .25rem 0" }}>
+            <div aria-hidden="true" style={{ fontSize: "1.9rem", marginBottom: ".35rem" }}>
+              ⏳
+            </div>
+            <h3
+              id="full-notice-title"
+              style={{ margin: "0 0 .6rem", fontSize: "1rem", color: "var(--warn)" }}
+            >
+              Plus aucune place disponible
+            </h3>
+            {/* Texte personnalisé du service (Paramètres > Configuration) s'il existe,
+                sinon le message par défaut ; la ligne « contacter le service » avec
+                l'e-mail reste ajoutée dans les deux cas. */}
+            <p
+              style={{
+                fontSize: ".85rem",
+                lineHeight: 1.55,
+                margin: "0 0 .5rem",
+                whiteSpace: "pre-line",
+              }}
+            >
+              {service.fullPeriodNoticeText?.trim() ||
+                "Nous sommes désolés : tous les créneaux de la période sont complets, il ne reste plus de place à réserver pour le moment."}
+            </p>
+            <p style={{ fontSize: ".85rem", lineHeight: 1.55, margin: 0 }}>
+              {service.contactEmail ? (
+                <>
+                  N'hésitez pas à vous adresser au gestionnaire du service, qui saura vous
+                  renseigner sur les possibilités restantes :{" "}
+                  <a href={`mailto:${service.contactEmail}`} style={{ fontWeight: 600 }}>
+                    {service.contactEmail}
+                  </a>
+                </>
+              ) : (
+                "N'hésitez pas à vous adresser au gestionnaire du service, qui saura vous renseigner sur les possibilités restantes."
+              )}
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setFullNoticeOpen(false)}
+              style={{ marginTop: "1rem", fontSize: ".78rem", padding: ".3rem 1rem" }}
+            >
+              J'ai compris
+            </button>
+          </div>
+        </ModalOverlay>
       )}
     </div>
   );

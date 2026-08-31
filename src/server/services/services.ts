@@ -19,7 +19,7 @@ export async function listServicesForCurrentAdmin() {
   return prisma.service.findMany({
     where,
     orderBy: [{ position: "asc" }, { label: "asc" }],
-    select: { id: true, label: true, icon: true },
+    select: { id: true, label: true, icon: true, contactEmail: true },
   });
 }
 
@@ -42,8 +42,11 @@ export async function createService(label: string, position: number) {
   return prisma.service.create({ data: { id, label, position } });
 }
 
-/** Mise à jour partielle (nom + icône) — utilisée par la modale de l'écran liste. */
-export function updateServiceBasics(id: string, data: { label?: string; icon?: string | null }) {
+/** Mise à jour partielle (nom + icône + e-mail de contact) — modale du référentiel. */
+export function updateServiceBasics(
+  id: string,
+  data: { label?: string; icon?: string | null; contactEmail?: string | null },
+) {
   return prisma.service.update({ where: { id }, data });
 }
 

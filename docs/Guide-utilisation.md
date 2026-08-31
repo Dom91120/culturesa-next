@@ -107,6 +107,10 @@ semaine type avec les créneaux disponibles.
   validation, validée) et, le cas échéant, « Clôturé ».
 - **Légende** — un rappel précise le nombre de séances réservables et les conditions du service
   (récurrent, semaines A/B, validation, thèmes, jauge, jours fériés, vacances scolaires).
+- **Plus de place** — à votre arrivée sur l'agenda ou sur une période, si plus aucun créneau de
+  la période affichée n'est réservable (tout est complet, clos ou hors délai), un message vous
+  en informe et vous invite à contacter le service par e-mail (si le service a activé cette
+  alerte).
 
 ![Agenda de réservation côté usager](img/05-agenda-usager.png)
 
@@ -241,9 +245,14 @@ Cela permet de **préparer le prochain exercice longtemps à l'avance** :
 
 La configuration définit les **paramètres globaux** du service — **créneaux récurrents** (autorise
 les créneaux qui se répètent chaque semaine), **alternance Semaine A/B** (sans effet si les créneaux
-récurrents sont désactivés) et **prise en compte des accompagnants** dans la jauge — puis, **pour
-chaque demandeur**, la **validation** et les **thèmes**. Le mode des thèmes peut être **« libre »**
-(texte saisi par l'usager) ou **« liste »** (choix imposé).
+récurrents sont désactivés), **prise en compte des accompagnants** dans la jauge et **alerte
+« plus de place »** (à l'arrivée sur l'agenda ou sur une période, si plus aucun créneau de la
+période affichée n'est réservable, une fenêtre informe l'usager et l'invite à contacter le
+service via l'e-mail de contact du référentiel Services ; le texte du message est
+personnalisable) — puis, **pour chaque demandeur**, la
+**validation** et les **thèmes**. Le
+mode des thèmes peut être **« libre »** (texte saisi par l'usager) ou **« liste »** (choix
+imposé).
 
 ![Paramètres : configuration des accès par demandeur](img/10-parametres-configuration.png)
 
@@ -284,7 +293,9 @@ services, ainsi que de la **gestion globale** de l'application via l'onglet **«
 
 La page **Configuration** regroupe les réglages de l'application (zone des vacances scolaires,
 URL, intervalles de rafraîchissement automatique, mode debug) et l'accès aux **référentiels** :
-**Services**, **Demandeurs**, **Structures** et **Niveaux**.
+**Services**, **Demandeurs**, **Structures** et **Niveaux**. Le référentiel des services porte,
+en plus du nom et de l'icône, un **e-mail de contact** générique (ex.
+`maisondesarts@chatillon92.fr`) proposé aux usagers quand plus aucune place n'est disponible.
 
 ![Configuration générale et référentiels](img/12-configuration-referentiels.png)
 

@@ -55,7 +55,8 @@ export default async function EditionsCreneauxPage({
   const { exercices, selected } = exo;
 
   const rows = await listOpenSlots(id, selected?.periodIds);
-  const withRuptures = sp.ruptures === "1";
+  // Rupture par demandeur COCHÉE par défaut (param `ruptures=0` pour la décocher).
+  const withRuptures = sp.ruptures == null ? true : sp.ruptures === "1";
 
   // Groupes de rupture : « Toutes les catégories » d'abord, puis ordre alphabétique.
   const groups = new Map<string, OpenSlot[]>();
@@ -77,7 +78,7 @@ export default async function EditionsCreneauxPage({
 
   const pdfHref = `/services/${id}/editions/pdf?kind=creneaux${
     selected ? `&exercice=${selected.id}` : ""
-  }${withRuptures ? "&ruptures=1" : ""}`;
+  }&ruptures=${withRuptures ? "1" : "0"}`;
   const csvHref = `/services/${id}/editions/export?kind=creneaux${
     selected ? `&exercice=${selected.id}` : ""
   }`;
@@ -136,7 +137,7 @@ export default async function EditionsCreneauxPage({
           className="no-print"
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
         >
-          <RupturesToggle label="rupture par demandeur" />
+          <RupturesToggle label="rupture par demandeur" defaultOn />
           <ExportButton href={csvHref} />
           <PrintButton iconOnly href={pdfHref} title="Imprimer (PDF)" />
         </div>

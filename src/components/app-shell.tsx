@@ -74,9 +74,7 @@ export function UserBar({ user }: { user: { name: string; email: string; role?: 
               <span className="user-caret">▾</span>
             </span>
             {/* Rôle en micro-capitales ; repli sur l'e-mail si non fourni. */}
-            <span className="user-ident-role">
-              {ROLE_LABELS[user.role ?? ""] ?? user.email}
-            </span>
+            <span className="user-ident-role">{ROLE_LABELS[user.role ?? ""] ?? user.email}</span>
           </span>
         </button>
         <div id="user-menu" className={menuOpen ? "open" : ""}>

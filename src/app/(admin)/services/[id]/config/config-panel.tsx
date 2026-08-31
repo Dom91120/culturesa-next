@@ -11,7 +11,11 @@ import { Switch } from "@/components/switch";
 import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
-import { setGaugeAccompagnantsAction } from "./actions";
+import {
+  setFullPeriodNoticeAction,
+  setFullPeriodNoticeTextAction,
+  setGaugeAccompagnantsAction,
+} from "./actions";
 import { GlobalRow } from "./global-row";
 import { ServiceValidationSettings } from "./service-validation-settings";
 
@@ -35,6 +39,8 @@ type Props = {
   initialThemeMode: ThemeMode;
   initialThemes: string[];
   initialGaugeAccompagnants: boolean;
+  initialFullPeriodNotice: boolean;
+  initialFullPeriodNoticeText: string;
   // Réglages « Validation & auto-validation » (service-globaux), édités ici.
   validationBloquante: boolean;
   autoValidationDelay: number;
@@ -95,6 +101,8 @@ export function ConfigPanel({
   initialThemeMode,
   initialThemes,
   initialGaugeAccompagnants,
+  initialFullPeriodNotice,
+  initialFullPeriodNoticeText,
   validationBloquante,
   autoValidationDelay,
   mgrNoticeMode,
@@ -113,6 +121,28 @@ export function ConfigPanel({
     startGaugeAcc(async () => {
       await setGaugeAccompagnantsAction(serviceId, v);
     });
+  }
+  const [fullPeriodNotice, setFullPeriodNotice] = useState(initialFullPeriodNotice);
+  const [, startFullNotice] = useTransition();
+  function toggleFullPeriodNotice(v: boolean) {
+    setFullPeriodNotice(v);
+    startFullNotice(async () => {
+      await setFullPeriodNoticeAction(serviceId, v);
+    });
+  }
+  // Texte personnalisé de l'alerte : auto-save DÉBOUNCÉ (saisie au clavier — un appel
+  // serveur coalescé après une courte inactivité, comme ServiceValidationSettings).
+  const [fullNoticeText, setFullNoticeText] = useState(initialFullPeriodNoticeText);
+  const fullNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [, startFullNoticeText] = useTransition();
+  function changeFullNoticeText(v: string) {
+    setFullNoticeText(v);
+    if (fullNoticeTimer.current) clearTimeout(fullNoticeTimer.current);
+    fullNoticeTimer.current = setTimeout(() => {
+      startFullNoticeText(async () => {
+        await setFullPeriodNoticeTextAction(serviceId, v);
+      });
+    }, 700);
   }
   const [rows, setRows] = useState<DemRow[]>(() =>
     initialRows.map((r, i) => ({
@@ -296,9 +326,56 @@ export function ConfigPanel({
           <GlobalRow
             label="Jauge — prise en compte des accompagnants"
             desc="Prendre en compte les accompagnants dans le calcul de la jauge des créneaux qui en ont une."
-            last
           >
             <Switch on={gaugeAccompagnants} onChange={toggleGaugeAccompagnants} />
+          </GlobalRow>
+
+          {/* Alerte « plus de place » : modale --warn côté usager quand plus aucune
+              occurrence de la période affichée n'est réservable (l'e-mail proposé
+              vient du référentiel Services, Administration > Configuration). Le
+              texte du message est personnalisable ; la ligne « contacter le
+              service » avec l'e-mail reste ajoutée automatiquement. */}
+          <GlobalRow
+            label="Alerte « plus de place »"
+            desc="À l'arrivée sur l'agenda ou sur une période, si plus aucun créneau de la période affichée n'est réservable, informe l'usager et l'invite à contacter le service (e-mail de contact du référentiel Services). Texte personnalisable ci-contre — vide, le message par défaut s'affiche."
+            align="start"
+            last
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: ".45rem",
+                paddingTop: ".5rem",
+              }}
+            >
+              <Switch on={fullPeriodNotice} onChange={toggleFullPeriodNotice} />
+              {fullPeriodNotice && (
+                <textarea
+                  value={fullNoticeText}
+                  maxLength={600}
+                  placeholder={
+                    "Nous sommes désolés : tous les créneaux de la période sont complets, il ne reste plus de place à réserver pour le moment."
+                  }
+                  onChange={(e) => changeFullNoticeText(e.target.value)}
+                  aria-label="Texte personnalisé de l'alerte « plus de place »"
+                  style={{
+                    width: 320,
+                    maxWidth: "100%",
+                    minHeight: 74,
+                    resize: "vertical",
+                    fontSize: ".76rem",
+                    lineHeight: 1.4,
+                    padding: ".4rem .5rem",
+                    borderRadius: "var(--rad-sm)",
+                    border: "1px solid var(--border)",
+                    background: "var(--surface1)",
+                    color: "var(--text)",
+                  }}
+                />
+              )}
+            </div>
           </GlobalRow>
         </section>
 
