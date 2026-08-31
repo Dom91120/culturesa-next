@@ -46,8 +46,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.1",
-    "@tailwindcss/postcss": "^4.3.1",
+    "@biomejs/biome": "^2.5.11",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.0",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.2.17",
@@ -56,12 +56,12 @@
     "cross-env": "^10.1.0",
     "docx": "^9.7.1",
     "dotenv": "^17.4.2",
-    "marked": "^18.0.5",
-    "prisma": "^7.9.1",
-    "tailwindcss": "^4.3.1",
-    "tsx": "^4.22.4",
+    "marked": "^18.0.11",
+    "prisma": "^7.10.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@11.5.0",
   "engines": {
