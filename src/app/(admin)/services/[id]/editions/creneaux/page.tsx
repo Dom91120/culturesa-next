@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { listOpenSlots, type OpenSlot } from "@/server/services/editions";
 import { ExerciceNav } from "../exercice-nav";
+import { ExportButton } from "../export-button";
 import { PrintButton } from "../print-button";
 import { resolveEditionExercice } from "../range";
 import { RupturesToggle } from "../ruptures-toggle";
@@ -77,6 +78,9 @@ export default async function EditionsCreneauxPage({
   const pdfHref = `/services/${id}/editions/pdf?kind=creneaux${
     selected ? `&exercice=${selected.id}` : ""
   }${withRuptures ? "&ruptures=1" : ""}`;
+  const csvHref = `/services/${id}/editions/export?kind=creneaux${
+    selected ? `&exercice=${selected.id}` : ""
+  }`;
 
   const linkBtn: React.CSSProperties = {
     fontSize: ".7rem",
@@ -133,6 +137,7 @@ export default async function EditionsCreneauxPage({
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
         >
           <RupturesToggle label="rupture par demandeur" />
+          <ExportButton href={csvHref} />
           <PrintButton iconOnly href={pdfHref} title="Imprimer (PDF)" />
         </div>
       </div>

@@ -174,12 +174,14 @@ pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶
 ### Éditions — listes et suivi
 
 L'onglet **Éditions** présente la **liste des inscrits** (les usagers ayant réservé sur
-l'exercice — identité, structure, niveau et contact ; les comptes anonymisés sont masqués par
-défaut), la **liste des créneaux ouverts** (l'offre de réservation du service : jour, horaires,
-type, période, places et demandeurs de chaque créneau, avec total et rupture par demandeur), le
+l'exercice — identité, structure, niveau, contact et date d'inscription ; tableau **triable par
+clic sur les en-têtes de colonnes** ; les comptes anonymisés sont masqués par défaut), la
+**liste des créneaux ouverts** (l'offre de réservation du service : jour, horaires, type,
+période, places et demandeurs de chaque créneau, avec total et rupture par demandeur), le
 tableau de **toutes les réservations** (période, date, créneau, demandeur, participant, thème,
-nombre d'enfants, statut, pointage) avec **export CSV**, une vue **Planning** hebdomadaire et la
-**feuille de pointage** (avec les motifs d'absence). Chaque écran s'imprime en **PDF**.
+nombre d'enfants, statut, pointage), une vue **Planning** hebdomadaire et la **feuille de
+pointage** (avec les motifs d'absence). Chaque écran s'imprime en **PDF**, et les listes
+(inscrits, créneaux ouverts, réservations) s'exportent en **CSV**.
 
 ![Liste des réservations (Éditions) et export CSV](img/07-editions-liste.png)
 

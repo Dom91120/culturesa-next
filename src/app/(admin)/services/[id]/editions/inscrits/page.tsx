@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { formatTel } from "@/lib/format";
 import { prisma } from "@/server/db";
-import { listInscrits } from "@/server/services/editions";
+import { type Inscrit, listInscrits } from "@/server/services/editions";
 import { AnonymisesToggle } from "../anonymises-toggle";
 import { ExerciceNav } from "../exercice-nav";
+import { ExportButton } from "../export-button";
 import { PrintButton } from "../print-button";
 import { resolveEditionExercice } from "../range";
 
@@ -18,7 +19,7 @@ export default async function EditionsInscritsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ exercice?: string; anonymises?: string }>;
+  searchParams: Promise<{ exercice?: string; anonymises?: string; tri?: string; dir?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -34,9 +35,51 @@ export default async function EditionsInscritsPage({
   const withAnonymized = sp.anonymises === "1";
   const inscrits = await listInscrits(id, selected?.periodIds, withAnonymized);
 
-  const pdfHref = `/services/${id}/editions/pdf?kind=inscrits${
-    selected ? `&exercice=${selected.id}` : ""
-  }${withAnonymized ? "&anonymises=1" : ""}`;
+  // Tri par clic sur les en-têtes : `tri` (colonne) + `dir` (asc par défaut), portés
+  // par l'URL — conservés par la navigation d'exercice (ExerciceNav garde les autres
+  // paramètres) et transmis au PDF (même vue imprimée). Défaut = identité.
+  const SORT_KEYS = ["identite", "structure", "niveau", "email", "tel", "inscription"] as const;
+  type SortKey = (typeof SORT_KEYS)[number];
+  const tri: SortKey = (SORT_KEYS as readonly string[]).includes(sp.tri ?? "")
+    ? (sp.tri as SortKey)
+    : "identite";
+  const dir = sp.dir === "desc" ? "desc" : "asc";
+  // Valeur triée = la valeur AFFICHÉE (structure avec repli demandeur, date en
+  // YYYY-MM-DD) ; départage identité pour un ordre stable.
+  const valOf = (u: Inscrit): string =>
+    tri === "identite"
+      ? `${u.nom} ${u.prenom}`
+      : tri === "structure"
+        ? u.structure || u.demandeur
+        : tri === "inscription"
+          ? u.inscritYmd
+          : u[tri];
+  inscrits.sort(
+    (a, b) =>
+      (valOf(a).localeCompare(valOf(b), "fr", { sensitivity: "base" }) ||
+        a.nom.localeCompare(b.nom) ||
+        a.prenom.localeCompare(b.prenom)) * (dir === "desc" ? -1 : 1),
+  );
+
+  // Lien d'un en-tête : re-clic sur la colonne active → inversion du sens.
+  const sortHref = (k: SortKey) => {
+    const p = new URLSearchParams();
+    if (selected) p.set("exercice", String(selected.id));
+    if (withAnonymized) p.set("anonymises", "1");
+    p.set("tri", k);
+    if (k === tri && dir === "asc") p.set("dir", "desc");
+    return `?${p.toString()}`;
+  };
+  const arrow = (k: SortKey) => (k === tri ? (dir === "asc" ? " ▲" : " ▼") : "");
+  const thLink: React.CSSProperties = { color: "inherit", textDecoration: "none" };
+
+  const viewParams = `${selected ? `&exercice=${selected.id}` : ""}${
+    withAnonymized ? "&anonymises=1" : ""
+  }`;
+  const pdfHref = `/services/${id}/editions/pdf?kind=inscrits${viewParams}&tri=${tri}${
+    dir === "desc" ? "&dir=desc" : ""
+  }`;
+  const csvHref = `/services/${id}/editions/export?kind=inscrits${viewParams}`;
 
   const linkBtn: React.CSSProperties = {
     fontSize: ".7rem",
@@ -93,6 +136,7 @@ export default async function EditionsInscritsPage({
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
         >
           <AnonymisesToggle />
+          <ExportButton href={csvHref} />
           <PrintButton iconOnly href={pdfHref} title="Imprimer (PDF)" />
         </div>
       </div>
@@ -105,11 +149,36 @@ export default async function EditionsInscritsPage({
             <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 820 }}>
               <thead>
                 <tr>
-                  <th style={{ width: "22%" }}>Identité</th>
-                  <th style={{ width: "26%" }}>Structure</th>
-                  <th style={{ width: "12%" }}>Niveau</th>
-                  <th style={{ width: "26%" }}>Mail</th>
-                  <th style={{ width: "14%" }}>Tél</th>
+                  <th style={{ width: "19%" }}>
+                    <a href={sortHref("identite")} style={thLink}>
+                      Identité{arrow("identite")}
+                    </a>
+                  </th>
+                  <th style={{ width: "22%" }}>
+                    <a href={sortHref("structure")} style={thLink}>
+                      Structure{arrow("structure")}
+                    </a>
+                  </th>
+                  <th style={{ width: "10%" }}>
+                    <a href={sortHref("niveau")} style={thLink}>
+                      Niveau{arrow("niveau")}
+                    </a>
+                  </th>
+                  <th style={{ width: "24%" }}>
+                    <a href={sortHref("email")} style={thLink}>
+                      Mail{arrow("email")}
+                    </a>
+                  </th>
+                  <th style={{ width: "13%" }}>
+                    <a href={sortHref("tel")} style={thLink}>
+                      Tél{arrow("tel")}
+                    </a>
+                  </th>
+                  <th style={{ width: "12%" }}>
+                    <a href={sortHref("inscription")} style={thLink}>
+                      Inscrit le{arrow("inscription")}
+                    </a>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -122,6 +191,7 @@ export default async function EditionsInscritsPage({
                     <td style={tdNoWrap}>{u.niveau || "—"}</td>
                     <td style={tdNoWrap}>{u.email || "—"}</td>
                     <td style={tdNoWrap}>{formatTel(u.tel)}</td>
+                    <td style={tdNoWrap}>{u.inscritLe}</td>
                   </tr>
                 ))}
               </tbody>

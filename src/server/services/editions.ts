@@ -152,6 +152,8 @@ export type Inscrit = {
   niveau: string;
   email: string;
   tel: string;
+  inscritLe: string; // date de création du compte, « 18/06/2026 »
+  inscritYmd: string; // la même en YYYY-MM-DD (clé de tri)
 };
 
 /**
@@ -182,6 +184,7 @@ export async function listInscrits(
           email: true,
           tel: true,
           niveau: true,
+          createdAt: true,
           structure: { select: { label: true } },
           demandeur: { select: { label: true } },
         },
@@ -197,6 +200,9 @@ export async function listInscrits(
       niveau: r.user.niveau ?? "",
       email: r.user.email ?? "",
       tel: r.user.tel ?? "",
+      // Date d'inscription = création du compte usager.
+      inscritLe: dateFmt.format(r.user.createdAt),
+      inscritYmd: r.user.createdAt.toISOString().slice(0, 10),
     }))
     .sort((a, b) => a.nom.localeCompare(b.nom) || a.prenom.localeCompare(b.prenom));
 }
