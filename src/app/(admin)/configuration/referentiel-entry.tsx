@@ -5,8 +5,11 @@ import { ModalOverlay } from "@/components/agenda-shared";
 
 /**
  * Entrée du panneau Référentiels (page Configuration) : un bouton (titre + sous-titre)
- * qui ouvre une MODALE (fermeture par Échap + clic sur le fond) hébergeant un éditeur en
- * mode tampon. Mutualise les wrappers services/demandeurs/structures/niveaux (audit R2).
+ * qui ouvre une MODALE hébergeant un éditeur en mode tampon. Mutualise les wrappers
+ * services/demandeurs/structures/niveaux (audit R2). Modale de FORMULAIRE : PAS de
+ * fermeture par Échap ni clic sur le fond (une saisie non enregistrée — ex. l'e-mail
+ * de contact d'un service — était jetée sans avertissement, retour Dom 2026-08-31) ;
+ * on ferme par « Fermer », « Annuler » ou ×.
  *
  * `children` est un render-prop recevant la fonction de fermeture, pour la passer en
  * `onClose` à l'éditeur. Les wrappers RESTENT des composants client minces (la page
@@ -50,6 +53,7 @@ export function ReferentielEntry({
       {open && (
         <ModalOverlay
           onClose={close}
+          dismissOnBackdrop={false}
           boxStyle={{ maxWidth, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
         >
           <div className="modal-title" style={{ marginBottom: "0.75rem" }}>

@@ -20,7 +20,8 @@ import { ICON_CATEGORIES } from "./legacy-icons";
 type Initial = { id: string; label: string; icon: string | null; contactEmail: string | null };
 type Row = { id: string | null; label: string; icon: string | null; contactEmail: string };
 
-const GRID = "40px 1.1fr 1fr 80px";
+// Colonne Action réduite à la largeur de son titre (retour Dom 2026-08-31).
+const GRID = "40px 1.1fr 1fr 48px";
 
 /** `ActionState` est nullable (contrat `useActionState`) ; `useBufferedRows` attend un résultat non-nul. */
 function toRefResult(res: ActionState): RefActionResult {
@@ -142,6 +143,9 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
                   className="dem-ghost"
                   value={r.label}
                   placeholder="Nom du service"
+                  // Saisie gelée pendant l'enregistrement : le resync post-save
+                  // (router.refresh) écraserait une frappe faite dans l'intervalle.
+                  disabled={saving}
                   onChange={(e) => patch(r.key, { label: e.target.value })}
                   style={{
                     fontSize: ".8rem",
@@ -162,6 +166,7 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
                   className="dem-ghost"
                   value={r.contactEmail}
                   placeholder="E-mail de contact"
+                  disabled={saving}
                   onChange={(e) => patch(r.key, { contactEmail: e.target.value })}
                   style={{
                     fontSize: ".78rem",
