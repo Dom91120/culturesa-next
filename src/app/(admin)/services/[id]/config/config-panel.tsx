@@ -356,7 +356,7 @@ export function ConfigPanel({
                   value={fullNoticeText}
                   maxLength={600}
                   placeholder={
-                    "Nous sommes désolés : tous les créneaux de la période sont complets, il ne reste plus de place à réserver pour le moment."
+                    "Toutes les séances de cette période sont complètes. De nouvelles places peuvent se libérer en cas d'annulation : n'hésitez pas à revenir consulter l'agenda."
                   }
                   onChange={(e) => changeFullNoticeText(e.target.value)}
                   aria-label="Texte personnalisé de l'alerte « plus de place »"

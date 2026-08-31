@@ -3946,7 +3946,7 @@ export function UserAgendaGrid({
               }}
             >
               {service.fullPeriodNoticeText?.trim() ||
-                "Nous sommes désolés : tous les créneaux de la période sont complets, il ne reste plus de place à réserver pour le moment."}
+                "Toutes les séances de cette période sont complètes. De nouvelles places peuvent se libérer en cas d'annulation : n'hésitez pas à revenir consulter l'agenda."}
             </p>
             <p style={{ fontSize: ".85rem", lineHeight: 1.55, margin: 0 }}>
               {service.contactEmail ? (
