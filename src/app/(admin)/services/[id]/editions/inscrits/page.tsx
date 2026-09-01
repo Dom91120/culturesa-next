@@ -149,7 +149,7 @@ export default async function EditionsInscritsPage({
             <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 820 }}>
               <thead>
                 <tr>
-                  <th style={{ width: "19%" }}>
+                  <th style={{ width: "22%" }}>
                     <a href={sortHref("identite")} style={thLink}>
                       Identité{arrow("identite")}
                     </a>
@@ -164,7 +164,7 @@ export default async function EditionsInscritsPage({
                       Niveau{arrow("niveau")}
                     </a>
                   </th>
-                  <th style={{ width: "24%" }}>
+                  <th style={{ width: "22%" }}>
                     <a href={sortHref("email")} style={thLink}>
                       Mail{arrow("email")}
                     </a>
