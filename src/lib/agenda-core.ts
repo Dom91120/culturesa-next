@@ -535,6 +535,7 @@ export function makeDayClosure(args: {
   isHolidayDay: (dayKey: string) => boolean;
   isSchoolHolidayDay: (dayKey: string) => boolean;
   outOfPeriodCls: (dayKey: string) => string;
+  closedDayTip: (dayKey: string) => string | undefined;
 } {
   const { active, mondayStr, coveringPeriod, openingForYmd, schoolHolidays } = args;
   const isDayDisabled = (dayKey: string): boolean => {
@@ -579,7 +580,15 @@ export function makeDayClosure(args: {
     if (!isDayDisabled(dayKey)) return "";
     return isHolidayDay(dayKey) || isSchoolHolidayDay(dayKey) ? " is-holiday" : " is-out-of-period";
   };
-  return { isDayDisabled, isHolidayDay, isSchoolHolidayDay, outOfPeriodCls };
+  // Libellé de l'info-bulle d'un jour hachuré (férié prioritaire sur vacances,
+  // comme la classe) ; « Hors période » couvre aussi le jour inactif de l'exercice.
+  const closedDayTip = (dayKey: string): string | undefined => {
+    if (!isDayDisabled(dayKey)) return undefined;
+    if (isHolidayDay(dayKey)) return "Jour férié";
+    if (isSchoolHolidayDay(dayKey)) return "Vacances scolaires";
+    return "Hors période";
+  };
+  return { isDayDisabled, isHolidayDay, isSchoolHolidayDay, outOfPeriodCls, closedDayTip };
 }
 
 /**

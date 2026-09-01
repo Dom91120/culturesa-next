@@ -17,6 +17,7 @@ export function AgendaWeekHeader({
   realweek,
   weekDateByDay,
   outOfPeriodCls,
+  dayTip,
 }: {
   days: string[];
   abMode: boolean;
@@ -24,6 +25,9 @@ export function AgendaWeekHeader({
   realweek: boolean;
   weekDateByDay: Record<string, string>;
   outOfPeriodCls: (d: string) => string;
+  // Info-bulle d'un jour hachuré (closedDayTip, agenda-core) : « Jour férié »,
+  // « Vacances scolaires » ou « Hors période » ; undefined = pas d'info-bulle.
+  dayTip?: (d: string) => string | undefined;
 }) {
   return (
     <>
@@ -34,7 +38,7 @@ export function AgendaWeekHeader({
         {abMode && effectiveWeek ? effectiveWeek : "🕘"}
       </div>
       {days.map((d) => (
-        <div key={d} className={`agenda-header-cell${outOfPeriodCls(d)}`}>
+        <div key={d} className={`agenda-header-cell${outOfPeriodCls(d)}`} data-tip={dayTip?.(d)}>
           {DAY_NAMES[d] ?? d}
           {realweek && weekDateByDay[d] && (
             <span className="agenda-day-sub">{weekDateByDay[d]}</span>
@@ -158,7 +162,11 @@ export function AgendaDayBackground({
         />
       ))}
       {hasLunch && lh > 0 && (
-        <div className="agenda-lunch-band" style={{ top: ltop, height: lh }} />
+        <div
+          className="agenda-lunch-band"
+          data-tip="Pause méridienne"
+          style={{ top: ltop, height: lh }}
+        />
       )}
     </>
   );

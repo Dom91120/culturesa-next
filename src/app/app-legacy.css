@@ -485,6 +485,7 @@ main {
   text-align: center;
 }
 .sidebar-tagline {
+  font-weight: bold;
   font-size: 0.58rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2308,7 +2309,10 @@ textarea.theme-pending:focus::placeholder {
     rgba(127, 127, 127, 0.08) 6px,
     rgba(127, 127, 127, 0.08) 12px
   );
-  pointer-events: none;
+  /* Doit recevoir le survol (info-bulle data-tip « Pause méridienne ») : les gestes
+     de colonne (glisser-créer, clic) délèguent par position (clientY), pas par cible,
+     donc la bande peut être la cible sans les gêner. Dans un jour fermé, elle hérite
+     du pointer-events:none de la colonne (l'overlay du jour prime). */
 }
 
 .agenda-block {

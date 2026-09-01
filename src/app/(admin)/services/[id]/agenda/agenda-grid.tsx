@@ -772,7 +772,7 @@ export function AgendaGrid({
   // Jour fermé / férié / vacances (Semaine réelle) : prédicats partagés
   // (makeDayClosure, agenda-core). Mémoïsé : identités stables entre rendus tant que
   // la période ne change pas → permet la mémo des blocs par jour (cf. dayBlockEls).
-  const { isDayDisabled, outOfPeriodCls } = useMemo(
+  const { isDayDisabled, outOfPeriodCls, closedDayTip } = useMemo(
     () =>
       makeDayClosure({
         active: true,
@@ -3573,6 +3573,7 @@ export function AgendaGrid({
               realweek={true}
               weekDateByDay={weekDateByDay}
               outOfPeriodCls={outOfPeriodCls}
+              dayTip={closedDayTip}
             />
 
             {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
@@ -3591,6 +3592,8 @@ export function AgendaGrid({
                   // data-allday-daykey : repère la cellule sous le curseur pendant le
                   // glisser-créer horizontal (cf. onAllDayCreateMouseDown / écouteurs).
                   "data-allday-daykey": d,
+                  // Jour hachuré : info-bulle « Jour férié / Vacances scolaires / Hors période ».
+                  "data-tip": closedDayTip(d),
                   style: {
                     cursor: isDayDisabled(d) ? "not-allowed" : creationMode ? "pointer" : "default",
                   },
@@ -3809,6 +3812,17 @@ export function AgendaGrid({
                       </div>
                     );
                   })()}
+                {/* Jour fermé (hachuré) : la colonne est en pointer-events:none, le survol
+                  n'atteint donc jamais l'info-bulle déléguée — cet overlay transparent
+                  ré-active les événements pour porter le data-tip (« Jour férié / Vacances
+                  scolaires / Hors période »). Les gestes restent neutralisés : les handlers
+                  de colonne (mousedown/dragOver/drop) guardent tous isDayDisabled. */}
+                {isDayDisabled(d) && (
+                  <div
+                    data-tip={closedDayTip(d)}
+                    style={{ position: "absolute", inset: 0, pointerEvents: "auto", zIndex: 5 }}
+                  />
+                )}
               </div>
             ))}
           </div>

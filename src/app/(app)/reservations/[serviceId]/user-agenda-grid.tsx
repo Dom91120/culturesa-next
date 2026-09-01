@@ -1328,7 +1328,7 @@ export function UserAgendaGrid({
   // agenda-core). La politique vacances du DEMANDEUR est déjà combinée (∧) dans
   // openingForYmd. Mémoïsé : identités stables requises pour mémoïser `occupiedQ`
   // (sinon recalcul à chaque rendu, donc à chaque survol/drag).
-  const { isDayDisabled, outOfPeriodCls } = useMemo(
+  const { isDayDisabled, outOfPeriodCls, closedDayTip } = useMemo(
     () =>
       makeDayClosure({
         active: true,
@@ -3432,6 +3432,7 @@ export function UserAgendaGrid({
               realweek={true}
               weekDateByDay={weekDateByDay}
               outOfPeriodCls={outOfPeriodCls}
+              dayTip={closedDayTip}
             />
 
             {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
@@ -3440,7 +3441,11 @@ export function UserAgendaGrid({
               vides réservables) : le compactage « sans créneau » ne masque que des
               heures vides, pas les créneaux. */}
             {displayDays.some((d) => dayBlocks(d).some((b) => b.isAllDay)) && (
-              <AgendaAllDayRow days={displayDays} outOfPeriodCls={outOfPeriodCls}>
+              <AgendaAllDayRow
+                days={displayDays}
+                outOfPeriodCls={outOfPeriodCls}
+                cellProps={(d) => ({ "data-tip": closedDayTip(d) })}
+              >
                 {(d) => dayBlockEls.allday.get(d)}
               </AgendaAllDayRow>
             )}
@@ -3492,6 +3497,17 @@ export function UserAgendaGrid({
                   sans créneau » ne compacte que des heures, pas des créneaux. Blocs
                   mémoïsés via dayBlockEls (perf). */}
                 {dayBlockEls.timed.get(d)}
+                {/* Jour fermé (hachuré) : la colonne est en pointer-events:none, le survol
+                  n'atteint donc jamais l'info-bulle déléguée — cet overlay transparent
+                  ré-active les événements pour porter le data-tip (« Jour férié / Vacances
+                  scolaires / Hors période »). Le clic reste neutralisé : onClick guarde
+                  isDayDisabled. */}
+                {isDayDisabled(d) && (
+                  <div
+                    data-tip={closedDayTip(d)}
+                    style={{ position: "absolute", inset: 0, pointerEvents: "auto", zIndex: 5 }}
+                  />
+                )}
               </div>
             ))}
           </div>
