@@ -159,7 +159,7 @@ export default async function EditionsInscritsPage({
                       Structure{arrow("structure")}
                     </a>
                   </th>
-                  <th style={{ width: "10%" }}>
+                  <th style={{ width: 70 }}>
                     <a href={sortHref("niveau")} style={thLink}>
                       Niveau{arrow("niveau")}
                     </a>
@@ -169,12 +169,12 @@ export default async function EditionsInscritsPage({
                       Mail{arrow("email")}
                     </a>
                   </th>
-                  <th style={{ width: "13%" }}>
+                  <th style={{ width: 80 }}>
                     <a href={sortHref("tel")} style={thLink}>
                       Tél{arrow("tel")}
                     </a>
                   </th>
-                  <th style={{ width: "12%" }}>
+                  <th style={{ width: 60 }}>
                     <a href={sortHref("inscription")} style={thLink}>
                       Inscrit le{arrow("inscription")}
                     </a>
