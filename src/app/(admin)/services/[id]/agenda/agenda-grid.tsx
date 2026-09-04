@@ -164,6 +164,9 @@ const BATCH_DISMISS_MS = 10000;
 // .ex-arrow`. Réglé ici et non sur la classe — celle-ci sert aussi aux flèches
 // d'exercice, juste à côté, qui gardent leur taille.
 const ARROW_STYLE: React.CSSProperties = { fontSize: "1rem", padding: "0 .2rem" };
+// Largeur (px) des bandes de bord de la grille qui font défiler la semaine pendant un
+// glisser de réservation (cf. onWrapDragOver).
+const DRAG_EDGE_PX = 28;
 
 // Champs date de la barre de création (plage d'un créneau récurrent) : même gabarit
 // compact que le champ Capacité voisin, largeur au besoin réel d'une date.
@@ -767,6 +770,143 @@ export function AgendaGrid({
     weekHasDeps: [bookedSlotDates, recurAbByPeriod, periods, modes.abMode],
     setAnchorMonday,
   });
+  // ── Glisser une réservation vers une AUTRE semaine (Dom 2026-09-04) ──────────
+  // Pendant un glisser HTML5 de réservation, survoler ◂ / ▸ fait défiler la semaine
+  // après un court délai, puis à cadence régulière tant que le survol dure ; le dépôt
+  // se fait ensuite sur un créneau de la semaine atteinte (mêmes règles que dans la
+  // semaine d'origine). Bornes = celles des flèches (canWeekPrev/Next).
+  // draggingId miroir en ref (lu au moment de l'événement, hors déps de renderBlock —
+  // audit perf 2026-07-19) ; déclaré ici car les flèches ◂ ▸ l'utilisent aussi.
+  const draggingIdRef = useFreshRef(draggingId);
+  const dragWeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragWeekArmed, setDragWeekArmed] = useState<-1 | 1 | null>(null);
+  const dragWeekArmedRef = useFreshRef(dragWeekArmed);
+  const shiftWeekRef = useFreshRef(shiftWeek);
+  const canWeekRef = useFreshRef({ prev: canWeekPrev, next: canWeekNext });
+  const clearDragWeek = useCallback(() => {
+    if (dragWeekTimerRef.current != null) clearTimeout(dragWeekTimerRef.current);
+    dragWeekTimerRef.current = null;
+    setDragWeekArmed(null);
+  }, []);
+  const armDragWeek = (delta: -1 | 1) => {
+    if (draggingIdRef.current == null) return;
+    if (dragWeekTimerRef.current != null) {
+      if (dragWeekArmedRef.current === delta) return;
+      // Changement de sens (bord gauche → bord droit) : on ré-arme.
+      clearDragWeek();
+    }
+    setDragWeekArmed(delta);
+    const tick = (first: boolean) => {
+      dragWeekTimerRef.current = setTimeout(
+        () => {
+          const can = delta < 0 ? canWeekRef.current.prev : canWeekRef.current.next;
+          if (draggingIdRef.current == null || !can) {
+            clearDragWeek();
+            return;
+          }
+          shiftWeekRef.current(delta);
+          tick(false);
+        },
+        first ? 450 : 900,
+      );
+    };
+    tick(true);
+  };
+  // Le changement de semaine DÉMONTE le badge source : son `dragend` ne remonte plus
+  // (nœud détaché) et draggingId resterait armé après un glisser abandonné (Échap,
+  // dépôt hors cible). Repli : pendant un glisser natif, aucun mousemove n'est délivré
+  // — le premier qui arrive signe donc la fin du geste. Garde de 300 ms contre un
+  // mousemove encore en file juste après le dragstart.
+  useEffect(() => {
+    if (draggingId == null) {
+      clearDragWeek();
+      return;
+    }
+    const startedAt = Date.now();
+    const onMove = () => {
+      if (Date.now() - startedAt < 300) return;
+      setDraggingId(null);
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [draggingId, clearDragWeek]);
+  // Bords GAUCHE / DROIT de la grille (bande de DRAG_EDGE_PX) : mêmes points chauds que
+  // les flèches — survoler le bord pendant le glisser fait défiler la semaine. Les
+  // bandes sont rendues en simple repère visuel (pointer-events none) : la détection se
+  // fait sur le conteneur .planning-wrap, à partir de la position du pointeur.
+  const onWrapDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (draggingIdRef.current == null) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    if (x < DRAG_EDGE_PX) armDragWeek(-1);
+    else if (x > r.width - DRAG_EDGE_PX) armDragWeek(1);
+    else if (dragWeekArmedRef.current != null) clearDragWeek();
+  };
+  const onWrapDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    clearDragWeek();
+  };
+  // Onglets de PÉRIODE : survoler un onglet pendant le glisser bascule sur cette période
+  // (même effet que le clic : période figée + semaine ancrée sur son début) après le
+  // même délai d'armement ; pas de répétition. Onglet allumé pendant l'armement.
+  const dragPeriodTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragPeriodArmed, setDragPeriodArmed] = useState<number | null>(null);
+  const dragPeriodArmedRef = useFreshRef(dragPeriodArmed);
+  const clearDragPeriod = useCallback(() => {
+    if (dragPeriodTimerRef.current != null) clearTimeout(dragPeriodTimerRef.current);
+    dragPeriodTimerRef.current = null;
+    setDragPeriodArmed(null);
+  }, []);
+  const armDragPeriod = (p: Period) => {
+    if (draggingIdRef.current == null || !p.dateStart) return;
+    if (dragPeriodArmedRef.current === p.id) return;
+    clearDragPeriod();
+    setDragPeriodArmed(p.id);
+    const dateStart = p.dateStart;
+    dragPeriodTimerRef.current = setTimeout(() => {
+      dragPeriodTimerRef.current = null;
+      if (draggingIdRef.current == null) {
+        setDragPeriodArmed(null);
+        return;
+      }
+      setRwPeriodId(p.id);
+      setAnchorMonday(ymd(mondayOf(new Date(`${dateStart}T00:00:00`))));
+    }, 450);
+  };
+  useEffect(() => {
+    if (draggingId == null) clearDragPeriod();
+  }, [draggingId, clearDragPeriod]);
+  const dragPeriodProps = (p: Period) => ({
+    onDragEnter: () => armDragPeriod(p),
+    onDragOver: (e: React.DragEvent) => {
+      if (draggingIdRef.current == null) return;
+      e.preventDefault();
+      armDragPeriod(p);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+      clearDragPeriod();
+    },
+  });
+  // Props communes des flèches ◂ ▸ pendant un glisser de réservation.
+  const dragWeekProps = (delta: -1 | 1) => ({
+    onDragEnter: () => armDragWeek(delta),
+    onDragOver: (e: React.DragEvent) => {
+      if (draggingIdRef.current == null) return;
+      e.preventDefault();
+      armDragWeek(delta);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      // Ignore les sorties vers un descendant (texte du bouton).
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+      clearDragWeek();
+    },
+    style:
+      dragWeekArmed === delta
+        ? { ...ARROW_STYLE, background: "var(--accent)", color: "#fff", borderRadius: 4 }
+        : ARROW_STYLE,
+  });
+
   // Libellé daté de chaque jour de la semaine réelle, par dayKey.
   const weekDateByDay = weekDateLabels(mondayStr, days);
   // Jour fermé / férié / vacances (Semaine réelle) : prédicats partagés
@@ -2347,7 +2487,6 @@ export function AgendaGrid({
   // restent frais SANS que ces états transitoires soient en déps de renderBlock (sinon
   // chaque start/end de glisser et chaque copier/couper re-rendait les ~100 blocs).
   // L'atténuation visuelle du badge glissé/coupé est posée en DOM direct (cf. data-bkid).
-  const draggingIdRef = useFreshRef(draggingId);
   const copiedBookingRef = useFreshRef(copiedBooking);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: les handlers d'événements passent par blockApiRef (useFreshRef, hors déps — lus au moment de l'événement) ; les entrées réelles lues AU RENDU sont listées à la main en fin de callback.
@@ -3039,12 +3178,15 @@ export function AgendaGrid({
             Petits triangles ◂ ▸ (et non ◀ ▶) : même dessin, moins large — cette barre
             partage sa ligne avec le titre et le sélecteur de période. */}
         <div className="periode-nav" style={{ margin: "0 auto", gap: ".1rem" }}>
+          {/* Pendant un glisser de réservation, survoler une flèche fait défiler la
+              semaine (dragWeekProps) ; un bouton désactivé ne reçoit pas les événements
+              de glisser, ce qui borne le défilement comme le clic. */}
           <button
             type="button"
             className="ex-arrow"
-            style={ARROW_STYLE}
             disabled={!canWeekPrev}
             onClick={() => canWeekPrev && shiftWeek(-1)}
+            {...dragWeekProps(-1)}
           >
             ◂
           </button>
@@ -3090,9 +3232,9 @@ export function AgendaGrid({
           <button
             type="button"
             className="ex-arrow"
-            style={ARROW_STYLE}
             disabled={!canWeekNext}
             onClick={() => canWeekNext && shiftWeek(1)}
+            {...dragWeekProps(1)}
           >
             ▸
           </button>
@@ -3406,7 +3548,15 @@ export function AgendaGrid({
                 key={p.id}
                 type="button"
                 className={`period-btn ${active ? "active" : ""}`}
-                style={{ "--period-color": p.color } as React.CSSProperties}
+                style={
+                  {
+                    "--period-color": p.color,
+                    // Survolé pendant un glisser de réservation (dragPeriodProps).
+                    ...(dragPeriodArmed === p.id
+                      ? { outline: "2px solid var(--accent)", outlineOffset: 1 }
+                      : {}),
+                  } as React.CSSProperties
+                }
                 onClick={() => {
                   // Onglet choisi = source de vérité : on fige la période ET on ancre la
                   // semaine sur son début (cf. legacy _pickedP).
@@ -3415,6 +3565,7 @@ export function AgendaGrid({
                     setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
                   }
                 }}
+                {...dragPeriodProps(p)}
               >
                 <span className="period-badge" />
                 {[p.etiquette, p.label].filter(Boolean).join(" · ")}
@@ -3568,7 +3719,45 @@ export function AgendaGrid({
         </div>
       </div>
 
-      <div className="planning-wrap">
+      <div
+        className="planning-wrap"
+        style={{ position: "relative" }}
+        onDragOver={onWrapDragOver}
+        onDragLeave={onWrapDragLeave}
+      >
+        {/* Bandes de bord visibles pendant un glisser de réservation : repère des points
+            chauds « semaine précédente / suivante » (allumées quand armées). */}
+        {draggingId != null &&
+          days.length > 0 &&
+          ([-1, 1] as const).map((delta) => (
+            <div
+              key={delta}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                ...(delta < 0 ? { left: 0 } : { right: 0 }),
+                width: DRAG_EDGE_PX,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.1rem",
+                // Couleur d'accent déclinée en transparence : discrète au repos, franche
+                // quand la bande est armée (essai --sidebar-bg écarté, Dom 2026-09-04).
+                color: dragWeekArmed === delta ? "#fff" : "var(--muted)",
+                background:
+                  dragWeekArmed === delta
+                    ? "color-mix(in srgb, var(--accent) 75%, transparent)"
+                    : "color-mix(in srgb, var(--accent) 12%, transparent)",
+                borderRadius: 6,
+                pointerEvents: "none",
+                zIndex: 6,
+              }}
+            >
+              {delta < 0 ? "◂" : "▸"}
+            </div>
+          ))}
         {/* Aucune colonne de jour (semaine hors période) : le squelette de grille n'a aucun
             sens (colonne horaire orpheline) — on affiche un état vide explicite à la place. */}
         {days.length === 0 ? (

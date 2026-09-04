@@ -189,7 +189,10 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   séance pose directement **Absent**.
 
 > 💡 Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
-> vers un autre créneau pour la déplacer.
+> vers un autre créneau pour la déplacer. Pour la déposer dans une **autre semaine**, survolez la
+> flèche ◂ ou ▸, ou le **bord gauche ou droit** de la grille, pendant le glisser : l'agenda change
+> de semaine, puis déposez la réservation. Survoler un **onglet de période** bascule de même sur
+> cette période.
 
 L'agenda affiche une **semaine datée** : créneaux récurrents et ponctuels, réservations et
 pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶ et onglets de période).

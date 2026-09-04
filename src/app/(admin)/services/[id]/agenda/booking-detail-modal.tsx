@@ -374,6 +374,8 @@ export function BookingDetailModal({
                   padding: ".1rem .3rem",
                   fontSize: ".72rem",
                   lineHeight: 1.2,
+                  // Désactivé (case décochée) : même gris atténué que la phrase.
+                  color: absent ? undefined : "var(--muted)",
                 }}
               />
             );
