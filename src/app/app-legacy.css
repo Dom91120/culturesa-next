@@ -1080,7 +1080,9 @@ textarea {
   margin-bottom: 0.75rem;
 }
 .period-btn {
-  padding: 0.4rem 1rem;
+  /* Centrage OPTIQUE : la masse des lettres est au-dessus du centre géométrique →
+     1px de plus en haut, 1px de moins en bas (hauteur inchangée) — Dom 2026-09-04. */
+  padding: calc(0.4rem + 1px) 1rem calc(0.4rem - 1px);
   border: 1px solid var(--border);
   border-radius: 99px;
   background: transparent;
@@ -2193,7 +2195,8 @@ textarea.theme-pending:focus::placeholder {
   margin: 0;
 }
 #agenda-period-tabs .period-btn {
-  padding: 0.16rem 0.44rem;
+  /* Même centrage optique que la règle de base (+1px haut / −1px bas). */
+  padding: calc(0.16rem + 1px) 0.44rem calc(0.16rem - 1px);
   font-size: 0.66rem;
 }
 /* Checkboxes Mode validation / Mode pointage plus compactes dans l'agenda :

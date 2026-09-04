@@ -3502,26 +3502,50 @@ export function UserAgendaGrid({
             Aide « Prévenir d'une absence » : bouton purement INFORMATIF (la saisie se fait
             sur le badge de la réservation concernée) — explique la procédure. Aligné à
             droite de la ligne des onglets, sous l'impression (retour Dom 2026-09-04).
-            Masqué sur mobile comme les options de la ligne de titre. */}
-        {!isMobile && (
+            Sur mobile : icône seule, sans cadre ni texte. */}
+        {isMobile ? (
+          // Mobile : l'icône SEULE, sans cadre ni texte (le libellé reste en aria-label et
+          // en infobulle) — Dom 2026-09-04.
+          <button
+            type="button"
+            data-tip="Prévenir d'une absence"
+            aria-label="Prévenir d'une absence"
+            style={{
+              marginLeft: "auto",
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              lineHeight: 0,
+            }}
+            onClick={() => setAbsenceHelpOpen(true)}
+          >
+            <img src="/absence.svg" width={24} height={24} alt="" aria-hidden="true" />
+          </button>
+        ) : (
           <button
             type="button"
             className="btn btn-ghost"
             style={{
               marginLeft: "auto",
-              padding: ".22rem .6rem",
+              padding: ".15rem .4rem .15rem .6rem",
               fontSize: ".66rem",
               whiteSpace: "nowrap",
               display: "inline-flex",
               alignItems: "center",
-              gap: ".35rem",
+              gap: ".4rem",
             }}
             onClick={() => setAbsenceHelpOpen(true)}
           >
-            {/* Icône SVG fournie par Dom (public/absence.svg) — rendu identique sur toutes
-                les plateformes, comme le calendrier (CalendarGlyph). */}
-            <img src="/absence.svg" width={16} height={16} alt="" aria-hidden="true" />
-            Prévenir d'une absence
+            {/* Texte à GAUCHE, icône à droite (Dom 2026-09-04). Icône SVG fournie par Dom
+                (public/absence.svg) — rendu identique sur toutes les plateformes, comme le
+                calendrier (CalendarGlyph) ; 24 px. */}
+            {/* Centrage OPTIQUE sur l'icône : la masse des lettres est au-dessus du
+                centre géométrique → texte descendu de 1px. */}
+            <span style={{ position: "relative", top: 1 }}>Prévenir d'une absence</span>
+            <img src="/absence.svg" width={24} height={24} alt="" aria-hidden="true" />
           </button>
         )}
       </div>
