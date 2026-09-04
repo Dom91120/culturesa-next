@@ -2,11 +2,31 @@
 
 import { useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import {
+  absencePrevenueDateFr,
+  absencePrevenueLabel,
+  absencePrevenueYmd,
+  ymd,
+} from "@/lib/agenda-core";
 import { formatTel } from "@/lib/format";
-import { setBookingPointageAction, updateBookingDetailAction } from "./actions";
+import {
+  setBookingAbsenceAction,
+  setBookingPointageAction,
+  updateBookingDetailAction,
+} from "./actions";
 import { plural } from "./agenda-format";
 import type { Booking } from "./agenda-grid";
 import { OccurrencesField } from "./occurrences-field";
+
+/**
+ * Le bloc « Absence prévenue » n'est pas gouverné par `readOnly` (qui couvre la
+ * consultation d'une PARENTE récurrente ou d'une séance pointée) : sur une occurrence
+ * datée non pointée, `readOnly` est faux — on ne dépend donc que de la nature de la
+ * réservation (jamais sur une parente, toujours identifiée par l'absence de date).
+ */
+function readOnlyAbsence(_readOnly: boolean, b: { bookingType: string }): boolean {
+  return b.bookingType === "recurring";
+}
 
 // Titre d'un champ en lecture seule (≠ <label>, qui doit cibler un contrôle).
 const FIELD_TITLE_STYLE: React.CSSProperties = {
@@ -24,6 +44,9 @@ const FIELD_TITLE_STYLE: React.CSSProperties = {
  * - Thème : champ libre (themesMode "libre") ou <select> (themesMode "liste").
  * - Verrou : une réservation pointée n'est pas modifiable (édition désactivée) ; SEUL le
  *   motif d'absence reste saisissable (le pointage n'est pas gouverné par ce verrou).
+ * - Absence PRÉVENUE (cf. services/booking-absence) : sur une SÉANCE datée à venir non
+ *   pointée, le gestionnaire prévenu par l'usager coche « Absence prévenue » (+ motif
+ *   facultatif) ; enregistré par le bouton « Enregistrer » comme les autres champs.
  * - Boutons : uniquement ceux du FORMULAIRE (Enregistrer / Annuler / Supprimer, selon les
  *   droits). Valider/dévalider et pointer passent EXCLUSIVEMENT par les modes validation
  *   et pointage de la grille (décision Dom 2026-08-29 — plus de rangée d'actions ici).
@@ -46,6 +69,7 @@ export function BookingDetailModal({
   occurrenceDates,
   slotStart,
   slotEnd,
+  occurrenceYmd,
   readOnly,
   canEdit,
   editBookingId,
@@ -64,6 +88,9 @@ export function BookingDetailModal({
   occurrenceDates: string[];
   slotStart: string;
   slotEnd: string;
+  // Date (YYYY-MM-DD) de la SÉANCE si la fiche porte une occurrence datée (miroir ou
+  // ponctuelle) ; null sur une parente récurrente → pas de bloc « Absence prévenue ».
+  occurrenceYmd: string | null;
   readOnly: boolean;
   // Participants + thème modifiables (indépendant de `readOnly`).
   canEdit: boolean;
@@ -84,16 +111,31 @@ export function BookingDetailModal({
   // Motif d'absence : champ du formulaire, enregistré par le bouton « Enregistrer »
   // comme les autres — n'existe que sur une occurrence pointée absente.
   const [motif, setMotif] = useState(booking.pointageMotif);
+  // Absence prévenue à l'avance (case à cocher) — état initial = signalement en base.
+  const [absent, setAbsent] = useState(booking.absencePrevenue != null);
+  // Date à laquelle l'usager a prévenu (saisie gestionnaire, a posteriori possible) :
+  // celle du signalement existant, sinon aujourd'hui.
+  const todayYmd = ymd(new Date());
+  const [prevenuLe, setPrevenuLe] = useState(
+    booking.absencePrevenue ? absencePrevenueYmd(booking.absencePrevenue) : todayYmd,
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const locked = booking.pointage != null;
   // Édition effective des participants / du thème.
   const editable = canEdit && !locked;
+  // Absence prévenue : déclarable / retirable sur une séance datée NON pointée, passée
+  // ou non (le gestionnaire consigne aussi a posteriori qu'il avait été prévenu) — mêmes
+  // règles que le serveur (assertAbsenceDeclarable, allowPast). Une fois la séance
+  // pointée, le signalement reste affiché mais figé.
+  const absenceEditable =
+    !readOnlyAbsence(readOnly, booking) && occurrenceYmd != null && booking.pointage == null;
   // Motif saisissable dès que la séance est absente : le pointage (et son motif) n'est
   // pas gouverné par le verrou — la fiche d'une occurrence pointée est justement en
-  // consultation (readOnly), brancher sur readOnly le rendait insaisissable.
-  const motifEditable = booking.pointage === "absent";
+  // consultation (readOnly), brancher sur readOnly le rendait insaisissable. Idem pour
+  // une absence PRÉVENUE en cours de saisie (case cochée).
+  const motifEditable = booking.pointage === "absent" || (absenceEditable && absent);
   // Suppression : action de gestion — jamais en consultation ni sur une résa
   // verrouillée par le pointage (mêmes règles que la croix des badges).
   const canDelete = !readOnly && !locked;
@@ -109,13 +151,21 @@ export function BookingDetailModal({
     Number(accompagnants) !== booking.accompagnants ||
     theme !== booking.theme;
   const motifDirty = motifEditable && motif.trim() !== booking.pointageMotif.trim();
-  const dirty = (editable && detailDirty) || motifDirty;
+  const absenceDirty =
+    absenceEditable &&
+    (absent !== (booking.absencePrevenue != null) ||
+      (absent &&
+        booking.absencePrevenue != null &&
+        prevenuLe !== absencePrevenueYmd(booking.absencePrevenue)));
+  const dirty = (editable && detailDirty) || motifDirty || absenceDirty;
 
   function reset() {
     setEnfants(String(booking.enfants));
     setAccompagnants(String(booking.accompagnants));
     setTheme(booking.theme);
     setMotif(booking.pointageMotif);
+    setAbsent(booking.absencePrevenue != null);
+    setPrevenuLe(booking.absencePrevenue ? absencePrevenueYmd(booking.absencePrevenue) : todayYmd);
     setError(null);
   }
 
@@ -141,7 +191,23 @@ export function BookingDetailModal({
           return;
         }
       }
-      if (motifDirty) {
+      if (absenceDirty || (motifDirty && absenceEditable)) {
+        // Absence prévenue (pose / retrait / motif) : une seule écriture. Au retrait le
+        // motif stocké est conservé (convention du pointage : il réapparaît si l'absence
+        // est réactivée).
+        const res = await setBookingAbsenceAction(
+          booking.id,
+          serviceId,
+          absent,
+          absent ? motif.trim() : undefined,
+          absent ? prevenuLe : undefined,
+        );
+        if (!res.ok) {
+          setSaving(false);
+          setError(res.error ?? "Échec.");
+          return;
+        }
+      } else if (motifDirty) {
         const res = await setBookingPointageAction(booking.id, serviceId, "absent", motif.trim());
         if (!res.ok) {
           setSaving(false);
@@ -216,11 +282,24 @@ export function BookingDetailModal({
           {dayHour}
         </span>
         {/* Pastille P/A inline — mêmes classes que les badges de la grille, doublée
-            pour l'en-tête (la taille badge .52rem y est illisible). */}
-        {booking.pointage && (
+            pour l'en-tête (la taille badge .52rem y est illisible). Absence PRÉVENUE
+            non encore pointée : « A » orange (.indic_ap), comme sur le badge. */}
+        {(booking.pointage || booking.absencePrevenue) && (
           <span
-            className={booking.pointage === "present" ? "indic_p" : "indic_a"}
-            title={booking.pointage === "present" ? "Présent" : "Absent"}
+            className={
+              booking.pointage === "present"
+                ? "indic_p"
+                : booking.pointage === "absent"
+                  ? "indic_a"
+                  : "indic_ap"
+            }
+            title={
+              booking.pointage === "present"
+                ? "Présent"
+                : booking.pointage === "absent"
+                  ? "Absent"
+                  : "Absence prévenue"
+            }
             style={{
               fontSize: "1rem",
               padding: "3px 6px",
@@ -245,15 +324,103 @@ export function BookingDetailModal({
       {/* La phrase « Réservation pointée — édition verrouillée. » est remplacée par le
           cadenas du titre (retour Dom 2026-08-29) ; seul le bandeau contextuel reste. */}
       {notice && (
-        <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".2rem 0 .6rem" }}>
+        <p
+          // Styles échangés avec la phrase « L'usager a prévenu… » (Dom 2026-09-04) :
+          // le bandeau de portée en .8rem semi-gras, la case d'absence en .72rem léger.
+          style={{
+            fontSize: ".8rem",
+            fontWeight: 600,
+            color: "var(--muted)",
+            // Remonté sous le titre (marge haute négative — retour Dom 2026-09-04).
+            margin: "-.55rem 0 .6rem",
+          }}
+        >
           {notice}
         </p>
       )}
 
       {/* `.bdet-form` : distinction visuelle modifiable / figé (cf. app-legacy.css). */}
       <div className="form-grid bdet-form">
-        {/* Motif d'absence : PREMIER champ de la fiche, uniquement quand la séance est
-            pointée absente. Enregistré par le bouton « Enregistrer » (Entrée = raccourci). */}
+        {/* Absence PRÉVENUE à l'avance : case à cocher sur une séance datée à venir non
+            pointée (le gestionnaire a été prévenu par l'usager). Pas de titre de section :
+            la phrase de la case porte elle-même la DATE du signalement existant
+            (« L'usager a prévenu le 04/09/2026 qu'il sera absent… »), l'auteur en
+            infobulle (Dom 2026-09-04). Séance passée ou pointée : la même phrase, figée. */}
+        {(absenceEditable || booking.absencePrevenue) &&
+          (() => {
+            const a = booking.absencePrevenue;
+            // Phrase figée (séance pointée) : la date en toutes lettres ; phrase
+            // éditable : un <input type=date> au milieu de la phrase (Dom 2026-09-04).
+            const sentence = (
+              <>
+                L'usager a prévenu{a ? ` le ${absencePrevenueDateFr(a)}` : ""} qu'il sera absent à
+                cette séance
+              </>
+            );
+            const tip = a ? `Absence ${absencePrevenueLabel(a)}` : undefined;
+            const dateInput = (
+              <input
+                type="date"
+                aria-label="Date à laquelle l'usager a prévenu"
+                value={prevenuLe}
+                max={todayYmd}
+                disabled={!absent}
+                onChange={(e) => {
+                  if (e.target.value) setPrevenuLe(e.target.value);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "auto",
+                  padding: ".1rem .3rem",
+                  fontSize: ".72rem",
+                  lineHeight: 1.2,
+                }}
+              />
+            );
+            return (
+              <div className="field full">
+                {absenceEditable ? (
+                  <label
+                    htmlFor="bdet-absence"
+                    title={tip}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: ".45rem",
+                      // Le style global des <label> (capitales espacées) ne convient pas
+                      // à une phrase : on le neutralise ici.
+                      letterSpacing: 0,
+                      textTransform: "none",
+                      fontSize: ".72rem",
+                      fontWeight: 400,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      id="bdet-absence"
+                      type="checkbox"
+                      checked={absent}
+                      onChange={(e) => setAbsent(e.target.checked)}
+                    />
+                    {/* Centrage OPTIQUE : la case et le texte ont le même centre géométrique,
+                        mais la masse des lettres est au-dessus — 1px vers le bas. */}
+                    <span style={{ position: "relative", top: 1 }}>L'usager a prévenu le</span>
+                    {dateInput}
+                    <span style={{ position: "relative", top: 1 }}>
+                      qu'il sera absent à cette séance
+                    </span>
+                  </label>
+                ) : (
+                  <span title={tip} style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+                    {sentence}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+        {/* Motif d'absence : PREMIER champ de la fiche, quand la séance est pointée
+            absente ou qu'une absence prévenue est cochée. Enregistré par le bouton
+            « Enregistrer » (Entrée = raccourci). */}
         {motifEditable && (
           <div className="field full">
             <label htmlFor="bdet-motif" style={FIELD_TITLE_STYLE}>
@@ -387,7 +554,7 @@ export function BookingDetailModal({
       {/* Boutons du FORMULAIRE uniquement (valider/dévalider et pointer passent par les
           modes de la grille) : Supprimer à gauche selon les droits, Annuler/Enregistrer
           à droite dès qu'un champ de la fiche est modifiable. */}
-      {(editable || motifEditable || canDelete) && (
+      {(editable || motifEditable || absenceEditable || canDelete) && (
         <div className="btn-row">
           {canDelete && (
             <button
@@ -404,7 +571,7 @@ export function BookingDetailModal({
               Annuler
             </button>
           )}
-          {(editable || motifEditable) && (
+          {(editable || motifEditable || absenceEditable) && (
             <button
               type="button"
               className="btn btn-primary"

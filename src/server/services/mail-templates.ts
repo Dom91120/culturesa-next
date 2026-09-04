@@ -8,7 +8,7 @@ import { sanitizeTemplateHtml } from "@/server/services/mail-html";
 // la variable BRUTE `{{bouton}}` (lien d'action), et des blocs conditionnels
 // `{{#if nom}}…{{/if}}` (n'affiche le bloc que si la variable est renseignée).
 
-// Types d'e-mails disposant d'un gabarit. Les 5 premiers (réservations) sont
+// Types d'e-mails disposant d'un gabarit. Les 7 premiers (réservations) sont
 // désactivables ; les suivants (compte/sécurité) sont toujours envoyés.
 export const TEMPLATE_KINDS = [
   "booking_confirmed",
@@ -17,6 +17,7 @@ export const TEMPLATE_KINDS = [
   "booking_cancelled",
   "booking_refused",
   "booking_reminder",
+  "booking_absence",
   "email_verification",
   "password_reset",
   "password_changed",
@@ -53,6 +54,12 @@ const DELETE_VARS: MailVar[] = [
   ...COMMON_VARS,
   { name: "motif", desc: "Motif saisi par le gestionnaire (peut être vide)" },
 ];
+// Absence prévenue : destinataire gestionnaires (signalée par l'usager) OU usager
+// (enregistrée par un gestionnaire) → le gabarit reste neutre et nomme l'usager.
+const ABSENCE_VARS: MailVar[] = [
+  ...COMMON_VARS,
+  { name: "motif", desc: "Motif de l'absence indiqué au signalement (peut être vide)" },
+];
 const REMINDER_VARS: MailVar[] = [
   { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, »)" },
   { name: "prenom", desc: "Prénom de l'usager" },
@@ -79,6 +86,7 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
   booking_cancelled: DELETE_VARS,
   booking_refused: DELETE_VARS,
   booking_reminder: REMINDER_VARS,
+  booking_absence: ABSENCE_VARS,
   email_verification: LINK_VARS,
   password_reset: LINK_VARS,
   two_factor_changed: [
@@ -178,6 +186,19 @@ ${DETAILS_CONFIRMATION}
 {{#if periode}}<p><strong>Période :</strong> {{periode}}</p>{{/if}}
 <p>Si vous ne pouvez plus vous y rendre, pensez à annuler votre réservation depuis votre espace CultuRésa afin de libérer la place.</p>
 <p>À bientôt,<br>L'équipe CultuRésa</p>`,
+  },
+  booking_absence: {
+    subject: "Absence prévenue — {{service}}",
+    html: `<p>{{salutation}}</p>
+<p>Une <strong>absence</strong> a été signalée pour la séance suivante{{#if service}} de « {{service}} »{{/if}} :</p>
+<ul>
+{{#if usager}}<li><strong>Usager :</strong> {{usager}}</li>{{/if}}
+<li><strong>Créneau :</strong> {{creneau}}</li>
+{{#if periode}}<li><strong>Période :</strong> {{periode}}</li>{{/if}}
+{{#if motif}}<li><strong>Motif :</strong> {{motif}}</li>{{/if}}
+</ul>
+<p>La réservation est conservée : la séance sera relevée comme absente au pointage. Si la présence est finalement possible, l'absence peut être retirée depuis l'agenda tant que la séance n'a pas eu lieu.</p>
+<p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
   email_verification: {
     subject: "Confirmez votre adresse e-mail — CultuRésa",

@@ -1144,6 +1144,46 @@ textarea {
   height: calc(var(--bu) * 36);
   font-size: calc(var(--bu) * 37);
 }
+/* Macaron « A » du badge usager — absence PRÉVENUE (cf. services/booking-absence) :
+   orange permanent (.is-declared) ; sans absence, bouton discret visible au survol
+   (« Prévenir d'une absence »). Haut GAUCHE (la croix × est à droite, la poignée au
+   centre), taille proportionnelle au créneau (cqmin) comme la croix. */
+.user-agenda-mine-badge .slot-btn-absence {
+  position: absolute;
+  top: calc(var(--bu) * 4);
+  left: calc(var(--bu) * 6);
+  width: calc(var(--bu) * 30);
+  height: calc(var(--bu) * 30);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--text);
+  font-size: calc(var(--bu) * 20);
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  z-index: 2;
+}
+.user-agenda-mine-badge:hover .slot-btn-absence {
+  display: inline-flex;
+}
+.user-agenda-mine-badge .slot-btn-absence:hover {
+  background: rgba(232, 140, 40, 0.92);
+  color: #fff;
+}
+.user-agenda-mine-badge .slot-btn-absence.is-declared {
+  display: inline-flex;
+  background: rgba(232, 140, 40, 0.92);
+  color: #fff;
+}
+.user-agenda-mine-badge .slot-btn-absence:disabled {
+  cursor: default;
+}
 /* Poignée de glissement des badges déplaçables : grille de 14 points (2 lignes × 7),
    centrée en haut, visible au survol. Fond OPAQUE hérité du badge (background-color:
    inherit → vert #c8e8b8 validé / orange #ffe6a7 en attente). Curseur grab : le
@@ -2101,7 +2141,8 @@ textarea.theme-pending:focus::placeholder {
   min-width: 3.5em;
 }
 .indic_p,
-.indic_a {
+.indic_a,
+.indic_ap {
   display: block;
   font-size: 0.52rem;
   font-weight: 800;
@@ -2116,6 +2157,11 @@ textarea.theme-pending:focus::placeholder {
 }
 .indic_a {
   background: rgba(220, 80, 80, 0.9);
+}
+/* Absence PRÉVENUE à l'avance, séance pas encore pointée : orange (ni vert ni rouge —
+   rien n'est constaté). Même teinte que la tuile « Absences prévenues » des stats. */
+.indic_ap {
+  background: rgba(232, 140, 40, 0.92);
 }
 /* Hover aligné sur les badges de l'onglet Réservations.
    !important nécessaire car _badgeStyle pose le background/border-color en inline. */

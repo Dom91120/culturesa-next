@@ -2028,7 +2028,20 @@ export function AgendaGrid({
     }
     if (pointageMode) {
       // Pointage = PAR OCCURRENCE → sur l'enfant cliqué (bk), pas la parente.
-      const next: Pointage = !bk.pointage ? "present" : bk.pointage === "present" ? "absent" : null;
+      // Cycle ∅ → P → A → ∅ ; une absence PRÉVENUE à l'avance inverse l'ordre
+      // (∅ → A → P → ∅) : le premier clic constate ce qui a été annoncé.
+      const prevenue = bk.absencePrevenue != null;
+      const next: Pointage = !bk.pointage
+        ? prevenue
+          ? "absent"
+          : "present"
+        : bk.pointage === "present"
+          ? prevenue
+            ? null
+            : "absent"
+          : prevenue
+            ? "present"
+            : null;
       runResult(setBookingPointageAction(bk.id, service.id, next));
       return true;
     }
@@ -2828,12 +2841,14 @@ export function AgendaGrid({
                         ×
                       </button>
                     )}
-                    {/* Mode pointage : cliquer le macaron A ouvre la fiche (saisie du
-                        motif d'absence) au lieu de cycler le pointage du badge. */}
+                    {/* Mode pointage : cliquer le macaron A (absent, ou absence prévenue
+                        orange) ouvre la fiche (motif / absence prévenue) au lieu de cycler
+                        le pointage du badge. */}
                     <PointagePill
                       pointage={bk.pointage}
+                      absencePrevenue={bk.absencePrevenue != null}
                       onClick={
-                        pointageMode && bk.pointage === "absent"
+                        pointageMode && (bk.pointage === "absent" || !bk.pointage)
                           ? () => setDetail({ booking: bk })
                           : undefined
                       }
@@ -3829,45 +3844,50 @@ export function AgendaGrid({
         )}
       </div>
 
-      {/* Sous le tableau : astuce à gauche, légende complète à droite (reprise du
-          legacy #agenda-legend-realweek). La légende n'a de sens qu'en « Semaine
-          réelle » (pointage P/A + créneaux ponctuels datés) — et rien de tout ça
-          n'a d'objet quand la grille est vide (état vide ci-dessus). */}
+      {/* Sous le tableau : l'astuce sur toute la largeur, puis la légende complète sur
+          la ligne suivante, précédée de « Légende : » (retour Dom 2026-09-04 ; reprise
+          du legacy #agenda-legend-realweek). La légende n'a de sens qu'en « Semaine
+          réelle » (pointage P/A + créneaux ponctuels datés) — et rien de tout ça n'a
+          d'objet quand la grille est vide (état vide ci-dessus). */}
       {days.length > 0 && (
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "1rem",
-            flexWrap: "wrap",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: ".25rem",
             marginTop: ".1rem",
+            fontSize: ".7rem",
+            color: "var(--muted)",
           }}
         >
-          {/* flex:1 + minWidth:0 → l'astuce absorbe le rétrécissement en passant à la
-            ligne au lieu de déborder ; la légende garde sa place (flexShrink:0). */}
-          <p
-            style={{
-              fontSize: ".7rem",
-              color: "var(--muted)",
-              margin: 0,
-              flex: "1 1 0%",
-              minWidth: 0,
-            }}
-          >
-            {/* « Astuce » en couleur de texte principale (noir en thème clair), « : » et
+          {/* « Astuce » en couleur de texte principale (noir en thème clair), « : » et
               la suite gardent la couleur courante. Le conseil dépend du mode création. */}
-            <span style={{ color: "var(--text)" }}>Astuce</span>
+          <p style={{ margin: 0 }}>
+            <span aria-hidden="true">💡</span> <span style={{ color: "var(--text)" }}>Astuce</span>
             {" : "}
             {creationMode
               ? "saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
-              : "cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un autre créneau pour le déplacer."}
+              : "cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer."}
           </p>
-          <div className="agenda-legend" style={{ flexShrink: 0 }}>
+          {/* Légende alignée à DROITE, une ligne vide sous l'astuce (retour Dom 2026-09-04). */}
+          <div
+            className="agenda-legend"
+            style={{ flexWrap: "wrap", alignSelf: "flex-end", marginTop: "1em" }}
+          >
+            <span>
+              <span style={{ color: "var(--text)" }}>Légende</span>
+              {" :"}
+            </span>
             {/* Sans demandeur récurrent, aucun créneau miroir (récurrent) → on masque
                 cet item de légende. */}
             {modes.recurringMode && <AgendaLegendSwatch kind="rec">Récurrent</AgendaLegendSwatch>}
             <AgendaLegendSwatch kind="uniq">Ponctuel</AgendaLegendSwatch>
+            {/* Absence prévenue (macaron orange, non pointée) avant P/A (Dom 2026-09-04). */}
+            <span className="agenda-legend-item">
+              <span className="indic_ap">A</span>
+              Absence prévenue
+            </span>
             <span className="agenda-legend-item">
               <span className="indic_p">P</span>
               Présent
@@ -4012,6 +4032,9 @@ export function AgendaGrid({
               occurrenceDates={occurrenceDates}
               slotStart={slot?.startTime ?? ""}
               slotEnd={slot?.endTime ?? ""}
+              // Date de la SÉANCE (occurrence miroir ou ponctuelle) : porte le bloc
+              // « Absence prévenue » ; null sur la parente récurrente (vue Modèle).
+              occurrenceYmd={uniqSlot?.slotDate ?? null}
               readOnly={readOnly}
               canEdit={canEdit}
               editBookingId={editBookingId}

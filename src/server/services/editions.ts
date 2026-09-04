@@ -7,6 +7,17 @@ import { prisma } from "@/server/db";
 /** Libellés des états de pointage (partagé par les écrans Liste et Pointages). */
 export const POINTAGE_LABEL: Record<string, string> = { present: "Présent", absent: "Absent" };
 
+/**
+ * Cellule « Pointage » des listes/exports : l'état relevé, complété par le signalement
+ * d'absence à l'avance — « Absence prévenue » tant que la séance n'est pas pointée,
+ * « Absent (prévenu) » une fois l'absence constatée.
+ */
+export function pointageCell(pointage: string | null, absencePrevenue: boolean): string {
+  if (pointage === "present") return "Présent";
+  if (pointage === "absent") return absencePrevenue ? "Absent (prévenu)" : "Absent";
+  return absencePrevenue ? "Absence prévenue" : "";
+}
+
 type EditionRow = {
   id: number;
   type: string; // Récurrente / Ponctuelle
@@ -44,6 +55,8 @@ export type SessionAttendee = {
   pointage: "present" | "absent" | null;
   // Motif d'absence saisi dans la fiche (vide sinon) — feuille de pointage.
   pointageMotif: string;
+  // Absence prévenue à l'avance (usager / gestionnaire), cf. services/booking-absence.
+  absencePrevenue: boolean;
   statut: string;
 };
 
@@ -86,6 +99,7 @@ export async function listDatedSessions(
       themeLabel: true,
       pointage: true,
       pointageMotif: true,
+      absencePrevenueAt: true,
       validated: true,
       slot: { select: { startTime: true, endTime: true, slotDate: true } },
       user: {
@@ -132,6 +146,7 @@ export async function listDatedSessions(
       theme: b.themeLabel,
       pointage: b.pointage,
       pointageMotif: b.pointageMotif,
+      absencePrevenue: b.absencePrevenueAt != null,
       statut: b.validated ? "Validée" : "En attente",
     });
   }
@@ -330,6 +345,7 @@ export async function listEditionRows(
       accompagnants: true,
       validated: true,
       pointage: true,
+      absencePrevenueAt: true,
       createdAt: true,
       slot: { select: { startTime: true, endTime: true, slotDate: true, slotDay: true } },
       user: {
@@ -392,7 +408,7 @@ export async function listEditionRows(
       jourDate: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),
       theme: b.themeLabel,
       statut: b.validated ? "Validée" : "En attente",
-      pointage: b.pointage === "present" ? "Présent" : b.pointage === "absent" ? "Absent" : "",
+      pointage: pointageCell(b.pointage, b.absencePrevenueAt != null),
       createdAt: (b.parent?.createdAt ?? b.createdAt).toISOString().slice(0, 16).replace("T", " "),
     };
   });

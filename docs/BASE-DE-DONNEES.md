@@ -28,6 +28,7 @@ Descriptif de la base **PostgreSQL** : diagramme des relations (ERD) + dictionna
 | `BookingType` | `recurring`, `unique` | type de réservation |
 | `EntityState` | `actif`, `desactive`, `archive` | état d'un créneau / d'une période |
 | `Pointage` | `present`, `absent` | présence relevée sur une séance |
+| `AbsenceSource` | `usager`, `gestionnaire` | auteur d'une absence prévenue à l'avance (`Booking.absencePrevenuePar`) |
 | `DayOfWeek` | `lun`…`dim` | jour d'un créneau récurrent (1 slot = 1 jour) |
 
 ---
@@ -300,7 +301,9 @@ Réservation. Une **récurrente** (parente) génère des **enfants** datés (un 
 | autoValidateFrom | horodatage? | | | départ du décompte d'auto-validation |
 | autoValidatedAt | horodatage? | | | date d'auto-validation (null = jamais) |
 | pointage | `Pointage`? | | | présence relevée |
-| pointageMotif | texte | "" | | motif d'absence (affiché seulement si pointage = absent ; conservé si le pointage change, vidé à l'anonymisation) |
+| pointageMotif | texte | "" | | motif d'absence (affiché si pointage = absent ou absence prévenue ; conservé si le pointage change, vidé à l'anonymisation) |
+| absencePrevenueAt | horodatage? | | | absence **prévenue à l'avance** sur une séance datée (null = aucune) ; distinct du pointage : ni verrou ni jauge, pré-remplit le pointage « absent » |
+| absencePrevenuePar | `AbsenceSource`? | | | auteur du signalement (usager depuis son agenda / gestionnaire depuis la fiche) |
 | createdAt | horodatage | now() | | |
 
 **Unique** `uq_recurring (userId, serviceId, slotId, periodId, week)`.

@@ -1,4 +1,4 @@
-import { type DatedSession, POINTAGE_LABEL } from "@/server/services/editions";
+import { type DatedSession, pointageCell } from "@/server/services/editions";
 import { formatDateHeading, type SessionBucket } from "../range";
 import { EditionScreenView, type EditionSearchParams, loadEditionScreen } from "../screen";
 
@@ -67,11 +67,16 @@ export default async function PointagesPage({
                 {a.accompagnants > 1 ? "s" : ""}
               </td>
               <td style={{ ...td, textAlign: "center" }}>
-                {a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}
-                {/* Motif d'absence saisi dans la fiche : sous l'état, en discret. */}
-                {a.pointage === "absent" && a.pointageMotif.trim() !== "" && (
-                  <div style={{ fontSize: ".7rem", color: "var(--muted)" }}>{a.pointageMotif}</div>
-                )}
+                {/* État relevé, ou « Absence prévenue » si signalée à l'avance et pas
+                    encore pointée (« Absent (prévenu) » une fois constatée). */}
+                {pointageCell(a.pointage, a.absencePrevenue) || "—"}
+                {/* Motif d'absence (fiche ou signalement) : sous l'état, en discret. */}
+                {(a.pointage === "absent" || (!a.pointage && a.absencePrevenue)) &&
+                  a.pointageMotif.trim() !== "" && (
+                    <div style={{ fontSize: ".7rem", color: "var(--muted)" }}>
+                      {a.pointageMotif}
+                    </div>
+                  )}
               </td>
               <td style={td} />
             </tr>

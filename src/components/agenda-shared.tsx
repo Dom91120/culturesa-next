@@ -247,23 +247,32 @@ export function AgendaLegendSwatch({
 // `onClick` (optionnel) : la pastille devient un vrai bouton et N'EST PLUS
 // transparente au clic — en mode pointage, cliquer le macaron A ouvre la fiche
 // pour saisir le motif d'absence au lieu de cycler le pointage (Dom 2026-08-29).
+// `absencePrevenue` : absence signalée À L'AVANCE (cf. services/booking-absence) et
+// séance pas encore pointée → macaron « A » ORANGE (.indic_ap) ; une fois pointée,
+// c'est le pointage (P vert / A rouge) qui s'affiche.
 export function PointagePill({
   pointage,
+  absencePrevenue = false,
   onClick,
   clickLabel,
 }: {
   pointage: Pointage;
+  absencePrevenue?: boolean;
   onClick?: () => void;
   clickLabel?: string;
 }) {
-  if (!pointage) return null;
-  const cls = pointage === "present" ? "indic_p" : "indic_a";
+  if (!pointage && !absencePrevenue) return null;
+  const cls = pointage === "present" ? "indic_p" : pointage === "absent" ? "indic_a" : "indic_ap";
   const letter = pointage === "present" ? "P" : "A";
+  const title = pointage ? undefined : "Absence prévenue";
+  // Absence prévenue (non pointée) : en haut à GAUCHE, comme le macaron du badge
+  // usager (slot-btn-absence) — le pointage P/A garde le haut droit (Dom 2026-09-04).
+  const absenceOnly = !pointage;
   return (
     <span
       style={{
         position: "absolute",
-        right: 3,
+        ...(absenceOnly ? { left: 3 } : { right: 3 }),
         top: 3,
         display: "flex",
         flexDirection: "column",
@@ -277,6 +286,7 @@ export function PointagePill({
           type="button"
           className={cls}
           aria-label={clickLabel}
+          title={title}
           style={{ border: "none", cursor: "pointer" }}
           onClick={(e) => {
             e.stopPropagation();
@@ -286,7 +296,9 @@ export function PointagePill({
           {letter}
         </button>
       ) : (
-        <span className={cls}>{letter}</span>
+        <span className={cls} title={title}>
+          {letter}
+        </span>
       )}
     </span>
   );

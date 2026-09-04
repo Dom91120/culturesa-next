@@ -270,6 +270,13 @@ export type BookingCancellationParams = {
   trigger?: "cancel_user" | "cancel_manager" | "refuse";
 };
 
+/** Absence prévenue à l'avance sur une séance (cf. services/booking-absence). */
+export type BookingAbsenceParams = Omit<BookingCancellationParams, "trigger"> & {
+  // Signalée par l'usager (→ gestionnaires par défaut) ou enregistrée par un
+  // gestionnaire (→ usager par défaut).
+  trigger: "absence_user" | "absence_manager";
+};
+
 /**
  * Envoie l'e-mail d'annulation/refus après la suppression d'une réservation, selon le
  * déclencheur (`cancel_user` par défaut). Le créneau, le service et la période sont résolus
@@ -281,8 +288,33 @@ export type BookingCancellationParams = {
 export async function sendBookingCancellationMail(
   params: BookingCancellationParams,
 ): Promise<void> {
+  await sendBookingEventMail(
+    params.trigger ?? "cancel_user",
+    params,
+    "sendBookingCancellationMail",
+  );
+}
+
+/**
+ * Envoie l'e-mail « Absence prévenue » après le signalement d'une absence sur une séance
+ * (même mécanique que l'annulation : réservation toujours en place, créneau/période résolus
+ * après coup). Best-effort.
+ */
+export async function sendBookingAbsenceMail(params: BookingAbsenceParams): Promise<void> {
+  await sendBookingEventMail(params.trigger, params, "sendBookingAbsenceMail");
+}
+
+/**
+ * Cœur commun des e-mails « événement + motif » (annulation, refus, absence prévenue) :
+ * déclencheur activé ? → destinataires du réglage global → variables usager / service /
+ * créneau / période / motif → gabarit effectif du déclencheur. Ne lève jamais.
+ */
+async function sendBookingEventMail(
+  trigger: BookingTrigger,
+  params: Omit<BookingCancellationParams, "trigger">,
+  logTag: string,
+): Promise<void> {
   try {
-    const trigger = params.trigger ?? "cancel_user";
     if (!(await isTriggerEnabled(trigger))) return;
 
     const [recipients, slot, concerned] = await Promise.all([
@@ -329,6 +361,6 @@ export async function sendBookingCancellationMail(
       });
     }
   } catch (e) {
-    console.error("[sendBookingCancellationMail] erreur:", e);
+    console.error(`[${logTag}] erreur:`, e);
   }
 }

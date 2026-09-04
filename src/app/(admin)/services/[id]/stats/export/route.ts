@@ -40,7 +40,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     lines.push(["Prévu", String(stats.prevu)]);
     lines.push(["Présents", String(stats.presents)]);
     lines.push(["Absents", String(stats.absents)]);
+    lines.push(["Absents dont prévenus à l'avance", String(stats.absentsPrevenus)]);
     lines.push(["Non pointés", String(stats.nonPointes)]);
+    lines.push(["Absences prévenues (toutes séances)", String(stats.absencesPrevenues)]);
     lines.push([
       "Taux de présence (%)",
       stats.tauxPresence != null ? String(stats.tauxPresence) : "",

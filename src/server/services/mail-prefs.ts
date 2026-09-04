@@ -12,6 +12,7 @@ export const MAIL_KINDS = [
   "booking_cancelled",
   "booking_refused",
   "booking_reminder",
+  "booking_absence",
 ] as const;
 
 type MailKind = (typeof MAIL_KINDS)[number];
@@ -36,6 +37,8 @@ const BOOKING_TRIGGERS = [
   "confirm_manager_create",
   "confirm_validate",
   "confirm_autovalidate",
+  "absence_user",
+  "absence_manager",
 ] as const;
 export type BookingTrigger = (typeof BOOKING_TRIGGERS)[number];
 
@@ -112,6 +115,21 @@ const DEFAULT_MAIL_TRIGGERS: MailTriggerDef[] = [
     defaultKind: "booking_confirmed",
     position: 10,
   },
+  // Absence PRÉVENUE À L'AVANCE sur une séance (cf. services/booking-absence) : signalée
+  // par l'usager depuis son agenda → destinataire par défaut les GESTIONNAIRES du
+  // service ; enregistrée par un gestionnaire → l'usager concerné (cf. DEFAULT_RECIPIENT).
+  {
+    key: "absence_user",
+    label: "L'usager prévient d'une absence à une séance",
+    defaultKind: "booking_absence",
+    position: 11,
+  },
+  {
+    key: "absence_manager",
+    label: "Le gestionnaire enregistre une absence prévenue",
+    defaultKind: "booking_absence",
+    position: 12,
+  },
 ];
 
 /** Référentiel de repli des déclencheurs (utilisé pour seeder la table et si elle est vide). */
@@ -172,7 +190,7 @@ export async function listMailTriggers(): Promise<MailTriggerDef[]> {
   try {
     const rows = await prisma.mailTrigger.findMany({ orderBy: { position: "asc" } });
     if (rows.length > 0) {
-      return rows
+      const fromDb: MailTriggerDef[] = rows
         .filter((r) => isBookingTrigger(r.key))
         .map((r) => ({
           key: r.key as BookingTrigger,
@@ -182,6 +200,12 @@ export async function listMailTriggers(): Promise<MailTriggerDef[]> {
             : TRIGGER_KIND[r.key as BookingTrigger],
           position: r.position,
         }));
+      // Déclencheurs ajoutés au code APRÈS le peuplement de la table (un serveur déployé
+      // ne rejoue pas le seed) : fusionnés depuis le référentiel de repli, sinon ils
+      // resteraient invisibles dans « Échanges par mail » — donc non réglables.
+      const known = new Set(fromDb.map((t) => t.key));
+      const missing = DEFAULT_MAIL_TRIGGERS.filter((t) => !known.has(t.key));
+      return [...fromDb, ...missing].sort((a, b) => a.position - b.position);
     }
   } catch {
     // Table absente (avant migration) → repli sur le référentiel code.
@@ -254,6 +278,14 @@ const MAIL_RECIPIENT_KINDS: readonly MailRecipientKind[] = [
 export const isMailRecipientKind = (v: string): v is MailRecipientKind =>
   (MAIL_RECIPIENT_KINDS as readonly string[]).includes(v);
 
+// Destinataire PAR DÉFAUT d'une action : « usager » (comportement historique), sauf les
+// actions dont l'auteur EST l'usager et qui visent à prévenir le service.
+const DEFAULT_RECIPIENT: Partial<Record<BookingTrigger, MailRecipientKind>> = {
+  absence_user: "gestionnaires",
+};
+const defaultRecipientOf = (t: BookingTrigger): MailRecipientKind =>
+  DEFAULT_RECIPIENT[t] ?? "usager";
+
 function recipientKey(t: BookingTrigger): string {
   return `mail.recipient.${t}`;
 }
@@ -268,7 +300,7 @@ export async function getTriggerRecipient(t: BookingTrigger): Promise<TriggerRec
   const cfg = await getConfigMany([recipientKey(t), recipientAddrKey(t)]);
   const raw = cfg[recipientKey(t)];
   return {
-    kind: isMailRecipientKind(raw) ? raw : "usager",
+    kind: isMailRecipientKind(raw) ? raw : defaultRecipientOf(t),
     addr: cfg[recipientAddrKey(t)] ?? "",
   };
 }
@@ -281,7 +313,7 @@ export async function getTriggerRecipients(): Promise<Record<BookingTrigger, Tri
   for (const t of BOOKING_TRIGGERS) {
     const raw = cfg[recipientKey(t)];
     out[t] = {
-      kind: isMailRecipientKind(raw) ? raw : "usager",
+      kind: isMailRecipientKind(raw) ? raw : defaultRecipientOf(t),
       addr: cfg[recipientAddrKey(t)] ?? "",
     };
   }
@@ -289,7 +321,8 @@ export async function getTriggerRecipients(): Promise<Record<BookingTrigger, Tri
 }
 
 /**
- * Définit le destinataire d'une action (global). Le défaut « usager » n'est PAS stocké (les
+ * Définit le destinataire d'une action (global). Le défaut de l'action (« usager », ou
+ * « gestionnaires » pour un signalement d'absence par l'usager) n'est PAS stocké (les
  * clés sont supprimées) pour ne pas accumuler de lignes redondantes ; l'adresse fixe n'est
  * conservée que pour « fixe ».
  */
@@ -298,7 +331,7 @@ export async function setTriggerRecipient(
   kind: MailRecipientKind,
   addr: string,
 ): Promise<void> {
-  if (kind === "usager") {
+  if (kind === defaultRecipientOf(t)) {
     await deleteConfig([recipientKey(t), recipientAddrKey(t)]);
     return;
   }

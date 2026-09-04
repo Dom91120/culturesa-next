@@ -25,7 +25,15 @@ import {
 import { prisma } from "@/server/db";
 import { requireServiceManager } from "@/server/guards";
 import {
+  ABSENCE_CANDIDATE_SELECT,
+  absencePrevenueAtFromYmd,
+  absenceWriteData,
+  assertAbsenceDeclarable,
+  YMD_RE,
+} from "@/server/services/booking-absence";
+import {
   type BookingConfirmationParams,
+  sendBookingAbsenceMail,
   sendBookingCancellationMail,
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
@@ -252,6 +260,75 @@ export async function setBookingPointageAction(
         : { pointage },
   });
   revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true };
+}
+
+/**
+ * Absence PRÉVENUE À L'AVANCE (fiche réservation) : le gestionnaire, prévenu par l'usager
+ * par un autre canal (téléphone, mail…), l'enregistre — ou la retire — sur une séance
+ * datée. Règles partagées avec l'usager (cf. services/booking-absence) : séance datée,
+ * non pointée — passée ou non (le gestionnaire consigne aussi a posteriori qu'il avait
+ * été prévenu). `motif` : `undefined` = ne pas toucher au motif stocké. `prevenuLe`
+ * (YYYY-MM-DD, ≤ aujourd'hui) : date à laquelle l'usager a prévenu — `undefined` =
+ * maintenant.
+ * E-mail « Absence prévenue » à la POSE seulement (pas à la modification du motif ni au
+ * retrait), déclencheur `absence_manager` → usager par défaut.
+ */
+export async function setBookingAbsenceAction(
+  bookingId: number,
+  serviceId: string,
+  absent: boolean,
+  motif?: string,
+  prevenuLe?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireServiceManager(serviceId);
+  const id = idSchema.safeParse(bookingId);
+  if (!id.success || typeof absent !== "boolean") return { ok: false, error: "Données invalides." };
+  const today = todayParisISO();
+  if (prevenuLe !== undefined && (!YMD_RE.test(prevenuLe) || prevenuLe > today)) {
+    return { ok: false, error: "Date de signalement invalide (au plus tard aujourd'hui)." };
+  }
+  // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
+  const b = await prisma.booking.findFirst({
+    where: { id: id.data, serviceId },
+    select: {
+      ...ABSENCE_CANDIDATE_SELECT,
+      userId: true,
+      slotId: true,
+      periodId: true,
+      pointageMotif: true,
+      absencePrevenueAt: true,
+      parent: { select: { periodId: true } },
+    },
+  });
+  if (!b) return { ok: false, error: "Réservation introuvable." };
+  try {
+    assertAbsenceDeclarable(b, today, { allowPast: true });
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    throw e;
+  }
+  await prisma.booking.update({
+    where: { id: id.data },
+    data: absenceWriteData(
+      absent,
+      "gestionnaire",
+      motif,
+      prevenuLe !== undefined ? absencePrevenueAtFromYmd(prevenuLe) : undefined,
+    ),
+  });
+  revalidatePath(`/services/${serviceId}/agenda`);
+  if (absent && b.absencePrevenueAt == null) {
+    await sendBookingAbsenceMail({
+      userId: b.userId,
+      serviceId,
+      slotId: b.slotId,
+      // Occurrence d'une récurrente : la période est portée par la parente.
+      periodId: b.periodId ?? b.parent?.periodId ?? null,
+      motif: motif !== undefined ? motif.trim() : b.pointageMotif,
+      trigger: "absence_manager",
+    });
+  }
   return { ok: true };
 }
 

@@ -25,8 +25,10 @@ import {
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
+  type AbsencePrevenue,
   type AgendaBlockBase,
   type AgendaBookingCore,
+  absencePrevenueLabel,
   addDays,
   autonomousUniqueIds,
   buildBlocksByDay,
@@ -61,7 +63,7 @@ import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-hol
 import { usePointerDrag } from "@/lib/use-pointer-drag";
 import { THEME_REQUIS_MSG } from "@/schemas/booking";
 import type { ServiceModes } from "@/server/services/service-modes";
-import { commitDraft } from "./actions";
+import { commitDraft, setMyAbsence } from "./actions";
 
 // (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — sont portés
 // par CHAQUE EXERCICE, cf. type Exercice.opening ; hors exercice = fermé.)
@@ -508,6 +510,9 @@ const MineBadge = memo(function MineBadge({
   dragFullSurface = false,
   shortSlot = false,
   veryShortSlot = false,
+  absence = null,
+  absenceEditable = false,
+  onAbsence,
 }: {
   validated: boolean;
   markedRemoval: boolean;
@@ -550,6 +555,13 @@ const MineBadge = memo(function MineBadge({
   // Créneau très court (≤ 15 min) : décale les compteurs (nombre d'enfants/adultes) de 2px
   // vers le bas.
   veryShortSlot?: boolean;
+  // Absence PRÉVENUE sur CETTE séance (cf. services/booking-absence) : macaron « A »
+  // orange permanent en haut à gauche. `absenceEditable` : séance datée à venir, non
+  // pointée → le macaron (ou, sans absence, un « A » discret au survol) ouvre la modale
+  // « Prévenir d'une absence » via `onAbsence`.
+  absence?: AbsencePrevenue | null;
+  absenceEditable?: boolean;
+  onAbsence?: () => void;
 }) {
   // Couleur du texte/éléments : vert foncé si validé (lisible sur le fond vert clair
   // du badge), orange sinon (jamais « inherit »).
@@ -650,6 +662,35 @@ const MineBadge = memo(function MineBadge({
           style={{ border: "none", padding: 0 }}
         >
           {closeIcon}
+        </button>
+      )}
+      {/* Macaron « A » — absence prévenue (orange, permanent) ou, au survol d'un badge
+          éditable, bouton discret « Prévenir d'une absence ». Cliquable seulement si la
+          séance est encore à venir et non pointée (absenceEditable). Haut GAUCHE : la
+          croix × occupe le haut droit, la poignée le haut centre. */}
+      {(absence || absenceEditable) && !markedRemoval && (
+        <button
+          type="button"
+          className={`slot-btn-absence${absence ? " is-declared" : ""}`}
+          data-tip={
+            absence
+              ? absenceEditable
+                ? "Absence prévenue — cliquer pour modifier ou retirer"
+                : "Absence prévenue"
+              : "Prévenir d'une absence"
+          }
+          aria-label={absence ? "Absence prévenue" : "Prévenir d'une absence"}
+          disabled={!absenceEditable}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (absenceEditable) onAbsence?.();
+          }}
+        >
+          A
         </button>
       )}
       {/* Poignée de glissement : prise dédiée pour amorcer le drag sur desktop (le corps
@@ -971,7 +1012,22 @@ type BadgeCbs = {
   onSetCount: (field: "enfants" | "accompagnants", value: number) => void;
   onSetTheme: (v: string) => void;
   onDragPointerDown: (e: React.PointerEvent) => void;
+  // Ouvre la modale « Prévenir d'une absence » sur l'OCCURRENCE du badge.
+  onAbsence: () => void;
 };
+
+// Date longue française d'un « YYYY-MM-DD » (modale d'absence : « jeudi 10 septembre 2026 »).
+function longDateFr(ymdStr: string): string {
+  const s = new Date(`${ymdStr}T00:00:00`).toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  // Majuscule initiale seule (« Lundi 21 septembre 2026 ») — pas de text-transform
+  // capitalize, qui mettrait aussi le mois en capitale.
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // Ligne « N enfant(s) M adulte(s) » de l'info-bulle au survol (port legacy _badgeTitle).
 function participantsLabel(enfants: number, accompagnants: number): string {
@@ -985,6 +1041,8 @@ function participantsLabel(enfants: number, accompagnants: number): string {
 type Booking = AgendaBookingCore & {
   // Réservation de l'usager courant (agenda usager) → badge ✅/⏳ + annulation.
   mine: boolean;
+  // Motif d'absence (prévenue ou pointée) — MES réservations seulement, "" sinon.
+  absenceMotif: string;
   // Occurrence SYNTHÉTIQUE d'une récurrente détenue par l'usager, non matérialisée
   // pour la date affichée (semaine passée / hors délai) : badge « ma réservation »
   // en LECTURE SEULE (ni annulation ni édition — l'action passe par une occurrence
@@ -1540,7 +1598,13 @@ export function UserAgendaGrid({
             const key = `${dk}|${p.slotId}`;
             // Occurrence déjà présente (enfant matérialisé de moi) → ne rien synthétiser.
             if (groups.get(key)?.some((x) => x.mine)) continue;
-            pushGroup(key, { ...p, dayKey: dk, synthetic: true, pointage: null });
+            pushGroup(key, {
+              ...p,
+              dayKey: dk,
+              synthetic: true,
+              pointage: null,
+              absencePrevenue: null,
+            });
           }
         },
       }),
@@ -1599,8 +1663,16 @@ export function UserAgendaGrid({
       });
     const statutOf = (v: boolean) =>
       v ? "Réservation validée" : "Demande en attente de validation";
-    const pointageOf = (p?: string | null) =>
-      p === "present" ? "Présent" : p === "absent" ? "Absent" : "—";
+    const pointageOf = (p?: string | null, a?: AbsencePrevenue | null) =>
+      p === "present"
+        ? "Présent"
+        : p === "absent"
+          ? a
+            ? "Absent (prévenu)"
+            : "Absent"
+          : a
+            ? "Absence prévenue"
+            : "—";
 
     type Row = {
       date: string;
@@ -1623,7 +1695,7 @@ export function UserAgendaGrid({
           type: "Ponctuelle",
           theme: b.theme || "—",
           statut: statutOf(b.validated),
-          pointage: pointageOf(b.pointage),
+          pointage: pointageOf(b.pointage, b.absencePrevenue),
         });
       } else if (b.parentBookingId == null && b.bookingType === "recurring") {
         // Récurrente → une ligne par occurrence (miroir) de la période, filtrée par la
@@ -1651,7 +1723,7 @@ export function UserAgendaGrid({
             type: "Récurrente",
             theme: (child?.theme ?? b.theme) || "—",
             statut: statutOf(child?.validated ?? b.validated),
-            pointage: pointageOf(child?.pointage),
+            pointage: pointageOf(child?.pointage, child?.absencePrevenue),
           });
         }
       }
@@ -1835,6 +1907,18 @@ export function UserAgendaGrid({
   // évaluation porte déjà sur la bonne période.
   const [fullNoticeOpen, setFullNoticeOpen] = useState(false);
   const fullNoticeShownFor = useRef(new Set<number>());
+  // « Prévenir d'une absence » : occurrence ciblée par la modale de saisie (hors
+  // brouillon — action immédiate, cf. setMyAbsence) et modale d'AIDE de la barre
+  // d'outils (explique la procédure).
+  const [absenceTarget, setAbsenceTarget] = useState<{
+    booking: Booking;
+    ymd: string;
+    time: string;
+  } | null>(null);
+  const [absenceHelpOpen, setAbsenceHelpOpen] = useState(false);
+  function openAbsence(booking: Booking, ymdStr: string, time: string) {
+    setAbsenceTarget({ booking, ymd: ymdStr, time });
+  }
   // biome-ignore lint/correctness/useExhaustiveDependencies: réévaluée uniquement quand la période affichée change.
   useEffect(() => {
     if (!service.fullPeriodNotice) return;
@@ -2557,6 +2641,7 @@ export function UserAgendaGrid({
     setAddCount,
     setPendingAdds,
     beginDrag,
+    openAbsence,
   };
   const blockApiRef = useFreshRef(blockApi);
 
@@ -2579,6 +2664,7 @@ export function UserAgendaGrid({
           onSetCount: (f, v) => holder.fresh.onSetCount(f, v),
           onSetTheme: (v) => holder.fresh.onSetTheme(v),
           onDragPointerDown: (ev) => holder.fresh.onDragPointerDown(ev),
+          onAbsence: () => holder.fresh.onAbsence(),
         },
       };
       badgeCbsRef.current.set(key, e);
@@ -2600,6 +2686,7 @@ export function UserAgendaGrid({
         setAddCount,
         setPendingAdds,
         beginDrag,
+        openAbsence,
       } = blockApiRef.current;
       // Info-bulle « Journées concernées » : créneaux RÉCURRENTS (liste des occurrences
       // à venir, en Modèle COMME en Semaine réelle) ET ponctuels autonomes (leur seule
@@ -2839,6 +2926,26 @@ export function UserAgendaGrid({
                       : "⏳ Demande en attente de validation";
                 const tipWeek =
                   abMode && (mb.week === "A" || mb.week === "B") ? `\nSemaine ${mb.week}` : "";
+                // Absence PRÉVENUE : portée par l'OCCURRENCE (myBkOcc — l'enfant daté pour
+                // une récurrente, la résa elle-même pour une ponctuelle), jamais par la
+                // parente. Déclarable sur une séance à venir (jour même inclus), non
+                // pointée, hors suppression/déplacement en brouillon.
+                const occ = myBkOcc ?? mb;
+                const blockYmd = anchorMonday
+                  ? ymd(addDays(anchorMonday, DAY_OFFSET[b.dayKey] ?? 0))
+                  : null;
+                const absenceEditable =
+                  !occ.synthetic &&
+                  !markedRemoval &&
+                  !isMoving &&
+                  occ.pointage == null &&
+                  blockYmd != null &&
+                  blockYmd >= todayYmd;
+                const tipAbsence = occ.absencePrevenue
+                  ? `\nAbsence ${absencePrevenueLabel(occ.absencePrevenue)}${
+                      occ.absenceMotif.trim() ? ` : ${occ.absenceMotif.trim()}` : ""
+                    }`
+                  : "";
                 // Callbacks stabilisés par badge (identité constante, closures fraîches) :
                 // logique IDENTIQUE aux anciennes closures inline, mais mémo-compatibles.
                 const cbs = badgeCbs(`bk:${mb.id}`, {
@@ -2848,6 +2955,9 @@ export function UserAgendaGrid({
                   onSetTheme: (v) => setMyTheme(mb, v),
                   onDragPointerDown: (e) =>
                     beginDrag({ kind: "booking", bookingId: mb.id, ponctuel: isPonctuelCell }, e),
+                  onAbsence: () => {
+                    if (blockYmd) openAbsence(occ, blockYmd, tipTime);
+                  },
                 });
                 return (
                   <MineBadge
@@ -2867,13 +2977,16 @@ export function UserAgendaGrid({
                     title={`${tipTime}\n${tipState}\n${participantsLabel(
                       cur.enfants,
                       cur.accompagnants,
-                    )}${tipWeek}`}
+                    )}${tipWeek}${tipAbsence}`}
                     closeIcon="×"
                     locked={bookingLocked(mb)}
                     onClose={cbs.onClose}
                     onBump={cbs.onBump}
                     onSetCount={cbs.onSetCount}
                     onSetTheme={cbs.onSetTheme}
+                    absence={occ.absencePrevenue}
+                    absenceEditable={absenceEditable}
+                    onAbsence={cbs.onAbsence}
                     // Déplaçable par glisser-déposer sauf si VERROUILLÉE (validation
                     // bloquante active) ou déjà marquée pour suppression. Aligné sur le
                     // serveur (moveInTx → assertBookingUnlocked) : une résa validée mais
@@ -2914,6 +3027,7 @@ export function UserAgendaGrid({
                     ),
                   onDragPointerDown: (e) =>
                     beginDrag({ kind: "draft", key: add.key, ponctuel: isPonctuelCell }, e),
+                  onAbsence: NOOP,
                 });
                 return (
                   <MineBadge
@@ -3074,6 +3188,9 @@ export function UserAgendaGrid({
       isMobile,
       // Disponibilité des périodes (slotOpensOn) : réagit aux changements de « Dispo ».
       periods,
+      // Absence prévenue : date du bloc (semaine affichée) et jour courant.
+      anchorMonday,
+      todayYmd,
     ],
   );
 
@@ -3381,7 +3498,32 @@ export function UserAgendaGrid({
             </span>
           )}
         </div>
-        {/* (Options « sans créneau » + impression : remontées sur la ligne de titre.) */}
+        {/* (Options « sans créneau » + impression : remontées sur la ligne de titre.)
+            Aide « Prévenir d'une absence » : bouton purement INFORMATIF (la saisie se fait
+            sur le badge de la réservation concernée) — explique la procédure. Aligné à
+            droite de la ligne des onglets, sous l'impression (retour Dom 2026-09-04).
+            Masqué sur mobile comme les options de la ligne de titre. */}
+        {!isMobile && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{
+              marginLeft: "auto",
+              padding: ".22rem .6rem",
+              fontSize: ".66rem",
+              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: ".35rem",
+            }}
+            onClick={() => setAbsenceHelpOpen(true)}
+          >
+            {/* Icône SVG fournie par Dom (public/absence.svg) — rendu identique sur toutes
+                les plateformes, comme le calendrier (CalendarGlyph). */}
+            <img src="/absence.svg" width={16} height={16} alt="" aria-hidden="true" />
+            Prévenir d'une absence
+          </button>
+        )}
       </div>
 
       {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour,
@@ -3988,6 +4130,214 @@ export function UserAgendaGrid({
           </div>
         </ModalOverlay>
       )}
+
+      {/* Aide « Prévenir d'une absence » (bouton de la barre d'outils) : la procédure,
+          pas de saisie ici. */}
+      {absenceHelpOpen && (
+        <ModalOverlay
+          onClose={() => setAbsenceHelpOpen(false)}
+          labelledBy="absence-help-title"
+          boxStyle={{ maxWidth: 480, width: "92%" }}
+        >
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() => setAbsenceHelpOpen(false)}
+            aria-label="Fermer"
+          >
+            ×
+          </button>
+          <h3 id="absence-help-title" className="modal-title">
+            Prévenir d'une absence
+          </h3>
+          <div style={{ fontSize: ".85rem", lineHeight: 1.55 }}>
+            <p style={{ margin: "0 0 .6rem" }}>
+              Vous ne pourrez pas venir à une séance ? Prévenez le service directement depuis
+              l'agenda&nbsp;:
+            </p>
+            <ol style={{ margin: "0 0 .6rem", paddingLeft: "1.25rem" }}>
+              <li style={{ marginBottom: ".3rem" }}>
+                Affichez la <strong>semaine de la séance</strong> et repérez votre réservation.
+              </li>
+              <li style={{ marginBottom: ".3rem" }}>
+                Survolez son badge et cliquez sur le macaron{" "}
+                <span
+                  className="indic_ap"
+                  style={{ display: "inline-block", fontSize: ".7rem", verticalAlign: "middle" }}
+                >
+                  A
+                </span>{" "}
+                <strong>« Prévenir d'une absence »</strong>, en haut à gauche.
+              </li>
+              <li>
+                Indiquez si vous le souhaitez un <strong>motif</strong> (facultatif), puis
+                confirmez.
+              </li>
+            </ol>
+            <p style={{ margin: "0 0 .6rem" }}>
+              Le service est informé par e-mail. Votre réservation est <strong>conservée</strong> :
+              seule la séance concernée est signalée comme absence. Si vous pouvez finalement venir,
+              cliquez de nouveau sur le macaron pour la retirer.
+            </p>
+            <p style={{ margin: 0, color: "var(--muted)" }}>
+              Une absence se signale sur une séance à venir (jour même inclus) tant qu'elle n'a pas
+              été pointée par le service. Pour annuler toute une réservation, utilisez la croix × du
+              badge.
+              {service.contactEmail ? (
+                <>
+                  {" "}
+                  Pour toute autre demande&nbsp;:{" "}
+                  <a href={`mailto:${service.contactEmail}`} style={{ fontWeight: 600 }}>
+                    {service.contactEmail}
+                  </a>
+                </>
+              ) : null}
+            </p>
+          </div>
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setAbsenceHelpOpen(false)}
+            >
+              J'ai compris
+            </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* Saisie « Prévenir d'une absence » sur l'occurrence choisie (macaron du badge). */}
+      {absenceTarget && (
+        <AbsenceModal
+          serviceId={service.id}
+          booking={absenceTarget.booking}
+          dateLabel={longDateFr(absenceTarget.ymd)}
+          time={absenceTarget.time}
+          onClose={() => setAbsenceTarget(null)}
+          onSaved={(msg) => {
+            setAbsenceTarget(null);
+            showToast(msg, "success");
+            router.refresh();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Modale « Prévenir d'une absence » : pose (motif facultatif), modification du motif ou
+ * retrait d'une absence prévenue sur UNE séance. Action immédiate (setMyAbsence), hors
+ * brouillon — la réservation reste en place, le service est informé par e-mail.
+ */
+function AbsenceModal({
+  serviceId,
+  booking,
+  dateLabel,
+  time,
+  onClose,
+  onSaved,
+}: {
+  serviceId: string;
+  booking: Booking;
+  dateLabel: string;
+  time: string;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const declared = booking.absencePrevenue != null;
+  const [motif, setMotif] = useState(booking.absenceMotif);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const motifDirty = motif.trim() !== booking.absenceMotif.trim();
+
+  async function submit(absent: boolean) {
+    setBusy(true);
+    setError(null);
+    const res = await setMyAbsence(serviceId, {
+      bookingId: booking.id,
+      absent,
+      motif: absent ? motif.trim() : undefined,
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error ?? "Échec.");
+      return;
+    }
+    onSaved(
+      !absent
+        ? "Absence retirée : votre présence est de nouveau attendue."
+        : declared
+          ? "Motif de l'absence enregistré."
+          : "Absence prévenue : le service est informé.",
+    );
+  }
+
+  return (
+    <ModalOverlay onClose={onClose} labelledBy="absence-title" boxStyle={{ maxWidth: 440 }}>
+      <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">
+        ×
+      </button>
+      <h3 id="absence-title" className="modal-title">
+        Prévenir d'une absence
+      </h3>
+      <p style={{ fontSize: ".85rem", margin: "0 0 .6rem" }}>
+        {dateLabel} · {time}
+      </p>
+      {declared && booking.absencePrevenue ? (
+        <p style={{ fontSize: ".8rem", color: "var(--muted)", margin: "0 0 .6rem" }}>
+          Absence {absencePrevenueLabel(booking.absencePrevenue)}.
+        </p>
+      ) : (
+        <p style={{ fontSize: ".8rem", color: "var(--muted)", margin: "0 0 .6rem" }}>
+          Votre réservation est conservée : seule cette séance sera signalée comme absence, et le
+          service en sera informé. Vous pourrez la retirer tant que la séance n'a pas eu lieu.
+        </p>
+      )}
+      <div className="field full">
+        <label htmlFor="absence-motif">Motif (facultatif)</label>
+        <input
+          id="absence-motif"
+          value={motif}
+          maxLength={255}
+          placeholder="Ex. sortie scolaire, classe absente…"
+          onChange={(e) => setMotif(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !busy) submit(true);
+          }}
+        />
+      </div>
+      {error && (
+        <p className="field-error" style={{ display: "block" }}>
+          {error}
+        </p>
+      )}
+      <div className="btn-row">
+        {declared && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ marginRight: "auto" }}
+            disabled={busy}
+            onClick={() => submit(false)}
+          >
+            Retirer l'absence
+          </button>
+        )}
+        <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
+          {declared ? "Fermer" : "Annuler"}
+        </button>
+        {(!declared || motifDirty) && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => submit(true)}
+          >
+            {declared ? "Enregistrer le motif" : "Confirmer l'absence"}
+          </button>
+        )}
+      </div>
+    </ModalOverlay>
   );
 }

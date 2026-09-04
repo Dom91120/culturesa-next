@@ -474,6 +474,11 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
               </>
             )}
           </p>
+          <p style={{ ...P, margin: ".55rem 0 0" }}>
+            Empêché pour <strong>une seule séance</strong> ? Cliquez sur le macaron{" "}
+            <strong>A</strong> du badge pour <strong>prévenir d'une absence</strong> : le service
+            est informé et votre réservation est conservée.
+          </p>
         </>
       ),
     },
@@ -565,7 +570,9 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
           <p style={{ margin: 0 }}>
             En cas d'absence, cliquez sur le macaron <strong>A</strong> du badge pour ouvrir la
             fiche et saisir un <strong>motif d'absence</strong> — il est repris dans l'infobulle du
-            badge et sur la feuille de pointage.
+            badge et sur la feuille de pointage. Un macaron <strong>A orange</strong> signale une{" "}
+            <strong>absence prévenue</strong> à l'avance (par l'usager, ou saisie par vous dans la
+            fiche) : le premier clic la pointe directement « Absent ».
           </p>
         </>
       ),

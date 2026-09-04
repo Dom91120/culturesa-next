@@ -5,7 +5,7 @@ import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-
 import {
   type DatedSession,
   listDatedSessions,
-  POINTAGE_LABEL,
+  pointageCell,
   type SessionAttendee,
 } from "@/server/services/editions";
 import { ExerciceNav } from "../exercice-nav";
@@ -254,7 +254,7 @@ export default async function EditionsListePage({
                   {a.statut}
                 </span>
               </td>
-              <td style={tdCenter}>{a.pointage ? POINTAGE_LABEL[a.pointage] : "—"}</td>
+              <td style={tdCenter}>{pointageCell(a.pointage, a.absencePrevenue) || "—"}</td>
             </tr>
           ))}
         </tbody>

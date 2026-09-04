@@ -53,6 +53,11 @@ type ServiceStats = {
   presents: number;
   absents: number;
   nonPointes: number;
+  // Absences PRÉVENUES à l'avance (cf. services/booking-absence) : toutes séances de la
+  // population (à venir comprises) pour la tuile ; et, parmi les absents pointés, celles
+  // qui avaient été signalées — pour distinguer absence prévenue / non prévenue.
+  absencesPrevenues: number;
+  absentsPrevenus: number;
   tauxPresence: number | null; // présents / (présents + absents)
   tauxAbsence: number | null; // absents / (présents + absents)
   tauxRealisation: number | null; // présents / prévu
@@ -156,6 +161,7 @@ export async function getServiceStats(
     select: {
       validated: true,
       pointage: true,
+      absencePrevenueAt: true,
       enfants: true,
       accompagnants: true,
       themeLabel: true,
@@ -343,6 +349,10 @@ export async function getServiceStats(
   const presents = pastOcc.filter((b) => b.pointage === "present").length;
   const absents = pastOcc.filter((b) => b.pointage === "absent").length;
   const nonPointes = prevu - presents - absents;
+  const absencesPrevenues = occ.filter((b) => b.absencePrevenueAt != null).length;
+  const absentsPrevenus = pastOcc.filter(
+    (b) => b.pointage === "absent" && b.absencePrevenueAt != null,
+  ).length;
   const tauxPresence =
     presents + absents > 0 ? Math.round((100 * presents) / (presents + absents)) : null;
   // Calculé indépendamment de tauxPresence (pas en 100 - tauxPresence) : évite un
@@ -369,6 +379,8 @@ export async function getServiceStats(
     presents,
     absents,
     nonPointes,
+    absencesPrevenues,
+    absentsPrevenus,
     tauxPresence,
     tauxAbsence,
     tauxRealisation,

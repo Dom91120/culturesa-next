@@ -14,8 +14,15 @@ import {
 import { prisma } from "@/server/db";
 import { requireUser } from "@/server/guards";
 import {
+  ABSENCE_CANDIDATE_SELECT,
+  absenceWriteData,
+  assertAbsenceDeclarable,
+  MAX_ABSENCE_MOTIF,
+} from "@/server/services/booking-absence";
+import {
   type BookingCancellationParams,
   type BookingConfirmationParams,
+  sendBookingAbsenceMail,
   sendBookingCancellationMail,
   sendBookingConfirmationMail,
 } from "@/server/services/booking-mail";
@@ -603,6 +610,62 @@ async function commitDraftInTx(
     }
   }
   return { confirmations: mails, cancellations };
+}
+
+// ── Prévenir d'une absence (hors brouillon) ──────────────────────────────────
+const absenceSchema = z.object({
+  bookingId: z.coerce.number().int().positive(),
+  absent: z.boolean(),
+  motif: z.string().trim().max(MAX_ABSENCE_MOTIF).optional(),
+});
+
+/**
+ * « Prévenir d'une absence » (agenda usager) : signale — ou retire — une absence À
+ * VENIR sur UNE séance datée de l'usager (occurrence d'une récurrente ou ponctuelle).
+ * Action IMMÉDIATE, hors brouillon : elle ne touche ni la capacité ni le planning, la
+ * réservation reste en place. Règles dans services/booking-absence (séance datée, non
+ * passée, non pointée). E-mail « Absence prévenue » à la POSE seulement, déclencheur
+ * `absence_user` → gestionnaires du service par défaut. Anti-IDOR : la réservation doit
+ * appartenir à l'usager ET au service.
+ */
+export async function setMyAbsence(serviceId: string, raw: unknown): Promise<Result> {
+  const session = await requireUser();
+  const parsed = absenceSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Données invalides." };
+  const { bookingId, absent, motif } = parsed.data;
+  const b = await prisma.booking.findFirst({
+    where: { id: bookingId, userId: session.user.id, serviceId },
+    select: {
+      ...ABSENCE_CANDIDATE_SELECT,
+      slotId: true,
+      periodId: true,
+      pointageMotif: true,
+      absencePrevenueAt: true,
+      parent: { select: { periodId: true } },
+    },
+  });
+  if (!b) return { ok: false, error: "Réservation introuvable." };
+  try {
+    assertAbsenceDeclarable(b, todayParisISO());
+  } catch (e) {
+    return mapBookingError(e);
+  }
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: absenceWriteData(absent, "usager", motif),
+  });
+  if (absent && b.absencePrevenueAt == null) {
+    await sendBookingAbsenceMail({
+      userId: session.user.id,
+      serviceId,
+      slotId: b.slotId,
+      periodId: b.periodId ?? b.parent?.periodId ?? null,
+      motif: motif ?? b.pointageMotif,
+      trigger: "absence_user",
+    });
+  }
+  revalidate(serviceId);
+  return { ok: true };
 }
 
 export async function commitDraft(serviceId: string, rawDraft: unknown): Promise<Result> {

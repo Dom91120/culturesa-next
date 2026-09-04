@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
+import { absencePrevenueDto } from "@/lib/agenda-core";
 import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -159,6 +160,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
           validated: true,
           pointage: true,
           pointageMotif: true,
+          absencePrevenueAt: true,
+          absencePrevenuePar: true,
           createdAt: true,
           user: {
             select: {
@@ -246,6 +249,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       validated: b.validated,
       pointage: b.pointage,
       pointageMotif: b.pointageMotif,
+      absencePrevenue: absencePrevenueDto(b),
       name: child ? "" : `${b.user.nom} ${b.user.prenom}`.trim() || "—",
       tel: child ? "" : (b.user.tel ?? ""),
       email: child ? "" : (b.user.email ?? ""),

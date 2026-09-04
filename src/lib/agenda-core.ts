@@ -164,6 +164,14 @@ export const CLOSED_OPENING: ExerciceOpening = {
 
 export type Pointage = "present" | "absent" | null;
 
+/**
+ * Absence PRÉVENUE À L'AVANCE sur une séance datée (cf. services/booking-absence) :
+ * horodatage ISO du signalement + auteur (usager depuis son agenda / gestionnaire
+ * prévenu par ailleurs). null = aucun signalement. Distinct du pointage : ni verrou,
+ * ni jauge — un simple drapeau qui pré-remplit le pointage « absent ».
+ */
+export type AbsencePrevenue = { at: string; par: "usager" | "gestionnaire" };
+
 // Socle du type Booking des deux grilles (audit 2026-07-24 : deux copies locales quasi
 // identiques) : champs communs des payloads admin et usager. Chaque grille ÉTEND ce
 // socle avec ses champs propres (admin : identité/contact ; usager : mine/synthetic) —
@@ -181,7 +189,34 @@ export type AgendaBookingCore = {
   theme: string;
   validated: boolean;
   pointage: Pointage;
+  absencePrevenue: AbsencePrevenue | null;
 };
+
+/** DTO client d'une absence prévenue depuis les colonnes Prisma (null si aucune). */
+export function absencePrevenueDto(b: {
+  absencePrevenueAt: Date | null;
+  absencePrevenuePar: "usager" | "gestionnaire" | null;
+}): AbsencePrevenue | null {
+  return b.absencePrevenueAt && b.absencePrevenuePar
+    ? { at: b.absencePrevenueAt.toISOString(), par: b.absencePrevenuePar }
+    : null;
+}
+
+/** Date du signalement « 04/09/2026 » (heure de Paris). */
+export function absencePrevenueDateFr(a: AbsencePrevenue): string {
+  return new Date(a.at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" });
+}
+
+/** Date du signalement en « YYYY-MM-DD » (heure de Paris) — valeur d'un <input type=date>. */
+export function absencePrevenueYmd(a: AbsencePrevenue): string {
+  return new Date(a.at).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
+}
+
+/** Libellé « prévenue par l'usager le 04/09/2026 » (infobulles, modale usager). */
+export function absencePrevenueLabel(a: AbsencePrevenue): string {
+  const qui = a.par === "usager" ? "l'usager" : "le gestionnaire";
+  return `prévenue par ${qui} le ${absencePrevenueDateFr(a)}`;
+}
 
 // Semaines où le créneau "tourne" (port de la colonne weeks). null / "" = toutes.
 export function parseWeeks(weeks: string | null): ("A" | "B")[] {

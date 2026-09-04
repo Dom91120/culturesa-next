@@ -23,6 +23,8 @@ const PALETTE = [
 ];
 const C_PRESENT = "#2caf7f";
 const C_ABSENT = "#e06b6b";
+// Absence prévenue à l'avance : orange, comme le macaron « A » des badges de l'agenda.
+const C_ABSENT_PREVENU = "#e8a45a";
 const C_NONE = "rgba(127,127,127,.32)";
 
 // ── Briques d'affichage ───────────────────────────────────────────────────────
@@ -716,6 +718,14 @@ export default async function StatsPage({
             hint="Absents / (présents + absents), séances pointées"
           />
         )}
+        {stats.absencesPrevenues > 0 && (
+          <MetricCard
+            value={stats.absencesPrevenues}
+            label="Absences prévenues"
+            color={C_ABSENT_PREVENU}
+            hint="Séances pour lesquelles une absence a été signalée à l'avance (par l'usager ou par un gestionnaire), séances à venir comprises"
+          />
+        )}
         {stats.pending > 0 && (
           <MetricCard value={stats.pending} label="Demandes en attente" color="var(--warn)" />
         )}
@@ -734,9 +744,24 @@ export default async function StatsPage({
         {stats.prevu > 0 && (
           <DonutPanel
             title="Présence — séances passées ou pointées"
+            // Absents scindés « prévenus / non prévenus » dès qu'une absence pointée avait
+            // été signalée à l'avance ; sinon une seule part « Absents ».
             data={[
               { label: "Présents", value: stats.presents, color: C_PRESENT },
-              { label: "Absents", value: stats.absents, color: C_ABSENT },
+              ...(stats.absentsPrevenus > 0
+                ? [
+                    {
+                      label: "Absents prévenus",
+                      value: stats.absentsPrevenus,
+                      color: C_ABSENT_PREVENU,
+                    },
+                    {
+                      label: "Absents non prévenus",
+                      value: stats.absents - stats.absentsPrevenus,
+                      color: C_ABSENT,
+                    },
+                  ]
+                : [{ label: "Absents", value: stats.absents, color: C_ABSENT }]),
               { label: "Non pointés", value: stats.nonPointes, color: C_NONE },
             ]}
             centerValue={stats.tauxPresence != null ? `${stats.tauxPresence}%` : "—"}

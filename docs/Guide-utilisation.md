@@ -127,6 +127,22 @@ Vous pouvez **annuler** une réservation tant qu'elle n'est pas verrouillée. Si
 le **verrouillage des réservations validées**, une réservation validée ne peut plus être annulée
 ni déplacée. Un bouton permet aussi d'**imprimer votre liste** de réservations.
 
+### Prévenir d'une absence
+
+Vous ne pourrez pas venir à **une séance** sans vouloir annuler toute votre réservation ?
+Prévenez le service depuis l'agenda :
+
+1. Affichez la **semaine de la séance** et repérez votre réservation.
+2. Survolez son badge et cliquez sur le macaron **A** « Prévenir d'une absence », en haut à
+   gauche du badge.
+3. Indiquez si vous le souhaitez un **motif** (facultatif), puis confirmez.
+
+Le service est **informé par e-mail** et le macaron passe en orange. Votre réservation est
+**conservée** : seule la séance concernée est signalée. Si vous pouvez finalement venir, cliquez
+de nouveau sur le macaron puis sur **« Retirer l'absence »**. Une absence se signale sur une
+séance **à venir** (jour même inclus), tant qu'elle n'a pas été pointée par le service. Le bouton
+**« Prévenir d'une absence »**, à droite des onglets de période, rappelle cette procédure.
+
 ### Règles appliquées automatiquement
 
 Lors d'une réservation, l'application vérifie automatiquement :
@@ -164,9 +180,16 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   d'absence, un clic sur le macaron **A** du badge ouvre la fiche de la réservation pour saisir
   un **motif d'absence** (facultatif) — il apparaît ensuite dans l'infobulle du badge et sur la
   feuille de pointage des Éditions, et il est conservé si le pointage est effacé puis remis.
+- **Absence prévenue** : un usager peut signaler à l'avance, depuis son agenda, qu'il sera
+  absent à une séance (les gestionnaires du service en sont informés par e-mail). Un
+  gestionnaire prévenu par un autre canal l'enregistre lui-même dans la **fiche de la
+  réservation** (case **« L'usager a prévenu le »** suivie de la date à laquelle il a prévenu,
+  puis un motif facultatif, sur toute séance non encore pointée, même passée). La séance porte alors un macaron **A** orange et l'infobulle indique qui a prévenu
+  et quand ; la réservation reste en place. En **mode pointage**, le premier clic sur une telle
+  séance pose directement **Absent**.
 
-> Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez un bloc vers un
-> autre créneau pour le déplacer.
+> 💡 Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
+> vers un autre créneau pour la déplacer.
 
 L'agenda affiche une **semaine datée** : créneaux récurrents et ponctuels, réservations et
 pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶ et onglets de période).
@@ -184,7 +207,8 @@ clic sur les en-têtes de colonnes** ; les comptes anonymisés sont masqués par
 période, places et demandeurs de chaque créneau, avec total et rupture par demandeur), le
 tableau de **toutes les réservations** (période, date, créneau, demandeur, participant, thème,
 nombre d'enfants, statut, pointage), une vue **Planning** hebdomadaire et la **feuille de
-pointage** (avec les motifs d'absence). Chaque écran s'imprime en **PDF**, et les listes
+pointage** (avec les motifs d'absence ; une absence signalée à l'avance apparaît comme
+« Absence prévenue », puis « Absent (prévenu) » une fois pointée). Chaque écran s'imprime en **PDF**, et les listes
 (inscrits, créneaux ouverts, réservations) s'exportent en **CSV**.
 
 ![Liste des réservations (Éditions) et export CSV](img/07-editions-liste.png)
@@ -194,9 +218,10 @@ pointage** (avec les motifs d'absence). Chaque écran s'imprime en **PDF**, et l
 ### Statistiques
 
 Le tableau de bord du service présente des **compteurs** (réservations, usagers distincts, en
-attente, enfants, accompagnants), le **suivi de présence** sur les séances passées (prévu /
-réalisé, taux de présence et de réalisation) et des **graphiques** de répartition (par jour, par
-mois, par structure, par niveau, taux de remplissage). Les données sont **filtrables et
+attente, enfants, accompagnants, absences prévenues), le **suivi de présence** sur les séances
+passées (prévu / réalisé, taux de présence et de réalisation, absents prévenus ou non) et des
+**graphiques** de répartition (par jour, par mois, par structure, par niveau, taux de
+remplissage). Les données sont **filtrables et
 exportables en CSV**.
 
 ![Statistiques d'un service](img/08-statistiques.png)
@@ -261,8 +286,8 @@ imposé).
 ### Paramètres — Échanges (e-mails du service)
 
 Chaque service peut personnaliser le **contenu** de ses e-mails de réservation : réservation
-confirmée, demande enregistrée, réservation annulée, réservation non validée (refus) et rappel de
-réservation. Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
+confirmée, demande enregistrée, réservation annulée, réservation non validée (refus), rappel de
+réservation et absence prévenue. Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
 utilisé. Le **routage, le destinataire et l'activation de l'envoi** sont, eux, **globaux** (voir
 [Administration → Échanges](#échanges-e-mails-réglages-globaux)).
 
@@ -361,6 +386,9 @@ suppression** (délai de grâce de 30 jours), d'**anonymiser** des comptes et de
   semaine paire = B.
 - **Validation / verrouillage** — une réservation validée peut être verrouillée (selon le réglage
   du service), empêchant toute annulation ou déplacement côté usager.
+- **Pointage / absence prévenue** — le pointage constate la présence ou l'absence **après** la
+  séance ; l'absence prévenue est un signalement **à l'avance** (usager ou gestionnaire) qui
+  n'annule pas la réservation et pré-remplit le pointage « Absent ».
 - **Jauge** — la capacité d'un créneau ; selon le service, les accompagnants y sont comptés ou non.
 - **Vacances scolaires** — récupérées depuis le calendrier officiel selon la zone ; un jour de
   vacances n'est réservable que si le service et le demandeur sont ouverts.

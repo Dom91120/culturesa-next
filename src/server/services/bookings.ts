@@ -1,4 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
+import { type AbsencePrevenue, absencePrevenueDto } from "@/lib/agenda-core";
 import { earliestBookableISO, todayParisISO } from "@/lib/booking-delay";
 import { toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
@@ -672,6 +673,9 @@ type UserAgendaBooking = {
   theme: string;
   validated: boolean;
   pointage: "present" | "absent" | null;
+  // Absence prévenue à l'avance + motif : données personnelles → `mine` seulement.
+  absencePrevenue: AbsencePrevenue | null;
+  absenceMotif: string;
   mine: boolean;
 };
 
@@ -825,6 +829,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         accompagnants: true,
         validated: true,
         pointage: true,
+        pointageMotif: true,
+        absencePrevenueAt: true,
+        absencePrevenuePar: true,
         themeLabel: true,
         userId: true,
       },
@@ -997,6 +1004,9 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
         // Pointage (présence/absence) : donnée personnelle → exposé seulement pour MES
         // réservations. La grille ne lit le pointage que sur `mine` (cf. impression).
         pointage: b.userId === userId ? b.pointage : null,
+        // Absence prévenue (et son motif) : idem, MES réservations seulement.
+        absencePrevenue: b.userId === userId ? absencePrevenueDto(b) : null,
+        absenceMotif: b.userId === userId ? b.pointageMotif : "",
         mine: b.userId === userId,
       }),
     ),

@@ -73,6 +73,12 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
       "Envoyé automatiquement une semaine avant, puis la veille de chaque séance réservée (réservations confirmées).",
     recipient: "L'usager concerné",
   },
+  booking_absence: {
+    label: "Absence prévenue",
+    description:
+      "Envoyé lorsqu'une absence est signalée à l'avance sur une séance : par l'usager depuis son agenda (destinataire par défaut : les gestionnaires du service) ou par un gestionnaire prévenu par ailleurs (destinataire par défaut : l'usager concerné).",
+    recipient: "Les gestionnaires du service, ou l'usager concerné (selon l'action)",
+  },
   email_verification: {
     label: "Confirmation d'adresse e-mail",
     description: "Envoyé à l'inscription pour activer le compte (toujours envoyé).",
