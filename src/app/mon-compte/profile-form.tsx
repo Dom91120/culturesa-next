@@ -59,6 +59,21 @@ type DemandeurOpt = {
 };
 
 /**
+ * Catégorie + structure en LECTURE SEULE (usager ayant déjà réservé sur l'exercice en
+ * cours) : affichées avec les autres champs gérés par l'administration, AU-DESSUS du
+ * bouton Enregistrer, avec la mention explicative (retour Dom 2026-09-04).
+ */
+function AffiliationReadonly({ profile }: { profile: Profile }) {
+  const dash = <span style={{ color: "var(--muted)" }}>—</span>;
+  return (
+    <>
+      <ReadonlyField label="Catégorie">{profile.categorie || dash}</ReadonlyField>
+      <ReadonlyField label="Structure">{profile.structure || dash}</ReadonlyField>
+    </>
+  );
+}
+
+/**
  * Catégorie + structure, modifiables par l'usager tant qu'il n'a rien réservé sur un
  * exercice en cours (`modifiable`). Formulaire SÉPARÉ de l'identité : ces deux champs
  * déplacent l'accès aux services, ils méritent leur propre geste d'enregistrement
@@ -83,22 +98,10 @@ function AffiliationFields({
   // Libellé saisi quand la catégorie choisie est en SAISIE LIBRE — pré-rempli avec la
   // structure actuelle de l'usager (c'est la sienne : pas de fuite), vidé au changement.
   const [structureTexte, setStructureTexte] = useState(profile.structure ?? "");
-  const dash = <span style={{ color: "var(--muted)" }}>—</span>;
 
-  if (!modifiable) {
-    return (
-      <>
-        <div className="form-grid">
-          <ReadonlyField label="Catégorie">{profile.categorie || dash}</ReadonlyField>
-          <ReadonlyField label="Structure">{profile.structure || dash}</ReadonlyField>
-        </div>
-        <span style={{ fontSize: ".72rem", color: "var(--muted)", lineHeight: 1.5 }}>
-          Vous avez des réservations sur l'exercice en cours : votre catégorie et votre structure ne
-          sont plus modifiables ici — contactez le service.
-        </span>
-      </>
-    );
-  }
+  // Non modifiable : rendu en lecture seule DANS le bloc des champs gérés par
+  // l'administration du formulaire d'identité (cf. AffiliationReadonly), pas ici.
+  if (!modifiable) return null;
 
   // Cascade : la structure suit la catégorie choisie (une structure appartient à une
   // seule catégorie ; le serveur refuse tout couple incohérent).
@@ -280,7 +283,20 @@ export function ProfileForm({
               borderTop: "1px solid var(--border)",
             }}
           >
-            <div className="form-grid">
+            <div
+              className="form-grid"
+              // Catégorie / structure figées + niveau sur UNE ligne : 3/8, 3/8, 1/4
+              // (retour Dom 2026-09-04). Sinon la grille standard à deux colonnes.
+              style={
+                isUser && !affiliationModifiable && profile.niveau
+                  ? { gridTemplateColumns: "3fr 3fr 2fr" }
+                  : undefined
+              }
+            >
+              {/* Catégorie / structure figées (réservations sur l'exercice en cours) :
+                  ici, avec le niveau — la version modifiable a son propre formulaire
+                  plus bas. */}
+              {isUser && !affiliationModifiable && <AffiliationReadonly profile={profile} />}
               {isUser && profile.niveau && (
                 <ReadonlyField label="Niveau">{profile.niveau}</ReadonlyField>
               )}
@@ -298,6 +314,20 @@ export function ProfileForm({
                 </div>
               )}
             </div>
+            {isUser && !affiliationModifiable && (
+              <span
+                style={{
+                  display: "block",
+                  marginTop: ".5rem",
+                  fontSize: ".72rem",
+                  color: "var(--muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Vous avez des réservations sur l'exercice en cours : votre catégorie et votre
+                structure ne sont plus modifiables ici — contactez le service.
+              </span>
+            )}
           </div>
         )}
 
@@ -321,7 +351,7 @@ export function ProfileForm({
           navigateur supprime le formulaire imbriqué, et le bouton soumettait celui du
           dessus). Les deux gestes restent ainsi distincts : changer d'école n'est pas
           corriger son numéro de téléphone. */}
-      {isUser && (
+      {isUser && affiliationModifiable && (
         <div
           style={{
             marginTop: "1.25rem",
