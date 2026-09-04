@@ -35,6 +35,7 @@ export default async function ConfigPage({ params }: { params: Promise<{ id: str
         initialGaugeAccompagnants={service.gaugeAccompagnants}
         initialFullPeriodNotice={service.fullPeriodNotice}
         initialFullPeriodNoticeText={service.fullPeriodNoticeText ?? ""}
+        initialAbsencePrevenue={service.absencePrevenue}
         validationBloquante={service.validationBloquante}
         autoValidationDelay={service.autoValidationDelay}
         mgrNoticeMode={service.mgrNoticeMode}

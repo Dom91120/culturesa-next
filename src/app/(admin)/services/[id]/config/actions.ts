@@ -44,6 +44,24 @@ export async function setFullPeriodNoticeAction(
 }
 
 /**
+ * Bascule « Absences prévenues » (Service.absencePrevenue) : signalement d'absence à
+ * l'avance par l'usager (agenda) ou le gestionnaire (fiche réservation).
+ */
+export async function setAbsencePrevenueAction(
+  serviceId: string,
+  value: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireServiceManager(serviceId);
+  await prisma.service.update({
+    where: { id: serviceId },
+    data: { absencePrevenue: value },
+  });
+  revalidatePath(`/services/${serviceId}/config`);
+  revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true };
+}
+
+/**
  * Texte personnalisé de l'alerte « plus de place » (Service.fullPeriodNoticeText) :
  * remplace le message par défaut de la modale ; vide → retour au texte par défaut.
  */

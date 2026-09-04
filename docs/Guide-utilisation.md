@@ -129,8 +129,8 @@ ni déplacée. Un bouton permet aussi d'**imprimer votre liste** de réservation
 
 ### Prévenir d'une absence
 
-Vous ne pourrez pas venir à **une séance** sans vouloir annuler toute votre réservation ?
-Prévenez le service depuis l'agenda :
+Vous ne pourrez pas venir à **une séance** sans vouloir annuler toute votre réservation ? Si le
+service a activé les **absences prévenues**, prévenez-le depuis l'agenda :
 
 1. Affichez la **semaine de la séance** et repérez votre réservation.
 2. Survolez son badge et cliquez sur le macaron **A** « Prévenir d'une absence », en haut à
@@ -175,13 +175,15 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   (date précise).
 - **Déplacer, copier ou supprimer** des créneaux.
 - **Gérer les réservations** : ajouter, modifier, annuler ou valider une réservation pour un
-  usager.
+  usager. L'e-mail de validation ou de remise en attente part après un court délai de
+  regroupement (réglé par l'administrateur) : en cas d'hésitation, seul l'état final est notifié.
 - **Pointage** : marquer chaque participant **Présent** ou **Absent** après la séance. En cas
   d'absence, un clic sur le macaron **A** du badge ouvre la fiche de la réservation pour saisir
   un **motif d'absence** (facultatif) — il apparaît ensuite dans l'infobulle du badge et sur la
   feuille de pointage des Éditions, et il est conservé si le pointage est effacé puis remis.
-- **Absence prévenue** : un usager peut signaler à l'avance, depuis son agenda, qu'il sera
-  absent à une séance (les gestionnaires du service en sont informés par e-mail). Un
+- **Absence prévenue** (si activée dans Paramètres › Configuration) : un usager peut signaler à
+  l'avance, depuis son agenda, qu'il sera absent à une séance (les gestionnaires du service en
+  sont informés par e-mail). Un
   gestionnaire prévenu par un autre canal l'enregistre lui-même dans la **fiche de la
   réservation** (case **« L'usager a prévenu le »** suivie de la date à laquelle il a prévenu,
   puis un motif facultatif, sur toute séance non encore pointée, même passée). La séance porte alors un macaron **A** orange et l'infobulle indique qui a prévenu
@@ -273,7 +275,9 @@ Cela permet de **préparer le prochain exercice longtemps à l'avance** :
 
 La configuration définit les **paramètres globaux** du service — **créneaux récurrents** (autorise
 les créneaux qui se répètent chaque semaine), **alternance Semaine A/B** (sans effet si les créneaux
-récurrents sont désactivés), **prise en compte des accompagnants** dans la jauge et **alerte
+récurrents sont désactivés), **prise en compte des accompagnants** dans la jauge, **absences
+prévenues** (l'usager peut signaler depuis son agenda qu'il sera absent à une séance, le
+gestionnaire l'enregistrer dans la fiche de réservation ; désactivé par défaut) et **alerte
 « plus de place »** (à l'arrivée sur l'agenda ou sur une période, si plus aucun créneau de la
 période affichée n'est réservable, une fenêtre informe l'usager et l'invite à contacter le
 service via l'e-mail de contact du référentiel Services ; le texte du message est
@@ -345,7 +349,11 @@ L'onglet **Échanges** règle les e-mails **au niveau global** (communs à tous 
 deux volets :
 
 - **Échanges par mail** — pour chaque action, le **type d'e-mail** envoyé, son **destinataire** et
-  l'**activation de l'envoi**.
+  l'**activation de l'envoi**. En dessous, le **délai de regroupement des notifications de
+  validation** (5 minutes par défaut) : quand un gestionnaire valide ou remet en attente une
+  réservation, l'e-mail part après ce délai et ne reflète que l'**état final** — une hésitation
+  (validé, dévalidé, validé…) ne produit qu'un e-mail au plus, ou aucun si l'état revient à
+  celui que l'usager connaissait. 0 = envoi immédiat à chaque clic.
 - **Modèles d'e-mails** — l'**objet et le corps** de tous les types. Les e-mails de réservation
   servent de **base surchargeable par chaque service** (onglet Échanges du service) ; les e-mails
   **système** (compte, sécurité, test) sont toujours envoyés. On peut aussi créer des **types

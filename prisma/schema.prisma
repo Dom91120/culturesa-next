@@ -223,6 +223,11 @@ model Service {
   // Texte personnalisé de l'alerte (remplace le message par défaut ; la ligne
   // « contacter le service » avec l'e-mail reste ajoutée automatiquement).
   fullPeriodNoticeText  String?
+  // « Absences prévenues » (Paramètres > Configuration) : autorise l'usager à signaler
+  // à l'avance son absence à une séance (macaron sur le badge, bouton d'aide) et le
+  // gestionnaire à l'enregistrer dans la fiche. Désactivé par défaut (opt-in) ; les
+  // signalements déjà enregistrés restent affichés. Cf. services/booking-absence.
+  absencePrevenue       Boolean    @default(false)
 
   // Réglages du mode « Création de créneau » de l'agenda, mémorisés d'une visite à
   // l'autre. Comme `capacity`, ce sont des défauts DU SERVICE (partagés par ses
@@ -581,6 +586,12 @@ model Booking {
   // est porté par `pointageMotif` (même champ que le motif d'absence pointée).
   absencePrevenueAt  DateTime?      @db.Timestamptz
   absencePrevenuePar AbsenceSource?
+  // Notification DIFFÉRÉE d'une (dé)validation MANUELLE (cf. services/validation-notice) :
+  // état `validated` que l'usager connaît (celui d'avant le premier clic de la fenêtre
+  // d'hésitation) + échéance d'envoi de l'e-mail reflétant l'état final. null = aucune
+  // fenêtre ouverte. Traité par /api/cron/validation-notice.
+  validationNoticeFrom  Boolean?
+  validationNoticeDueAt DateTime? @db.Timestamptz
 
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
@@ -605,6 +616,8 @@ model Booking {
   // (editions.ts). Couvre aussi les lookups serviceId seul (préfixe gauche) → l'index
   // [serviceId] simple devient redondant et a été retiré.
   @@index([serviceId, periodId, createdAt])
+  // Fenêtres de notification différée à échéance (validation-notice.ts).
+  @@index([validationNoticeDueAt])
   @@map("bookings")
 }
 

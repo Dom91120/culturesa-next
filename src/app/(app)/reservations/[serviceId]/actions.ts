@@ -633,6 +633,15 @@ export async function setMyAbsence(serviceId: string, raw: unknown): Promise<Res
   const parsed = absenceSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
   const { bookingId, absent, motif } = parsed.data;
+  // Réglage PAR SERVICE (Paramètres > Configuration) : l'UI masque l'action, le serveur
+  // la refuse (un export d'action serveur est un point d'entrée public).
+  const svc = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { absencePrevenue: true },
+  });
+  if (!svc?.absencePrevenue) {
+    return { ok: false, error: "Ce service n'accepte pas les signalements d'absence." };
+  }
   const b = await prisma.booking.findFirst({
     where: { id: bookingId, userId: session.user.id, serviceId },
     select: {

@@ -164,6 +164,7 @@ Activité réservable. PK = id applicatif (`svc_00N`).
 | semaineAb | booléen | false | alternance A/B activée |
 | themesMode | `ThemesMode` | libre | saisie du thème |
 | gaugeAccompagnants | booléen | true | compter les accompagnants dans la jauge |
+| absencePrevenue | booléen | false | « Absences prévenues » : signalement d'absence à l'avance (usager + gestionnaire), opt-in |
 | autoValidationDelay | entier | 0 | délai d'auto-validation **signé** (0=off, <0=ouvré, >0=calendaire) |
 | mgrNoticeMode | texte | none | digest gestionnaires (none/hours/daily/weekly) |
 | mgrNoticeIntervalHours / Hour / Weekday | entier/texte | 4 / 8 / lun | cadence du digest |
@@ -304,10 +305,12 @@ Réservation. Une **récurrente** (parente) génère des **enfants** datés (un 
 | pointageMotif | texte | "" | | motif d'absence (affiché si pointage = absent ou absence prévenue ; conservé si le pointage change, vidé à l'anonymisation) |
 | absencePrevenueAt | horodatage? | | | absence **prévenue à l'avance** sur une séance datée (null = aucune) ; distinct du pointage : ni verrou ni jauge, pré-remplit le pointage « absent » |
 | absencePrevenuePar | `AbsenceSource`? | | | auteur du signalement (usager depuis son agenda / gestionnaire depuis la fiche) |
+| validationNoticeFrom | booléen? | | | notification différée de (dé)validation manuelle : état `validated` que l'usager connaît (avant le premier clic de la fenêtre) |
+| validationNoticeDueAt | horodatage? | | | échéance d'envoi de l'e-mail reflétant l'état final (null = aucune fenêtre) ; traité par `/api/cron/validation-notice` |
 | createdAt | horodatage | now() | | |
 
 **Unique** `uq_recurring (userId, serviceId, slotId, periodId, week)`.
-Index : `userId`, `serviceId`, `periodId`, `slotId`, `parentBookingId`, `(serviceId, validated)`, `(serviceId, autoValidatedAt)`.
+Index : `userId`, `serviceId`, `periodId`, `slotId`, `parentBookingId`, `(serviceId, validated)`, `(serviceId, autoValidatedAt)`, `validationNoticeDueAt`.
 
 #### `BookingReminder` → `booking_reminders`
 Journal des rappels envoyés (idempotence du cron). | id 🔑 ; `bookingId` ↗ `bookings` (Cascade) ; `slotDate`, `kind` ("week" J-7 / "day" J-1), `sentAt`. **Unique `(bookingId, slotDate, kind)`** ; index `slotDate`.

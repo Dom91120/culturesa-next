@@ -70,6 +70,7 @@ export function BookingDetailModal({
   slotStart,
   slotEnd,
   occurrenceYmd,
+  absencePrevenueEnabled,
   readOnly,
   canEdit,
   editBookingId,
@@ -91,6 +92,9 @@ export function BookingDetailModal({
   // Date (YYYY-MM-DD) de la SÉANCE si la fiche porte une occurrence datée (miroir ou
   // ponctuelle) ; null sur une parente récurrente → pas de bloc « Absence prévenue ».
   occurrenceYmd: string | null;
+  // « Absences prévenues » activées pour le service : sinon pas de case (un signalement
+  // existant reste affiché en lecture seule).
+  absencePrevenueEnabled: boolean;
   readOnly: boolean;
   // Participants + thème modifiables (indépendant de `readOnly`).
   canEdit: boolean;
@@ -131,7 +135,10 @@ export function BookingDetailModal({
   // règles que le serveur (assertAbsenceDeclarable, allowPast). Une fois la séance
   // pointée, le signalement reste affiché mais figé.
   const absenceEditable =
-    !readOnlyAbsence(readOnly, booking) && occurrenceYmd != null && booking.pointage == null;
+    absencePrevenueEnabled &&
+    !readOnlyAbsence(readOnly, booking) &&
+    occurrenceYmd != null &&
+    booking.pointage == null;
   // Motif saisissable dès que la séance est absente : le pointage (et son motif) n'est
   // pas gouverné par le verrou — la fiche d'une occurrence pointée est justement en
   // consultation (readOnly), brancher sur readOnly le rendait insaisissable. Idem pour

@@ -160,8 +160,8 @@ d&#39;<strong>accompagnants</strong>.</li>
 le <strong>verrouillage des réservations validées</strong>, une réservation validée ne peut plus être annulée
 ni déplacée. Un bouton permet aussi d&#39;<strong>imprimer votre liste</strong> de réservations.</p>
 <h3 id="prévenir-d39une-absence">Prévenir d&#39;une absence</h3>
-<p>Vous ne pourrez pas venir à <strong>une séance</strong> sans vouloir annuler toute votre réservation ?
-Prévenez le service depuis l&#39;agenda :</p>
+<p>Vous ne pourrez pas venir à <strong>une séance</strong> sans vouloir annuler toute votre réservation ? Si le
+service a activé les <strong>absences prévenues</strong>, prévenez-le depuis l&#39;agenda :</p>
 <ol>
 <li>Affichez la <strong>semaine de la séance</strong> et repérez votre réservation.</li>
 <li>Survolez son badge et cliquez sur le macaron <strong>A</strong> « Prévenir d&#39;une absence », en haut à
@@ -198,13 +198,15 @@ confiés</strong>. Chaque service dispose des onglets <strong>Agenda</strong>, <
 (date précise).</li>
 <li><strong>Déplacer, copier ou supprimer</strong> des créneaux.</li>
 <li><strong>Gérer les réservations</strong> : ajouter, modifier, annuler ou valider une réservation pour un
-usager.</li>
+usager. L&#39;e-mail de validation ou de remise en attente part après un court délai de
+regroupement (réglé par l&#39;administrateur) : en cas d&#39;hésitation, seul l&#39;état final est notifié.</li>
 <li><strong>Pointage</strong> : marquer chaque participant <strong>Présent</strong> ou <strong>Absent</strong> après la séance. En cas
 d&#39;absence, un clic sur le macaron <strong>A</strong> du badge ouvre la fiche de la réservation pour saisir
 un <strong>motif d&#39;absence</strong> (facultatif) — il apparaît ensuite dans l&#39;infobulle du badge et sur la
 feuille de pointage des Éditions, et il est conservé si le pointage est effacé puis remis.</li>
-<li><strong>Absence prévenue</strong> : un usager peut signaler à l&#39;avance, depuis son agenda, qu&#39;il sera
-absent à une séance (les gestionnaires du service en sont informés par e-mail). Un
+<li><strong>Absence prévenue</strong> (si activée dans Paramètres › Configuration) : un usager peut signaler à
+l&#39;avance, depuis son agenda, qu&#39;il sera absent à une séance (les gestionnaires du service en
+sont informés par e-mail). Un
 gestionnaire prévenu par un autre canal l&#39;enregistre lui-même dans la <strong>fiche de la
 réservation</strong> (case <strong>« L&#39;usager a prévenu le »</strong> suivie de la date à laquelle il a prévenu,
 puis un motif facultatif, sur toute séance non encore pointée, même passée). La séance porte alors un macaron <strong>A</strong> orange et l&#39;infobulle indique qui a prévenu
@@ -280,7 +282,9 @@ ce drapeau ; la case reste modifiable à la main ensuite.</p>
 <h3 id="paramètres-configuration-accès-et-thèmes">Paramètres — Configuration (accès et thèmes)</h3>
 <p>La configuration définit les <strong>paramètres globaux</strong> du service — <strong>créneaux récurrents</strong> (autorise
 les créneaux qui se répètent chaque semaine), <strong>alternance Semaine A/B</strong> (sans effet si les créneaux
-récurrents sont désactivés), <strong>prise en compte des accompagnants</strong> dans la jauge et <strong>alerte
+récurrents sont désactivés), <strong>prise en compte des accompagnants</strong> dans la jauge, <strong>absences
+prévenues</strong> (l&#39;usager peut signaler depuis son agenda qu&#39;il sera absent à une séance, le
+gestionnaire l&#39;enregistrer dans la fiche de réservation ; désactivé par défaut) et <strong>alerte
 « plus de place »</strong> (à l&#39;arrivée sur l&#39;agenda ou sur une période, si plus aucun créneau de la
 période affichée n&#39;est réservable, une fenêtre informe l&#39;usager et l&#39;invite à contacter le
 service via l&#39;e-mail de contact du référentiel Services ; le texte du message est
@@ -329,7 +333,11 @@ gérés et statut RGPD.</p>
 deux volets :</p>
 <ul>
 <li><strong>Échanges par mail</strong> — pour chaque action, le <strong>type d&#39;e-mail</strong> envoyé, son <strong>destinataire</strong> et
-l&#39;<strong>activation de l&#39;envoi</strong>.</li>
+l&#39;<strong>activation de l&#39;envoi</strong>. En dessous, le <strong>délai de regroupement des notifications de
+validation</strong> (5 minutes par défaut) : quand un gestionnaire valide ou remet en attente une
+réservation, l&#39;e-mail part après ce délai et ne reflète que l&#39;<strong>état final</strong> — une hésitation
+(validé, dévalidé, validé…) ne produit qu&#39;un e-mail au plus, ou aucun si l&#39;état revient à
+celui que l&#39;usager connaissait. 0 = envoi immédiat à chaque clic.</li>
 <li><strong>Modèles d&#39;e-mails</strong> — l&#39;<strong>objet et le corps</strong> de tous les types. Les e-mails de réservation
 servent de <strong>base surchargeable par chaque service</strong> (onglet Échanges du service) ; les e-mails
 <strong>système</strong> (compte, sécurité, test) sont toujours envoyés. On peut aussi créer des <strong>types

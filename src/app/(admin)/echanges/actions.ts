@@ -22,6 +22,10 @@ import {
   TEMPLATE_KINDS,
   updateCustomMailType,
 } from "@/server/services/mail-templates";
+import {
+  MAX_VALIDATION_NOTICE_DELAY,
+  setValidationNoticeDelay,
+} from "@/server/services/validation-notice";
 
 const isBookingKind = (kind: string) => (MAIL_KINDS as readonly string[]).includes(kind);
 
@@ -51,6 +55,21 @@ export async function setMailTriggerAction(
   if (!isBookingTrigger(trigger)) return { ok: false, error: "Action inconnue." };
   await requireRole("administrateur");
   await setTriggerEnabled(trigger, enabled);
+  revalidatePath("/echanges");
+  return { ok: true };
+}
+
+/**
+ * Délai de regroupement des notifications de validation (minutes, global) : 0 = envoi
+ * immédiat à chaque clic ; sinon seul l'état final est notifié après ce délai (cf.
+ * services/validation-notice).
+ */
+export async function setValidationNoticeDelayAction(minutes: number): Promise<ActionState> {
+  await requireRole("administrateur");
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_VALIDATION_NOTICE_DELAY) {
+    return { ok: false, error: `Délai invalide (0 à ${MAX_VALIDATION_NOTICE_DELAY} minutes).` };
+  }
+  await setValidationNoticeDelay(minutes);
   revalidatePath("/echanges");
   return { ok: true };
 }

@@ -82,6 +82,8 @@ type Service = {
   fullPeriodNotice: boolean;
   fullPeriodNoticeText: string | null;
   contactEmail: string | null;
+  // « Absences prévenues » activées pour ce service (Paramètres > Configuration).
+  absencePrevenue: boolean;
 };
 type Period = {
   id: number;
@@ -2935,6 +2937,7 @@ export function UserAgendaGrid({
                   ? ymd(addDays(anchorMonday, DAY_OFFSET[b.dayKey] ?? 0))
                   : null;
                 const absenceEditable =
+                  service.absencePrevenue &&
                   !occ.synthetic &&
                   !markedRemoval &&
                   !isMoving &&
@@ -3503,7 +3506,8 @@ export function UserAgendaGrid({
             sur le badge de la réservation concernée) — explique la procédure. Aligné à
             droite de la ligne des onglets, sous l'impression (retour Dom 2026-09-04).
             Sur mobile : icône seule, sans cadre ni texte. */}
-        {isMobile ? (
+        {/* Bouton d'aide masqué quand le service n'active pas les absences prévenues. */}
+        {!service.absencePrevenue ? null : isMobile ? (
           // Mobile : l'icône SEULE, sans cadre ni texte (le libellé reste en aria-label et
           // en infobulle) — Dom 2026-09-04.
           <button

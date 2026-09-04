@@ -1,4 +1,5 @@
 import { requireRole } from "@/server/guards";
+import { getValidationNoticeDelay } from "@/server/services/validation-notice";
 import { EchangesAdminTabs } from "./echanges-tabs";
 import {
   getGlobalModeleRows,
@@ -17,12 +18,14 @@ export default async function EchangesAdminPage() {
   // Réservé aux administrateurs (les gestionnaires gèrent le contenu des modèles de leurs services).
   await requireRole("administrateur");
 
-  const [routingRows, kindOptions, autoMailRows, globalModeleRows] = await Promise.all([
-    getRoutingRows(),
-    getKindOptions(),
-    getMailRows(SYSTEM_MAIL_KINDS),
-    getGlobalModeleRows(),
-  ]);
+  const [routingRows, kindOptions, autoMailRows, globalModeleRows, validationNoticeDelay] =
+    await Promise.all([
+      getRoutingRows(),
+      getKindOptions(),
+      getMailRows(SYSTEM_MAIL_KINDS),
+      getGlobalModeleRows(),
+      getValidationNoticeDelay(),
+    ]);
   // Système d'abord (toujours envoyés), puis réservation (intégrés + globaux personnalisés).
   const modeleRows = [...autoMailRows, ...globalModeleRows];
 
@@ -31,6 +34,7 @@ export default async function EchangesAdminPage() {
       routingRows={routingRows}
       kindOptions={kindOptions}
       modeleRows={modeleRows}
+      validationNoticeDelay={validationNoticeDelay}
     />
   );
 }

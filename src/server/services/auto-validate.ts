@@ -292,7 +292,14 @@ export async function runAutoValidation(now: Date = new Date()): Promise<{
     await prisma.$transaction([
       prisma.booking.updateMany({
         where: { id: { in: dueIds } },
-        data: { validated: true, autoValidatedAt: now },
+        // Fenêtre de notification différée éventuelle (validation-notice) refermée :
+        // l'auto-validation notifie elle-même, sans quoi le cron doublerait l'e-mail.
+        data: {
+          validated: true,
+          autoValidatedAt: now,
+          validationNoticeFrom: null,
+          validationNoticeDueAt: null,
+        },
       }),
       // Propagation aux réservations-enfants des récurrents validés.
       prisma.booking.updateMany({

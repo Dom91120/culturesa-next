@@ -18,7 +18,12 @@ import { getConfigMany, setConfig } from "@/server/config";
  * planifié (`cron.lastCronAt.<clé>`, base du calcul d'échéance).
  */
 
-export type CronTaskKey = "auto-validate" | "rgpd-retention" | "booking-reminder" | "backup";
+export type CronTaskKey =
+  | "auto-validate"
+  | "validation-notice"
+  | "rgpd-retention"
+  | "booking-reminder"
+  | "backup";
 
 export type CronSchedule =
   | { type: "everyMinutes"; step: number }
@@ -40,6 +45,14 @@ export const CRON_TASKS: CronTaskDef[] = [
     description:
       "Valide les réservations en attente selon le délai configuré par service, puis envoie le digest de notification aux gestionnaires (échéance configurée en Administration › Configuration).",
     defaultSchedule: { type: "everyMinutes", step: 15 },
+    runnable: true,
+  },
+  {
+    key: "validation-notice",
+    label: "Notifications de validation",
+    description:
+      "Envoie les e-mails de validation / remise en attente des réservations après le délai de regroupement (Administration › Échanges) : seul l'état final est notifié, une hésitation du gestionnaire (validé, dévalidé…) ne produit qu'un e-mail au plus.",
+    defaultSchedule: { type: "everyMinutes", step: 5 },
     runnable: true,
   },
   {
@@ -239,6 +252,14 @@ export function summarizeAutoValidate(
   digest: { emails: number },
 ): string {
   return `${stats.validated}/${stats.candidates} réservation(s) validée(s), ${digest.emails} notification(s) gestionnaire`;
+}
+
+export function summarizeValidationNotices(r: {
+  due: number;
+  sent: number;
+  silent: number;
+}): string {
+  return `${r.sent} e-mail(s) envoyé(s), ${r.silent} sans changement, sur ${r.due} échéance(s)`;
 }
 
 export function summarizeRgpdRetention(r: { notified: number; anonymized: number }): string {

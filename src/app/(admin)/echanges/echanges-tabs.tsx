@@ -4,6 +4,7 @@ import { useState } from "react";
 import { EchangesConfig, type KindData } from "./echanges-config";
 import { MailRoutingTable } from "./mail-routing-table";
 import type { RoutingRow } from "./mail-rows";
+import { ValidationNoticeDelayField } from "./validation-notice-delay";
 
 /**
  * Onglet « Échanges » (ADMINISTRATION), GLOBAL, scindé en deux sous-onglets :
@@ -16,10 +17,13 @@ export function EchangesAdminTabs({
   routingRows,
   kindOptions,
   modeleRows,
+  validationNoticeDelay,
 }: {
   routingRows: RoutingRow[];
   kindOptions: { value: string; label: string }[];
   modeleRows: KindData[];
+  // Délai de regroupement des notifications de validation (minutes, 0 = immédiat).
+  validationNoticeDelay: number;
 }) {
   const [tab, setTab] = useState<"routage" | "modeles">("routage");
 
@@ -66,6 +70,7 @@ export function EchangesAdminTabs({
             «&nbsp;Modèles d&apos;e-mails&nbsp;».
           </p>
           <MailRoutingTable rows={routingRows} kindOptions={kindOptions} />
+          <ValidationNoticeDelayField initial={validationNoticeDelay} />
         </div>
       ) : (
         <EchangesConfig

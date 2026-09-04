@@ -16,9 +16,11 @@ import {
   summarizeBackup,
   summarizeBookingReminders,
   summarizeRgpdRetention,
+  summarizeValidationNotices,
 } from "@/server/services/cron-tasks";
 import { sendManagerDigest } from "@/server/services/manager-notice";
 import { runRgpdRetention } from "@/server/services/rgpd";
+import { runValidationNotices } from "@/server/services/validation-notice";
 
 export type RunCronResult = { ok: true; summary: string } | { ok: false; error: string };
 
@@ -37,6 +39,9 @@ export async function runCronTaskAction(key: CronTaskKey): Promise<RunCronResult
         const digest = await sendManagerDigest();
         return summarizeAutoValidate(stats, digest);
       };
+      break;
+    case "validation-notice":
+      run = async () => summarizeValidationNotices(await runValidationNotices());
       break;
     case "rgpd-retention":
       run = async () => summarizeRgpdRetention(await runRgpdRetention());

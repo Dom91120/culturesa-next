@@ -106,6 +106,9 @@ type Service = {
   capacity: number;
   themesMode: "libre" | "liste";
   gaugeAccompagnants: boolean;
+  // « Absences prévenues » activées (Paramètres > Configuration) : case dans la fiche,
+  // entrée de légende. Les signalements existants restent affichés quoi qu'il en soit.
+  absencePrevenue: boolean;
   // Réglages mémorisés du mode création (cf. create-prefs.ts).
   createKind: string;
   createParityScoped: boolean;
@@ -4079,11 +4082,14 @@ export function AgendaGrid({
                 cet item de légende. */}
             {modes.recurringMode && <AgendaLegendSwatch kind="rec">Récurrent</AgendaLegendSwatch>}
             <AgendaLegendSwatch kind="uniq">Ponctuel</AgendaLegendSwatch>
-            {/* Absence prévenue (macaron orange, non pointée) avant P/A (Dom 2026-09-04). */}
-            <span className="agenda-legend-item">
-              <span className="indic_ap">A</span>
-              Absence prévenue
-            </span>
+            {/* Absence prévenue (macaron orange, non pointée) avant P/A (Dom 2026-09-04) —
+                seulement si le service active les absences prévenues. */}
+            {service.absencePrevenue && (
+              <span className="agenda-legend-item">
+                <span className="indic_ap">A</span>
+                Absence prévenue
+              </span>
+            )}
             <span className="agenda-legend-item">
               <span className="indic_p">P</span>
               Présent
@@ -4231,6 +4237,7 @@ export function AgendaGrid({
               // Date de la SÉANCE (occurrence miroir ou ponctuelle) : porte le bloc
               // « Absence prévenue » ; null sur la parente récurrente (vue Modèle).
               occurrenceYmd={uniqSlot?.slotDate ?? null}
+              absencePrevenueEnabled={service.absencePrevenue}
               readOnly={readOnly}
               canEdit={canEdit}
               editBookingId={editBookingId}

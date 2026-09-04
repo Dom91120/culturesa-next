@@ -12,6 +12,7 @@ import type { DemandeurSettingRow } from "@/server/services/demandeur-settings";
 import { saveDemandeurSettingsAction } from "../demandeurs/actions";
 import { saveThemesAction } from "../themes/actions";
 import {
+  setAbsencePrevenueAction,
   setFullPeriodNoticeAction,
   setFullPeriodNoticeTextAction,
   setGaugeAccompagnantsAction,
@@ -41,6 +42,8 @@ type Props = {
   initialGaugeAccompagnants: boolean;
   initialFullPeriodNotice: boolean;
   initialFullPeriodNoticeText: string;
+  // « Absences prévenues » : signalement d'absence à l'avance (usager + gestionnaire).
+  initialAbsencePrevenue: boolean;
   // Réglages « Validation & auto-validation » (service-globaux), édités ici.
   validationBloquante: boolean;
   autoValidationDelay: number;
@@ -103,6 +106,7 @@ export function ConfigPanel({
   initialGaugeAccompagnants,
   initialFullPeriodNotice,
   initialFullPeriodNoticeText,
+  initialAbsencePrevenue,
   validationBloquante,
   autoValidationDelay,
   mgrNoticeMode,
@@ -120,6 +124,14 @@ export function ConfigPanel({
     setGaugeAccompagnants(v);
     startGaugeAcc(async () => {
       await setGaugeAccompagnantsAction(serviceId, v);
+    });
+  }
+  const [absencePrevenue, setAbsencePrevenue] = useState(initialAbsencePrevenue);
+  const [, startAbsencePrevenue] = useTransition();
+  function toggleAbsencePrevenue(v: boolean) {
+    setAbsencePrevenue(v);
+    startAbsencePrevenue(async () => {
+      await setAbsencePrevenueAction(serviceId, v);
     });
   }
   const [fullPeriodNotice, setFullPeriodNotice] = useState(initialFullPeriodNotice);
@@ -328,6 +340,16 @@ export function ConfigPanel({
             desc="Prendre en compte les accompagnants dans le calcul de la jauge des créneaux qui en ont une."
           >
             <Switch on={gaugeAccompagnants} onChange={toggleGaugeAccompagnants} />
+          </GlobalRow>
+
+          {/* Absences prévenues (cf. services/booking-absence) : l'usager signale depuis son
+              agenda qu'il sera absent à une séance (macaron « A » du badge, bouton d'aide),
+              le gestionnaire l'enregistre dans la fiche. Opt-in par service. */}
+          <GlobalRow
+            label="Absences prévenues"
+            desc="Permet à l'usager de prévenir depuis son agenda qu'il sera absent à une séance (la réservation est conservée, le service est informé par e-mail) et au gestionnaire d'enregistrer une absence prévenue dans la fiche de réservation. Désactivé, les signalements déjà enregistrés restent visibles."
+          >
+            <Switch on={absencePrevenue} onChange={toggleAbsencePrevenue} />
           </GlobalRow>
 
           {/* Alerte « plus de place » : modale --warn côté usager quand plus aucune

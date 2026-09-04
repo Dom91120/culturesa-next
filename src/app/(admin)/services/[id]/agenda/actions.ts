@@ -69,6 +69,10 @@ import {
   regenerateRecurringMirrorsForPeriodInTx,
   SlotMutationError,
 } from "@/server/services/slots";
+import {
+  getValidationNoticeDelay,
+  validationNoticeWindow,
+} from "@/server/services/validation-notice";
 
 // Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
 type DayKeyT = (typeof DAYS)[number];
@@ -159,6 +163,8 @@ export async function setBookingValidatedAction(
       parentBookingId: true,
       pointage: true,
       validated: true,
+      validationNoticeFrom: true,
+      validationNoticeDueAt: true,
       userId: true,
       periodId: true,
       enfants: true,
@@ -174,13 +180,22 @@ export async function setBookingValidatedAction(
     return { ok: false, error: "Réservation verrouillée (séance pointée ou miroir)." };
   }
   const changed = b.validated !== validated;
+  // Notification DIFFÉRÉE (cf. services/validation-notice) : au lieu d'un e-mail par
+  // clic, on ouvre/prolonge une fenêtre traitée par le cron — seul l'état FINAL est
+  // notifié. Délai 0 = envoi immédiat (comportement historique).
+  const noticeDelay = changed ? await getValidationNoticeDelay() : 0;
+  const noticeData =
+    changed && noticeDelay > 0 ? validationNoticeWindow(b, new Date(), noticeDelay) : {};
   // Validation au niveau de la SÉRIE : le parent + propagation à tous ses miroirs,
   // verrou pointage re-vérifié DANS la transaction (anti-TOCTOU, audit 2026-07-17).
   try {
     await prisma.$transaction(
       async (tx) => {
         await assertNotLockedByPointageInTx(tx, id.data, serviceId);
-        await tx.booking.update({ where: { id: id.data }, data: { validated } });
+        await tx.booking.update({
+          where: { id: id.data },
+          data: { validated, ...noticeData },
+        });
         await tx.booking.updateMany({ where: { parentBookingId: id.data }, data: { validated } });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -196,7 +211,8 @@ export async function setBookingValidatedAction(
 
   // Notifie l'usager d'une (dé)validation MANUELLE par le gestionnaire (best-effort,
   // uniquement sur transition réelle) : e-mail « validée » ou « en attente » (port legacy).
-  if (changed && b.slot) {
+  // IMMÉDIAT seulement si le délai de regroupement est à 0 ; sinon le cron s'en charge.
+  if (changed && noticeDelay === 0 && b.slot) {
     await sendBookingConfirmationMail({
       userId: b.userId,
       serviceId,
@@ -287,6 +303,14 @@ export async function setBookingAbsenceAction(
   const today = todayParisISO();
   if (prevenuLe !== undefined && (!YMD_RE.test(prevenuLe) || prevenuLe > today)) {
     return { ok: false, error: "Date de signalement invalide (au plus tard aujourd'hui)." };
+  }
+  // Réglage PAR SERVICE (Paramètres > Configuration) — l'UI masque la case, le serveur refuse.
+  const svc = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { absencePrevenue: true },
+  });
+  if (!svc?.absencePrevenue) {
+    return { ok: false, error: "Les absences prévenues ne sont pas activées pour ce service." };
   }
   // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
   const b = await prisma.booking.findFirst({
