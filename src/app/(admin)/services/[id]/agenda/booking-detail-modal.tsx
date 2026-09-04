@@ -114,10 +114,11 @@ export function BookingDetailModal({
   // Absence prévenue à l'avance (case à cocher) — état initial = signalement en base.
   const [absent, setAbsent] = useState(booking.absencePrevenue != null);
   // Date à laquelle l'usager a prévenu (saisie gestionnaire, a posteriori possible) :
-  // celle du signalement existant, sinon aujourd'hui.
+  // celle du signalement existant, sinon VIDE tant que rien n'est saisi (Dom
+  // 2026-09-04) — le serveur prend alors la date du jour.
   const todayYmd = ymd(new Date());
   const [prevenuLe, setPrevenuLe] = useState(
-    booking.absencePrevenue ? absencePrevenueYmd(booking.absencePrevenue) : todayYmd,
+    booking.absencePrevenue ? absencePrevenueYmd(booking.absencePrevenue) : "",
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -156,6 +157,7 @@ export function BookingDetailModal({
     (absent !== (booking.absencePrevenue != null) ||
       (absent &&
         booking.absencePrevenue != null &&
+        prevenuLe !== "" &&
         prevenuLe !== absencePrevenueYmd(booking.absencePrevenue)));
   const dirty = (editable && detailDirty) || motifDirty || absenceDirty;
 
@@ -165,7 +167,7 @@ export function BookingDetailModal({
     setTheme(booking.theme);
     setMotif(booking.pointageMotif);
     setAbsent(booking.absencePrevenue != null);
-    setPrevenuLe(booking.absencePrevenue ? absencePrevenueYmd(booking.absencePrevenue) : todayYmd);
+    setPrevenuLe(booking.absencePrevenue ? absencePrevenueYmd(booking.absencePrevenue) : "");
     setError(null);
   }
 
@@ -200,7 +202,8 @@ export function BookingDetailModal({
           serviceId,
           absent,
           absent ? motif.trim() : undefined,
-          absent ? prevenuLe : undefined,
+          // Date vide = non saisie → le serveur horodate au jour même.
+          absent && prevenuLe ? prevenuLe : undefined,
         );
         if (!res.ok) {
           setSaving(false);
@@ -365,9 +368,7 @@ export function BookingDetailModal({
                 value={prevenuLe}
                 max={todayYmd}
                 disabled={!absent}
-                onChange={(e) => {
-                  if (e.target.value) setPrevenuLe(e.target.value);
-                }}
+                onChange={(e) => setPrevenuLe(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   width: "auto",

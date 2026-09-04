@@ -804,6 +804,12 @@ export function AgendaGrid({
             clearDragWeek();
             return;
           }
+          // Glisser issu de la PILE d'un créneau : la pile (seulement masquée pendant le
+          // geste, fermée au dragend du badge source) perdrait sa fermeture — le badge
+          // source est démonté par le changement de semaine et dragend ne tire plus ;
+          // elle pouvait ainsi réapparaître. On la ferme pour de bon ici : le dépôt
+          // vise une autre semaine, revenir à la pile d'origine n'a plus de sens.
+          setStackKey(null);
           shiftWeekRef.current(delta);
           tick(false);
         },
@@ -869,6 +875,7 @@ export function AgendaGrid({
         setDragPeriodArmed(null);
         return;
       }
+      setStackKey(null); // pile fermée pour de bon (cf. défilement de semaine)
       setRwPeriodId(p.id);
       setAnchorMonday(ymd(mondayOf(new Date(`${dateStart}T00:00:00`))));
     }, 450);
