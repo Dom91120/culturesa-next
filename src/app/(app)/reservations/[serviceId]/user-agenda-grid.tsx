@@ -3118,8 +3118,8 @@ export function UserAgendaGrid({
 
   // Boutons à icône « Liste d'attente » (pictogramme inliné WaitingListGlyph) puis
   // « Prévenir d'une absence » (public/absence.svg), chacun selon le réglage du service ;
-  // icône seule, libellé en infobulle (ToolbarIconButton). Rendus sur la ligne de titre
-  // à côté d'Imprimer (bureau) ou sur la ligne des onglets (mobile).
+  // icône seule, libellé en infobulle (ToolbarIconButton). Rendus sur la ligne de titre,
+  // à côté d'Imprimer sur bureau.
   const actionIcons = (
     <>
       {/* Ordre : absence puis liste d'attente, à côté de l'imprimante (Dom 2026-09-05). */}
@@ -3218,23 +3218,27 @@ export function UserAgendaGrid({
           margin: isMobile ? "0" : "0 0 .75rem",
         }}
       >
-        <div className="panel-title res-title" style={{ marginBottom: 0 }}>
-          <span className="dot" />
-          Réservations
-          {/* Exercice en cours : même rendu inline que le titre de l'Agenda admin.
+        {/* Titre masqué sur MOBILE (Dom 2026-09-05) : la ligne ne porte que la nav de
+            semaine + « Aujourd'hui » et les boutons à icône. */}
+        {!isMobile && (
+          <div className="panel-title res-title" style={{ marginBottom: 0 }}>
+            <span className="dot" />
+            Réservations
+            {/* Exercice en cours : même rendu inline que le titre de l'Agenda admin.
               Masqué sur MOBILE — à 375px, « 2026-2027 » passait sous la nav de
               semaine (l'info reste lisible via les onglets de période dessous). */}
-          {currentExerciceId != null && !isMobile && (
-            <span className="exercice-nav-inline">
-              <span className="ex-nav-label">
-                {exercices.find((e) => e.id === currentExerciceId)?.label}
+            {currentExerciceId != null && !isMobile && (
+              <span className="exercice-nav-inline">
+                <span className="ex-nav-label">
+                  {exercices.find((e) => e.id === currentExerciceId)?.label}
+                </span>
               </span>
-            </span>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         {/* Navigation semaine (Semaine réelle) : centrée en absolu sur la ligne de
-            titre (desktop). Sur MOBILE, elle reste DANS LE FLUX, calée à droite par
-            le space-between — centrée en absolu, elle chevauchait le titre. */}
+            titre (desktop). Sur MOBILE, elle reste DANS LE FLUX (premier élément de la
+            ligne, le titre y étant masqué). */}
         <div
           className="periode-nav"
           style={
@@ -3320,18 +3324,22 @@ export function UserAgendaGrid({
                 className="btn btn-ghost pn-today"
                 // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
                 // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
-                // Sur MOBILE, la nav est calée au bord droit : « Aujourd'hui » s'ancre
-                // à sa GAUCHE (à droite, il sortirait de l'écran).
+                // Desktop : ancré en absolu juste après ▶ (hors du centrage de la nav).
+                // Mobile : DANS LE FLUX, à droite de ▶ (Dom 2026-09-05) — la nav étant en
+                // flux calée à droite, le groupe nav + bouton se replie sans déborder.
                 style={{
                   padding: ".05rem .45rem",
                   fontSize: ".64rem",
-                  position: "absolute",
-                  top: "50%",
-                  transform: "translateY(-50%)",
                   whiteSpace: "nowrap",
                   ...(isMobile
-                    ? { right: "100%", marginRight: ".4rem" }
-                    : { left: "100%", marginLeft: ".4rem" }),
+                    ? { position: "static", marginLeft: ".4rem" }
+                    : {
+                        position: "absolute",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        left: "100%",
+                        marginLeft: ".4rem",
+                      }),
                 }}
                 onClick={() => {
                   // Retour à la semaine courante : on verrouille sur la période
@@ -3347,12 +3355,11 @@ export function UserAgendaGrid({
             )}
           </span>
         </div>
-        {/* Options (case « sans créneau » + impression) : sur la ligne de TITRE,
-            poussées au bord droit par marginLeft:auto (l'agenda usager est verrouillé
-            en « Semaine réelle », il n'y a plus de sélecteur A/B ici). Masquées sur mobile. */}
+        {/* Boutons de la ligne de TITRE (icônes absence / liste d'attente, puis Imprimer
+            sur bureau), poussés au bord droit par marginLeft:auto. */}
         <div
           style={{
-            display: isMobile ? "none" : "flex",
+            display: "flex",
             marginLeft: "auto",
             alignItems: "center",
             justifyContent: "flex-end",
@@ -3361,18 +3368,19 @@ export function UserAgendaGrid({
             // (centrée en absolu, donc invisible pour le flux) : le libellé tient sur
             // UNE ligne quand la place le permet, et se replie automatiquement sinon
             // au lieu de passer sous la nav.
-            maxWidth: "calc(50% - 80px)",
+            maxWidth: isMobile ? undefined : "calc(50% - 80px)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            {/* Bureau : boutons à icône (liste d'attente / absence) à GAUCHE du bouton
-                Imprimer, sur la ligne de titre (Dom 2026-09-05) — sur mobile ils sont
-                rendus sur la ligne des onglets, pas ici (ce groupe y est masqué). */}
-            {!isMobile && actionIcons}
-            <PrintIconButton
-              onClick={printMyBookings}
-              tip="Imprimer la liste de mes réservations"
-            />
+            {/* Boutons à icône (absence / liste d'attente) à GAUCHE du bouton Imprimer
+                (bureau) ; sur mobile, seules les icônes (Dom 2026-09-05). */}
+            {actionIcons}
+            {!isMobile && (
+              <PrintIconButton
+                onClick={printMyBookings}
+                tip="Imprimer la liste de mes réservations"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -3422,13 +3430,6 @@ export function UserAgendaGrid({
             sur le badge de la réservation concernée) — explique la procédure. Aligné à
             droite de la ligne des onglets, sous l'impression (retour Dom 2026-09-04).
             Sur mobile : icône seule, sans cadre ni texte. */}
-        {/* Mobile : les boutons à icône (liste d'attente / absence) restent sur la ligne
-            des onglets, la ligne de titre n'ayant pas de groupe d'options. */}
-        {isMobile && (
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".5rem" }}>
-            {actionIcons}
-          </div>
-        )}
       </div>
 
       {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour,
