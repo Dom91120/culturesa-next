@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ModalOverlay, WaitingListGlyph } from "@/components/agenda-shared";
 import { DAY_NAMES } from "@/lib/agenda-core";
 import { dispoKey, HALF_DAY_LABEL, HALF_DAYS } from "@/lib/waiting-list";
@@ -38,6 +38,20 @@ export function WaitingListModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inscrit = entry != null;
+  // Petit écran : jours ABRÉGÉS en en-tête (« Mer. ») et tableau sur toute la largeur —
+  // cinq colonnes de « Mercredi » ne tiennent pas dans 375 px (Dom 2026-09-05).
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const dayHeader = (d: string) => {
+    const full = DAY_NAMES[d] ?? d;
+    return narrow ? `${full.slice(0, 3)}.` : full;
+  };
 
   function toggle(key: string) {
     setDispos((prev) => {
@@ -92,8 +106,11 @@ export function WaitingListModal({
         className="modal-title"
         style={{ display: "flex", alignItems: "center", gap: ".45rem", flexWrap: "nowrap" }}
       >
-        <WaitingListGlyph size={24} />
-        <span>Liste d'attente</span>
+        {/* Même gris atténué que le pictogramme du bouton de la barre d'options. */}
+        <span style={{ color: "var(--muted)", display: "inline-flex" }}>
+          <WaitingListGlyph size={24} />
+        </span>
+        <span>S'inscrire sur la liste d'attente</span>
       </h3>
 
       <p style={{ fontSize: ".85rem", lineHeight: 1.55, margin: "0 0 .7rem" }}>
@@ -101,22 +118,41 @@ export function WaitingListModal({
         en indiquant vos <strong>disponibilités par demi-journée</strong>.
       </p>
 
-      <table style={{ borderCollapse: "collapse", fontSize: ".82rem", margin: "0 auto .7rem" }}>
+      {/* Jours en COLONNES, demi-journées en LIGNES (Dom 2026-09-05). */}
+      <table
+        style={{
+          borderCollapse: "collapse",
+          fontSize: ".82rem",
+          margin: "0 auto .7rem",
+          // Colonnes de jours de largeur ÉGALE (la plus large, « Mercredi », donne la mesure) ;
+          // sur petit écran, toute la largeur avec les jours abrégés.
+          tableLayout: "fixed",
+          width: narrow ? "100%" : `calc(6.5rem + ${days.length} * 5.2rem)`,
+          maxWidth: "100%",
+        }}
+      >
         <thead>
           <tr>
-            <th style={{ ...cell, textAlign: "left", fontWeight: 600 }} />
-            {HALF_DAYS.map((h) => (
-              <th key={h} style={{ ...cell, fontWeight: 600, color: "var(--muted)" }}>
-                {HALF_DAY_LABEL[h]}
+            <th
+              style={{
+                ...cell,
+                textAlign: "left",
+                fontWeight: 600,
+                width: narrow ? "6.2rem" : "6.5rem",
+              }}
+            />
+            {days.map((d) => (
+              <th key={d} style={{ ...cell, fontWeight: 600 }}>
+                {dayHeader(d)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {days.map((d) => (
-            <tr key={d}>
-              <td style={{ ...cell, textAlign: "left", fontWeight: 600 }}>{DAY_NAMES[d] ?? d}</td>
-              {HALF_DAYS.map((h) => {
+          {HALF_DAYS.map((h) => (
+            <tr key={h}>
+              <td style={{ ...cell, textAlign: "left", fontWeight: 600 }}>{HALF_DAY_LABEL[h]}</td>
+              {days.map((d) => {
                 const k = dispoKey(d, h);
                 return (
                   <td key={k} style={cell}>
@@ -135,50 +171,61 @@ export function WaitingListModal({
         </tbody>
       </table>
 
-      <p
-        style={{ fontSize: ".82rem", lineHeight: 1.55, color: "var(--muted)", margin: "0 0 .7rem" }}
-      >
+      <p style={{ fontSize: ".82rem", lineHeight: 1.55, margin: "0 0 .7rem" }}>
         Vous serez <strong>prévenu par e-mail</strong> dès que des créneaux correspondant à vos
         disponibilités se libéreront. La liste d'attente est traitée dans l'ordre d'inscription.
       </p>
 
-      <label
+      {/* Option dans un CADRE discret (filet fin, fond de champ), pour la lire comme un
+          choix à part du formulaire principal (Dom 2026-09-05). */}
+      <div
         style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: ".5rem",
-          // Style global des <label> (capitales espacées) inadapté à une phrase.
-          letterSpacing: 0,
-          textTransform: "none",
-          fontSize: ".85rem",
-          fontWeight: 500,
-          color: "var(--text)",
-          cursor: "pointer",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--rad-sm)",
+          background: "var(--surface2)",
+          padding: ".6rem .75rem",
           margin: "0 0 .35rem",
         }}
       >
-        <input
-          type="checkbox"
-          checked={auto}
-          onChange={(e) => setAuto(e.target.checked)}
-          style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0 }}
-        />
-        <span>
-          M'inscrire automatiquement dès qu'un créneau se libère
-          <span
-            style={{
-              display: "block",
-              fontSize: ".74rem",
-              fontWeight: 400,
-              color: "var(--muted)",
-              lineHeight: 1.45,
-            }}
-          >
-            La réservation sera faite en votre nom, avec les participants de votre fiche, et vous en
-            serez informé par e-mail.
+        <div style={{ fontSize: ".82rem", fontWeight: 600, margin: "0 0 .35rem" }}>Option</div>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: ".5rem",
+            // Style global des <label> (capitales espacées) inadapté à une phrase.
+            letterSpacing: 0,
+            textTransform: "none",
+            fontSize: ".85rem",
+            fontWeight: 500,
+            color: "var(--text)",
+            cursor: "pointer",
+            margin: 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={auto}
+            onChange={(e) => setAuto(e.target.checked)}
+            style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0 }}
+          />
+          <span>
+            Réservation automatique dès qu'un créneau se libère
+            <span
+              style={{
+                display: "block",
+                fontSize: ".74rem",
+                fontWeight: 400,
+                color: "var(--muted)",
+                lineHeight: 1.45,
+              }}
+            >
+              La réservation sera faite en votre nom, avec les participants de votre fiche, et vous
+              en serez informé par e-mail.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      </div>
 
       {inscrit && entry && (
         <p style={{ fontSize: ".74rem", color: "var(--muted)", margin: ".4rem 0 0" }}>

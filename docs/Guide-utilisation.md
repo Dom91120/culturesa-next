@@ -149,7 +149,7 @@ Tout est complet ? Si le service a activé la **liste d'attente**, le bouton **�
 à droite des onglets de période, ouvre une fenêtre où vous indiquez vos **disponibilités par
 demi-journée** (matin / après-midi, sur les jours d'ouverture du service). Vous serez **prévenu
 par e-mail** dès que des créneaux correspondant à vos disponibilités se libéreront, dans l'ordre
-d'inscription. Cochez **« M'inscrire automatiquement dès qu'un créneau se libère »** pour que la
+d'inscription. Cochez **« Réservation automatique dès qu'un créneau se libère »** pour que la
 réservation soit faite en votre nom, avec les participants de votre fiche : vous en êtes informé
 par e-mail et retiré de la liste. Validez avec **« S'inscrire sur la liste d'attente »** ; une
 fois inscrit, le même bouton permet de **mettre à jour** vos disponibilités ou de vous

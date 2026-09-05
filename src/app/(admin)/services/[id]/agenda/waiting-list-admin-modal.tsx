@@ -63,10 +63,13 @@ export function WaitingListAdminModal({
         className="modal-title"
         style={{ display: "flex", alignItems: "center", gap: ".45rem", flexWrap: "nowrap" }}
       >
-        <WaitingListGlyph size={24} />
+        {/* Même gris atténué que le pictogramme du bouton de la barre d'options. */}
+        <span style={{ color: "var(--muted)", display: "inline-flex" }}>
+          <WaitingListGlyph size={24} />
+        </span>
         <span>
           Liste d'attente{" "}
-          <span style={{ color: "var(--muted)", fontWeight: 400 }}>
+          <span style={{ fontWeight: 400 }}>
             ({rows.length} inscrit{rows.length > 1 ? "s" : ""})
           </span>
         </span>
