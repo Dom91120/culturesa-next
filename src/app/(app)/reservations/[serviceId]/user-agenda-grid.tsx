@@ -13,6 +13,7 @@ import {
   useWeekNavigation,
 } from "@/components/agenda-hooks";
 import {
+  AbsenceGlyph,
   AgendaAllDayRow,
   AgendaDayBackground,
   AgendaEmptyWeekNotice,
@@ -3117,7 +3118,7 @@ export function UserAgendaGrid({
   }, [displayDays, isDayDisabled, blocksByDay, renderBlock]);
 
   // Boutons à icône « Liste d'attente » (pictogramme inliné WaitingListGlyph) puis
-  // « Prévenir d'une absence » (public/absence.svg), chacun selon le réglage du service ;
+  // « Prévenir d'une absence » (pictogramme inliné AbsenceGlyph), chacun selon le réglage du service ;
   // icône seule, libellé en infobulle (ToolbarIconButton). Rendus sur la ligne de titre,
   // à côté d'Imprimer sur bureau.
   const actionIcons = (
@@ -3126,7 +3127,8 @@ export function UserAgendaGrid({
       {service.absencePrevenue && (
         <ToolbarIconButton
           label="Prévenir d'une absence"
-          icon="/absence.svg"
+          icon={<AbsenceGlyph size={15} />}
+          framed
           onClick={() => setAbsenceHelpOpen(true)}
         />
       )}

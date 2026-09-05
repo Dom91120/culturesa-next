@@ -398,6 +398,36 @@ export function WaitingListGlyph({ size = 24 }: { size?: number }) {
 }
 
 /**
+ * Pictogramme « Prévenir d'une absence » = Lucide « calendar-x-2 » (calendrier, croix
+ * en coin — même composition que WaitingListGlyph), choisi par Dom le 2026-09-05.
+ * Inliné pour hériter de la couleur du bouton (`currentColor`), ce qu'un <img> sur
+ * public/absence.svg ne permet pas ; ce fichier reste la source du dessin (docs).
+ */
+export function AbsenceGlyph({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" />
+      <path d="M3 10h18" />
+      <path d="m17 22 5-5" />
+      <path d="m17 17 5 5" />
+    </svg>
+  );
+}
+
+/**
  * Bouton « Liste d'attente » (agenda gestionnaire ET agenda usager, Dom 2026-09-05) :
  * même chrome que le bouton Imprimer (cadre fin, pictogramme 15 px gris) + pastille
  * optionnelle en coin haut-droit ; rien si `badge` est vide. Couleur : ORANGE par
@@ -534,12 +564,16 @@ export function ToolbarIconButton({
   label,
   icon,
   withLabel = false,
+  framed = false,
   onClick,
 }: {
   label: string;
   // Chemin d'un SVG de public/ (rendu en <img>) OU pictogramme inliné (nœud React).
   icon: string | React.ReactNode;
   withLabel?: boolean;
+  // Icône seule : même chrome que les boutons Imprimer / Liste d'attente (cadre fin,
+  // pictogramme gris) — pour un pictogramme en trait à `currentColor`.
+  framed?: boolean;
   onClick?: () => void;
 }) {
   const glyph =
@@ -554,15 +588,29 @@ export function ToolbarIconButton({
         type="button"
         data-tip={label}
         aria-label={label}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          cursor: "pointer",
-          display: "inline-flex",
-          alignItems: "center",
-          lineHeight: 0,
-        }}
+        style={
+          framed
+            ? {
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--rad-sm)",
+                padding: ".28rem .38rem",
+                cursor: "pointer",
+                color: "var(--muted)",
+                display: "flex",
+                alignItems: "center",
+                lineHeight: 1,
+              }
+            : {
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                lineHeight: 0,
+              }
+        }
         onClick={onClick}
       >
         {glyph}
