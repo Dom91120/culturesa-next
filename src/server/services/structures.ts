@@ -80,7 +80,7 @@ export async function resolveStructureLibre(demandeurId: number, label: string):
 //  L'usager peut changer sa catégorie et sa structure depuis « Mon compte », à une
 //  condition : n'avoir aucune réservation sur un exercice en cours. Le détail du
 //  raisonnement (pourquoi c'est acceptable alors que la catégorie commande l'accès)
-//  est dans `updateAffiliationAction` — mon-compte/actions.ts.
+//  est dans `applyAffiliation` (étape d'`updateProfileAction`) — mon-compte/actions.ts.
 // ════════════════════════════════════════════════════════════════════════════
 
 /**

@@ -45,73 +45,71 @@ export function UserShell({
   }, [pathname]);
 
   return (
-    <>
-      <main>
-        <div className="app-layout">
-          <div
-            id="service-sidebar-wrap"
-            className={`${effCollapsed ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
-            style={SIDEBAR_WRAP_STYLE}
-          >
-            <SidebarToggle narrow={narrow} toggleSidebar={toggleSidebar} />
-            {/* Bouton « sandwich » visible uniquement en mode smartphone (CSS) :
+    <main>
+      <div className="app-layout">
+        <div
+          id="service-sidebar-wrap"
+          className={`${effCollapsed ? "collapsed" : ""}${mobileNavOpen ? " mobile-open" : ""}`}
+          style={SIDEBAR_WRAP_STYLE}
+        >
+          <SidebarToggle narrow={narrow} toggleSidebar={toggleSidebar} />
+          {/* Bouton « sandwich » visible uniquement en mode smartphone (CSS) :
                 déplie/replie la liste des services affichée sur plusieurs lignes. */}
-            <button
-              type="button"
-              id="mobile-services-toggle"
-              aria-expanded={mobileNavOpen}
-              aria-controls="service-sidebar"
-              onClick={() => setMobileNavOpen((o) => !o)}
-            >
-              <span className="mst-burger" aria-hidden="true">
-                ☰
+          <button
+            type="button"
+            id="mobile-services-toggle"
+            aria-expanded={mobileNavOpen}
+            aria-controls="service-sidebar"
+            onClick={() => setMobileNavOpen((o) => !o)}
+          >
+            <span className="mst-burger" aria-hidden="true">
+              ☰
+            </span>
+            {activeServiceIcon && (
+              <span className="mst-icon" aria-hidden="true">
+                {activeServiceIcon}
               </span>
-              {activeServiceIcon && (
-                <span className="mst-icon" aria-hidden="true">
-                  {activeServiceIcon}
-                </span>
-              )}
-              <span className="mst-label">{activeServiceLabel}</span>
-              <span className="mst-caret" aria-hidden="true">
-                ▾
-              </span>
-            </button>
-            {/* Marque dans la sidebar (comme le shell admin) : plus de bandeau-titre en haut. */}
-            <SidebarBrand />
+            )}
+            <span className="mst-label">{activeServiceLabel}</span>
+            <span className="mst-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+          {/* Marque dans la sidebar (comme le shell admin) : plus de bandeau-titre en haut. */}
+          <SidebarBrand />
 
-            <div className="sidebar-label">Réservations</div>
-            <div id="service-sidebar">
-              {/* Sidebar repliée : seuls les icônes restent visibles → info-bulle native
+          <div className="sidebar-label">Réservations</div>
+          <div id="service-sidebar">
+            {/* Sidebar repliée : seuls les icônes restent visibles → info-bulle native
                   (title) avec le libellé au survol. Dépliée : pas de title (redondant). */}
-              {services.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={activeServiceId === s.id ? "active" : ""}
-                  title={effCollapsed ? s.label : undefined}
-                  onClick={() => router.push(`/reservations/${s.id}`)}
-                >
-                  <span className="sb-icon">{s.icon || "📄"}</span>
-                  <span className="sb-label">{s.label}</span>
-                </button>
-              ))}
-              {services.length === 0 && (
-                <p style={{ fontSize: ".78rem", color: "var(--muted)", padding: ".4rem" }}>
-                  Aucune activité disponible.
-                </p>
-              )}
+            {services.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={activeServiceId === s.id ? "active" : ""}
+                title={effCollapsed ? s.label : undefined}
+                onClick={() => router.push(`/reservations/${s.id}`)}
+              >
+                <span className="sb-icon">{s.icon || "📄"}</span>
+                <span className="sb-label">{s.label}</span>
+              </button>
+            ))}
+            {services.length === 0 && (
+              <p style={{ fontSize: ".78rem", color: "var(--muted)", padding: ".4rem" }}>
+                Aucune activité disponible.
+              </p>
+            )}
 
-              {/* (Plus d'entrée « Mon compte » ici : elle vit dans le menu du bloc
+            {/* (Plus d'entrée « Mon compte » ici : elle vit dans le menu du bloc
                   utilisateur ci-dessous — elle figurait en double, Dom 2026-08-30.) */}
-            </div>
-
-            {/* Barre utilisateur épinglée en BAS de la sidebar (cf. UserBar). */}
-            <UserBar user={user} />
           </div>
 
-          <div className="app-main">{children}</div>
+          {/* Barre utilisateur épinglée en BAS de la sidebar (cf. UserBar). */}
+          <UserBar user={user} />
         </div>
-      </main>
-    </>
+
+        <div className="app-main">{children}</div>
+      </div>
+    </main>
   );
 }

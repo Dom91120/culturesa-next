@@ -72,7 +72,9 @@ Un e-mail de vérification vous est ensuite envoyé pour **activer votre compte*
 Depuis **« Mon compte »**, vous pouvez modifier vos informations personnelles, changer votre mot
 de passe et demander la suppression de votre compte :
 
-- **Mon profil** — nom, prénom, e-mail, téléphone.
+- **Mon profil** — nom, prénom, téléphone, nombre d'enfants et d'accompagnants, catégorie et
+  structure (un seul bouton « Enregistrer » ; catégorie et structure restent modifiables tant que
+  vous n'avez aucune réservation sur l'exercice en cours).
 - **Changer mon mot de passe** — avec rappel des règles de sécurité (12 caractères, majuscule,
   minuscule, chiffre, caractère spécial).
 - **Supprimer mon compte** — conformément au RGPD, vos données sont anonymisées de façon
@@ -294,9 +296,9 @@ La configuration définit les **paramètres globaux** du service — **créneaux
 les créneaux qui se répètent chaque semaine), **alternance Semaine A/B** (sans effet si les créneaux
 récurrents sont désactivés), **prise en compte des accompagnants** dans la jauge, **absences
 prévenues** (l'usager peut signaler depuis son agenda qu'il sera absent à une séance, le
-gestionnaire l'enregistrer dans la fiche de réservation ; désactivé par défaut), **liste
+gestionnaire l'enregistrer dans la fiche de réservation ; activé par défaut), **liste
 d'attente** (l'usager dépose ses disponibilités par demi-journée et est prévenu par e-mail, ou
-inscrit automatiquement, dès qu'un créneau se libère ; désactivé par défaut) et **alerte
+inscrit automatiquement, dès qu'un créneau se libère ; activé par défaut) et **alerte
 « plus de place »** (à l'arrivée sur l'agenda ou sur une période, si plus aucun créneau de la
 période affichée n'est réservable, une fenêtre informe l'usager et l'invite à contacter le
 service via l'e-mail de contact du référentiel Services ; le texte du message est

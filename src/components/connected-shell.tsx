@@ -117,73 +117,71 @@ export function ConnectedShell({
   }
 
   return (
-    <>
-      <main>
-        <div className="app-layout">
-          <div
-            id="service-sidebar-wrap"
-            className={effCollapsed ? "collapsed" : ""}
-            style={SIDEBAR_WRAP_STYLE}
-          >
-            <SidebarToggle narrow={narrow} toggleSidebar={toggleSidebar} />
-            <SidebarBrand />
+    <main>
+      <div className="app-layout">
+        <div
+          id="service-sidebar-wrap"
+          className={effCollapsed ? "collapsed" : ""}
+          style={SIDEBAR_WRAP_STYLE}
+        >
+          <SidebarToggle narrow={narrow} toggleSidebar={toggleSidebar} />
+          <SidebarBrand />
 
-            <div className="sidebar-label">Services</div>
-            <div id="service-sidebar">
-              {/* Sidebar repliée : seuls les icônes restent visibles → info-bulle native
+          <div className="sidebar-label">Services</div>
+          <div id="service-sidebar">
+            {/* Sidebar repliée : seuls les icônes restent visibles → info-bulle native
                   (title) avec le libellé au survol. Dépliée : pas de title (redondant). */}
-              {services.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={activeServiceId === s.id ? "active" : ""}
-                  title={effCollapsed ? s.label : undefined}
-                  onClick={() => goToService(s.id)}
-                >
-                  <span className="sb-icon">{s.icon || "📄"}</span>
-                  <span className="sb-label">{s.label}</span>
-                </button>
-              ))}
+            {services.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={activeServiceId === s.id ? "active" : ""}
+                title={effCollapsed ? s.label : undefined}
+                onClick={() => goToService(s.id)}
+              >
+                <span className="sb-icon">{s.icon || "📄"}</span>
+                <span className="sb-label">{s.label}</span>
+              </button>
+            ))}
 
-              {isAdmin && (
-                <button
-                  type="button"
-                  id="sidebar-admin-btn"
-                  className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
-                  style={{ marginTop: "1rem" }}
-                  title={effCollapsed ? "Administration" : undefined}
-                  onClick={goToAdmin}
-                >
-                  <span className="sb-icon">⚙️</span>
-                  <span className="sb-label">Administration</span>
-                </button>
-              )}
+            {isAdmin && (
+              <button
+                type="button"
+                id="sidebar-admin-btn"
+                className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
+                style={{ marginTop: "1rem" }}
+                title={effCollapsed ? "Administration" : undefined}
+                onClick={goToAdmin}
+              >
+                <span className="sb-icon">⚙️</span>
+                <span className="sb-label">Administration</span>
+              </button>
+            )}
 
-              {/* (Plus d'entrée « Mon compte » ici : elle vit dans le menu du bloc
+            {/* (Plus d'entrée « Mon compte » ici : elle vit dans le menu du bloc
                   utilisateur ci-dessous — elle figurait en double, Dom 2026-08-30.) */}
-            </div>
-
-            {/* Barre utilisateur épinglée en BAS de la sidebar (cf. UserBar). */}
-            <UserBar user={user} />
           </div>
 
-          <div className="app-main">
-            <div className="tabs-nav">
-              {tabs.map((t) => (
-                <button
-                  key={t.href}
-                  type="button"
-                  className={`tab-nav-btn${t.href === activeHref ? " active" : ""}`}
-                  onClick={() => router.push(t.href)}
-                >
-                  <span className="tab-icon">{t.icon}</span> {t.label}
-                </button>
-              ))}
-            </div>
-            {children}
-          </div>
+          {/* Barre utilisateur épinglée en BAS de la sidebar (cf. UserBar). */}
+          <UserBar user={user} />
         </div>
-      </main>
-    </>
+
+        <div className="app-main">
+          <div className="tabs-nav">
+            {tabs.map((t) => (
+              <button
+                key={t.href}
+                type="button"
+                className={`tab-nav-btn${t.href === activeHref ? " active" : ""}`}
+                onClick={() => router.push(t.href)}
+              >
+                <span className="tab-icon">{t.icon}</span> {t.label}
+              </button>
+            ))}
+          </div>
+          {children}
+        </div>
+      </div>
+    </main>
   );
 }

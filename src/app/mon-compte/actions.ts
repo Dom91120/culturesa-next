@@ -74,6 +74,17 @@ export async function updateProfileAction(
     data.accompagnants = accompagnants;
   }
 
+  // Catégorie / structure : dans le MÊME formulaire que l'identité, un seul
+  // « Enregistrer » (Dom 2026-09-05). Les champs ne sont postés que lorsqu'ils sont
+  // saisissables (aucune réservation sur l'exercice en cours) ; applyAffiliation
+  // revérifie cette condition et les couples catégorie/structure. Appliqué AVANT
+  // l'identité : une affiliation refusée ne doit pas laisser croire que rien n'est
+  // enregistré alors que le téléphone l'a été.
+  if (dbUser?.role === "utilisateur" && formData.has("demandeurId")) {
+    const aff = await applyAffiliation(session.user.id, formData);
+    if (!aff.ok) return aff;
+  }
+
   await prisma.user.update({ where: { id: session.user.id }, data });
   revalidatePath("/mon-compte");
   return { ok: true };
@@ -103,12 +114,14 @@ export async function updateProfileAction(
  *
  * Contrôles revérifiés ICI : le formulaire les applique déjà, mais une server action
  * voit des entrées brutes.
+ *
+ * Étape d'`updateProfileAction` (même formulaire que l'identité depuis le 2026-09-05) ;
+ * `userId` vient de la session vérifiée par l'appelant.
  */
-export async function updateAffiliationAction(
-  _prev: ActionState,
+async function applyAffiliation(
+  userId: string,
   formData: FormData,
-): Promise<ActionState> {
-  const session = await requireUser();
+): Promise<NonNullable<ActionState>> {
   const entier = (v: FormDataEntryValue | null): number | null => {
     const brut = String(v ?? "").trim();
     if (brut === "") return null;
@@ -121,7 +134,7 @@ export async function updateAffiliationAction(
     return { ok: false, error: "Valeurs invalides." };
   }
 
-  if (await aReservationSurExerciceCourant(session.user.id)) {
+  if (await aReservationSurExerciceCourant(userId)) {
     return {
       ok: false,
       error:
@@ -162,7 +175,7 @@ export async function updateAffiliationAction(
   }
 
   const avant = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: {
       email: true,
       demandeur: { select: { label: true } },
@@ -170,18 +183,18 @@ export async function updateAffiliationAction(
     },
   });
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: userId },
     data: { demandeurId, structureId },
   });
   const apres = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { demandeur: { select: { label: true } }, structure: { select: { label: true } } },
   });
   // Trace : un changement d'affiliation déplace l'accès aux services. Il est fait par
   // l'usager, donc sans regard d'un gestionnaire — le journal est le seul endroit où
   // il reste visible.
   await recordAudit(AUDIT.USER_AFFILIATION_CHANGED, {
-    target: avant?.email ?? session.user.id,
+    target: avant?.email ?? userId,
     details: {
       avant: {
         categorie: avant?.demandeur?.label ?? null,
@@ -193,7 +206,6 @@ export async function updateAffiliationAction(
       },
     },
   });
-  revalidatePath("/mon-compte");
   return { ok: true };
 }
 

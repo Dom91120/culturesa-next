@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { initialActionState } from "@/lib/action-state";
 import { upperCaseOnInput } from "@/lib/format";
 import { STRUCTURE_LIBRE_MAX } from "@/schemas/user";
-import { updateAffiliationAction, updateProfileAction } from "./actions";
+import { updateProfileAction } from "./actions";
 
 type Role = "utilisateur" | "gestionnaire" | "administrateur";
 
@@ -74,21 +74,18 @@ function AffiliationReadonly({ profile }: { profile: Profile }) {
 }
 
 /**
- * Catégorie + structure, modifiables par l'usager tant qu'il n'a rien réservé sur un
- * exercice en cours (`modifiable`). Formulaire SÉPARÉ de l'identité : ces deux champs
- * déplacent l'accès aux services, ils méritent leur propre geste d'enregistrement
- * plutôt que de partir avec un changement de numéro de téléphone.
+ * Catégorie + structure SAISISSABLES (usager sans réservation sur un exercice en
+ * cours) : deux champs du formulaire d'identité, enregistrés AVEC lui par
+ * `updateProfileAction` — un seul « Enregistrer » (Dom 2026-09-05). Seule la cascade
+ * catégorie → structure est locale ; le serveur refuse tout couple incohérent.
  */
-function AffiliationFields({
+function AffiliationEditable({
   profile,
   demandeurs,
-  modifiable,
 }: {
   profile: Profile;
   demandeurs: DemandeurOpt[];
-  modifiable: boolean;
 }) {
-  const [state, action, pending] = useActionState(updateAffiliationAction, initialActionState);
   const [demandeurId, setDemandeurId] = useState(
     profile.demandeurId != null ? String(profile.demandeurId) : "",
   );
@@ -99,12 +96,8 @@ function AffiliationFields({
   // structure actuelle de l'usager (c'est la sienne : pas de fuite), vidé au changement.
   const [structureTexte, setStructureTexte] = useState(profile.structure ?? "");
 
-  // Non modifiable : rendu en lecture seule DANS le bloc des champs gérés par
-  // l'administration du formulaire d'identité (cf. AffiliationReadonly), pas ici.
-  if (!modifiable) return null;
-
   // Cascade : la structure suit la catégorie choisie (une structure appartient à une
-  // seule catégorie ; le serveur refuse tout couple incohérent).
+  // seule catégorie).
   const demandeurChoisi = demandeurs.find((d) => String(d.id) === demandeurId);
   const structures = demandeurChoisi?.structures ?? [];
   // Catégorie en saisie libre → champ TEXTE obligatoire à la place du sélecteur,
@@ -112,77 +105,62 @@ function AffiliationFields({
   const saisieLibre = demandeurChoisi?.structureLibre ?? false;
 
   return (
-    <form action={action}>
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor="p-demandeur">Catégorie</label>
+    <>
+      <div className="field">
+        <label htmlFor="p-demandeur">Catégorie</label>
+        <select
+          id="p-demandeur"
+          name="demandeurId"
+          value={demandeurId}
+          onChange={(e) => {
+            setDemandeurId(e.target.value);
+            // La structure dépend de la catégorie → la re-sélection/saisie est requise.
+            setStructureId("");
+            setStructureTexte("");
+          }}
+        >
+          <option value="">— Aucune —</option>
+          {demandeurs.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor={saisieLibre ? "p-structure-libre" : "p-structure"}>
+          Structure{saisieLibre && <span className="required-star">*</span>}
+        </label>
+        {saisieLibre ? (
+          <input
+            id="p-structure-libre"
+            name="structureTexte"
+            required
+            maxLength={STRUCTURE_LIBRE_MAX}
+            placeholder="Nom de votre structure"
+            value={structureTexte}
+            onChange={(e) => setStructureTexte(e.target.value)}
+          />
+        ) : (
           <select
-            id="p-demandeur"
-            name="demandeurId"
-            value={demandeurId}
-            onChange={(e) => {
-              setDemandeurId(e.target.value);
-              // La structure dépend de la catégorie → la re-sélection/saisie est requise.
-              setStructureId("");
-              setStructureTexte("");
-            }}
+            id="p-structure"
+            name="structureId"
+            value={structureId}
+            disabled={!demandeurId || structures.length === 0}
+            onChange={(e) => setStructureId(e.target.value)}
           >
-            <option value="">— Aucune —</option>
-            {demandeurs.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.label}
+            <option value="">
+              {demandeurId ? "— Aucune —" : "— Choisissez d'abord une catégorie —"}
+            </option>
+            {structures.map((st) => (
+              <option key={st.id} value={st.id}>
+                {st.label}
               </option>
             ))}
           </select>
-        </div>
-        <div className="field">
-          <label htmlFor={saisieLibre ? "p-structure-libre" : "p-structure"}>
-            Structure{saisieLibre && <span className="required-star">*</span>}
-          </label>
-          {saisieLibre ? (
-            <input
-              id="p-structure-libre"
-              name="structureTexte"
-              required
-              maxLength={STRUCTURE_LIBRE_MAX}
-              placeholder="Nom de votre structure"
-              value={structureTexte}
-              onChange={(e) => setStructureTexte(e.target.value)}
-            />
-          ) : (
-            <select
-              id="p-structure"
-              name="structureId"
-              value={structureId}
-              disabled={!demandeurId || structures.length === 0}
-              onChange={(e) => setStructureId(e.target.value)}
-            >
-              <option value="">
-                {demandeurId ? "— Aucune —" : "— Choisissez d'abord une catégorie —"}
-              </option>
-              {structures.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.label}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        )}
       </div>
-      {state?.error && (
-        <p className="field-error" style={{ display: "block" }}>
-          {state.error}
-        </p>
-      )}
-      {state?.ok && (
-        <p style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Affiliation enregistrée</p>
-      )}
-      <div className="btn-row" style={{ marginTop: ".4rem" }}>
-        <button type="submit" className="btn btn-ghost" disabled={pending}>
-          {pending ? "Enregistrement…" : "Enregistrer catégorie / structure"}
-        </button>
-      </div>
-    </form>
+    </>
   );
 }
 
@@ -272,9 +250,11 @@ export function ProfileForm({
           )}
         </div>
 
-        {/* Champs en lecture seule gérés par l'administration (catégorie, structure,
-            niveau, services). Masqué pour un administrateur — le rôle est affiché à
-            côté du titre. */}
+        {/* Affiliation (catégorie, structure, niveau) et services gérés : DANS le même
+            formulaire que l'identité, un seul « Enregistrer » (Dom 2026-09-05).
+            Catégorie et structure sont saisissables tant que l'usager n'a rien réservé
+            sur l'exercice en cours, figées sinon. Masqué pour un administrateur — le
+            rôle est affiché à côté du titre. */}
         {(isUser || isManager) && (
           <div
             style={{
@@ -285,18 +265,16 @@ export function ProfileForm({
           >
             <div
               className="form-grid"
-              // Catégorie / structure figées + niveau sur UNE ligne : 3/8, 3/8, 1/4
-              // (retour Dom 2026-09-04). Sinon la grille standard à deux colonnes.
-              style={
-                isUser && !affiliationModifiable && profile.niveau
-                  ? { gridTemplateColumns: "3fr 3fr 2fr" }
-                  : undefined
-              }
+              // Catégorie, structure et niveau sur UNE ligne : 3/8, 3/8, 1/4 (retour
+              // Dom 2026-09-04). Sinon la grille standard à deux colonnes.
+              style={isUser && profile.niveau ? { gridTemplateColumns: "3fr 3fr 2fr" } : undefined}
             >
-              {/* Catégorie / structure figées (réservations sur l'exercice en cours) :
-                  ici, avec le niveau — la version modifiable a son propre formulaire
-                  plus bas. */}
-              {isUser && !affiliationModifiable && <AffiliationReadonly profile={profile} />}
+              {isUser &&
+                (affiliationModifiable ? (
+                  <AffiliationEditable profile={profile} demandeurs={demandeurs} />
+                ) : (
+                  <AffiliationReadonly profile={profile} />
+                ))}
               {isUser && profile.niveau && (
                 <ReadonlyField label="Niveau">{profile.niveau}</ReadonlyField>
               )}
@@ -345,27 +323,6 @@ export function ProfileForm({
           </button>
         </div>
       </form>
-
-      {/* Catégorie / structure : HORS du formulaire d'identité — elles ont leur propre
-          action, et un formulaire ne peut pas en contenir un autre (HTML : le
-          navigateur supprime le formulaire imbriqué, et le bouton soumettait celui du
-          dessus). Les deux gestes restent ainsi distincts : changer d'école n'est pas
-          corriger son numéro de téléphone. */}
-      {isUser && affiliationModifiable && (
-        <div
-          style={{
-            marginTop: "1.25rem",
-            paddingTop: "1rem",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
-          <AffiliationFields
-            profile={profile}
-            demandeurs={demandeurs}
-            modifiable={affiliationModifiable}
-          />
-        </div>
-      )}
     </div>
   );
 }
