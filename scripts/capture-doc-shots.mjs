@@ -2,7 +2,7 @@
 // Usage : le serveur dev (ou prod locale) tourne sur http://localhost:3000, base SEEDÉE
 // (comptes de démo du seed), puis :  node scripts/capture-doc-shots.mjs
 // Produit : docs/img/06-agenda-admin.png, docs/img/03-mon-compte.png,
-//           public/onboarding/pointage-mode.png
+//           public/onboarding/pointage-mode.png, public/onboarding/validation-mode.png
 // Après validation des images : `pnpm gen:docs && pnpm gen:docs:word` (artefacts).
 import fs from "node:fs";
 import puppeteer from "puppeteer";
@@ -10,9 +10,10 @@ import puppeteer from "puppeteer";
 const BASE = process.env.CAPTURE_BASE_URL ?? "http://localhost:3000";
 // Identifiants de DÉMO du seed (prisma/seed.ts) — fixtures du dépôt, pas des secrets.
 const ADMIN = { email: "informatique@chatillon92.fr", password: "Admin123456!" };
-// Usager SANS réservation sur l'exercice en cours : le bloc catégorie/structure
-// s'affiche en mode MODIFIABLE (sinon lecture seule, #p-demandeur absent).
-const USAGER = { email: "lea.loisir-mat@test.fr", password: "Test0123456!" };
+// Usager AVEC réservations sur l'exercice en cours et un niveau renseigné : le bloc
+// catégorie / structure / niveau s'affiche FIGÉ, sur une ligne, au-dessus du bouton
+// Enregistrer (disposition 2026-09-04) — c'est le cas courant à documenter.
+const USAGER = { email: "paul.elementaire@test.fr", password: "Test0123456!" };
 // Gabarit des captures existantes : fenêtre 1380×940 rendue en ×2 (2760×1880).
 const VIEWPORT = { width: 1380, height: 940, deviceScaleFactor: 2 };
 
@@ -54,36 +55,53 @@ try {
     await page.screenshot({ path: "docs/img/06-agenda-admin.png" });
     console.log("✓ docs/img/06-agenda-admin.png");
 
-    // ── 3. Barre d'options, « Mode pointage » coché (public/onboarding) ─────────────
-    await page.evaluate(() => {
-      const label = [...document.querySelectorAll("label")].find((l) =>
-        l.textContent?.includes("Mode pointage"),
-      );
-      label?.querySelector("input")?.click();
-    });
+    // ── 3. Barre d'options (public/onboarding) : « Mode pointage » coché, puis
+    //      « Mode validation » coché — même cadrage (cases + boutons liste d'attente /
+    //      Imprimer / Mode création). ────────────────────────────────────────────────
+    const toggleMode = (name) =>
+      page.evaluate((n) => {
+        const label = [...document.querySelectorAll("label")].find((l) =>
+          l.textContent?.includes(n),
+        );
+        label?.querySelector("input")?.click();
+      }, name);
+    const optionsClip = () =>
+      page.evaluate(() => {
+        const labels = [...document.querySelectorAll("label")].filter(
+          (l) =>
+            l.textContent?.includes("Mode validation") || l.textContent?.includes("Mode pointage"),
+        );
+        const btns = [...document.querySelectorAll("button")].filter(
+          (b) =>
+            b.getAttribute("aria-label")?.includes("Imprimer") ||
+            b.getAttribute("aria-label")?.includes("Liste d'attente") ||
+            b.getAttribute("aria-label")?.includes("création") ||
+            b.getAttribute("data-tip")?.includes("création") ||
+            b.getAttribute("title")?.includes("création") ||
+            b.textContent?.includes("Mode création"),
+        );
+        const boxes = [...labels, ...btns].map((e) => e.getBoundingClientRect());
+        const x1 = Math.min(...boxes.map((b) => b.left));
+        const y1 = Math.min(...boxes.map((b) => b.top));
+        const x2 = Math.max(...boxes.map((b) => b.right));
+        const y2 = Math.max(...boxes.map((b) => b.bottom));
+        return { x: x1 - 6, y: y1 - 6, width: x2 - x1 + 12, height: y2 - y1 + 12 };
+      });
+    await toggleMode("Mode pointage");
     await sleep(600);
-    const clip = await page.evaluate(() => {
-      const labels = [...document.querySelectorAll("label")].filter(
-        (l) =>
-          l.textContent?.includes("Masquer les horaires") ||
-          l.textContent?.includes("Mode validation") ||
-          l.textContent?.includes("Mode pointage"),
-      );
-      const btns = [...document.querySelectorAll("button")].filter(
-        (b) =>
-          b.getAttribute("aria-label")?.includes("Imprimer") ||
-          b.getAttribute("title")?.includes("création") ||
-          b.textContent?.includes("Mode création"),
-      );
-      const boxes = [...labels, ...btns].map((e) => e.getBoundingClientRect());
-      const x1 = Math.min(...boxes.map((b) => b.left));
-      const y1 = Math.min(...boxes.map((b) => b.top));
-      const x2 = Math.max(...boxes.map((b) => b.right));
-      const y2 = Math.max(...boxes.map((b) => b.bottom));
-      return { x: x1 - 6, y: y1 - 6, width: x2 - x1 + 12, height: y2 - y1 + 12 };
+    await page.screenshot({
+      path: "public/onboarding/pointage-mode.png",
+      clip: await optionsClip(),
     });
-    await page.screenshot({ path: "public/onboarding/pointage-mode.png", clip });
     console.log("✓ public/onboarding/pointage-mode.png");
+    // Modes exclusifs : cocher « validation » décoche « pointage ».
+    await toggleMode("Mode validation");
+    await sleep(600);
+    await page.screenshot({
+      path: "public/onboarding/validation-mode.png",
+      clip: await optionsClip(),
+    });
+    console.log("✓ public/onboarding/validation-mode.png");
     await ctx.close();
   }
 
@@ -94,7 +112,10 @@ try {
     await page.setViewport(VIEWPORT);
     await login(page, USAGER);
     await page.goto(`${BASE}/mon-compte`, { waitUntil: "networkidle0" });
-    await page.waitForSelector("#p-demandeur"); // bloc catégorie/structure rendu
+    // Bloc catégorie / structure figé rendu (mention « ne sont plus modifiables ici »).
+    await page.waitForFunction(() =>
+      document.body.innerText.includes("ne sont plus modifiables ici"),
+    );
     await hideDevtools(page);
     await sleep(500);
     await page.screenshot({ path: "docs/img/03-mon-compte.png", fullPage: true });
@@ -108,6 +129,7 @@ for (const f of [
   "docs/img/06-agenda-admin.png",
   "docs/img/03-mon-compte.png",
   "public/onboarding/pointage-mode.png",
+  "public/onboarding/validation-mode.png",
 ]) {
   const { size } = fs.statSync(f);
   console.log(`  ${f} — ${Math.round(size / 1024)} Ko`);

@@ -226,13 +226,13 @@ model Service {
   fullPeriodNoticeText  String?
   // « Absences prévenues » (Paramètres > Configuration) : autorise l'usager à signaler
   // à l'avance son absence à une séance (macaron sur le badge, bouton d'aide) et le
-  // gestionnaire à l'enregistrer dans la fiche. Désactivé par défaut (opt-in) ; les
-  // signalements déjà enregistrés restent affichés. Cf. services/booking-absence.
-  absencePrevenue       Boolean    @default(false)
-  // « Liste d'attente » (Paramètres > Configuration, opt-in) : l'usager dépose ses
+  // gestionnaire à l'enregistrer dans la fiche. Activé par défaut (Dom 2026-09-05) ;
+  // désactivé, les signalements déjà enregistrés restent affichés. Cf. services/booking-absence.
+  absencePrevenue       Boolean    @default(true)
+  // « Liste d'attente » (Paramètres > Configuration) : l'usager dépose ses
   // disponibilités par demi-journée et est prévenu (ou inscrit automatiquement) dès
-  // qu'un créneau réservable se libère. Cf. services/waiting-list.
-  listeAttente          Boolean    @default(false)
+  // qu'un créneau réservable se libère. Activé par défaut. Cf. services/waiting-list.
+  listeAttente          Boolean    @default(true)
 
   // Réglages du mode « Création de créneau » de l'agenda, mémorisés d'une visite à
   // l'autre. Comme `capacity`, ce sont des défauts DU SERVICE (partagés par ses
@@ -526,10 +526,10 @@ model ServiceTheme {
 }
 
 model ServiceDemandeurSettings {
-  serviceId   String
-  demandeurId Int
-  validation  Boolean @default(false)
-  themes      Boolean @default(false)
+  serviceId     String
+  demandeurId   Int
+  validation    Boolean @default(false)
+  themes        Boolean @default(false)
   /// Le thème devient OBLIGATOIRE : l'usager ne peut pas enregistrer sans l'avoir
   /// renseigné. Sans effet si `themes` est éteint — le champ n'est alors pas affiché.
   themeRequired Boolean @default(false)
@@ -575,29 +575,29 @@ model Booking {
   updatedAt       DateTime    @default(now()) @updatedAt @db.Timestamptz
 
   // Point de départ du décompte d'auto-validation (= createdAt, MAJ sur déplacement).
-  autoValidateFrom DateTime? @db.Timestamptz
+  autoValidateFrom      DateTime?      @db.Timestamptz
   // Horodatage de l'auto-validation (null = jamais auto-validée). Sert au digest de
   // notification des gestionnaires (cf. services/manager-notice.ts).
-  autoValidatedAt  DateTime? @db.Timestamptz
-  pointage         Pointage?
+  autoValidatedAt       DateTime?      @db.Timestamptz
+  pointage              Pointage?
   // Motif d'absence (facultatif, saisi dans la fiche réservation) : AFFICHÉ seulement
   // lorsque pointage = absent, mais CONSERVÉ si le pointage change — il réapparaît si
   // l'absence est réactivée. Effacé uniquement à l'anonymisation RGPD.
-  pointageMotif    String    @default("")
+  pointageMotif         String         @default("")
   // Absence PRÉVENUE À L'AVANCE sur une séance datée (occurrence d'une récurrente ou
   // ponctuelle autonome) : horodatage du signalement (null = aucun) et son auteur
   // (usager depuis son agenda, ou gestionnaire prévenu par ailleurs). Distinct du
   // pointage — la séance reste réservée (jauge inchangée) et NON verrouillée ; le
   // pointage, posé après coup, reste la référence des statistiques. Le motif éventuel
   // est porté par `pointageMotif` (même champ que le motif d'absence pointée).
-  absencePrevenueAt  DateTime?      @db.Timestamptz
-  absencePrevenuePar AbsenceSource?
+  absencePrevenueAt     DateTime?      @db.Timestamptz
+  absencePrevenuePar    AbsenceSource?
   // Notification DIFFÉRÉE d'une (dé)validation MANUELLE (cf. services/validation-notice) :
   // état `validated` que l'usager connaît (celui d'avant le premier clic de la fenêtre
   // d'hésitation) + échéance d'envoi de l'e-mail reflétant l'état final. null = aucune
   // fenêtre ouverte. Traité par /api/cron/validation-notice.
   validationNoticeFrom  Boolean?
-  validationNoticeDueAt DateTime? @db.Timestamptz
+  validationNoticeDueAt DateTime?      @db.Timestamptz
 
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   service   Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)

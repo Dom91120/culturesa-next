@@ -164,8 +164,8 @@ Activité réservable. PK = id applicatif (`svc_00N`).
 | semaineAb | booléen | false | alternance A/B activée |
 | themesMode | `ThemesMode` | libre | saisie du thème |
 | gaugeAccompagnants | booléen | true | compter les accompagnants dans la jauge |
-| absencePrevenue | booléen | false | « Absences prévenues » : signalement d'absence à l'avance (usager + gestionnaire), opt-in |
-| listeAttente | booléen | false | « Liste d'attente » : disponibilités des usagers, notification / inscription automatique, opt-in |
+| absencePrevenue | booléen | true | « Absences prévenues » : signalement d'absence à l'avance (usager + gestionnaire) |
+| listeAttente | booléen | true | « Liste d'attente » : disponibilités des usagers, notification / inscription automatique |
 | autoValidationDelay | entier | 0 | délai d'auto-validation **signé** (0=off, <0=ouvré, >0=calendaire) |
 | mgrNoticeMode | texte | none | digest gestionnaires (none/hours/daily/weekly) |
 | mgrNoticeIntervalHours / Hour / Weekday | entier/texte | 4 / 8 / lun | cadence du digest |
