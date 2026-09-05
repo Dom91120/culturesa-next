@@ -7,10 +7,7 @@
 // laisser de trous (1, 2, 5, 6…). Partagé par gen-guide-html.mjs et gen-guide-docx.cjs.
 function filtrerGuideUsager(md) {
   // Titre propre à la déclinaison.
-  let out = md.replace(
-    /^# Guide d'utilisation — CultuRésa/m,
-    "# Guide de l'usager — CultuRésa",
-  );
+  let out = md.replace(/^# Guide d'utilisation — CultuRésa/m, "# Guide de l'usager — CultuRésa");
 
   // Sommaire du préambule : du libellé « Sommaire : » à la ligne vide suivante.
   out = out.replace(/^Sommaire :[\s\S]*?\n\n/m, "");
@@ -19,7 +16,11 @@ function filtrerGuideUsager(md) {
   const parts = out.split(/^(?=## )/m);
   const keep = [parts[0]];
   for (const section of parts.slice(1)) {
-    if (/^## \d+\. (Pour tous les utilisateurs|Pour les usagers|Notions clés|Automatismes)/.test(section)) {
+    if (
+      /^## \d+\. (Pour tous les utilisateurs|Pour les usagers|Notions clés|Automatismes)/.test(
+        section,
+      )
+    ) {
       keep.push(section.replace(/^## \d+\.\s*/, "## "));
     }
   }

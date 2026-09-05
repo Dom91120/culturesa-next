@@ -54,12 +54,7 @@ for (const [md, docx] of [
 // Guillemets français du guide fonctionnel uniquement (le guide serveur cite des
 // commandes, pas des libellés). Normalisation : apostrophes typographiques et espaces
 // insécables ramenées à leur forme simple des deux côtés.
-const normalize = (s) =>
-  s
-    .replace(/[  ]/g, " ")
-    .replace(/’/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+const normalize = (s) => s.replace(/[  ]/g, " ").replace(/’/g, "'").replace(/\s+/g, " ").trim();
 
 // Citations du guide qui ne sont PAS des libellés d'interface (prose, exemples).
 const ALLOWLIST = new Set([
@@ -77,8 +72,7 @@ for (const m of guide.matchAll(/«\s?([^»]{2,60}?)\s?»/g)) labels.add(m[1].tri
 // Les COMMENTAIRES sont retirés du corpus : un libellé d'UI supprimée survit longtemps
 // dans les commentaires (c'est précisément le cas « Modèle de période ») — seul le code
 // effectif (chaînes JSX/TS) atteste qu'un libellé existe encore à l'écran.
-const stripComments = (s) =>
-  s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const corpus = [];
 const walk = (dir) => {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
