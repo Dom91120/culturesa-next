@@ -73,6 +73,7 @@ import {
   getValidationNoticeDelay,
   validationNoticeWindow,
 } from "@/server/services/validation-notice";
+import { deleteWaitingEntryById } from "@/server/services/waiting-list";
 
 // Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
 type DayKeyT = (typeof DAYS)[number];
@@ -353,6 +354,20 @@ export async function setBookingAbsenceAction(
       trigger: "absence_manager",
     });
   }
+  return { ok: true };
+}
+
+/** Liste d'attente : retrait d'un inscrit par le gestionnaire (bornée au service). */
+export async function removeWaitingEntryAction(
+  serviceId: string,
+  entryId: number,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireServiceManager(serviceId);
+  const id = idSchema.safeParse(entryId);
+  if (!id.success) return { ok: false, error: "Données invalides." };
+  const ok = await deleteWaitingEntryById(serviceId, id.data);
+  if (!ok) return { ok: false, error: "Inscription introuvable." };
+  revalidatePath(`/services/${serviceId}/agenda`);
   return { ok: true };
 }
 

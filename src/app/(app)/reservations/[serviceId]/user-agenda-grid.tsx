@@ -22,6 +22,8 @@ import {
   CalendarGlyph,
   ModalOverlay,
   PrintIconButton,
+  ToolbarIconButton,
+  WaitingListGlyph,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
@@ -64,6 +66,7 @@ import { usePointerDrag } from "@/lib/use-pointer-drag";
 import { THEME_REQUIS_MSG } from "@/schemas/booking";
 import type { ServiceModes } from "@/server/services/service-modes";
 import { commitDraft, setMyAbsence } from "./actions";
+import { type WaitingEntryView, WaitingListModal } from "./waiting-list-modal";
 
 // (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — sont portés
 // par CHAQUE EXERCICE, cf. type Exercice.opening ; hors exercice = fermé.)
@@ -84,6 +87,8 @@ type Service = {
   contactEmail: string | null;
   // « Absences prévenues » activées pour ce service (Paramètres > Configuration).
   absencePrevenue: boolean;
+  // « Liste d'attente » activée pour ce service (Paramètres > Configuration).
+  listeAttente: boolean;
 };
 type Period = {
   id: number;
@@ -1103,6 +1108,7 @@ export function UserAgendaGrid({
   demandeurOpenOnSchoolHolidays,
   schoolHolidays,
   userInfo,
+  waitingEntry,
   autoRefreshSeconds,
   debugMode,
 }: {
@@ -1128,6 +1134,8 @@ export function UserAgendaGrid({
     enfants: number;
     accompagnants: number;
   };
+  // Inscription de l'usager sur la liste d'attente du service (null = aucune).
+  waitingEntry: WaitingEntryView | null;
   // Intervalle d'auto-rafraîchissement de la disponibilité, en secondes (0 = désactivé).
   autoRefreshSeconds: number;
   // Mode debug (app_config `debug.mode`, lu côté serveur) : affiche le bandeau dem-info.
@@ -1918,6 +1926,16 @@ export function UserAgendaGrid({
     time: string;
   } | null>(null);
   const [absenceHelpOpen, setAbsenceHelpOpen] = useState(false);
+  // Liste d'attente : modale d'inscription (disponibilités par demi-journée). Les jours
+  // proposés = jours ouverts des exercices affichés (union), dans l'ordre de la semaine.
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const waitlistDays = useMemo(() => {
+    const open = new Set<string>();
+    for (const ex of exercices) {
+      for (const d of ex.opening.activeDays.split(",")) if (d.trim()) open.add(d.trim());
+    }
+    return ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"].filter((d) => open.has(d));
+  }, [exercices]);
   function openAbsence(booking: Booking, ymdStr: string, time: string) {
     setAbsenceTarget({ booking, ymd: ymdStr, time });
   }
@@ -3506,52 +3524,28 @@ export function UserAgendaGrid({
             sur le badge de la réservation concernée) — explique la procédure. Aligné à
             droite de la ligne des onglets, sous l'impression (retour Dom 2026-09-04).
             Sur mobile : icône seule, sans cadre ni texte. */}
-        {/* Bouton d'aide masqué quand le service n'active pas les absences prévenues. */}
-        {!service.absencePrevenue ? null : isMobile ? (
-          // Mobile : l'icône SEULE, sans cadre ni texte (le libellé reste en aria-label et
-          // en infobulle) — Dom 2026-09-04.
-          <button
-            type="button"
-            data-tip="Prévenir d'une absence"
-            aria-label="Prévenir d'une absence"
-            style={{
-              marginLeft: "auto",
-              background: "none",
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              lineHeight: 0,
-            }}
-            onClick={() => setAbsenceHelpOpen(true)}
-          >
-            <img src="/absence.svg" width={24} height={24} alt="" aria-hidden="true" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{
-              marginLeft: "auto",
-              padding: ".15rem .4rem .15rem .6rem",
-              fontSize: ".66rem",
-              whiteSpace: "nowrap",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: ".4rem",
-            }}
-            onClick={() => setAbsenceHelpOpen(true)}
-          >
-            {/* Texte à GAUCHE, icône à droite (Dom 2026-09-04). Icône SVG fournie par Dom
-                (public/absence.svg) — rendu identique sur toutes les plateformes, comme le
-                calendrier (CalendarGlyph) ; 24 px. */}
-            {/* Centrage OPTIQUE sur l'icône : la masse des lettres est au-dessus du
-                centre géométrique → texte descendu de 1px. */}
-            <span style={{ position: "relative", top: 1 }}>Prévenir d'une absence</span>
-            <img src="/absence.svg" width={24} height={24} alt="" aria-hidden="true" />
-          </button>
-        )}
+        {/* Boutons à icône de la ligne des onglets, alignés à droite : « Liste d'attente »
+            (pictogramme inliné WaitingListGlyph) puis « Prévenir d'une absence » (public/absence.svg,
+            seulement si le service active les absences prévenues). Même gabarit pour les
+            deux (ToolbarIconButton) : texte + icône 24 px sur bureau, icône seule sur mobile. */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".5rem" }}>
+          {service.listeAttente && (
+            <ToolbarIconButton
+              label={waitingEntry ? "Liste d'attente ✓" : "Liste d'attente"}
+              icon={<WaitingListGlyph size={24} />}
+              mobile={isMobile}
+              onClick={() => setWaitlistOpen(true)}
+            />
+          )}
+          {service.absencePrevenue && (
+            <ToolbarIconButton
+              label="Prévenir d'une absence"
+              icon="/absence.svg"
+              mobile={isMobile}
+              onClick={() => setAbsenceHelpOpen(true)}
+            />
+          )}
+        </div>
       </div>
 
       {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour,
@@ -3746,7 +3740,7 @@ export function UserAgendaGrid({
               const noun = (n: number) => `réservation${n > 1 ? "s" : ""}`;
               return (
                 <>
-                  Vous pouvez au maximum demander{" "}
+                  Maximum :{" "}
                   {showPeriod && (
                     <>
                       <strong>
@@ -4232,6 +4226,21 @@ export function UserAgendaGrid({
             </button>
           </div>
         </ModalOverlay>
+      )}
+
+      {/* Liste d'attente : inscription / mise à jour / retrait (réglage service). */}
+      {waitlistOpen && (
+        <WaitingListModal
+          serviceId={service.id}
+          days={waitlistDays}
+          entry={waitingEntry}
+          onClose={() => setWaitlistOpen(false)}
+          onSaved={(msg) => {
+            setWaitlistOpen(false);
+            showToast(msg, "success");
+            router.refresh();
+          }}
+        />
       )}
 
       {/* Saisie « Prévenir d'une absence » sur l'occurrence choisie (macaron du badge). */}

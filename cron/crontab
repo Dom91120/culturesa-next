@@ -4,12 +4,13 @@
 #
 # Toutes les tâches sont APPELÉES toutes les 5 minutes : chaque route applique la
 # planification configurée dans l'admin (Tâches planifiées › CRON — défauts :
-# auto-validation toutes les 15 min, notifications de validation toutes les 5 min,
+# auto-validation toutes les 15 min, notifications de validation et liste d'attente toutes les 5 min,
 # rétention RGPD à 03h00, rappels à 07h00, export de la base à 02h00) et ne s'exécute
 # que si son échéance est atteinte ; sinon l'appel répond `skipped` sans rien faire.
 
 */5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/auto-validate >/dev/null 2>&1
 */5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/validation-notice >/dev/null 2>&1
+*/5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/waiting-list >/dev/null 2>&1
 */5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/rgpd-retention >/dev/null 2>&1
 */5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/booking-reminder >/dev/null 2>&1
 */5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" http://app:3000/api/cron/backup >/dev/null 2>&1

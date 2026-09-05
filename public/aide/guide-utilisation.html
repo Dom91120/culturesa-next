@@ -173,6 +173,16 @@ gauche du badge.</li>
 de nouveau sur le macaron puis sur <strong>« Retirer l&#39;absence »</strong>. Une absence se signale sur une
 séance <strong>à venir</strong> (jour même inclus), tant qu&#39;elle n&#39;a pas été pointée par le service. Le bouton
 <strong>« Prévenir d&#39;une absence »</strong>, à droite des onglets de période, rappelle cette procédure.</p>
+<h3 id="liste-d39attente">Liste d&#39;attente</h3>
+<p>Tout est complet ? Si le service a activé la <strong>liste d&#39;attente</strong>, le bouton <strong>« Liste d&#39;attente »</strong>,
+à droite des onglets de période, ouvre une fenêtre où vous indiquez vos <strong>disponibilités par
+demi-journée</strong> (matin / après-midi, sur les jours d&#39;ouverture du service). Vous serez <strong>prévenu
+par e-mail</strong> dès que des créneaux correspondant à vos disponibilités se libéreront, dans l&#39;ordre
+d&#39;inscription. Cochez <strong>« M&#39;inscrire automatiquement dès qu&#39;un créneau se libère »</strong> pour que la
+réservation soit faite en votre nom, avec les participants de votre fiche : vous en êtes informé
+par e-mail et retiré de la liste. Validez avec <strong>« S&#39;inscrire sur la liste d&#39;attente »</strong> ; une
+fois inscrit, le même bouton permet de <strong>mettre à jour</strong> vos disponibilités ou de vous
+<strong>retirer de la liste</strong>.</p>
 <h3 id="règles-appliquées-automatiquement">Règles appliquées automatiquement</h3>
 <p>Lors d&#39;une réservation, l&#39;application vérifie automatiquement :</p>
 <ul>
@@ -212,9 +222,14 @@ réservation</strong> (case <strong>« L&#39;usager a prévenu le »</strong> su
 puis un motif facultatif, sur toute séance non encore pointée, même passée). La séance porte alors un macaron <strong>A</strong> orange et l&#39;infobulle indique qui a prévenu
 et quand ; la réservation reste en place. En <strong>mode pointage</strong>, le premier clic sur une telle
 séance pose directement <strong>Absent</strong>.</li>
+<li><strong>Liste d&#39;attente</strong> (si activée dans Paramètres › Configuration) : le bouton <strong>« Liste d&#39;attente »</strong>
+de la barre d&#39;options, avec le nombre d&#39;inscrits, ouvre la liste des usagers inscrits, dans l&#39;ordre d&#39;inscription,
+avec leurs disponibilités et leur choix d&#39;inscription automatique ; un bouton permet de retirer
+une inscription. La tâche planifiée « Liste d&#39;attente » prévient ou inscrit les usagers dès
+qu&#39;un créneau réservable se libère.</li>
 </ul>
 <blockquote>
-<p>💡 Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
+<p>💡 Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
 vers un autre créneau pour la déplacer. Pour la déposer dans une <strong>autre semaine</strong>, survolez la
 flèche ◂ ou ▸, ou le <strong>bord gauche ou droit</strong> de la grille, pendant le glisser : l&#39;agenda change
 de semaine, puis déposez la réservation. Survoler un <strong>onglet de période</strong> bascule de même sur
@@ -284,7 +299,9 @@ ce drapeau ; la case reste modifiable à la main ensuite.</p>
 les créneaux qui se répètent chaque semaine), <strong>alternance Semaine A/B</strong> (sans effet si les créneaux
 récurrents sont désactivés), <strong>prise en compte des accompagnants</strong> dans la jauge, <strong>absences
 prévenues</strong> (l&#39;usager peut signaler depuis son agenda qu&#39;il sera absent à une séance, le
-gestionnaire l&#39;enregistrer dans la fiche de réservation ; désactivé par défaut) et <strong>alerte
+gestionnaire l&#39;enregistrer dans la fiche de réservation ; désactivé par défaut), <strong>liste
+d&#39;attente</strong> (l&#39;usager dépose ses disponibilités par demi-journée et est prévenu par e-mail, ou
+inscrit automatiquement, dès qu&#39;un créneau se libère ; désactivé par défaut) et <strong>alerte
 « plus de place »</strong> (à l&#39;arrivée sur l&#39;agenda ou sur une période, si plus aucun créneau de la
 période affichée n&#39;est réservable, une fenêtre informe l&#39;usager et l&#39;invite à contacter le
 service via l&#39;e-mail de contact du référentiel Services ; le texte du message est
@@ -297,7 +314,8 @@ imposé).</p>
 <h3 id="paramètres-échanges-e-mails-du-service">Paramètres — Échanges (e-mails du service)</h3>
 <p>Chaque service peut personnaliser le <strong>contenu</strong> de ses e-mails de réservation : réservation
 confirmée, demande enregistrée, réservation annulée, réservation non validée (refus), rappel de
-réservation et absence prévenue. Le bouton <strong>« Modifier »</strong> personnalise le contenu ; à défaut, le gabarit global est
+réservation, absence prévenue et liste d&#39;attente (inscription, créneaux libérés, inscription
+automatique). Le bouton <strong>« Modifier »</strong> personnalise le contenu ; à défaut, le gabarit global est
 utilisé. Le <strong>routage, le destinataire et l&#39;activation de l&#39;envoi</strong> sont, eux, <strong>globaux</strong> (voir
 <a href="#échanges-e-mails-réglages-globaux">Administration → Échanges</a>).</p>
 <p><img src="img/11-parametres-echanges.png" alt="Paramètres : e-mails personnalisés par service"></p>
@@ -386,6 +404,11 @@ vacances n&#39;est réservable que si le service et le demandeur sont ouverts.</
 <li><strong>Validation automatique</strong> des réservations après un délai paramétré, avec récapitulatif envoyé
 aux gestionnaires.</li>
 <li><strong>Rappels de réservation</strong> envoyés aux usagers (J-7 et J-1).</li>
+<li><strong>Notifications de validation</strong> regroupées : l&#39;e-mail de validation ou de remise en attente part
+après le délai réglé dans Échanges et ne reflète que l&#39;état final.</li>
+<li><strong>Liste d&#39;attente</strong> : toutes les 5 minutes, pour chaque inscrit et dans l&#39;ordre d&#39;inscription,
+recherche des créneaux réservables correspondant à ses disponibilités — inscription automatique
+si demandée, sinon e-mail « créneaux libérés » (nouveautés seulement).</li>
 <li><strong>Conservation des données</strong> : anonymisation des comptes inactifs après l&#39;avis de suppression.</li>
 </ul>
 <hr>

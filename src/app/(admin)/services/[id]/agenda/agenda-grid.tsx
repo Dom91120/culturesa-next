@@ -21,6 +21,7 @@ import {
   AgendaWeekHeader,
   PointagePill,
   PrintIconButton,
+  WaitingListGlyph,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
@@ -63,6 +64,7 @@ import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-hol
 import { resolveSlotRange } from "@/lib/slot-range";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
+import type { WaitingAdminRow } from "@/server/services/waiting-list";
 import type { BatchUpdatedItem } from "./actions";
 import {
   cloneSlotAtTimesAction,
@@ -97,6 +99,7 @@ import { BookingStackModal } from "./booking-stack-modal";
 import { asCreateKind, type CreateKind, sanitizeDemIds } from "./create-prefs";
 import { DefaultDemandeursModal } from "./default-demandeurs-modal";
 import { SlotConfigModal } from "./slot-config-modal";
+import { WaitingListAdminModal } from "./waiting-list-admin-modal";
 
 // (Les réglages d'ouverture — plages, jours actifs, fériés, vacances — sont portés
 // par CHAQUE EXERCICE, cf. type Exercice.opening ; hors exercice = fermé.)
@@ -109,6 +112,8 @@ type Service = {
   // « Absences prévenues » activées (Paramètres > Configuration) : case dans la fiche,
   // entrée de légende. Les signalements existants restent affichés quoi qu'il en soit.
   absencePrevenue: boolean;
+  // « Liste d'attente » activée (Paramètres > Configuration) : bouton + modale des inscrits.
+  listeAttente: boolean;
   // Réglages mémorisés du mode création (cf. create-prefs.ts).
   createKind: string;
   createParityScoped: boolean;
@@ -282,8 +287,11 @@ export function AgendaGrid({
   schoolHolidays,
   autoRefreshSeconds,
   viewerEmail,
+  waitingEntries,
 }: {
   service: Service;
+  // Inscrits sur la liste d'attente (ordre d'inscription) — vide si réglage inactif.
+  waitingEntries: WaitingAdminRow[];
   periods: Period[];
   slots: Slot[];
   uniqueSlots: UniqueSlot[];
@@ -355,7 +363,6 @@ export function AgendaGrid({
   // chaque ◀/▶ — et quand une semaine chevauche la frontière de deux périodes contiguës,
   // elle bascule sur la voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
   const [rwPeriodId, setRwPeriodId] = useState<number | null>(null);
-  const [hideEmpty, setHideEmpty] = useState(false);
   const [validation, setValidation] = useState(false);
   const [pointageMode, setPointageMode] = useState(false);
   // Mode « Création de créneau » : clic = créneau d'1 quart d'heure ; glisser
@@ -493,6 +500,8 @@ export function AgendaGrid({
   });
   const hResizeDrag = hResizeDragH.drag;
   const [detail, setDetail] = useState<Detail>(null);
+  // Modale « Liste d'attente » (inscrits du service).
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   // Réservation en attente de confirmation de suppression (modale dédiée, port du
   // legacy booking-delete-confirm-modal : récap + avertissement « irréversible »).
   const [deleteTarget, setDeleteTarget] = useState<Booking | null>(null);
@@ -764,11 +773,12 @@ export function AgendaGrid({
     return ab.has("") || ab.has(slotWeekTag(monday));
   };
   // Navigation hebdo ◀/▶ (câblage partagé useWeekNavigation, agenda-hooks) : bornée
-  // à la période couvrante ; en hideEmpty, saute aux semaines AYANT une réservation.
+  // à la période couvrante. (L'option « masquer les horaires sans réservation », qui
+  // faisait aussi sauter les semaines vides, a été retirée — Dom 2026-09-05.)
   const { canWeekPrev, canWeekNext, shiftWeek } = useWeekNavigation({
     mondayStr,
     coveringPeriod,
-    hideEmpty,
+    hideEmpty: false,
     weekHas: weekHasBooking,
     weekHasDeps: [bookedSlotDates, recurAbByPeriod, periods, modes.abMode],
     setAnchorMonday,
@@ -1019,64 +1029,6 @@ export function AgendaGrid({
   // Les quarts non occupés sont ensuite sautés dans `quarters`.
   // Mémoïsé : recalculé seulement quand ses entrées changent (et pas, p.ex., pendant
   // un glisser-créer) — clé pour la stabilité de la géométrie et la mémo des blocs.
-  const occupiedQ = useMemo(() => {
-    const set = new Set<number>();
-    if (!hideEmpty) return set;
-    const occupiedHours = new Set<number>();
-    // Ids des créneaux récurrents ayant une réservation visible (période + semaine A/B).
-    const recBookedSlotIds = new Set<string>();
-    // Ids des créneaux ponctuels (datés) ayant une réservation dans la semaine affichée.
-    const uniqBookedSlotIds = new Set<string>();
-    const uniqSunday = sundayStr ?? mondayStr;
-    // Lookup par id (l'ancien uniqueSlots.find dans la boucle était O(B×U) par rendu).
-    const uniqById = new Map(uniqueSlots.map((s) => [s.id, s]));
-    for (const b of bookings) {
-      if (uniqueIdSet.has(b.slotId)) {
-        if (!mondayStr) continue;
-        const u = uniqById.get(b.slotId);
-        if (!u?.slotDate || u.slotDate < mondayStr || (uniqSunday && u.slotDate > uniqSunday))
-          continue;
-        uniqBookedSlotIds.add(b.slotId);
-        continue;
-      }
-      if (effectivePeriodId != null && b.periodId !== effectivePeriodId) continue;
-      if (effectiveWeek != null && b.week !== effectiveWeek && b.week !== "") continue;
-      recBookedSlotIds.add(b.slotId);
-    }
-    const addHours = (sMin: number, eMin: number) => {
-      const s = Math.max(sMin, gridStartMin);
-      const e = Math.min(eMin, gridEndMin);
-      if (e <= s) return;
-      for (let m = Math.floor(s / 60) * 60; m < e; m += 60) occupiedHours.add(m);
-    };
-    for (const s of slots) {
-      if (!recBookedSlotIds.has(s.id)) continue;
-      addHours(toMinutes(s.startTime, gridStartMin), toMinutes(s.endTime, gridStartMin + 60));
-    }
-    for (const u of uniqueSlots) {
-      if (!uniqBookedSlotIds.has(u.id)) continue;
-      addHours(toMinutes(u.startTime, gridStartMin), toMinutes(u.endTime, gridStartMin + 60));
-    }
-    // Étend chaque heure occupée à ses 4 quarts (dans [gridStartMin, gridEndMin]).
-    for (const h of occupiedHours) {
-      for (let q = h; q < h + 60; q += 15) {
-        if (q >= gridStartMin && q < gridEndMin) set.add(q);
-      }
-    }
-    return set;
-  }, [
-    hideEmpty,
-    bookings,
-    uniqueIdSet,
-    slots,
-    uniqueSlots,
-    mondayStr,
-    sundayStr,
-    effectivePeriodId,
-    effectiveWeek,
-    gridStartMin,
-    gridEndMin,
-  ]);
 
   // Géométrie de la grille (quarts visibles + mapping minute↔pixel) mutualisée.
   // Mémoïsée : `mapMinToY` doit rester stable d'un rendu à l'autre pour que la mémo
@@ -1088,9 +1040,9 @@ export function AgendaGrid({
         gridEndMin,
         lunchStart,
         lunchEnd,
-        occupiedQ: hideEmpty ? occupiedQ : null,
+        occupiedQ: null,
       }),
-    [gridStartMin, gridEndMin, lunchStart, lunchEnd, hideEmpty, occupiedQ],
+    [gridStartMin, gridEndMin, lunchStart, lunchEnd],
   );
 
   const slotsParsed = useMemo(
@@ -3085,19 +3037,15 @@ export function AgendaGrid({
       const bl: Block[] = isDayDisabled(d) ? [] : (blocksByDay[d] ?? []);
       timed.set(
         d,
-        bl
-          .filter((b) => !b.isAllDay && (!hideEmpty || b.bookings.length > 0))
-          .map((b) => renderBlock(b, false)),
+        bl.filter((b) => !b.isAllDay).map((b) => renderBlock(b, false)),
       );
       allday.set(
         d,
-        bl
-          .filter((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0))
-          .map((b) => renderBlock(b, true)),
+        bl.filter((b) => b.isAllDay).map((b) => renderBlock(b, true)),
       );
     }
     return { timed, allday };
-  }, [days, isDayDisabled, blocksByDay, renderBlock, hideEmpty]);
+  }, [days, isDayDisabled, blocksByDay, renderBlock]);
 
   // Atténuation « en cours de glisser / couper » posée en DOM DIRECT (cf. data-bkid) :
   // la réservation glissée (HTML5, transitoire) ou coupée (jusqu'au collage) passe à
@@ -3272,49 +3220,81 @@ export function AgendaGrid({
             n'ayant plus qu'un seul élément, `space-between` du conteneur le renvoie
             à gauche — sous le titre, loin de la colonne où l'œil l'attend. */}
         <div style={{ display: "flex", alignItems: "center", gap: ".4rem", marginLeft: "auto" }}>
-          {/* Hors création : cases à cocher (masquer horaires / validation / pointage),
-              à gauche du bouton Imprimer. */}
+          {/* Hors création : cases à cocher (validation / pointage, une par ligne), à
+              gauche du bouton Imprimer. */}
           {!creationMode && (
             <div
               className="planning-options-row"
-              style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
+              style={{ flexDirection: "column", alignItems: "flex-end", gap: 0, lineHeight: 1.1 }}
             >
               <label className="planning-option">
-                Masquer les horaires sans réservation
+                Mode validation
                 <input
                   type="checkbox"
-                  checked={hideEmpty}
-                  onChange={(e) => setHideEmpty(e.target.checked)}
+                  checked={validation}
+                  onChange={(e) => toggleValidation(e.target.checked)}
                 />
               </label>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  alignSelf: "stretch",
-                  justifyContent: "space-between",
-                }}
-              >
-                <label className="planning-option">
-                  Mode validation
-                  <input
-                    type="checkbox"
-                    checked={validation}
-                    onChange={(e) => toggleValidation(e.target.checked)}
-                  />
-                </label>
-                <label className="planning-option">
-                  Mode pointage
-                  <input
-                    type="checkbox"
-                    checked={pointageMode}
-                    onChange={(e) => togglePointageMode(e.target.checked)}
-                  />
-                </label>
-              </div>
+              <label className="planning-option">
+                Mode pointage
+                <input
+                  type="checkbox"
+                  checked={pointageMode}
+                  onChange={(e) => togglePointageMode(e.target.checked)}
+                />
+              </label>
             </div>
           )}
-          {/* Hors création : bouton Imprimer, à gauche du bouton « Mode création ». */}
+          {/* Hors création : liste d'attente (réglage service) puis bouton Imprimer, à
+              gauche du bouton « Mode création ». */}
+          {!creationMode && service.listeAttente && (
+            // Même chrome que le bouton Imprimer voisin (PrintIconButton : cadre fin,
+            // pictogramme 15 px gris) + pastille ORANGE du nombre d'inscrits en coin
+            // haut-droit, comme le compteur de demandeurs du mode création ; rien si 0
+            // (Dom 2026-09-05).
+            <button
+              type="button"
+              data-tip="Liste d'attente"
+              aria-label={`Liste d'attente (${waitingEntries.length})`}
+              style={{
+                position: "relative",
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--rad-sm)",
+                padding: ".28rem .38rem",
+                cursor: "pointer",
+                color: "var(--muted)",
+                display: "flex",
+                alignItems: "center",
+                lineHeight: 1,
+              }}
+              onClick={() => setWaitlistOpen(true)}
+            >
+              <WaitingListGlyph size={15} />
+              {waitingEntries.length > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -5,
+                    right: -5,
+                    minWidth: 13,
+                    height: 13,
+                    padding: "0 3px",
+                    boxSizing: "border-box",
+                    borderRadius: 999,
+                    background: "var(--warn)",
+                    color: "#fff",
+                    fontSize: ".55rem",
+                    fontWeight: 700,
+                    lineHeight: "13px",
+                    textAlign: "center",
+                  }}
+                >
+                  {waitingEntries.length}
+                </span>
+              )}
+            </button>
+          )}
           {!creationMode && (
             <PrintIconButton onClick={printSessionsList} tip="Imprimer la liste des réservations" />
           )}
@@ -3792,13 +3772,9 @@ export function AgendaGrid({
 
             {/* Bande « Journée entière » : créneaux sans horaire, au-dessus de la
               grille horaire (port du legacy alldayRow). Masquée s'il n'y a aucun
-              bloc all-day — en hideEmpty, on ne compte que ceux qui ont une résa.
-              En mode création, la ligne reste toujours affichée (même vide) pour
+              bloc all-day. En mode création, la ligne reste toujours affichée (même vide) pour
               rester visible/gérable. */}
-            {(creationMode ||
-              days.some((d) =>
-                dayBlocks(d).some((b) => b.isAllDay && (!hideEmpty || b.bookings.length > 0)),
-              )) && (
+            {(creationMode || days.some((d) => dayBlocks(d).some((b) => b.isAllDay))) && (
               <AgendaAllDayRow
                 days={days}
                 outOfPeriodCls={outOfPeriodCls}
@@ -4060,14 +4036,13 @@ export function AgendaGrid({
             color: "var(--muted)",
           }}
         >
-          {/* « Astuce » en couleur de texte principale (noir en thème clair), « : » et
-              la suite gardent la couleur courante. Le conseil dépend du mode création. */}
+          {/* Conseil précédé de l'ampoule seule (plus de mot « Astuce », Dom 2026-09-05) ;
+              le conseil dépend du mode création. */}
           <p style={{ margin: 0 }}>
-            <span aria-hidden="true">💡</span> <span style={{ color: "var(--text)" }}>Astuce</span>
-            {" : "}
+            <span aria-hidden="true">💡</span>{" "}
             {creationMode
-              ? "saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
-              : "cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer."}
+              ? "Saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
+              : "Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer."}
           </p>
           {/* Légende alignée à DROITE, une ligne vide sous l'astuce (retour Dom 2026-09-04). */}
           <div
@@ -4253,6 +4228,15 @@ export function AgendaGrid({
             />
           );
         })()}
+
+      {waitlistOpen && (
+        <WaitingListAdminModal
+          serviceId={service.id}
+          rows={waitingEntries}
+          onClose={() => setWaitlistOpen(false)}
+          onChanged={() => router.refresh()}
+        />
+      )}
 
       {deleteTarget &&
         (() => {

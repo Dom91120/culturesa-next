@@ -13,6 +13,9 @@ export const MAIL_KINDS = [
   "booking_refused",
   "booking_reminder",
   "booking_absence",
+  "waitlist_joined",
+  "waitlist_available",
+  "waitlist_autobooked",
 ] as const;
 
 type MailKind = (typeof MAIL_KINDS)[number];
@@ -39,6 +42,9 @@ const BOOKING_TRIGGERS = [
   "confirm_autovalidate",
   "absence_user",
   "absence_manager",
+  "waitlist_join",
+  "waitlist_available",
+  "waitlist_autobook",
 ] as const;
 export type BookingTrigger = (typeof BOOKING_TRIGGERS)[number];
 
@@ -129,6 +135,25 @@ const DEFAULT_MAIL_TRIGGERS: MailTriggerDef[] = [
     label: "Le gestionnaire enregistre une absence prévenue",
     defaultKind: "booking_absence",
     position: 12,
+  },
+  // Liste d'attente (cf. services/waiting-list) : tous à destination de l'usager.
+  {
+    key: "waitlist_join",
+    label: "L'usager s'inscrit sur la liste d'attente",
+    defaultKind: "waitlist_joined",
+    position: 13,
+  },
+  {
+    key: "waitlist_available",
+    label: "Liste d'attente : des créneaux se sont libérés",
+    defaultKind: "waitlist_available",
+    position: 14,
+  },
+  {
+    key: "waitlist_autobook",
+    label: "Liste d'attente : inscription automatique sur un créneau libéré",
+    defaultKind: "waitlist_autobooked",
+    position: 15,
   },
 ];
 

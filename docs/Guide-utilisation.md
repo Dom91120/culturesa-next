@@ -143,6 +143,18 @@ de nouveau sur le macaron puis sur **« Retirer l'absence »**. Une absence se s
 séance **à venir** (jour même inclus), tant qu'elle n'a pas été pointée par le service. Le bouton
 **« Prévenir d'une absence »**, à droite des onglets de période, rappelle cette procédure.
 
+### Liste d'attente
+
+Tout est complet ? Si le service a activé la **liste d'attente**, le bouton **« Liste d'attente »**,
+à droite des onglets de période, ouvre une fenêtre où vous indiquez vos **disponibilités par
+demi-journée** (matin / après-midi, sur les jours d'ouverture du service). Vous serez **prévenu
+par e-mail** dès que des créneaux correspondant à vos disponibilités se libéreront, dans l'ordre
+d'inscription. Cochez **« M'inscrire automatiquement dès qu'un créneau se libère »** pour que la
+réservation soit faite en votre nom, avec les participants de votre fiche : vous en êtes informé
+par e-mail et retiré de la liste. Validez avec **« S'inscrire sur la liste d'attente »** ; une
+fois inscrit, le même bouton permet de **mettre à jour** vos disponibilités ou de vous
+**retirer de la liste**.
+
 ### Règles appliquées automatiquement
 
 Lors d'une réservation, l'application vérifie automatiquement :
@@ -189,8 +201,13 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   puis un motif facultatif, sur toute séance non encore pointée, même passée). La séance porte alors un macaron **A** orange et l'infobulle indique qui a prévenu
   et quand ; la réservation reste en place. En **mode pointage**, le premier clic sur une telle
   séance pose directement **Absent**.
+- **Liste d'attente** (si activée dans Paramètres › Configuration) : le bouton **« Liste d'attente »**
+  de la barre d'options, avec le nombre d'inscrits, ouvre la liste des usagers inscrits, dans l'ordre d'inscription,
+  avec leurs disponibilités et leur choix d'inscription automatique ; un bouton permet de retirer
+  une inscription. La tâche planifiée « Liste d'attente » prévient ou inscrit les usagers dès
+  qu'un créneau réservable se libère.
 
-> 💡 Astuce : cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
+> 💡 Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
 > vers un autre créneau pour la déplacer. Pour la déposer dans une **autre semaine**, survolez la
 > flèche ◂ ou ▸, ou le **bord gauche ou droit** de la grille, pendant le glisser : l'agenda change
 > de semaine, puis déposez la réservation. Survoler un **onglet de période** bascule de même sur
@@ -277,7 +294,9 @@ La configuration définit les **paramètres globaux** du service — **créneaux
 les créneaux qui se répètent chaque semaine), **alternance Semaine A/B** (sans effet si les créneaux
 récurrents sont désactivés), **prise en compte des accompagnants** dans la jauge, **absences
 prévenues** (l'usager peut signaler depuis son agenda qu'il sera absent à une séance, le
-gestionnaire l'enregistrer dans la fiche de réservation ; désactivé par défaut) et **alerte
+gestionnaire l'enregistrer dans la fiche de réservation ; désactivé par défaut), **liste
+d'attente** (l'usager dépose ses disponibilités par demi-journée et est prévenu par e-mail, ou
+inscrit automatiquement, dès qu'un créneau se libère ; désactivé par défaut) et **alerte
 « plus de place »** (à l'arrivée sur l'agenda ou sur une période, si plus aucun créneau de la
 période affichée n'est réservable, une fenêtre informe l'usager et l'invite à contacter le
 service via l'e-mail de contact du référentiel Services ; le texte du message est
@@ -294,7 +313,8 @@ imposé).
 
 Chaque service peut personnaliser le **contenu** de ses e-mails de réservation : réservation
 confirmée, demande enregistrée, réservation annulée, réservation non validée (refus), rappel de
-réservation et absence prévenue. Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
+réservation, absence prévenue et liste d'attente (inscription, créneaux libérés, inscription
+automatique). Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
 utilisé. Le **routage, le destinataire et l'activation de l'envoi** sont, eux, **globaux** (voir
 [Administration → Échanges](#échanges-e-mails-réglages-globaux)).
 
@@ -413,6 +433,11 @@ Plusieurs traitements s'exécutent automatiquement, sans intervention :
 - **Validation automatique** des réservations après un délai paramétré, avec récapitulatif envoyé
   aux gestionnaires.
 - **Rappels de réservation** envoyés aux usagers (J-7 et J-1).
+- **Notifications de validation** regroupées : l'e-mail de validation ou de remise en attente part
+  après le délai réglé dans Échanges et ne reflète que l'état final.
+- **Liste d'attente** : toutes les 5 minutes, pour chaque inscrit et dans l'ordre d'inscription,
+  recherche des créneaux réservables correspondant à ses disponibilités — inscription automatique
+  si demandée, sinon e-mail « créneaux libérés » (nouveautés seulement).
 - **Conservation des données** : anonymisation des comptes inactifs après l'avis de suppression.
 
 ---

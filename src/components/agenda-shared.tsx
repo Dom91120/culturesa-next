@@ -364,6 +364,39 @@ export function ModalOverlay({
 
 /** Bouton d'impression (icône imprimante) des deux grilles — style et SVG
  * strictement identiques des deux côtés avant l'extraction (audit 2026-07-17). */
+/**
+ * Pictogramme « Liste d'attente » : trois lignes (Feather « menu », sans puces) + petit
+ * sablier Lucide en bas à droite — même famille que l'imprimante et le crayon de la
+ * barre d'options (contour 24 px, trait 2, currentColor). Source : public/liste_attente.svg,
+ * inliné ici pour hériter de la couleur du bouton (thème sombre compris).
+ */
+export function WaitingListGlyph({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="3" y1="5" x2="21" y2="5" />
+      <line x1="3" y1="11" x2="21" y2="11" />
+      <line x1="3" y1="17" x2="11" y2="17" />
+      <g transform="translate(12 12) scale(0.5)" strokeWidth="3.5">
+        <path d="M5 22h14" />
+        <path d="M5 2h14" />
+        <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+        <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+      </g>
+    </svg>
+  );
+}
+
 export function PrintIconButton({ onClick, tip }: { onClick: () => void; tip: string }) {
   return (
     <button
@@ -421,5 +454,73 @@ export function AgendaEmptyWeekNotice({ children }: { children: React.ReactNode 
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * Bouton à icône de la ligne des onglets de période (« Prévenir d'une absence »,
+ * « Liste d'attente ») : sur bureau, bouton cadré texte à GAUCHE + icône SVG 24 px à
+ * droite (icônes fournies par Dom dans public/ — rendu identique sur toutes les
+ * plateformes, comme le calendrier) ; sur mobile, l'icône SEULE sans cadre ni texte,
+ * le libellé restant en aria-label et en infobulle (Dom 2026-09-04/05).
+ */
+export function ToolbarIconButton({
+  label,
+  icon,
+  mobile,
+  onClick,
+}: {
+  label: string;
+  // Chemin d'un SVG de public/ (rendu en <img>) OU pictogramme inliné (nœud React).
+  icon: string | React.ReactNode;
+  mobile: boolean;
+  onClick?: () => void;
+}) {
+  const glyph =
+    typeof icon === "string" ? (
+      <img src={icon} width={24} height={24} alt="" aria-hidden="true" />
+    ) : (
+      icon
+    );
+  if (mobile) {
+    return (
+      <button
+        type="button"
+        data-tip={label}
+        aria-label={label}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          lineHeight: 0,
+        }}
+        onClick={onClick}
+      >
+        {glyph}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost"
+      style={{
+        padding: ".15rem .4rem .15rem .6rem",
+        fontSize: ".66rem",
+        whiteSpace: "nowrap",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: ".4rem",
+      }}
+      onClick={onClick}
+    >
+      {/* Centrage OPTIQUE sur l'icône : la masse des lettres est au-dessus du centre
+          géométrique → texte descendu de 1px. */}
+      <span style={{ position: "relative", top: 1 }}>{label}</span>
+      {glyph}
+    </button>
   );
 }

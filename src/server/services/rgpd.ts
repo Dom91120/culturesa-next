@@ -126,6 +126,8 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
     // sensible (« enfant malade »…) — vidé par minimisation ; l'historique métier
     // (pointage P/A, effectifs, thème) reste intact pour les statistiques.
     await tx.booking.updateMany({ where: { userId }, data: { pointageMotif: "" } });
+    // Liste d'attente : plus de destinataire ni de réservation possible → retiré.
+    await tx.waitingListEntry.deleteMany({ where: { userId } });
 
     // Déconnexion : on révoque toutes les sessions actives.
     await tx.session.deleteMany({ where: { userId } });

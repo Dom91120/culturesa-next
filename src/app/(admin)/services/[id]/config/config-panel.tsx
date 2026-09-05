@@ -16,6 +16,7 @@ import {
   setFullPeriodNoticeAction,
   setFullPeriodNoticeTextAction,
   setGaugeAccompagnantsAction,
+  setListeAttenteAction,
 } from "./actions";
 import { GlobalRow } from "./global-row";
 import { ServiceValidationSettings } from "./service-validation-settings";
@@ -44,6 +45,8 @@ type Props = {
   initialFullPeriodNoticeText: string;
   // « Absences prévenues » : signalement d'absence à l'avance (usager + gestionnaire).
   initialAbsencePrevenue: boolean;
+  // « Liste d'attente » : disponibilités des usagers, notification / inscription automatique.
+  initialListeAttente: boolean;
   // Réglages « Validation & auto-validation » (service-globaux), édités ici.
   validationBloquante: boolean;
   autoValidationDelay: number;
@@ -107,6 +110,7 @@ export function ConfigPanel({
   initialFullPeriodNotice,
   initialFullPeriodNoticeText,
   initialAbsencePrevenue,
+  initialListeAttente,
   validationBloquante,
   autoValidationDelay,
   mgrNoticeMode,
@@ -132,6 +136,14 @@ export function ConfigPanel({
     setAbsencePrevenue(v);
     startAbsencePrevenue(async () => {
       await setAbsencePrevenueAction(serviceId, v);
+    });
+  }
+  const [listeAttente, setListeAttente] = useState(initialListeAttente);
+  const [, startListeAttente] = useTransition();
+  function toggleListeAttente(v: boolean) {
+    setListeAttente(v);
+    startListeAttente(async () => {
+      await setListeAttenteAction(serviceId, v);
     });
   }
   const [fullPeriodNotice, setFullPeriodNotice] = useState(initialFullPeriodNotice);
@@ -350,6 +362,16 @@ export function ConfigPanel({
             desc="Permet à l'usager de prévenir depuis son agenda qu'il sera absent à une séance (la réservation est conservée, le service est informé par e-mail) et au gestionnaire d'enregistrer une absence prévenue dans la fiche de réservation. Désactivé, les signalements déjà enregistrés restent visibles."
           >
             <Switch on={absencePrevenue} onChange={toggleAbsencePrevenue} />
+          </GlobalRow>
+
+          {/* Liste d'attente (cf. services/waiting-list) : l'usager dépose ses disponibilités
+              par demi-journée ; la tâche planifiée le prévient (ou le réserve automatiquement)
+              dès qu'un créneau réservable correspondant a de la place. Opt-in par service. */}
+          <GlobalRow
+            label="Liste d'attente"
+            desc="Quand tout est complet, l'usager peut s'inscrire sur la liste d'attente avec ses disponibilités par demi-journée. Il est prévenu par e-mail dès qu'un créneau correspondant se libère — ou inscrit automatiquement s'il l'a demandé. Les inscrits sont visibles depuis l'agenda."
+          >
+            <Switch on={listeAttente} onChange={toggleListeAttente} />
           </GlobalRow>
 
           {/* Alerte « plus de place » : modale --warn côté usager quand plus aucune

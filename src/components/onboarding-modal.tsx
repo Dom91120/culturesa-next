@@ -479,6 +479,11 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
             <strong>A</strong> du badge pour <strong>prévenir d'une absence</strong> : le service
             est informé et votre réservation est conservée.
           </p>
+          <p style={{ ...P, margin: ".55rem 0 0" }}>
+            Tout est complet ? Si le service le propose, inscrivez-vous sur la{" "}
+            <strong>liste d'attente</strong> avec vos disponibilités : vous serez prévenu dès qu'un
+            créneau se libère.
+          </p>
         </>
       ),
     },

@@ -697,6 +697,7 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       fullPeriodNoticeText: true,
       contactEmail: true,
       absencePrevenue: true,
+      listeAttente: true,
     },
   });
   if (!service) return null;
@@ -958,6 +959,8 @@ export async function getUserServiceAgenda(serviceId: string, userId: string) {
       contactEmail: service.contactEmail,
       // « Absences prévenues » (réglage service) : macaron + aide côté usager.
       absencePrevenue: service.absencePrevenue,
+      // « Liste d'attente » (réglage service) : bouton + modale côté usager.
+      listeAttente: service.listeAttente,
     },
     periods: periods.map((p) => ({
       id: p.id,

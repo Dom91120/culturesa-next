@@ -79,6 +79,24 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
       "Envoyé lorsqu'une absence est signalée à l'avance sur une séance : par l'usager depuis son agenda (destinataire par défaut : les gestionnaires du service) ou par un gestionnaire prévenu par ailleurs (destinataire par défaut : l'usager concerné).",
     recipient: "Les gestionnaires du service, ou l'usager concerné (selon l'action)",
   },
+  waitlist_joined: {
+    label: "Liste d'attente : inscription",
+    description:
+      "Envoyé à l'usager lorsqu'il s'inscrit sur la liste d'attente d'un service (récapitule ses disponibilités).",
+    recipient: "L'usager concerné",
+  },
+  waitlist_available: {
+    label: "Liste d'attente : créneaux libérés",
+    description:
+      "Envoyé à un inscrit de la liste d'attente lorsque des créneaux réservables correspondant à ses disponibilités apparaissent (nouveautés seulement).",
+    recipient: "L'usager concerné",
+  },
+  waitlist_autobooked: {
+    label: "Liste d'attente : inscription automatique",
+    description:
+      "Envoyé à un inscrit de la liste d'attente ayant demandé l'inscription automatique, lorsqu'une réservation a été faite en son nom sur un créneau libéré (en plus de l'e-mail de réservation habituel).",
+    recipient: "L'usager concerné",
+  },
   email_verification: {
     label: "Confirmation d'adresse e-mail",
     description: "Envoyé à l'inscription pour activer le compte (toujours envoyé).",

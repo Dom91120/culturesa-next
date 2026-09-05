@@ -8,8 +8,8 @@ import { sanitizeTemplateHtml } from "@/server/services/mail-html";
 // la variable BRUTE `{{bouton}}` (lien d'action), et des blocs conditionnels
 // `{{#if nom}}…{{/if}}` (n'affiche le bloc que si la variable est renseignée).
 
-// Types d'e-mails disposant d'un gabarit. Les 7 premiers (réservations) sont
-// désactivables ; les suivants (compte/sécurité) sont toujours envoyés.
+// Types d'e-mails disposant d'un gabarit. Les 10 premiers (réservations, liste
+// d'attente) sont désactivables ; les suivants (compte/sécurité) sont toujours envoyés.
 export const TEMPLATE_KINDS = [
   "booking_confirmed",
   "booking_pending",
@@ -18,6 +18,9 @@ export const TEMPLATE_KINDS = [
   "booking_refused",
   "booking_reminder",
   "booking_absence",
+  "waitlist_joined",
+  "waitlist_available",
+  "waitlist_autobooked",
   "email_verification",
   "password_reset",
   "password_changed",
@@ -60,6 +63,16 @@ const ABSENCE_VARS: MailVar[] = [
   ...COMMON_VARS,
   { name: "motif", desc: "Motif de l'absence indiqué au signalement (peut être vide)" },
 ];
+// Liste d'attente : disponibilités déclarées, créneaux concernés (texte et liste HTML),
+// bouton vers l'agenda du service.
+const WAITLIST_VARS: MailVar[] = [
+  ...COMMON_VARS.filter((v) => v.name !== "creneau" && v.name !== "periode"),
+  { name: "disponibilites", desc: "Demi-journées déclarées (« Lundi matin, Jeudi après-midi »)" },
+  { name: "creneaux", desc: "Créneaux concernés, en texte (séparés par « ; »)" },
+  { name: "liste_creneaux", desc: "Créneaux concernés, en liste à puces (HTML)" },
+  { name: "bouton", desc: "Bouton « Voir l'agenda » (lien vers l'agenda du service)" },
+  { name: "url", desc: "Adresse de l'agenda du service (à afficher en secours, en texte)" },
+];
 const REMINDER_VARS: MailVar[] = [
   { name: "salutation", desc: "« Bonjour Prénom, » (ou « Bonjour, »)" },
   { name: "prenom", desc: "Prénom de l'usager" },
@@ -87,6 +100,9 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
   booking_refused: DELETE_VARS,
   booking_reminder: REMINDER_VARS,
   booking_absence: ABSENCE_VARS,
+  waitlist_joined: WAITLIST_VARS,
+  waitlist_available: WAITLIST_VARS,
+  waitlist_autobooked: WAITLIST_VARS,
   email_verification: LINK_VARS,
   password_reset: LINK_VARS,
   two_factor_changed: [
@@ -198,6 +214,34 @@ ${DETAILS_CONFIRMATION}
 {{#if motif}}<li><strong>Motif :</strong> {{motif}}</li>{{/if}}
 </ul>
 <p>La réservation est conservée : la séance sera relevée comme absente au pointage. Si la présence est finalement possible, l'absence peut être retirée depuis l'agenda tant que la séance n'a pas eu lieu.</p>
+<p>Cordialement,<br>L'équipe CultuRésa</p>`,
+  },
+  waitlist_joined: {
+    subject: "Inscription sur la liste d'attente — {{service}}",
+    html: `<p>{{salutation}}</p>
+<p>Votre inscription sur la liste d'attente de « {{service}} » est bien enregistrée.</p>
+<p><strong>Vos disponibilités :</strong> {{disponibilites}}</p>
+<p>Nous vous préviendrons par e-mail dès qu'un créneau correspondant se libérera. Vous pouvez modifier vos disponibilités ou vous retirer de la liste depuis l'agenda.</p>
+<p>{{bouton}}</p>
+<p>Cordialement,<br>L'équipe CultuRésa</p>`,
+  },
+  waitlist_available: {
+    subject: "Des créneaux se sont libérés — {{service}}",
+    html: `<p>{{salutation}}</p>
+<p>Bonne nouvelle : des créneaux correspondant à vos disponibilités ({{disponibilites}}) sont désormais réservables pour « {{service}} » :</p>
+{{liste_creneaux}}
+<p>Les places sont attribuées au premier qui réserve : rendez-vous sur l'agenda pour réserver.</p>
+<p>{{bouton}}</p>
+<p>Si le lien ne fonctionne pas, copiez cette adresse dans votre navigateur :<br>{{url}}</p>
+<p>Cordialement,<br>L'équipe CultuRésa</p>`,
+  },
+  waitlist_autobooked: {
+    subject: "Liste d'attente : vous êtes inscrit — {{service}}",
+    html: `<p>{{salutation}}</p>
+<p>Un créneau correspondant à vos disponibilités s'est libéré pour « {{service}} » : conformément à votre demande, la réservation a été faite <strong>en votre nom</strong>.</p>
+{{liste_creneaux}}
+<p>Vous recevez par ailleurs l'e-mail habituel de réservation. Vous avez été retiré de la liste d'attente ; vous pouvez consulter ou annuler cette réservation depuis l'agenda.</p>
+<p>{{bouton}}</p>
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
   email_verification: {

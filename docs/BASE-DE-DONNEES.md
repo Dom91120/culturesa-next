@@ -165,6 +165,7 @@ Activité réservable. PK = id applicatif (`svc_00N`).
 | themesMode | `ThemesMode` | libre | saisie du thème |
 | gaugeAccompagnants | booléen | true | compter les accompagnants dans la jauge |
 | absencePrevenue | booléen | false | « Absences prévenues » : signalement d'absence à l'avance (usager + gestionnaire), opt-in |
+| listeAttente | booléen | false | « Liste d'attente » : disponibilités des usagers, notification / inscription automatique, opt-in |
 | autoValidationDelay | entier | 0 | délai d'auto-validation **signé** (0=off, <0=ouvré, >0=calendaire) |
 | mgrNoticeMode | texte | none | digest gestionnaires (none/hours/daily/weekly) |
 | mgrNoticeIntervalHours / Hour / Weekday | entier/texte | 4 / 8 / lun | cadence du digest |
@@ -311,6 +312,22 @@ Réservation. Une **récurrente** (parente) génère des **enfants** datés (un 
 
 **Unique** `uq_recurring (userId, serviceId, slotId, periodId, week)`.
 Index : `userId`, `serviceId`, `periodId`, `slotId`, `parentBookingId`, `(serviceId, validated)`, `(serviceId, autoValidatedAt)`, `validationNoticeDueAt`.
+
+#### `WaitingListEntry` → `liste_attente`
+Liste d'attente d'un service (réglage `Service.listeAttente`) : **une entrée par usager et par service**, traitée par `/api/cron/waiting-list` dans l'ordre d'inscription.
+
+| Colonne | Type | Défaut | Clé | Description |
+|---|---|---|---|---|
+| id | entier | auto | 🔑 | |
+| serviceId | texte | | ↗ `services` (Cascade) | |
+| userId | texte | | ↗ `user` (Cascade) | |
+| disponibilites | texte | "" | | demi-journées disponibles, CSV « lun-am,jeu-pm… » |
+| autoInscription | booléen | false | | réservation automatique dès qu'un créneau se libère |
+| createdAt / updatedAt | horodatage | now() | | rang d'inscription = createdAt |
+| lastNotifiedAt | horodatage? | | | dernier e-mail « créneaux libérés » |
+| notifiedKeys | texte | "" | | créneaux déjà signalés (ne prévenir que des nouveautés) |
+
+**Unique** `(serviceId, userId)` ; index `(serviceId, createdAt)`.
 
 #### `BookingReminder` → `booking_reminders`
 Journal des rappels envoyés (idempotence du cron). | id 🔑 ; `bookingId` ↗ `bookings` (Cascade) ; `slotDate`, `kind` ("week" J-7 / "day" J-1), `sentAt`. **Unique `(bookingId, slotDate, kind)`** ; index `slotDate`.

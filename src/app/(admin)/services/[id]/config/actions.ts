@@ -62,6 +62,21 @@ export async function setAbsencePrevenueAction(
 }
 
 /**
+ * Bascule « Liste d'attente » (Service.listeAttente) : inscription des usagers avec
+ * leurs disponibilités, notification / inscription automatique quand un créneau se libère.
+ */
+export async function setListeAttenteAction(
+  serviceId: string,
+  value: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireServiceManager(serviceId);
+  await prisma.service.update({ where: { id: serviceId }, data: { listeAttente: value } });
+  revalidatePath(`/services/${serviceId}/config`);
+  revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true };
+}
+
+/**
  * Texte personnalisé de l'alerte « plus de place » (Service.fullPeriodNoticeText) :
  * remplace le message par défaut de la modale ; vide → retour au texte par défaut.
  */

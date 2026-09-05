@@ -10,6 +10,7 @@ import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-
 import { currentExerciceIdForService, eligiblePeriodsWhere } from "@/server/services/exercice";
 import { loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { deriveServiceModes } from "@/server/services/service-modes";
+import { listWaitingEntries } from "@/server/services/waiting-list";
 import { AgendaGrid } from "./agenda-grid";
 
 export default async function AgendaPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +26,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       showPreviousExercices: true,
       gaugeAccompagnants: true,
       absencePrevenue: true,
+      listeAttente: true,
       // Réglages mémorisés du mode « Création de créneau » (cf. agenda/create-prefs.ts).
       createKind: true,
       createParityScoped: true,
@@ -333,6 +335,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     <>
       <AgendaGrid
         service={service}
+        // Liste d'attente du service (réglage actif seulement) : bouton + modale de la grille.
+        waitingEntries={service.listeAttente ? await listWaitingEntries(id) : []}
         periods={periodsData}
         slots={slotsData}
         uniqueSlots={uniqueSlotsData}

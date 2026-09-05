@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getConfigMany } from "@/server/config";
 import { requireUser } from "@/server/guards";
 import { getUserServiceAgenda } from "@/server/services/bookings";
+import { getWaitingEntry } from "@/server/services/waiting-list";
 import { UserAgendaGrid } from "./user-agenda-grid";
 
 export default async function ReservationsServicePage({
@@ -13,6 +14,10 @@ export default async function ReservationsServicePage({
   const session = await requireUser();
   const data = await getUserServiceAgenda(serviceId, session.user.id);
   if (!data) notFound();
+  // Inscription éventuelle de l'usager sur la liste d'attente du service.
+  const waitingEntry = data.service.listeAttente
+    ? await getWaitingEntry(serviceId, session.user.id)
+    : null;
 
   // Réglages lus côté serveur (Administration > Configuration).
   const cfg = await getConfigMany(["reservations.autoRefreshSeconds", "debug.mode"]);
@@ -35,6 +40,7 @@ export default async function ReservationsServicePage({
       demandeurOpenOnSchoolHolidays={data.demandeurOpenOnSchoolHolidays}
       schoolHolidays={data.schoolHolidays}
       userInfo={data.user}
+      waitingEntry={waitingEntry}
       autoRefreshSeconds={autoRefreshSeconds}
       debugMode={debugMode}
     />

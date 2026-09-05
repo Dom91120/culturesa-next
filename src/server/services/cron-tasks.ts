@@ -21,6 +21,7 @@ import { getConfigMany, setConfig } from "@/server/config";
 export type CronTaskKey =
   | "auto-validate"
   | "validation-notice"
+  | "waiting-list"
   | "rgpd-retention"
   | "booking-reminder"
   | "backup";
@@ -52,6 +53,14 @@ export const CRON_TASKS: CronTaskDef[] = [
     label: "Notifications de validation",
     description:
       "Envoie les e-mails de validation / remise en attente des réservations après le délai de regroupement (Administration › Échanges) : seul l'état final est notifié, une hésitation du gestionnaire (validé, dévalidé…) ne produit qu'un e-mail au plus.",
+    defaultSchedule: { type: "everyMinutes", step: 5 },
+    runnable: true,
+  },
+  {
+    key: "waiting-list",
+    label: "Liste d'attente",
+    description:
+      "Pour chaque inscrit sur une liste d'attente (services où le réglage est actif), dans l'ordre d'inscription : cherche les créneaux réservables correspondant à ses disponibilités, l'inscrit automatiquement s'il l'a demandé, sinon le prévient par e-mail des nouveaux créneaux libérés.",
     defaultSchedule: { type: "everyMinutes", step: 5 },
     runnable: true,
   },
@@ -260,6 +269,15 @@ export function summarizeValidationNotices(r: {
   silent: number;
 }): string {
   return `${r.sent} e-mail(s) envoyé(s), ${r.silent} sans changement, sur ${r.due} échéance(s)`;
+}
+
+export function summarizeWaitingList(r: {
+  services: number;
+  entries: number;
+  notified: number;
+  booked: number;
+}): string {
+  return `${r.entries} inscrit(s) sur ${r.services} service(s) : ${r.booked} inscription(s) automatique(s), ${r.notified} e-mail(s) « créneaux libérés »`;
 }
 
 export function summarizeRgpdRetention(r: { notified: number; anonymized: number }): string {

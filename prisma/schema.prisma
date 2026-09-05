@@ -123,6 +123,7 @@ model User {
   sessions        Session[]
   accounts        Account[]
   bookings        Booking[]
+  waitingList     WaitingListEntry[]
   managedServices ServiceManager[]
   twoFactors      TwoFactor[]
 
@@ -228,6 +229,10 @@ model Service {
   // gestionnaire à l'enregistrer dans la fiche. Désactivé par défaut (opt-in) ; les
   // signalements déjà enregistrés restent affichés. Cf. services/booking-absence.
   absencePrevenue       Boolean    @default(false)
+  // « Liste d'attente » (Paramètres > Configuration, opt-in) : l'usager dépose ses
+  // disponibilités par demi-journée et est prévenu (ou inscrit automatiquement) dès
+  // qu'un créneau réservable se libère. Cf. services/waiting-list.
+  listeAttente          Boolean    @default(false)
 
   // Réglages du mode « Création de créneau » de l'agenda, mémorisés d'une visite à
   // l'autre. Comme `capacity`, ce sont des défauts DU SERVICE (partagés par ses
@@ -264,6 +269,7 @@ model Service {
   demandeurSettings ServiceDemandeurSettings[]
   bookings          Booking[]
   managers          ServiceManager[]
+  waitingList       WaitingListEntry[]
 
   @@map("services")
 }
@@ -677,6 +683,31 @@ model FailedMail {
 
   @@index([createdAt])
   @@map("failed_mails")
+}
+
+// Liste d'attente d'un service (réglage Service.listeAttente) : UNE entrée par usager et
+// par service. `disponibilites` = CSV de demi-journées « lun-am,jeu-pm… » (cf.
+// lib/waiting-list) ; `autoInscription` = réservation automatique dès qu'un créneau
+// correspondant se libère ; `notifiedKeys` = créneaux déjà signalés par e-mail (ne
+// prévenir que des nouveautés). Traitée par /api/cron/waiting-list dans l'ordre
+// d'inscription (createdAt). Cf. services/waiting-list.
+model WaitingListEntry {
+  id              Int       @id @default(autoincrement())
+  serviceId       String
+  userId          String
+  disponibilites  String    @default("")
+  autoInscription Boolean   @default(false)
+  createdAt       DateTime  @default(now()) @db.Timestamptz
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz
+  lastNotifiedAt  DateTime? @db.Timestamptz
+  notifiedKeys    String    @default("")
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, userId])
+  @@index([serviceId, createdAt])
+  @@map("liste_attente")
 }
 
 // Référentiel des déclencheurs d'e-mails de réservation (actions métier affichées dans
