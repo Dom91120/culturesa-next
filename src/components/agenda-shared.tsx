@@ -239,6 +239,38 @@ export function AgendaLegendSwatch({
   );
 }
 
+/**
+ * Pastille d'ÉTAT d'une réservation usager telle qu'elle figure dans la légende de
+ * l'agenda usager : sablier sur fond jaune (demande en attente de validation) ou coche
+ * sur fond vert (réservation validée), même ombre que les badges. Partagée avec
+ * l'onboarding pour que l'usager y retrouve les vraies icônes (Dom 2026-09-05).
+ */
+export function BookingStateSwatch({ state }: { state: "pending" | "validated" }) {
+  const validated = state === "validated";
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 34,
+        height: 20,
+        borderRadius: "var(--rad-sm)",
+        background: validated ? "#c8e8b8" : "#ffe6a7",
+        boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
+        flexShrink: 0,
+      }}
+    >
+      <span
+        className="slot-icon"
+        style={{ fontSize: ".85rem", lineHeight: 1, color: validated ? "#3e7e2f" : "#b2a478" }}
+      >
+        {validated ? "✔" : "⏳"}
+      </span>
+    </span>
+  );
+}
+
 // Pastille de pointage P (présent, vert) / A (absent, rouge) affichée en haut à
 // droite du badge, reprise du legacy `_badgeIndicators` (classes .indic_p /
 // .indic_a). Le pointage n'existe que sur les réservations ponctuelles datées,

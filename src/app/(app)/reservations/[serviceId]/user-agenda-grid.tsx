@@ -20,6 +20,7 @@ import {
   AgendaLegendSwatch,
   AgendaTimeColumn,
   AgendaWeekHeader,
+  BookingStateSwatch,
   CalendarGlyph,
   ModalOverlay,
   PrintIconButton,
@@ -3701,26 +3702,7 @@ export function UserAgendaGrid({
                   letterSpacing: "-0.02em",
                 }}
               >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 34,
-                    height: 20,
-                    borderRadius: "var(--rad-sm)",
-                    background: "#ffe6a7",
-                    boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-                    flexShrink: 0,
-                  }}
-                >
-                  <span
-                    className="slot-icon"
-                    style={{ fontSize: ".85rem", lineHeight: 1, color: "#b2a478" }}
-                  >
-                    ⏳
-                  </span>
-                </span>
+                <BookingStateSwatch state="pending" />
                 Demande en attente de validation
               </span>
               {/* Légende « Créneau récurrent » (même rendu que l'agenda admin), à droite. */}
@@ -3764,26 +3746,7 @@ export function UserAgendaGrid({
                   letterSpacing: "-0.02em",
                 }}
               >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 34,
-                    height: 20,
-                    borderRadius: "var(--rad-sm)",
-                    background: "#c8e8b8",
-                    boxShadow: "2px 2px 4px rgba(0, 0, 0, .28)",
-                    flexShrink: 0,
-                  }}
-                >
-                  <span
-                    className="slot-icon"
-                    style={{ fontSize: ".85rem", lineHeight: 1, color: "#3e7e2f" }}
-                  >
-                    ✔
-                  </span>
-                </span>
+                <BookingStateSwatch state="validated" />
                 Réservation validée
               </span>
               {/* Légende « Créneau ponctuel » (même rendu que l'agenda admin), à droite. */}

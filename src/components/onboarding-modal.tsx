@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
-import { ModalOverlay } from "@/components/agenda-shared";
+import { BookingStateSwatch, ModalOverlay, WaitingListGlyph } from "@/components/agenda-shared";
 import { markOnboardedAction } from "./onboarding-actions";
 
 /** Événement global pour ré-ouvrir l'onboarding (« Revoir la présentation » du user-menu). */
@@ -9,7 +9,7 @@ export const ONBOARDING_REPLAY_EVENT = "culturesa:onboarding-replay";
 
 // `image` (optionnel) : illustration de fin d'étape, rendue sous le texte dans un
 // conteneur extensible qui la CENTRE verticalement dans l'espace restant du corps.
-type Step = { title: string; body: ReactNode; image?: ReactNode };
+type Step = { title: ReactNode; body: ReactNode; image?: ReactNode };
 type ServiceLite = { label: string };
 
 /* ── Illustrations ────────────────────────────────────────────────────────────────────
@@ -193,34 +193,24 @@ function ReservationShot() {
 
 /** Légende des statuts (en attente / validée), comme sous l'agenda. */
 function LegendMock() {
-  const chip = (bg: string, fg: string): React.CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    background: bg,
-    color: fg,
-    fontSize: ".8rem",
-    flexShrink: 0,
-  });
+  // Vraies pastilles de la légende de l'agenda usager (BookingStateSwatch), les deux
+  // entrées sur UNE ligne, 50 % / 50 % (Dom 2026-09-05).
   const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: ".5rem" };
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: ".4rem", margin: ".5rem 0 0" }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: ".4rem .5rem",
+        margin: ".5rem 0 0",
+      }}
+    >
       <div style={row}>
-        <span style={chip("rgba(232,164,90,.2)", "#9a7b3a")} aria-hidden>
-          ⏳
-        </span>
+        <BookingStateSwatch state="pending" />
         <span style={{ fontSize: ".82rem" }}>Demande en attente de validation</span>
       </div>
       <div style={row}>
-        <span
-          style={chip("color-mix(in srgb, var(--accent) 22%, transparent)", "var(--accent)")}
-          aria-hidden
-        >
-          ✓
-        </span>
+        <BookingStateSwatch state="validated" />
         <span style={{ fontSize: ".82rem" }}>Réservation validée</span>
       </div>
     </div>
@@ -228,27 +218,103 @@ function LegendMock() {
 }
 
 /** Icône imprimante — mêmes tracés que le bouton d'impression de l'écran Réservations. */
+/**
+ * Macaron « A » tel qu'il apparaît sur les badges (mêmes teintes que .slot-btn-absence et
+ * .indic_a / .indic_ap d'app-legacy.css), en ligne dans la prose : « gris » = bouton
+ * discret au survol du badge usager, « orange » = absence prévenue, « rouge » = pointé
+ * absent. Montrer le vrai macaron plutôt qu'un A en gras (Dom 2026-09-05).
+ */
+function MacaronA({ variant }: { variant: "gris" | "orange" | "rouge" }) {
+  const bg =
+    variant === "orange"
+      ? "rgba(232, 140, 40, 0.92)"
+      : variant === "rouge"
+        ? "rgba(220, 80, 80, 0.9)"
+        : "rgba(0, 0, 0, 0.12)";
+  return (
+    <span
+      aria-label={
+        variant === "orange"
+          ? "macaron A orange"
+          : variant === "rouge"
+            ? "macaron A rouge"
+            : "macaron A"
+      }
+      style={{
+        display: "inline-block",
+        background: bg,
+        color: variant === "gris" ? "var(--text)" : "#fff",
+        fontSize: ".72em",
+        fontWeight: 800,
+        lineHeight: 1,
+        padding: "2px 4px",
+        borderRadius: 3,
+        verticalAlign: "1px",
+      }}
+    >
+      A
+    </span>
+  );
+}
+
+/**
+ * Bouton de la ligne de titre de l'agenda usager (Imprimer, Liste d'attente…) reproduit
+ * EN LIGNE dans la prose : même chrome que les vrais boutons (cadre fin, pictogramme),
+ * mais cadre et trait de la couleur du texte qui l'entoure — il fait partie de la phrase,
+ * pas de la barre d'outils (Dom 2026-09-05).
+ */
+function ToolbarButtonMock({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span
+      aria-label={label}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        border: "1px solid currentColor",
+        borderRadius: "var(--rad-sm)",
+        padding: ".18rem .3rem",
+        color: "inherit",
+        lineHeight: 1,
+        // Le cadre (≈ 20 px) dépasse la ligne de texte (interligne 1,15 ≈ 16 px) : les
+        // marges verticales NÉGATIVES l'empêchent d'écarter les lignes du paragraphe,
+        // il déborde simplement un peu au-dessus et au-dessous (Dom 2026-09-05).
+        margin: "-4px 0",
+        verticalAlign: "-3px",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function WaitingListButtonMock() {
+  return (
+    <ToolbarButtonMock label="bouton Liste d'attente">
+      <WaitingListGlyph size={13} />
+    </ToolbarButtonMock>
+  );
+}
+
 function PrinterIcon() {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      // display:inline-block écrase le preflight Tailwind (svg { display:block }), sinon
-      // l'icône passe seule sur sa ligne au lieu de suivre le flux du texte.
-      style={{ display: "inline-block", verticalAlign: "-2px", margin: "0 1px" }}
-    >
-      <polyline points="6 9 6 2 18 2 18 9" />
-      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-      <rect x="6" y="14" width="12" height="8" />
-    </svg>
+    <ToolbarButtonMock label="bouton Imprimer">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="6 9 6 2 18 2 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect x="6" y="14" width="12" height="8" />
+      </svg>
+    </ToolbarButtonMock>
   );
 }
 
@@ -352,7 +418,8 @@ function BurgerMock({ label }: { label: string }) {
 
 /* ── Contenu des étapes ──────────────────────────────────────────────────────────────── */
 
-const P: React.CSSProperties = { margin: "0 0 .55rem" };
+// Interligne 1,15 sur tous les paragraphes de l'onboarding (Dom 2026-09-05).
+const P: React.CSSProperties = { margin: "0 0 .55rem", lineHeight: 1.15 };
 
 /** Note : quota de réservations par période / an, variable selon le service. */
 function QuotaNote() {
@@ -373,7 +440,13 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
   const names = services.map((s) => s.label);
   return [
     {
-      title: "Bienvenue sur CultuRésa 👋",
+      // « Résa » en vert italique, comme la marque de la sidebar (Dom 2026-09-05).
+      title: (
+        <>
+          👋 Bienvenue sur Cultu
+          <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
+        </>
+      ),
       // Deux lignes séparées d'une LIGNE VIDE (maquette Dom 2026-08-30) : l'accroche,
       // un saut de ligne, puis l'annonce.
       body: (
@@ -386,7 +459,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
       ),
     },
     {
-      title: "Plusieurs services à votre disposition 🏛️",
+      title: "🏛️ Plusieurs services à votre disposition",
       // DESKTOP : capture de la sidebar À CÔTÉ du texte (rangée) et non dessous —
       // l'étape tient dans les 150px communs du corps, la modale ne grandit plus
       // (retour Dom 2026-08-30 : se caler sur les pages les MOINS hautes). MOBILE :
@@ -434,7 +507,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
       image: isMobile ? <BurgerMock label={names[0] ?? "Médiathèque"} /> : undefined,
     },
     {
-      title: "Créer une réservation 📆",
+      title: "📆 Créer une réservation",
       body: hasGauge ? (
         <>
           <p style={P}>
@@ -458,7 +531,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
       ),
     },
     {
-      title: "Suivre vos réservations ✅",
+      title: "✅ Suivre vos réservations",
       body: (
         <>
           <p style={P}>Vos réservations apparaissent directement sur l'agenda :</p>
@@ -475,14 +548,15 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
             )}
           </p>
           <p style={{ ...P, margin: ".55rem 0 0" }}>
-            Empêché pour <strong>une seule séance</strong> ? Cliquez sur le macaron{" "}
-            <strong>A</strong> du badge pour <strong>prévenir d'une absence</strong> : le service
-            est informé et votre réservation est conservée.
+            Empêché pour <strong>une séance</strong> ? Survolez votre badge et cliquez sur le
+            macaron <MacaronA variant="gris" /> pour <strong>prévenir d'une absence à venir</strong>{" "}
+            : le service est informé, le macaron <MacaronA variant="orange" /> passe en orange et
+            votre réservation est conservée.
           </p>
           <p style={{ ...P, margin: ".55rem 0 0" }}>
-            Tout est complet ? Si le service le propose, inscrivez-vous sur la{" "}
-            <strong>liste d'attente</strong> avec vos disponibilités : vous serez prévenu dès qu'un
-            créneau se libère.
+            Tout est complet ? Inscrivez-vous sur la <strong>liste d'attente</strong>{" "}
+            <WaitingListButtonMock /> avec vos disponibilités : vous serez prévenu dès qu'un créneau
+            se libère.
           </p>
         </>
       ),
@@ -496,7 +570,7 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
   // menu Administration (réservé aux administrateurs).
   gestionnaire: [
     {
-      title: "Bienvenue 👋",
+      title: "👋 Bienvenue",
       body: (
         <>
           <p style={P}>
@@ -514,7 +588,7 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
     {
       // La bascule « Modèle de période » / « Semaine réelle » a été retirée : l'agenda
       // n'a plus qu'une vue, la semaine datée (cf. agenda-grid, vue unique).
-      title: "Un agenda unique, semaine par semaine 🗓️",
+      title: "🗓️ Un agenda unique, semaine par semaine",
       body: (
         <>
           <p style={P}>
@@ -526,7 +600,7 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       ),
     },
     {
-      title: "Créer les créneaux 🗓️",
+      title: "🗓️ Créer les créneaux",
       body: (
         <>
           <p style={P}>
@@ -543,7 +617,7 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       image: <SlotCreateShot />,
     },
     {
-      title: "Réserver pour un utilisateur ✅",
+      title: "✅ Réserver pour un utilisateur",
       body: (
         <p style={{ margin: 0 }}>
           Vous pouvez réserver à la place d'un usager : cliquez sur un{" "}
@@ -554,7 +628,7 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       image: <ReservationCreateShot />,
     },
     {
-      title: "Valider les demandes ✅",
+      title: "✅ Valider les demandes",
       body: (
         <>
           <p style={P}>
@@ -565,7 +639,7 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       image: <ValidationModeShot />,
     },
     {
-      title: "Renseigner les pointages 🖊️",
+      title: "🖊️ Renseigner les pointages",
       body: (
         <>
           <p style={P}>
@@ -573,18 +647,19 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
             l'absence à chaque réservation, semaine après semaine.
           </p>
           <p style={{ margin: 0 }}>
-            En cas d'absence, cliquez sur le macaron <strong>A</strong> du badge pour ouvrir la
-            fiche et saisir un <strong>motif d'absence</strong> — il est repris dans l'infobulle du
-            badge et sur la feuille de pointage. Un macaron <strong>A orange</strong> signale une{" "}
-            <strong>absence prévenue</strong> à l'avance (par l'usager, ou saisie par vous dans la
-            fiche) : le premier clic la pointe directement « Absent ».
+            En cas d'absence, cliquez sur le macaron <MacaronA variant="rouge" /> du badge pour
+            ouvrir la fiche et saisir un <strong>motif d'absence</strong> — il est repris dans
+            l'infobulle du badge et sur la feuille de pointage. Un macaron orange{" "}
+            <MacaronA variant="orange" /> signale une <strong>absence prévenue</strong> à l'avance
+            (par l'usager, ou saisie par vous dans la fiche) : le premier clic la pointe directement
+            « Absent ».
           </p>
         </>
       ),
       image: <PointageModeShot />,
     },
     {
-      title: "Éditions 📋 et Statistiques 📈",
+      title: "📋 Éditions et 📈 Statistiques",
       body: (
         <>
           <p style={P}>
@@ -604,15 +679,15 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
   // Administrateur : périmètre GLOBAL (en plus de la gestion des services).
   administrateur: [
     {
-      title: "Bienvenue dans l'administration 👋",
+      title: "👋 Bienvenue dans l'administration",
       body: "Vous administrez l'ensemble de l'application : services, comptes et paramètres généraux, en plus de la gestion de chaque service.",
     },
     {
-      title: "Configuration et référentiels ⚙️",
+      title: "⚙️ Configuration et référentiels",
       body: "Depuis « Administration », réglez les paramètres généraux et les référentiels : services, demandeurs, structures et niveaux.",
     },
     {
-      title: "Comptes, messagerie et RGPD 🛡️",
+      title: "🛡️ Comptes, messagerie et RGPD",
       body: "Gérez les utilisateurs et leurs rôles, la messagerie (e-mails) et la conservation des données personnelles (RGPD).",
     },
   ],
@@ -715,9 +790,10 @@ export function OnboardingModal({
 
         {/* Indicateur de progression */}
         <div style={{ display: "flex", justifyContent: "center", gap: 6, margin: ".7rem 0 1rem" }}>
-          {steps.map((s, i) => (
+          {steps.map((_s, i) => (
             <span
-              key={s.title}
+              // Position de l'étape : la liste est fixe et un titre peut être un nœud.
+              key={i}
               style={{
                 width: 7,
                 height: 7,
