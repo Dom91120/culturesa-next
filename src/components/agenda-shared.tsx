@@ -397,6 +397,73 @@ export function WaitingListGlyph({ size = 24 }: { size?: number }) {
   );
 }
 
+/**
+ * Bouton « Liste d'attente » (agenda gestionnaire ET agenda usager, Dom 2026-09-05) :
+ * même chrome que le bouton Imprimer (cadre fin, pictogramme 15 px gris) + pastille
+ * optionnelle en coin haut-droit ; rien si `badge` est vide. Couleur : ORANGE par
+ * défaut (compteur d'inscrits côté gestionnaire = attention), VERT côté usager inscrit
+ * (« ✓ » = état acquis, comme la coche « Réservation validée » de la légende).
+ */
+export function WaitingListButton({
+  tip,
+  ariaLabel,
+  badge,
+  badgeColor = "var(--warn)",
+  onClick,
+}: {
+  tip: string;
+  ariaLabel?: string;
+  badge?: string | number | null;
+  badgeColor?: string;
+  onClick: () => void;
+}) {
+  const show = badge != null && badge !== "" && badge !== 0;
+  return (
+    <button
+      type="button"
+      data-tip={tip}
+      aria-label={ariaLabel ?? tip}
+      style={{
+        position: "relative",
+        background: "none",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--rad-sm)",
+        padding: ".28rem .38rem",
+        cursor: "pointer",
+        color: "var(--muted)",
+        display: "flex",
+        alignItems: "center",
+        lineHeight: 1,
+      }}
+      onClick={onClick}
+    >
+      <WaitingListGlyph size={15} />
+      {show && (
+        <span
+          style={{
+            position: "absolute",
+            top: -5,
+            right: -5,
+            minWidth: 13,
+            height: 13,
+            padding: "0 3px",
+            boxSizing: "border-box",
+            borderRadius: 999,
+            background: badgeColor,
+            color: "#fff",
+            fontSize: ".55rem",
+            fontWeight: 700,
+            lineHeight: "13px",
+            textAlign: "center",
+          }}
+        >
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function PrintIconButton({ onClick, tip }: { onClick: () => void; tip: string }) {
   return (
     <button
@@ -459,21 +526,20 @@ export function AgendaEmptyWeekNotice({ children }: { children: React.ReactNode 
 
 /**
  * Bouton à icône de la ligne des onglets de période (« Prévenir d'une absence »,
- * « Liste d'attente ») : sur bureau, bouton cadré texte à GAUCHE + icône SVG 24 px à
- * droite (icônes fournies par Dom dans public/ — rendu identique sur toutes les
- * plateformes, comme le calendrier) ; sur mobile, l'icône SEULE sans cadre ni texte,
- * le libellé restant en aria-label et en infobulle (Dom 2026-09-04/05).
+ * « Liste d'attente ») : par défaut l'icône SEULE, sans cadre ni texte, le libellé
+ * restant en aria-label et en infobulle — même rendu sur bureau et mobile (Dom
+ * 2026-09-05). `withLabel` : variante cadrée texte à GAUCHE + icône 24 px à droite.
  */
 export function ToolbarIconButton({
   label,
   icon,
-  mobile,
+  withLabel = false,
   onClick,
 }: {
   label: string;
   // Chemin d'un SVG de public/ (rendu en <img>) OU pictogramme inliné (nœud React).
   icon: string | React.ReactNode;
-  mobile: boolean;
+  withLabel?: boolean;
   onClick?: () => void;
 }) {
   const glyph =
@@ -482,7 +548,7 @@ export function ToolbarIconButton({
     ) : (
       icon
     );
-  if (mobile) {
+  if (!withLabel) {
     return (
       <button
         type="button"

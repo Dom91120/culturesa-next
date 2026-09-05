@@ -21,7 +21,7 @@ import {
   AgendaWeekHeader,
   PointagePill,
   PrintIconButton,
-  WaitingListGlyph,
+  WaitingListButton,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
@@ -732,55 +732,12 @@ export function AgendaGrid({
   // matche rien → aucun bloc.
   const effectivePeriodId = coveringPeriod?.id ?? -1;
 
-  // Dates (YYYY-MM-DD) des créneaux ponctuels (datés) ayant au moins une réservation
-  // (port legacy _agendaBookedSlotDates). Trié croissant. Mémoïsé + Set : l'ancien
-  // filter×some était O(miroirs × réservations) recalculé à CHAQUE rendu (survol,
-  // drag…) — audit perf.
-  const bookedSlotDates = useMemo(() => {
-    const bookedSlotIds = new Set(bookings.map((b) => b.slotId));
-    return uniqueSlots
-      .filter((s) => s.slotDate && bookedSlotIds.has(s.id))
-      .map((s) => s.slotDate as string)
-      .sort();
-  }, [uniqueSlots, bookings]);
-  // Parités A/B couvertes par les réservations RÉCURRENTES (periodId > 0) de chaque
-  // période. Une résa sans semaine ("") vaut pour A ET B. Ces résas se répètent chaque
-  // semaine de la période → une semaine est « non vide » seulement si sa parité figure
-  // ici. (Hors mode A/B, on enregistre "A"/"B"/"" sans distinction — voir weekHasBooking.)
-  const recurAbByPeriod = useMemo(() => {
-    const map = new Map<number, Set<"A" | "B" | "">>();
-    for (const b of bookings) {
-      if (b.periodId <= 0) continue;
-      const set = map.get(b.periodId) ?? new Set<"A" | "B" | "">();
-      set.add((b.week === "A" || b.week === "B" ? b.week : "") as "A" | "B" | "");
-      map.set(b.periodId, set);
-    }
-    return map;
-  }, [bookings]);
-
-  // Une semaine (lundi → dimanche) contient-elle une réservation visible ?
-  // - ponctuel daté réservé dans la semaine, OU
-  // - réservation récurrente de la période couvrant la semaine, dont la parité A/B
-  //   est compatible avec celle de la semaine (en mode A/B). "" = vaut pour A et B.
-  const weekHasBooking = (monday: string): boolean => {
-    const sunday = ymd(addDays(monday, 6));
-    if (bookedSlotDates.some((d) => d >= monday && d <= sunday)) return true;
-    const p = periodCoveringDate(monday) ?? periodCoveringDate(ymd(addDays(monday, 3)));
-    if (p == null) return false;
-    const ab = recurAbByPeriod.get(p.id);
-    if (!ab || ab.size === 0) return false;
-    if (!modes.abMode) return true; // pas de distinction A/B → toute résa récurrente compte
-    return ab.has("") || ab.has(slotWeekTag(monday));
-  };
   // Navigation hebdo ◀/▶ (câblage partagé useWeekNavigation, agenda-hooks) : bornée
   // à la période couvrante. (L'option « masquer les horaires sans réservation », qui
   // faisait aussi sauter les semaines vides, a été retirée — Dom 2026-09-05.)
   const { canWeekPrev, canWeekNext, shiftWeek } = useWeekNavigation({
     mondayStr,
     coveringPeriod,
-    hideEmpty: false,
-    weekHas: weekHasBooking,
-    weekHasDeps: [bookedSlotDates, recurAbByPeriod, periods, modes.abMode],
     setAnchorMonday,
   });
   // ── Glisser une réservation vers une AUTRE semaine (Dom 2026-09-04) ──────────
@@ -1034,14 +991,7 @@ export function AgendaGrid({
   // Mémoïsée : `mapMinToY` doit rester stable d'un rendu à l'autre pour que la mémo
   // des blocs par jour tienne (sinon recréée à chaque rendu = mémo invalide).
   const { quarters, qIdx, totalH, mapMinToY, yToMin } = useMemo(
-    () =>
-      gridGeometry({
-        gridStartMin,
-        gridEndMin,
-        lunchStart,
-        lunchEnd,
-        occupiedQ: null,
-      }),
+    () => gridGeometry({ gridStartMin, gridEndMin, lunchStart, lunchEnd }),
     [gridStartMin, gridEndMin, lunchStart, lunchEnd],
   );
 
@@ -3248,52 +3198,14 @@ export function AgendaGrid({
           {/* Hors création : liste d'attente (réglage service) puis bouton Imprimer, à
               gauche du bouton « Mode création ». */}
           {!creationMode && service.listeAttente && (
-            // Même chrome que le bouton Imprimer voisin (PrintIconButton : cadre fin,
-            // pictogramme 15 px gris) + pastille ORANGE du nombre d'inscrits en coin
-            // haut-droit, comme le compteur de demandeurs du mode création ; rien si 0
-            // (Dom 2026-09-05).
-            <button
-              type="button"
-              data-tip="Liste d'attente"
-              aria-label={`Liste d'attente (${waitingEntries.length})`}
-              style={{
-                position: "relative",
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--muted)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-              }}
+            // Bouton partagé avec l'agenda usager (chrome du bouton Imprimer) + pastille
+            // orange du nombre d'inscrits ; rien si 0 (Dom 2026-09-05).
+            <WaitingListButton
+              tip="Liste d'attente"
+              ariaLabel={`Liste d'attente (${waitingEntries.length})`}
+              badge={waitingEntries.length}
               onClick={() => setWaitlistOpen(true)}
-            >
-              <WaitingListGlyph size={15} />
-              {waitingEntries.length > 0 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: -5,
-                    right: -5,
-                    minWidth: 13,
-                    height: 13,
-                    padding: "0 3px",
-                    boxSizing: "border-box",
-                    borderRadius: 999,
-                    background: "var(--warn)",
-                    color: "#fff",
-                    fontSize: ".55rem",
-                    fontWeight: 700,
-                    lineHeight: "13px",
-                    textAlign: "center",
-                  }}
-                >
-                  {waitingEntries.length}
-                </span>
-              )}
-            </button>
+            />
           )}
           {!creationMode && (
             <PrintIconButton onClick={printSessionsList} tip="Imprimer la liste des réservations" />

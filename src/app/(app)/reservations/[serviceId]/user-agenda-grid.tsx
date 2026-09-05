@@ -23,7 +23,7 @@ import {
   ModalOverlay,
   PrintIconButton,
   ToolbarIconButton,
-  WaitingListGlyph,
+  WaitingListButton,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
@@ -1172,10 +1172,6 @@ export function UserAgendaGrid({
   // chevauche la frontière de deux périodes contiguës, elle bascule sur la
   // voisine (dont les bornes laissent sortir). Cf. legacy _agendaPeriodUserPicked.
   const [rwPeriodId, setRwPeriodId] = useState<number | null>(null);
-  // « Masquer les horaires sans créneau » : compacte les heures qui ne portent AUCUN
-  // créneau. Préférence utilisateur (décochée par défaut) — voir la valeur effective
-  // `hideNoSlot` dérivée plus bas (forcée sur mobile).
-  const [hideNoSlotPref, setHideNoSlotPref] = useState(false);
   // Modale "pile" : liste des réservations d'un créneau (clé slot+jour, recalculée
   // en direct depuis blocksByDay pour rester à jour après un refresh).
   // Glisser-déplacer (pointer events, cf. usePointerDrag) : élément en cours de drag.
@@ -1282,10 +1278,6 @@ export function UserAgendaGrid({
     () => (isMobile && mobileDay ? [mobileDay] : days),
     [isMobile, mobileDay, days],
   );
-  // Compactage « sans créneau » : valeur effective. Sur mobile, toujours désactivé (la
-  // case est masquée et n'est donc pas modifiable) → on affiche toute la plage horaire.
-  const hideNoSlot = isMobile ? false : hideNoSlotPref;
-
   // (Bornes horaires de la grille : dérivées plus haut avec les colonnes, cf.
   // gridDaysAndBounds.)
 
@@ -1309,54 +1301,12 @@ export function UserAgendaGrid({
   // Sans période couvrant la semaine, -1 ne matche rien → aucun bloc.
   const effectivePeriodId = coveringPeriod?.id ?? -1;
 
-  // Dates (YYYY-MM-DD) des créneaux ponctuels AUTONOMES (datés) réservables — sert au
-  // mode « Masquer les horaires sans créneau » pour sauter aux semaines portant au moins
-  // un créneau et (dés)activer ◀/▶. Trié croissant. Mémoïsé : recalculé sinon à chaque
-  // rendu (survol/drag), hideNoSlot étant actif par défaut (audit perf).
-  const uniqSlotDates = useMemo(
-    () =>
-      uniqueSlots
-        .filter((s) => !s.parentSlotId && s.slotDate && (s.capacity ?? service.capacity) > 0)
-        .map((s) => s.slotDate as string)
-        .sort(),
-    [uniqueSlots, service.capacity],
-  );
-  // Parités A/B couvertes par les créneaux RÉCURRENTS de chaque période (un créneau
-  // « A,B » couvre les deux). Les récurrents se répètent chaque semaine de la période →
-  // une semaine porte un créneau si sa parité y figure (ou hors mode A/B).
-  const recurSlotAbByPeriod = useMemo(() => {
-    const map = new Map<number, Set<"A" | "B">>();
-    for (const s of slots) {
-      if (s.periodId == null || s.periodId <= 0) continue;
-      if ((s.capacity ?? service.capacity) <= 0) continue;
-      const set = map.get(s.periodId) ?? new Set<"A" | "B">();
-      for (const w of parseWeeks(s.weeks)) set.add(w);
-      map.set(s.periodId, set);
-    }
-    return map;
-  }, [slots, service.capacity]);
-
-  // Une semaine (lundi → dimanche) contient-elle au moins un créneau visible ?
-  // - créneau ponctuel daté dans la semaine, OU
-  // - créneau récurrent de la période couvrant la semaine, de parité A/B compatible.
-  const weekHasSlot = (monday: string): boolean => {
-    const sunday = ymd(addDays(monday, 6));
-    if (uniqSlotDates.some((d) => d >= monday && d <= sunday)) return true;
-    const p = periodCoveringDate(monday) ?? periodCoveringDate(ymd(addDays(monday, 3)));
-    if (p == null) return false;
-    const ab = recurSlotAbByPeriod.get(p.id);
-    if (!ab || ab.size === 0) return false;
-    if (!modes.abMode) return true; // pas de distinction A/B → tout récurrent compte
-    return ab.has(slotWeekTag(monday));
-  };
   // Navigation hebdo ◀/▶ (câblage partagé useWeekNavigation, agenda-hooks) : bornée
-  // à la période couvrante ; en hideNoSlot, saute aux semaines AYANT un créneau.
+  // à la période couvrante. (L'option « masquer les horaires sans créneau » et son saut
+  // des semaines vides ont été retirés — Dom 2026-09-05.)
   const { canWeekPrev, canWeekNext, shiftWeek } = useWeekNavigation({
     mondayStr,
     coveringPeriod,
-    hideEmpty: hideNoSlot,
-    weekHas: weekHasSlot,
-    weekHasDeps: [uniqSlotDates, recurSlotAbByPeriod, periods, modes.abMode],
     setAnchorMonday,
   });
 
@@ -1394,7 +1344,7 @@ export function UserAgendaGrid({
   const weekDateByDay = useMemo(() => weekDateLabels(mondayStr, days), [mondayStr, days]);
   // Jour fermé / férié (semaine réelle) : prédicats partagés (makeDayClosure,
   // agenda-core). La politique vacances du DEMANDEUR est déjà combinée (∧) dans
-  // openingForYmd. Mémoïsé : identités stables requises pour mémoïser `occupiedQ`
+  // openingForYmd. Mémoïsé : identités stables requises par les mémos en aval
   // (sinon recalcul à chaque rendu, donc à chaque survol/drag).
   const { isDayDisabled, outOfPeriodCls, closedDayTip } = useMemo(
     () =>
@@ -1455,82 +1405,12 @@ export function UserAgendaGrid({
   );
 
   // ── « Masquer les horaires sans créneau » (compactage, port legacy) ─────────
-  // On ne resserre pas la plage : on construit l'ensemble des quarts d'heure portant
-  // un CRÉNEAU (granularité HEURE : dès qu'un créneau — réservé OU vide réservable —
-  // touche une heure, ses 4 quarts sont conservés pour garder le repère "heure").
-  // Les quarts sans créneau sont ensuite sautés dans `quarters`.
-  // Mémoïsé : double boucle slots × uniqueSlots construisant un Set — sinon recalculé à
-  // CHAQUE rendu (donc à chaque survol/drag, via onMouseMove/setDragPos). Cf. P2 audit.
-  const occupiedQ = useMemo(() => {
-    const set = new Set<number>();
-    if (!hideNoSlot) return set;
-    const occupiedHours = new Set<number>();
-    const addHours = (sMin: number, eMin: number) => {
-      const s = Math.max(sMin, gridStartMin);
-      const e = Math.min(eMin, gridEndMin);
-      if (e <= s) return;
-      for (let m = Math.floor(s / 60) * 60; m < e; m += 60) occupiedHours.add(m);
-    };
-    // Créneaux RÉCURRENTS visibles : période active, semaine A/B, jour ouvert, capacité.
-    for (const s of slots) {
-      if (effectivePeriodId != null && s.periodId !== effectivePeriodId) continue;
-      if (abMode && effectiveWeek != null && !parseWeeks(s.weeks).includes(effectiveWeek)) continue;
-      const dk = s.slotDay;
-      // `displayDays` = jours réellement rendus (toute la semaine sur desktop, un
-      // seul jour sur mobile) → sur mobile, on masque les heures vides DU jour affiché.
-      if (!dk || !displayDays.includes(dk) || isDayDisabled(dk)) continue;
-      if ((s.capacity ?? service.capacity) <= 0) continue;
-      addHours(toMinutes(s.startTime, gridStartMin), toMinutes(s.endTime, gridStartMin + 60));
-    }
-    // Créneaux PONCTUELS autonomes datés dans la semaine affichée.
-    if (mondayStr) {
-      const sunday = sundayStr ?? mondayStr;
-      for (const u of uniqueSlots) {
-        if (u.parentSlotId) continue;
-        if (!u.slotDate || u.slotDate < mondayStr || u.slotDate > sunday) continue;
-        const dk = dayKeyFromYmd(u.slotDate);
-        if (!displayDays.includes(dk) || isDayDisabled(dk)) continue;
-        if ((u.capacity ?? service.capacity) <= 0) continue;
-        addHours(toMinutes(u.startTime, gridStartMin), toMinutes(u.endTime, gridStartMin + 60));
-      }
-    }
-    // Étend chaque heure occupée à ses 4 quarts (dans [gridStartMin, gridEndMin]).
-    for (const h of occupiedHours) {
-      for (let q = h; q < h + 60; q += 15) {
-        if (q >= gridStartMin && q < gridEndMin) set.add(q);
-      }
-    }
-    return set;
-  }, [
-    hideNoSlot,
-    slots,
-    effectivePeriodId,
-    abMode,
-    effectiveWeek,
-    displayDays,
-    isDayDisabled,
-    service.capacity,
-    mondayStr,
-    sundayStr,
-    uniqueSlots,
-    gridStartMin,
-    gridEndMin,
-  ]);
-
   // Géométrie de la grille (quarts visibles + mapping minute↔pixel) mutualisée.
   // Mémoïsée : `mapMinToY` doit rester stable d'un rendu à l'autre pour que la mémo
   // des blocs par jour tienne (sinon recréée à chaque rendu = mémo invalide).
-  // `occupiedQ` (compactage hideNoSlot) est construit ci-dessus côté usager.
   const { quarters, qIdx, totalH, mapMinToY, yToMin } = useMemo(
-    () =>
-      gridGeometry({
-        gridStartMin,
-        gridEndMin,
-        lunchStart,
-        lunchEnd,
-        occupiedQ: hideNoSlot ? occupiedQ : null,
-      }),
-    [gridStartMin, gridEndMin, lunchStart, lunchEnd, hideNoSlot, occupiedQ],
+    () => gridGeometry({ gridStartMin, gridEndMin, lunchStart, lunchEnd }),
+    [gridStartMin, gridEndMin, lunchStart, lunchEnd],
   );
 
   const slotsParsed = useMemo(
@@ -3236,6 +3116,33 @@ export function UserAgendaGrid({
     return { timed, allday };
   }, [displayDays, isDayDisabled, blocksByDay, renderBlock]);
 
+  // Boutons à icône « Liste d'attente » (pictogramme inliné WaitingListGlyph) puis
+  // « Prévenir d'une absence » (public/absence.svg), chacun selon le réglage du service ;
+  // icône seule, libellé en infobulle (ToolbarIconButton). Rendus sur la ligne de titre
+  // à côté d'Imprimer (bureau) ou sur la ligne des onglets (mobile).
+  const actionIcons = (
+    <>
+      {/* Ordre : absence puis liste d'attente, à côté de l'imprimante (Dom 2026-09-05). */}
+      {service.absencePrevenue && (
+        <ToolbarIconButton
+          label="Prévenir d'une absence"
+          icon="/absence.svg"
+          onClick={() => setAbsenceHelpOpen(true)}
+        />
+      )}
+      {service.listeAttente && (
+        // Même bouton que l'agenda gestionnaire (Dom 2026-09-05) ; pastille « ✓ » si inscrit.
+        <WaitingListButton
+          tip={waitingEntry ? "Liste d'attente — vous êtes inscrit" : "Liste d'attente"}
+          ariaLabel="Liste d'attente"
+          badge={waitingEntry ? "✓" : null}
+          badgeColor="var(--accent)"
+          onClick={() => setWaitlistOpen(true)}
+        />
+      )}
+    </>
+  );
+
   return (
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
     <div id="tab-content-agenda" onMouseMove={onAgendaTip} onMouseLeave={clearTip}>
@@ -3457,20 +3364,11 @@ export function UserAgendaGrid({
             maxWidth: "calc(50% - 80px)",
           }}
         >
-          <div
-            className="planning-options-row"
-            style={{ flexDirection: "column", alignItems: "flex-end", gap: 1, lineHeight: 1.1 }}
-          >
-            <label className="planning-option" style={{ whiteSpace: "normal", textAlign: "right" }}>
-              Masquer les horaires sans créneau
-              <input
-                type="checkbox"
-                checked={hideNoSlotPref}
-                onChange={(e) => setHideNoSlotPref(e.target.checked)}
-              />
-            </label>
-          </div>
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            {/* Bureau : boutons à icône (liste d'attente / absence) à GAUCHE du bouton
+                Imprimer, sur la ligne de titre (Dom 2026-09-05) — sur mobile ils sont
+                rendus sur la ligne des onglets, pas ici (ce groupe y est masqué). */}
+            {!isMobile && actionIcons}
             <PrintIconButton
               onClick={printMyBookings}
               tip="Imprimer la liste de mes réservations"
@@ -3524,28 +3422,13 @@ export function UserAgendaGrid({
             sur le badge de la réservation concernée) — explique la procédure. Aligné à
             droite de la ligne des onglets, sous l'impression (retour Dom 2026-09-04).
             Sur mobile : icône seule, sans cadre ni texte. */}
-        {/* Boutons à icône de la ligne des onglets, alignés à droite : « Liste d'attente »
-            (pictogramme inliné WaitingListGlyph) puis « Prévenir d'une absence » (public/absence.svg,
-            seulement si le service active les absences prévenues). Même gabarit pour les
-            deux (ToolbarIconButton) : texte + icône 24 px sur bureau, icône seule sur mobile. */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".5rem" }}>
-          {service.listeAttente && (
-            <ToolbarIconButton
-              label={waitingEntry ? "Liste d'attente ✓" : "Liste d'attente"}
-              icon={<WaitingListGlyph size={24} />}
-              mobile={isMobile}
-              onClick={() => setWaitlistOpen(true)}
-            />
-          )}
-          {service.absencePrevenue && (
-            <ToolbarIconButton
-              label="Prévenir d'une absence"
-              icon="/absence.svg"
-              mobile={isMobile}
-              onClick={() => setAbsenceHelpOpen(true)}
-            />
-          )}
-        </div>
+        {/* Mobile : les boutons à icône (liste d'attente / absence) restent sur la ligne
+            des onglets, la ligne de titre n'ayant pas de groupe d'options. */}
+        {isMobile && (
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".5rem" }}>
+            {actionIcons}
+          </div>
+        )}
       </div>
 
       {/* Navigation jour par jour (mobile uniquement) : la grille n'affiche qu'un jour,

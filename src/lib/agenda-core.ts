@@ -329,13 +329,10 @@ export const ROW_H = 56;
 
 // ─── Géométrie de la grille semaine (axe horaire) ────────────────────────────
 // Mutualisée entre la grille admin et la grille usager : à partir des bornes de
-// la plage horaire, de la pause méridienne et — optionnellement — de l'ensemble
-// des quarts d'heure à conserver (compactage « masquer les horaires vides »),
-// produit la liste des quarts VISIBLES et les fonctions de mapping minute↔pixel.
-// La logique de « ce qui est occupé » diffère entre les deux modes : chaque
-// conteneur construit son propre `occupiedQ` et le passe ici (null = pas de
-// compactage). Le reste (pause compactée à 30 min, mapping linéaire intra-quart)
-// est identique partout. Port du legacy renderAgendaWeekly / mapMinToY.
+// la plage horaire et de la pause méridienne, produit la liste des quarts VISIBLES
+// et les fonctions de mapping minute↔pixel (pause compactée à 30 min, mapping
+// linéaire intra-quart). Port du legacy renderAgendaWeekly / mapMinToY. (Le
+// compactage « masquer les horaires vides » a été retiré — Dom 2026-09-05.)
 type GridGeometry = {
   /** Quarts d'heure visibles (minutes depuis minuit), dans l'ordre. */
   quarters: number[];
@@ -356,10 +353,8 @@ export function gridGeometry(args: {
   lunchStart: number;
   /** afternoonStart en minutes (NaN accepté = pas de pause). */
   lunchEnd: number;
-  /** Quarts à conserver (compactage actif) ; null = tous les quarts visibles. */
-  occupiedQ: Set<number> | null;
 }): GridGeometry {
-  const { gridStartMin, gridEndMin, lunchStart, lunchEnd, occupiedQ } = args;
+  const { gridStartMin, gridEndMin, lunchStart, lunchEnd } = args;
   const QUARTER_H = ROW_H / 4; // px par tranche de 15 min
   const hasLunch =
     Number.isFinite(lunchStart) &&
@@ -372,7 +367,6 @@ export function gridGeometry(args: {
 
   const quarters: number[] = [];
   for (let m = gridStartMin; m < gridEndMin; m += 15) {
-    if (occupiedQ && !occupiedQ.has(m)) continue;
     if (lunchSkipFrom !== null && m >= lunchSkipFrom && m < lunchEnd) continue;
     quarters.push(m);
   }
@@ -627,63 +621,32 @@ export function makeDayClosure(args: {
 }
 
 /**
- * Navigation hebdomadaire ◀/▶ : bornée aux dates de la période couvrante ; en mode
- * « masquer les semaines vides » (hideEmpty), désactive une direction sans semaine
- * pleine et fait sauter shiftTarget aux semaines AYANT du contenu (port legacy
- * shiftAgendaWeek). `weekHas` définit le contenu : réservations côté admin, créneaux
- * côté usager. shiftTarget renvoie le nouveau lundi, ou null si le saut sort de la
- * période (l'appelant n'ancre alors rien). Balaie jusqu'à 260 semaines : à appeler
- * sous useMemo (cf. les deux grilles).
+ * Navigation hebdomadaire ◀/▶ : bornée aux dates de la période couvrante. shiftTarget
+ * renvoie le nouveau lundi, ou null si le saut sort de la période (l'appelant n'ancre
+ * alors rien). (Le mode « masquer les semaines vides » a été retiré — Dom 2026-09-05.)
  */
 export function makeWeekNavigation(args: {
   mondayStr: string | null;
   coveringPeriod: { dateStart?: string | null; dateEnd?: string | null } | null;
-  hideEmpty: boolean;
-  weekHas: (monday: string) => boolean;
 }): {
   canWeekPrev: boolean;
   canWeekNext: boolean;
   shiftTarget: (deltaWeeks: number) => string | null;
 } {
-  const { mondayStr, coveringPeriod, hideEmpty, weekHas } = args;
-  // Existe-t-il une semaine pleine au-delà de `monday` dans la direction donnée,
-  // sans sortir de la période active ?
-  const hasWeekBeyond = (monday: string, dir: 1 | -1): boolean => {
-    const startB = coveringPeriod?.dateStart;
-    const endB = coveringPeriod?.dateEnd;
-    let cur = ymd(addDays(monday, dir * 7));
-    for (let i = 0; i < 260; i++) {
-      const sunday = ymd(addDays(cur, 6));
-      if (endB && cur > endB) break;
-      if (startB && sunday < startB) break;
-      if (weekHas(cur)) return true;
-      cur = ymd(addDays(cur, dir * 7));
-    }
-    return false;
-  };
+  const { mondayStr, coveringPeriod } = args;
   const canWeekPrev = mondayStr
-    ? (coveringPeriod?.dateStart
-        ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
-        : true) &&
-      (!hideEmpty || hasWeekBeyond(mondayStr, -1))
+    ? coveringPeriod?.dateStart
+      ? ymd(addDays(mondayStr, -1)) >= coveringPeriod.dateStart
+      : true
     : false;
   const canWeekNext = mondayStr
-    ? (coveringPeriod?.dateEnd ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd : true) &&
-      (!hideEmpty || hasWeekBeyond(mondayStr, 1))
+    ? coveringPeriod?.dateEnd
+      ? ymd(addDays(mondayStr, 7)) <= coveringPeriod.dateEnd
+      : true
     : false;
   const shiftTarget = (deltaWeeks: number): string | null => {
     if (!mondayStr) return null;
-    let newAnchor = ymd(addDays(mondayStr, deltaWeeks * 7));
-    if (hideEmpty && deltaWeeks !== 0) {
-      const step = deltaWeeks > 0 ? 7 : -7;
-      const MAX_ITER = 260;
-      let iter = 0;
-      while (iter++ < MAX_ITER) {
-        if (weekHas(newAnchor)) break;
-        if (!hasWeekBeyond(newAnchor, deltaWeeks > 0 ? 1 : -1)) break;
-        newAnchor = ymd(addDays(newAnchor, step));
-      }
-    }
+    const newAnchor = ymd(addDays(mondayStr, deltaWeeks * 7));
     // Clamp à la période active : si le saut sort de la période, on annule.
     if (coveringPeriod?.dateStart && coveringPeriod.dateEnd) {
       const newSunday = ymd(addDays(newAnchor, 6));

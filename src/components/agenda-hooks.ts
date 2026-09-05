@@ -61,27 +61,19 @@ export function useWeekGridColumns(
 
 /**
  * Câblage de la navigation hebdo ◀/▶ autour de la fabrique pure makeWeekNavigation
- * (agenda-core) : mémoïsation (le balayage va jusqu'à 260 semaines — à ne recalculer
- * que quand les données ou la semaine changent, pas à chaque survol/drag, audit perf)
- * + ancrage du lundi cible. `weekHas` définit le contenu d'une semaine et RESTE à
- * chaque grille (réservations côté admin, créneaux côté usager — sémantiques
- * volontairement distinctes) ; c'est une closure recréée à chaque rendu, donc ses
- * entrées réelles sont fournies via `weekHasDeps`.
+ * (agenda-core) : mémoïsation + ancrage du lundi cible. (Le saut des semaines vides —
+ * option « masquer les horaires sans réservation / sans créneau » — a été retiré des
+ * deux grilles, Dom 2026-09-05.)
  */
 export function useWeekNavigation(args: {
   mondayStr: string | null;
   coveringPeriod: { dateStart?: string | null; dateEnd?: string | null } | null;
-  hideEmpty: boolean;
-  weekHas: (monday: string) => boolean;
-  /** Entrées RÉELLES de la closure `weekHas` (déps du useMemo). */
-  weekHasDeps: readonly unknown[];
   setAnchorMonday: (monday: string) => void;
 }) {
-  const { mondayStr, coveringPeriod, hideEmpty, weekHas, setAnchorMonday } = args;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: weekHas est une closure recréée à chaque rendu ; ses entrées réelles sont fournies par l'appelant (weekHasDeps).
+  const { mondayStr, coveringPeriod, setAnchorMonday } = args;
   const { canWeekPrev, canWeekNext, shiftTarget } = useMemo(
-    () => makeWeekNavigation({ mondayStr, coveringPeriod, hideEmpty, weekHas }),
-    [mondayStr, hideEmpty, coveringPeriod, ...args.weekHasDeps],
+    () => makeWeekNavigation({ mondayStr, coveringPeriod }),
+    [mondayStr, coveringPeriod],
   );
   const shiftWeek = (deltaWeeks: number) => {
     const target = shiftTarget(deltaWeeks);
