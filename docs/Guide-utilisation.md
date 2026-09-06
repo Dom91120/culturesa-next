@@ -158,6 +158,10 @@ par e-mail et retiré de la liste. Validez avec **« S'inscrire sur la liste d'a
 fois inscrit, le même bouton permet de **mettre à jour** vos disponibilités ou de vous
 **retirer de la liste**. Si vous avez déjà atteint votre maximum de réservations (pour l'année, ou
 sur chaque période), vous ne pouvez pas vous inscrire sur la liste d'attente de ce service.
+La liste vous est aussi proposée au bon moment : un clic sur un créneau **complet** affiche un lien
+« s'inscrire sur la liste d'attente » (la demi-journée du créneau est précochée), la fenêtre
+**« Plus aucune place disponible »** porte un bouton d'inscription, et les e-mails de refus ou de
+suppression par le service rappellent la liste d'attente.
 
 ### Règles appliquées automatiquement
 

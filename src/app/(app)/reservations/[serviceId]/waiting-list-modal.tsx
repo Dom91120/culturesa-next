@@ -28,6 +28,7 @@ export function WaitingListModal({
   days,
   periods,
   entry,
+  preset,
   onClose,
   onSaved,
 }: {
@@ -38,10 +39,13 @@ export function WaitingListModal({
   // (toutes cochées par défaut — Dom 2026-09-06).
   periods: WaitingPeriodOption[];
   entry: WaitingEntryView | null;
+  // Demi-journées précochées à l'ouverture (clic sur un créneau complet) — ignorées
+  // si l'usager est déjà inscrit (ses disponibilités priment).
+  preset?: string[];
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
-  const [dispos, setDispos] = useState<Set<string>>(new Set(entry?.dispos ?? []));
+  const [dispos, setDispos] = useState<Set<string>>(new Set(entry?.dispos ?? preset ?? []));
   const periodChoice = periods.length > 1;
   const [periodIds, setPeriodIds] = useState<Set<number>>(
     new Set(entry && entry.periodIds.length > 0 ? entry.periodIds : periods.map((p) => p.id)),

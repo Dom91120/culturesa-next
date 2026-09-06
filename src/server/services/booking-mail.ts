@@ -1,4 +1,5 @@
 import { DAY_NAMES } from "@/lib/agenda-core";
+import { escapeHtml } from "@/lib/email-theme";
 import { greeting } from "@/lib/mail-render";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -326,7 +327,7 @@ async function sendBookingEventMail(
           endTime: true,
           slotDate: true,
           slotDay: true,
-          service: { select: { label: true } },
+          service: { select: { label: true, listeAttente: true } },
         },
       }),
       prisma.user.findUnique({
@@ -335,6 +336,15 @@ async function sendBookingEventMail(
       }),
     ]);
     if (recipients.length === 0) return;
+
+    // Refus d'une demande / suppression par le service : l'usager n'a plus de place — on
+    // lui rappelle la liste d'attente si le service la propose (variable {{liste_attente}},
+    // HTML brut, vide sinon ; Dom 2026-09-06).
+    const rawVars: Record<string, string> = {};
+    if (slot?.service.listeAttente && (trigger === "refuse" || trigger === "cancel_manager")) {
+      const url = `${(await getAppUrl()).replace(/\/$/, "")}/reservations/${params.serviceId}`;
+      rawVars.liste_attente = `<p>Plus de place ? Vous pouvez vous inscrire sur la <strong>liste d'attente</strong> du service depuis <a href="${escapeHtml(url)}">l'agenda</a> : vous serez prévenu par e-mail dès qu'un créneau correspondant à vos disponibilités se libérera.</p>`;
+    }
 
     const periodLabel = await resolvePeriodLabel({
       serviceId: params.serviceId,
@@ -357,6 +367,7 @@ async function sendBookingEventMail(
         to: r.email,
         kind,
         vars: { ...baseVars, salutation: greeting(prenom), prenom },
+        rawVars,
         serviceId: params.serviceId,
       });
     }

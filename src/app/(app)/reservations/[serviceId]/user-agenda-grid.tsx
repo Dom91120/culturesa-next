@@ -1216,9 +1216,26 @@ export function UserAgendaGrid({
     toastVisible,
     toastCenterX,
     showToast: pushToast,
-  } = useAgendaToast<{ content: string; variant: "success" | "danger" }>();
-  function showToast(content: string, variant: "success" | "danger") {
-    pushToast({ content, variant });
+  } = useAgendaToast<{
+    content: React.ReactNode;
+    variant: "success" | "danger";
+    // Toast porteur d'une action (lien) : cliquable et affiché plus longtemps.
+    action?: boolean;
+    durationMs?: number;
+  }>();
+  function showToast(
+    content: React.ReactNode,
+    variant: "success" | "danger",
+    opts?: { action?: boolean; durationMs?: number },
+  ) {
+    pushToast({ content, variant, ...opts });
+  }
+  // Ouverture de la modale « liste d'attente » avec des demi-journées précochées (clic sur
+  // un créneau complet, alerte « plus de place ») — Dom 2026-09-06.
+  const [waitlistPreset, setWaitlistPreset] = useState<string[] | undefined>(undefined);
+  function openWaitlist(preset?: string[]) {
+    setWaitlistPreset(preset);
+    setWaitlistOpen(true);
   }
   // Info-bulle flottante unique (texte data-tip / « Journées concernées »), factorisée
   // dans un hook partagé. Suspendue pendant la saisie d'un thème.
@@ -2655,7 +2672,46 @@ export function UserAgendaGrid({
             // Clic sur un créneau → coche/décoche pour réservation (brouillon).
             // (Si c'est ma résa, le badge interne gère l'annulation et stoppe la propagation.)
             e.stopPropagation();
-            if (b.full || closed || opensOn) return;
+            if (b.full) {
+              // Créneau complet : proposer la liste d'attente si le service l'offre, avec
+              // la demi-journée du créneau précochée (Dom 2026-09-06).
+              if (service.listeAttente) {
+                if (waitingEntry) {
+                  showToast(
+                    "Ce créneau est complet — vous êtes déjà sur la liste d'attente.",
+                    "danger",
+                  );
+                } else {
+                  const halves = b.isAllDay ? ["am", "pm"] : [b.startMin < 12 * 60 ? "am" : "pm"];
+                  const preset = halves.map((h) => `${b.dayKey}-${h}`);
+                  showToast(
+                    <>
+                      Ce créneau est complet —{" "}
+                      <button
+                        type="button"
+                        onClick={() => openWaitlist(preset)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          color: "inherit",
+                          font: "inherit",
+                          fontWeight: 700,
+                          textDecoration: "underline",
+                          cursor: "pointer",
+                        }}
+                      >
+                        s'inscrire sur la liste d'attente
+                      </button>
+                    </>,
+                    "danger",
+                    { action: true, durationMs: 8000 },
+                  );
+                }
+              }
+              return;
+            }
+            if (closed || opensOn) return;
             const ponctuel = uniqueIdSet.has(b.slotId);
             if (!ponctuel && (effectivePeriodId == null || effectivePeriodId <= 0)) return;
             togglePendingAdd(b.slotId, b.dayKey, ponctuel);
@@ -3160,7 +3216,7 @@ export function UserAgendaGrid({
       {toast &&
         createPortal(
           <output
-            className={`toast toast--${toast.variant}${toastVisible ? " show" : ""}`}
+            className={`toast toast--${toast.variant}${toast.action ? " toast--action" : ""}${toastVisible ? " show" : ""}`}
             style={{
               zIndex: 11000,
               ...(toastCenterX != null ? { left: `${toastCenterX}px` } : {}),
@@ -3996,14 +4052,47 @@ export function UserAgendaGrid({
                 "N'hésitez pas à vous adresser au gestionnaire du service, qui saura vous renseigner sur les possibilités restantes."
               )}
             </p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setFullNoticeOpen(false)}
-              style={{ marginTop: "1rem", fontSize: ".78rem", padding: ".3rem 1rem" }}
+            {/* Liste d'attente (si le service la propose) : la solution au moment où
+                l'usager bute sur une période pleine (Dom 2026-09-06). */}
+            {service.listeAttente && waitingEntry && (
+              <p style={{ fontSize: ".85rem", lineHeight: 1.55, margin: ".5rem 0 0" }}>
+                Vous êtes inscrit sur la liste d'attente : nous vous préviendrons dès qu'un créneau
+                se libère.
+              </p>
+            )}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: ".5rem",
+                flexWrap: "wrap",
+                marginTop: "1rem",
+              }}
             >
-              J'ai compris
-            </button>
+              <button
+                type="button"
+                className={
+                  service.listeAttente && !waitingEntry ? "btn btn-ghost" : "btn btn-primary"
+                }
+                onClick={() => setFullNoticeOpen(false)}
+                style={{ fontSize: ".78rem", padding: ".3rem 1rem" }}
+              >
+                J'ai compris
+              </button>
+              {service.listeAttente && !waitingEntry && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setFullNoticeOpen(false);
+                    openWaitlist();
+                  }}
+                  style={{ fontSize: ".78rem", padding: ".3rem 1rem" }}
+                >
+                  S'inscrire sur la liste d'attente
+                </button>
+              )}
+            </div>
           </div>
         </ModalOverlay>
       )}
@@ -4090,6 +4179,7 @@ export function UserAgendaGrid({
           days={waitlistDays}
           periods={periods.map((p) => ({ id: p.id, label: p.label }))}
           entry={waitingEntry}
+          preset={waitlistPreset}
           onClose={() => setWaitlistOpen(false)}
           onSaved={(msg) => {
             setWaitlistOpen(false);

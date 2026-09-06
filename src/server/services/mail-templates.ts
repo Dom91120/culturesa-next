@@ -56,6 +56,10 @@ const BOOKING_VARS: MailVar[] = [
 const DELETE_VARS: MailVar[] = [
   ...COMMON_VARS,
   { name: "motif", desc: "Motif saisi par le gestionnaire (peut être vide)" },
+  {
+    name: "liste_attente",
+    desc: "Paragraphe « liste d'attente » avec lien vers l'agenda (HTML) — vide si le service n'a pas de liste d'attente ou si l'annulation vient de l'usager",
+  },
 ];
 // Absence prévenue : destinataire gestionnaires (signalée par l'usager) OU usager
 // (enregistrée par un gestionnaire) → le gabarit reste neutre et nomme l'usager.
@@ -187,6 +191,7 @@ ${DETAILS_CONFIRMATION}
 {{#if creneau}}<p><strong>Créneau concerné :</strong> {{creneau}}</p>{{/if}}
 {{#if periode}}<p><strong>Période :</strong> {{periode}}</p>{{/if}}
 {{#if motif}}<p><strong>Motif :</strong><br>{{motif}}</p>{{/if}}
+{{liste_attente}}
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
   booking_refused: {
@@ -196,6 +201,7 @@ ${DETAILS_CONFIRMATION}
 {{#if creneau}}<p><strong>Créneau concerné :</strong> {{creneau}}</p>{{/if}}
 {{#if periode}}<p><strong>Période :</strong> {{periode}}</p>{{/if}}
 {{#if motif}}<p><strong>Motif :</strong><br>{{motif}}</p>{{/if}}
+{{liste_attente}}
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },
   booking_reminder: {

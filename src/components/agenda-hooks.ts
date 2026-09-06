@@ -113,8 +113,11 @@ export function useAgendaToast<P extends object>() {
     window.addEventListener("resize", measure);
     setToastVisible(false);
     const raf = requestAnimationFrame(() => setToastVisible(true));
-    const hide = window.setTimeout(() => setToastVisible(false), 4000);
-    const clear = window.setTimeout(() => setToast(null), 4300);
+    // Durée : 4 s par défaut ; un toast porteur d'une action (lien à cliquer) peut en
+    // demander davantage via `durationMs` dans sa charge utile.
+    const duration = (toast as { durationMs?: number }).durationMs ?? 4000;
+    const hide = window.setTimeout(() => setToastVisible(false), duration);
+    const clear = window.setTimeout(() => setToast(null), duration + 300);
     return () => {
       window.removeEventListener("resize", measure);
       cancelAnimationFrame(raf);

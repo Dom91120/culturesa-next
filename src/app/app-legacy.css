@@ -1327,6 +1327,11 @@ textarea.theme-pending:focus::placeholder {
   background: var(--warn);
   color: #fff;
 }
+/* Toast porteur d'une ACTION (lien « s'inscrire sur la liste d'attente ») : cliquable,
+   à la différence des toasts d'information (pointer-events: none ci-dessus). */
+.toast.toast--action {
+  pointer-events: auto;
+}
 /* Succès (création / modification / déplacement enregistré) : vert accent, texte blanc. */
 .toast--success {
   background: var(--accent);
