@@ -127,7 +127,13 @@ export function WaitingListModal({
   const cell: React.CSSProperties = { padding: ".3rem .5rem", textAlign: "center" };
 
   return (
-    <ModalOverlay onClose={onClose} labelledBy="waitlist-title" boxStyle={{ maxWidth: 520 }}>
+    // Modale élargie dès six périodes (services à périodes mensuelles) : six cases par
+    // ligne, colonnes de largeur égale (Dom 2026-09-06).
+    <ModalOverlay
+      onClose={onClose}
+      labelledBy="waitlist-title"
+      boxStyle={{ maxWidth: periods.length >= 6 ? 640 : 520 }}
+    >
       <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">
         ×
       </button>
@@ -208,10 +214,40 @@ export function WaitingListModal({
 
       {periodChoice && (
         <div style={{ margin: "0 0 .7rem" }}>
-          <div style={{ fontSize: ".82rem", fontWeight: 600, margin: "0 0 .3rem" }}>
-            Périodes souhaitées
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: "1rem",
+              margin: "0 0 .3rem",
+            }}
+          >
+            <span style={{ fontSize: ".82rem", fontWeight: 600 }}>Périodes souhaitées</span>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: ".68rem", padding: ".1rem .45rem" }}
+              onClick={() =>
+                setPeriodIds(
+                  periodIds.size === periods.length ? new Set() : new Set(periods.map((p) => p.id)),
+                )
+              }
+            >
+              {periodIds.size === periods.length ? "Tout décocher" : "Tout cocher"}
+            </button>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: ".35rem 1rem" }}>
+          {/* Grille à colonnes ÉGALES : six par ligne au plus (petit écran : autant que la
+              largeur le permet) — les mois s'alignent d'une ligne à l'autre. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: narrow
+                ? "repeat(auto-fill, minmax(6.5rem, 1fr))"
+                : `repeat(${Math.min(6, periods.length)}, 1fr)`,
+              gap: ".35rem .75rem",
+            }}
+          >
             {periods.map((p) => (
               <label
                 key={p.id}
@@ -223,6 +259,9 @@ export function WaitingListModal({
                   textTransform: "none",
                   fontSize: ".85rem",
                   fontWeight: 500,
+                  // Interligne 1 : un libellé replié (« Septembre - Décembre » en colonne
+                  // étroite) reste compact (Dom 2026-09-06).
+                  lineHeight: 1,
                   color: "var(--text)",
                   cursor: "pointer",
                   margin: 0,
