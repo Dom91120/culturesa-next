@@ -149,13 +149,15 @@ séance **à venir** (jour même inclus), tant qu'elle n'a pas été pointée pa
 
 Plus de place ? Si le service a activé la **liste d'attente**, le bouton **« Liste d'attente »**,
 à droite des onglets de période, ouvre une fenêtre où vous indiquez vos **disponibilités par
-demi-journée** (matin / après-midi, sur les jours d'ouverture du service). Vous serez **prévenu
+demi-journée** (matin / après-midi, sur les jours d'ouverture du service) et, si le service
+compte plusieurs périodes, les **périodes souhaitées** (toutes par défaut). Vous serez **prévenu
 par e-mail** dès que des créneaux correspondant à vos disponibilités se libéreront, dans l'ordre
 d'inscription. Cochez **« Réservation automatique dès qu'un créneau se libère »** pour que la
 réservation soit faite en votre nom, avec les participants de votre fiche : vous en êtes informé
 par e-mail et retiré de la liste. Validez avec **« S'inscrire sur la liste d'attente »** ; une
 fois inscrit, le même bouton permet de **mettre à jour** vos disponibilités ou de vous
-**retirer de la liste**.
+**retirer de la liste**. Si vous avez déjà atteint votre maximum de réservations (pour l'année, ou
+sur chaque période), vous ne pouvez pas vous inscrire sur la liste d'attente de ce service.
 
 ### Règles appliquées automatiquement
 
@@ -205,9 +207,12 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   séance pose directement **Absent**.
 - **Liste d'attente** (si activée dans Paramètres › Configuration) : le bouton **« Liste d'attente »**
   de la barre d'options, avec le nombre d'inscrits, ouvre la liste des usagers inscrits, dans l'ordre d'inscription,
-  avec leurs disponibilités et leur choix d'inscription automatique ; un bouton permet de retirer
+  avec leurs disponibilités, leurs périodes souhaitées et leur choix d'inscription automatique ;
+  un bouton permet de retirer
   une inscription. La tâche planifiée « Liste d'attente » prévient ou inscrit les usagers dès
-  qu'un créneau réservable se libère.
+  qu'un créneau réservable se libère. Chaque inscription terminée (inscrit automatiquement, a
+  réservé lui-même, retiré sans place, retiré par le service) est conservée dans un historique
+  qui alimente les **Statistiques**.
 
 > 💡 Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
 > vers un autre créneau pour la déplacer. Pour la déposer dans une **autre semaine**, survolez la
@@ -247,6 +252,13 @@ passées (prévu / réalisé, taux de présence et de réalisation, absents pré
 **graphiques** de répartition (par jour, par mois, par structure, par niveau, taux de
 remplissage). Les données sont **filtrables et
 exportables en CSV**.
+
+Si le service utilise la **liste d'attente**, le tableau de bord montre aussi qui n'a **pas
+trouvé de place** : compteurs « Sans place trouvée » (inscriptions retirées sans réservation),
+« Placés depuis la liste » (inscription automatique ou réservation faite ensuite par l'usager,
+avec le délai moyen) et « En attente aujourd'hui », un anneau **« Issue des inscriptions »**,
+la répartition des sans-place **par catégorie et par structure** et les **inscriptions par mois**.
+Le filtre de dates s'applique à la date d'inscription.
 
 ![Statistiques d'un service](img/08-statistiques.png)
 
@@ -438,7 +450,7 @@ Plusieurs traitements s'exécutent automatiquement, sans intervention :
 - **Notifications de validation** regroupées : l'e-mail de validation ou de remise en attente part
   après le délai réglé dans Échanges et ne reflète que l'état final.
 - **Liste d'attente** : toutes les 5 minutes, pour chaque inscrit et dans l'ordre d'inscription,
-  recherche des créneaux réservables correspondant à ses disponibilités — inscription automatique
+  recherche des créneaux réservables correspondant à ses disponibilités et périodes — inscription automatique
   si demandée, sinon e-mail « créneaux libérés » (nouveautés seulement).
 - **Conservation des données** : anonymisation des comptes inactifs après l'avis de suppression.
 

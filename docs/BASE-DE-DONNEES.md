@@ -322,12 +322,32 @@ Liste d'attente d'un service (réglage `Service.listeAttente`) : **une entrée p
 | serviceId | texte | | ↗ `services` (Cascade) | |
 | userId | texte | | ↗ `user` (Cascade) | |
 | disponibilites | texte | "" | | demi-journées disponibles, CSV « lun-am,jeu-pm… » |
+| periodIds | texte | "" | | périodes acceptées (ids CSV « 12,13 ») ; vide = toutes les périodes de l'exercice (2026-09-06) |
 | autoInscription | booléen | false | | réservation automatique dès qu'un créneau se libère |
 | createdAt / updatedAt | horodatage | now() | | rang d'inscription = createdAt |
 | lastNotifiedAt | horodatage? | | | dernier e-mail « créneaux libérés » |
 | notifiedKeys | texte | "" | | créneaux déjà signalés (ne prévenir que des nouveautés) |
 
-**Unique** `(serviceId, userId)` ; index `(serviceId, createdAt)`.
+**Unique** `(serviceId, userId)` ; index `(serviceId, createdAt)`. Une entrée n'est jamais supprimée sans être **historisée** dans `liste_attente_historique` (ci-dessous).
+
+#### `WaitingListLog` → `liste_attente_historique`
+Historique des inscriptions en liste d'attente, une ligne par entrée **clôturée** (2026-09-06) : alimente les statistiques « demandeurs sans place » du service. Catégorie et structure **figées** à la clôture (comme le snapshot des réservations).
+
+| Colonne | Type | Défaut | Clé | Description |
+|---|---|---|---|---|
+| id | entier | auto | 🔑 | |
+| serviceId | texte | | ↗ `services` (Cascade) | |
+| userId | texte? | | ↗ `user` (SetNull) | mis à NULL à l'anonymisation du compte |
+| demandeurLabel / structureLabel | texte | "" | | libellés figés au moment de la clôture |
+| disponibilites | texte | "" | | demi-journées demandées (CSV) |
+| periodIds | texte | "" | | périodes acceptées (ids CSV) ; vide = toutes |
+| autoInscription | booléen | false | | option « réservation automatique » |
+| inscritAt | horodatage | | | date d'inscription (= `createdAt` de l'entrée) — c'est sur elle que filtrent les statistiques |
+| clotureAt | horodatage | now() | | date de clôture |
+| issue | enum `WaitingListOutcome` | | | `AUTO_BOOKED` (inscrit automatiquement), `BOOKED` (a réservé lui-même après l'inscription — déduit au retrait), `LEFT` (retiré par l'usager, sans place), `REMOVED` (retiré par un gestionnaire, sans place), `ANONYMIZED` |
+| bookingId | entier? | | ↗ `bookings` (SetNull) | réservation obtenue, s'il y en a une |
+
+Index `(serviceId, inscritAt)`, `(userId)`, `(bookingId)`.
 
 #### `BookingReminder` → `booking_reminders`
 Journal des rappels envoyés (idempotence du cron). | id 🔑 ; `bookingId` ↗ `bookings` (Cascade) ; `slotDate`, `kind` ("week" J-7 / "day" J-1), `sentAt`. **Unique `(bookingId, slotDate, kind)`** ; index `slotDate`.

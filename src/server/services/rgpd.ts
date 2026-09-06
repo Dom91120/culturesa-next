@@ -4,6 +4,7 @@ import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { resolveEffectiveDemandeurId } from "@/server/services/bookings";
 import { sendTemplatedMail } from "@/server/services/mail-send";
+import { closeWaitingEntries } from "@/server/services/waiting-list";
 
 type AnonymizeReason = "self_service" | "admin" | "retention";
 
@@ -103,6 +104,12 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
 
     const now = new Date();
 
+    // Liste d'attente : plus de destinataire ni de réservation possible → inscriptions
+    // clôturées dans l'historique (libellés figés AVANT la mise à blanc de la fiche), puis
+    // historique détaché du compte (userId NULL) — les libellés restent pour les stats.
+    await closeWaitingEntries(tx, { userId }, "ANONYMIZED");
+    await tx.waitingListLog.updateMany({ where: { userId }, data: { userId: null } });
+
     await tx.user.update({
       where: { id: userId },
       data: {
@@ -126,8 +133,6 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
     // sensible (« enfant malade »…) — vidé par minimisation ; l'historique métier
     // (pointage P/A, effectifs, thème) reste intact pour les statistiques.
     await tx.booking.updateMany({ where: { userId }, data: { pointageMotif: "" } });
-    // Liste d'attente : plus de destinataire ni de réservation possible → retiré.
-    await tx.waitingListEntry.deleteMany({ where: { userId } });
 
     // Déconnexion : on révoque toutes les sessions actives.
     await tx.session.deleteMany({ where: { userId } });

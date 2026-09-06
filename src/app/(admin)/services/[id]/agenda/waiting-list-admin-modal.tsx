@@ -107,7 +107,14 @@ export function WaitingListAdminModal({
                     <div style={{ fontSize: ".72rem", color: "var(--muted)" }}>{r.email}</div>
                   </td>
                   <td style={td}>{r.structure || r.demandeur || "—"}</td>
-                  <td style={td}>{r.dispos.join(", ") || "—"}</td>
+                  <td style={td}>
+                    {r.dispos.join(", ") || "—"}
+                    {r.periodes.length > 0 && (
+                      <div style={{ fontSize: ".72rem", color: "var(--muted)" }}>
+                        Périodes : {r.periodes.join(", ")}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ ...td, textAlign: "center" }}>{r.autoInscription ? "Oui" : "—"}</td>
                   <td style={td}>{fmt(r.createdAt)}</td>
                   <td style={td}>{r.lastNotifiedAt ? fmt(r.lastNotifiedAt) : "—"}</td>

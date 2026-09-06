@@ -805,8 +805,8 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
           <p style={{ margin: 0 }}>
             <strong>« Éditions 📋 »</strong> imprime et exporte la liste des inscrits, la liste des
             créneaux ouverts, la liste des réservations, le planning et les feuilles de pointage.{" "}
-            <strong>« Statistiques 📈 »</strong> synthétise la fréquentation de votre service,
-            exportable en CSV.
+            <strong>« Statistiques 📈 »</strong> synthétise la fréquentation de votre service, y
+            compris les usagers restés sans place en liste d'attente, exportable en CSV.
           </p>
         </>
       ),

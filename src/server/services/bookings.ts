@@ -439,6 +439,49 @@ export async function limiteReservationAtteinte(
 }
 
 /**
+ * Plus aucune place possible pour cet usager sur l'exercice VISIBLE des usagers du
+ * service ? Sert à la liste d'attente (Dom 2026-09-06) : la tâche planifiée rejoue les
+ * limites de réservation, donc un usager au maximum ANNUEL, ou au maximum PAR PÉRIODE sur
+ * CHAQUE période de l'exercice (service à période unique : dès la première réservation si
+ * le maximum est 1), ne serait jamais placé — son inscription est refusée d'emblée.
+ * Même décompte que `limiteReservationAtteinte` (deux natures confondues, miroirs
+ * exclus). Pas d'exercice visible, pas de période → false.
+ */
+export async function limitesEpuiseesPourListeAttente(
+  db: Prisma.TransactionClient,
+  serviceId: string,
+  userId: string,
+): Promise<boolean> {
+  const exercice = await db.exercice.findFirst({
+    where: { serviceId, visibleToUsers: true },
+    select: {
+      maxReservations: true,
+      maxReservationsPeriod: true,
+      periods: { select: { id: true } },
+    },
+  });
+  if (!exercice || exercice.periods.length === 0) return false;
+  const periodIds = exercice.periods.map((p) => p.id);
+  const compter = (ids: number[]) =>
+    db.booking.count({
+      where: {
+        serviceId,
+        userId,
+        parentBookingId: null,
+        OR: [
+          { bookingType: "recurring", periodId: { in: ids } },
+          { bookingType: "unique", slot: { periodId: { in: ids } } },
+        ],
+      },
+    });
+  if ((await compter(periodIds)) >= exercice.maxReservations) return true;
+  for (const id of periodIds) {
+    if ((await compter([id])) < exercice.maxReservationsPeriod) return false;
+  }
+  return true;
+}
+
+/**
  * Vacances scolaires : refuse un créneau ponctuel daté tombant en vacances scolaires de la
  * zone configurée (port legacy `bk_user_school_block`) dès lors que le SERVICE ferme pendant
  * les vacances (`serviceOpenOnSchoolHolidays` = false) OU que le demandeur de l'usager ferme.

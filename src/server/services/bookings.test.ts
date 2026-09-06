@@ -24,6 +24,7 @@ import {
   BookingError,
   effectiveOpenOnSchoolHolidays,
   isValidationMode,
+  limitesEpuiseesPourListeAttente,
   mapBookingError,
   resolveEffectiveDemandeurId,
   userCanAccessService,
@@ -561,5 +562,76 @@ describe("assertNotSchoolHolidayForUser", () => {
     await expect(assertNotSchoolHolidayForUser(tx, "u1", inHolidays, true)).rejects.toThrow(
       "Ce créneau tombe en vacances scolaires.",
     );
+  });
+});
+
+describe("limitesEpuiseesPourListeAttente (liste d'attente)", () => {
+  const exercice = (max: number, maxPeriod: number, periods: number[]) => ({
+    maxReservations: max,
+    maxReservationsPeriod: maxPeriod,
+    periods: periods.map((id) => ({ id })),
+  });
+  const tx = (exo: unknown, count: (ids: number[]) => number) =>
+    fakeTx({
+      exercice: { findFirst: vi.fn(async () => exo) },
+      booking: {
+        count: vi.fn(async (args: { where: { OR: { periodId: { in: number[] } }[] } }) =>
+          count(args.where.OR[0].periodId.in),
+        ),
+      },
+    });
+
+  it("false sans exercice visible ou sans période", async () => {
+    expect(
+      await limitesEpuiseesPourListeAttente(
+        tx(null, () => 99),
+        "svc",
+        "u1",
+      ),
+    ).toBe(false);
+    expect(
+      await limitesEpuiseesPourListeAttente(
+        tx(exercice(1, 1, []), () => 99),
+        "svc",
+        "u1",
+      ),
+    ).toBe(false);
+  });
+
+  it("true au maximum annuel (décompte sur toutes les périodes)", async () => {
+    expect(
+      await limitesEpuiseesPourListeAttente(
+        tx(exercice(2, 5, [10, 11]), () => 2),
+        "svc",
+        "u1",
+      ),
+    ).toBe(true);
+  });
+
+  it("true au maximum PAR PÉRIODE sur chaque période (période unique : dès 1 réservation)", async () => {
+    // Une seule période, max 1 par période, 1 réservation → plus aucune place possible.
+    expect(
+      await limitesEpuiseesPourListeAttente(
+        tx(exercice(3, 1, [10]), () => 1),
+        "svc",
+        "u1",
+      ),
+    ).toBe(true);
+    // Deux périodes, max 1 par période : pleine sur 10, libre sur 11 → une place reste possible.
+    const parPeriode = (ids: number[]) =>
+      ids.length === 1 && ids[0] === 10 ? 1 : ids.length === 1 ? 0 : 1;
+    expect(
+      await limitesEpuiseesPourListeAttente(tx(exercice(3, 1, [10, 11]), parPeriode), "svc", "u1"),
+    ).toBe(false);
+  });
+
+  it("false sous les maximums", async () => {
+    expect(
+      await limitesEpuiseesPourListeAttente(
+        tx(exercice(2, 2, [10]), () => 1),
+        "svc",
+        "u1",
+      ),
+    ).toBe(false);
   });
 });

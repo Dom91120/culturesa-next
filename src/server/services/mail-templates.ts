@@ -68,6 +68,10 @@ const ABSENCE_VARS: MailVar[] = [
 const WAITLIST_VARS: MailVar[] = [
   ...COMMON_VARS.filter((v) => v.name !== "creneau" && v.name !== "periode"),
   { name: "disponibilites", desc: "Demi-journées déclarées (« Lundi matin, Jeudi après-midi »)" },
+  {
+    name: "periodes",
+    desc: "Périodes souhaitées (« Septembre - Décembre, Janvier - Mars ») — toutes si aucune restriction",
+  },
   { name: "creneaux", desc: "Créneaux concernés, en texte (séparés par « ; »)" },
   { name: "liste_creneaux", desc: "Créneaux concernés, en liste à puces (HTML)" },
   { name: "bouton", desc: "Bouton « Voir l'agenda » (lien vers l'agenda du service)" },
@@ -220,7 +224,7 @@ ${DETAILS_CONFIRMATION}
     subject: "Inscription sur la liste d'attente — {{service}}",
     html: `<p>{{salutation}}</p>
 <p>Votre inscription sur la liste d'attente de « {{service}} » est bien enregistrée.</p>
-<p><strong>Vos disponibilités :</strong> {{disponibilites}}</p>
+<p><strong>Vos disponibilités :</strong> {{disponibilites}}<br><strong>Périodes souhaitées :</strong> {{periodes}}</p>
 <p>Nous vous préviendrons par e-mail dès qu'un créneau correspondant se libérera. Vous pouvez modifier vos disponibilités ou vous retirer de la liste depuis l'agenda.</p>
 <p>{{bouton}}</p>
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
@@ -228,7 +232,7 @@ ${DETAILS_CONFIRMATION}
   waitlist_available: {
     subject: "Des créneaux se sont libérés — {{service}}",
     html: `<p>{{salutation}}</p>
-<p>Bonne nouvelle : des créneaux correspondant à vos disponibilités ({{disponibilites}}) sont désormais réservables pour « {{service}} » :</p>
+<p>Bonne nouvelle : des créneaux correspondant à vos disponibilités ({{disponibilites}} — périodes : {{periodes}}) sont désormais réservables pour « {{service}} » :</p>
 {{liste_creneaux}}
 <p>Les places sont attribuées au premier qui réserve : rendez-vous sur l'agenda pour réserver.</p>
 <p>{{bouton}}</p>
@@ -238,7 +242,7 @@ ${DETAILS_CONFIRMATION}
   waitlist_autobooked: {
     subject: "Liste d'attente : vous êtes inscrit — {{service}}",
     html: `<p>{{salutation}}</p>
-<p>Un créneau correspondant à vos disponibilités s'est libéré pour « {{service}} » : conformément à votre demande, la réservation a été faite <strong>en votre nom</strong>.</p>
+<p>Un créneau correspondant à vos disponibilités ({{disponibilites}} — périodes : {{periodes}}) s'est libéré pour « {{service}} » : conformément à votre demande, la réservation a été faite <strong>en votre nom</strong>.</p>
 {{liste_creneaux}}
 <p>Vous recevez par ailleurs l'e-mail habituel de réservation. Vous avez été retiré de la liste d'attente ; vous pouvez consulter ou annuler cette réservation depuis l'agenda.</p>
 <p>{{bouton}}</p>

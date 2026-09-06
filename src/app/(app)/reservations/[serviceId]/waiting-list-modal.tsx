@@ -8,9 +8,13 @@ import { joinWaitingList, leaveWaitingList } from "./actions";
 
 export type WaitingEntryView = {
   dispos: string[];
+  // Périodes acceptées (ids) ; [] = toutes.
+  periodIds: number[];
   autoInscription: boolean;
   createdAt: string; // ISO
 };
+
+export type WaitingPeriodOption = { id: number; label: string };
 
 /**
  * Modale « Liste d'attente » (agenda usager) : phrase d'introduction, grille des
@@ -22,6 +26,7 @@ export type WaitingEntryView = {
 export function WaitingListModal({
   serviceId,
   days,
+  periods,
   entry,
   onClose,
   onSaved,
@@ -29,11 +34,18 @@ export function WaitingListModal({
   serviceId: string;
   // Jours ouverts du service (clés lun..dim, ordre de la semaine).
   days: string[];
+  // Périodes de l'exercice visible : le choix n'est proposé qu'à partir de deux
+  // (toutes cochées par défaut — Dom 2026-09-06).
+  periods: WaitingPeriodOption[];
   entry: WaitingEntryView | null;
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
   const [dispos, setDispos] = useState<Set<string>>(new Set(entry?.dispos ?? []));
+  const periodChoice = periods.length > 1;
+  const [periodIds, setPeriodIds] = useState<Set<number>>(
+    new Set(entry && entry.periodIds.length > 0 ? entry.periodIds : periods.map((p) => p.id)),
+  );
   const [auto, setAuto] = useState(entry?.autoInscription ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,14 +74,32 @@ export function WaitingListModal({
     });
   }
 
+  function togglePeriod(id: number) {
+    setPeriodIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function submit() {
     if (dispos.size === 0) {
       setError("Indiquez au moins une demi-journée de disponibilité.");
       return;
     }
+    if (periodChoice && periodIds.size === 0) {
+      setError("Indiquez au moins une période.");
+      return;
+    }
     setBusy(true);
     setError(null);
-    const res = await joinWaitingList(serviceId, { dispos: [...dispos], autoInscription: auto });
+    const res = await joinWaitingList(serviceId, {
+      dispos: [...dispos],
+      // Toutes les périodes cochées = pas de restriction.
+      periodIds: periodChoice && periodIds.size < periods.length ? [...periodIds] : [],
+      autoInscription: auto,
+    });
     setBusy(false);
     if (!res.ok) {
       setError(res.error ?? "Échec.");
@@ -175,6 +205,41 @@ export function WaitingListModal({
         Vous serez <strong>prévenu par e-mail</strong> dès que des créneaux correspondant à vos
         disponibilités se libéreront. La liste d'attente est traitée dans l'ordre d'inscription.
       </p>
+
+      {periodChoice && (
+        <div style={{ margin: "0 0 .7rem" }}>
+          <div style={{ fontSize: ".82rem", fontWeight: 600, margin: "0 0 .3rem" }}>
+            Périodes souhaitées
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: ".35rem 1rem" }}>
+            {periods.map((p) => (
+              <label
+                key={p.id}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: ".4rem",
+                  letterSpacing: 0,
+                  textTransform: "none",
+                  fontSize: ".85rem",
+                  fontWeight: 500,
+                  color: "var(--text)",
+                  cursor: "pointer",
+                  margin: 0,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={periodIds.has(p.id)}
+                  onChange={() => togglePeriod(p.id)}
+                  style={{ width: 18, height: 18, flexShrink: 0 }}
+                />
+                {p.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Option dans un CADRE discret (filet fin, fond de champ), pour la lire comme un
           choix à part du formulaire principal (Dom 2026-09-05). */}

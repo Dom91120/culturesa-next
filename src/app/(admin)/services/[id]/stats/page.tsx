@@ -645,6 +645,9 @@ export default async function StatsPage({
   const moyParInscrit =
     stats.distinctUsers > 0 ? (stats.total / stats.distinctUsers).toFixed(1) : "0";
   const peakDay = [...stats.byDay].sort((a, b) => b.value - a.value)[0];
+  // Liste d'attente : null tant que le service n'a jamais eu d'inscription.
+  const wl = stats.waitlist;
+  const wlDemMax = wl ? Math.max(1, ...wl.noPlaceByDemandeur.map((r) => r.value)) : 1;
 
   const eqs = new URLSearchParams();
   if (type !== "all") eqs.set("type", type);
@@ -729,6 +732,33 @@ export default async function StatsPage({
         {stats.pending > 0 && (
           <MetricCard value={stats.pending} label="Demandes en attente" color="var(--warn)" />
         )}
+        {/* Liste d'attente (Dom 2026-09-06) : qui n'a pas trouvé de place. */}
+        {wl && (
+          <MetricCard
+            value={wl.noPlace}
+            label="Sans place trouvée"
+            color={C_ABSENT}
+            hint="Inscriptions en liste d'attente retirées (par l'usager ou par le service) sans qu'une réservation ait suivi — sur la plage, à la date d'inscription"
+          />
+        )}
+        {wl && wl.placed > 0 && (
+          <MetricCard
+            value={wl.placed}
+            label="Placés depuis la liste"
+            color={C_PRESENT}
+            sub={wl.placedAvgDays != null ? `${wl.placedAvgDays} j en moyenne` : undefined}
+            hint="Inscriptions ayant abouti à une réservation (inscription automatique, ou réservation faite par l'usager après son inscription) et délai moyen inscription → réservation"
+          />
+        )}
+        {wl && wl.waitingNow > 0 && (
+          <MetricCard
+            value={wl.waitingNow}
+            label="En attente aujourd'hui"
+            color="var(--warn)"
+            sub={wl.waitingAvgDays != null ? `depuis ${wl.waitingAvgDays} j en moyenne` : undefined}
+            hint="Usagers actuellement inscrits sur la liste d'attente (état du jour, quel que soit le filtre)"
+          />
+        )}
       </div>
 
       {/* Grille unique : anneaux (5, ou 4 sans présence) PUIS panneaux — tout s'enchaîne
@@ -784,6 +814,30 @@ export default async function StatsPage({
           />
         )}
 
+        {wl && wl.outcomes.length > 0 && (
+          <DonutPanel
+            title="Liste d'attente — issue des inscriptions"
+            data={wl.outcomes.map((o) => ({
+              ...o,
+              color:
+                o.label === "Inscrits automatiquement" || o.label === "Ont réservé eux-mêmes"
+                  ? o.label === "Inscrits automatiquement"
+                    ? C_PRESENT
+                    : "#6dceaa"
+                  : o.label === "Toujours en attente"
+                    ? "#e8a45a"
+                    : o.label === "Comptes anonymisés"
+                      ? C_NONE
+                      : o.label === "Retirés par le service"
+                        ? "#a07dd4"
+                        : C_ABSENT,
+            }))}
+            centerValue={String(wl.noPlace)}
+            centerLabel="sans place"
+            centerColor={C_ABSENT}
+          />
+        )}
+
         <DonutPanel
           title="Répartition par jour"
           data={forDonut(stats.byDay, 6)}
@@ -836,6 +890,53 @@ export default async function StatsPage({
             />
           ))}
         </Panel>
+
+        {wl && (
+          <Panel
+            title="Liste d'attente — sans place par catégorie"
+            hint="Inscriptions retirées sans réservation, catégorie figée au retrait"
+            empty={wl.noPlaceByDemandeur.length === 0}
+          >
+            {wl.noPlaceByDemandeur.map((r) => (
+              <BarRow
+                key={r.label}
+                label={r.label}
+                value={r.value}
+                max={wlDemMax}
+                color={C_ABSENT}
+              />
+            ))}
+          </Panel>
+        )}
+
+        {wl && (
+          <Panel
+            title="Liste d'attente — sans place par structure"
+            hint="Inscriptions retirées sans réservation, structure figée au retrait"
+            empty={wl.noPlaceByStructure.length === 0}
+          >
+            {wl.noPlaceByStructure.map((r) => (
+              <BarRow
+                key={r.label}
+                label={r.label}
+                value={r.value}
+                max={Math.max(1, ...wl.noPlaceByStructure.map((x) => x.value))}
+                color="#a07dd4"
+                labelAbove
+              />
+            ))}
+          </Panel>
+        )}
+
+        {wl && (
+          <Panel
+            title="Inscriptions en liste d'attente par mois"
+            hint="Toutes issues confondues, à la date d'inscription"
+            empty={wl.byMonth.length === 0}
+          >
+            <AreaChart data={wl.byMonth} color="#e06b6b" />
+          </Panel>
+        )}
 
         <Panel title="Top niveaux" empty={stats.topNiveaux.length === 0}>
           {stats.topNiveaux.map((r) => (

@@ -68,3 +68,26 @@ export function dispoLabel(key: string): string {
 export function dispoLabels(csv: string | null | undefined): string[] {
   return serializeDispos(parseDispos(csv)).split(",").filter(Boolean).map(dispoLabel);
 }
+
+// ─── Périodes acceptées ──────────────────────────────────────────────────────────
+// Ids de période en CSV (« 12,13 ») ; VIDE = toutes les périodes de l'exercice. Choix
+// proposé dans la modale seulement quand le service a plusieurs périodes (Dom 2026-09-06).
+
+/** Ids entiers positifs, dédoublonnés, triés. */
+export function parsePeriodIds(csv: string | null | undefined): number[] {
+  const out = new Set<number>();
+  for (const part of (csv ?? "").split(",")) {
+    const n = Number.parseInt(part.trim(), 10);
+    if (Number.isInteger(n) && n > 0) out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+export function serializePeriodIds(ids: Iterable<number>): string {
+  return parsePeriodIds([...ids].join(",")).join(",");
+}
+
+/** Le créneau (période `periodId`) est-il accepté ? Aucune restriction → oui. */
+export function periodAccepted(periodId: number, accepted: ReadonlySet<number>): boolean {
+  return accepted.size === 0 || accepted.has(periodId);
+}

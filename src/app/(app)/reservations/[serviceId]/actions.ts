@@ -37,6 +37,7 @@ import {
   cancelUserBookingInTx,
   effectiveDemandeurId,
   isValidationMode,
+  limitesEpuiseesPourListeAttente,
   mapBookingError,
   userCanAccessService,
 } from "@/server/services/bookings";
@@ -46,6 +47,7 @@ import { syncRecurringChildren } from "@/server/services/recurring-children";
 import { reservePonctuelInTx, reserveRecurringInTx } from "@/server/services/user-booking";
 import {
   deleteWaitingEntry,
+  getWaitingEntry,
   MAX_DISPOS,
   saveWaitingEntry,
   sendWaitlistMail,
@@ -472,6 +474,8 @@ async function commitDraftInTx(
 // ── Liste d'attente (réglage par service) ────────────────────────────────────
 const waitlistSchema = z.object({
   dispos: z.array(z.string().refine(isDispoKey)).min(1).max(MAX_DISPOS),
+  // Périodes acceptées (ids) ; absent ou vide = toutes.
+  periodIds: z.array(z.number().int().positive()).max(24).optional(),
   autoInscription: z.boolean(),
 });
 
@@ -497,18 +501,34 @@ export async function joinWaitingList(serviceId: string, raw: unknown): Promise<
   if (!(await userCanAccessService(prisma, session.user.id, serviceId))) {
     return { ok: false, error: "Vous n'avez pas accès à ce service." };
   }
+  // Au maximum de réservations (annuel, ou par période sur toutes les périodes), aucune
+  // place ne pourrait jamais lui être proposée (la tâche planifiée rejoue ces limites) :
+  // refus immédiat plutôt qu'une attente sans issue (Dom 2026-09-06). Seulement à la
+  // CRÉATION : un inscrit garde la main sur ses disponibilités et sur son retrait.
+  if (
+    !(await getWaitingEntry(serviceId, session.user.id)) &&
+    (await limitesEpuiseesPourListeAttente(prisma, serviceId, session.user.id))
+  ) {
+    return {
+      ok: false,
+      error:
+        "Vous avez atteint votre maximum de réservations : vous ne pouvez pas vous inscrire sur cette liste d'attente.",
+    };
+  }
   try {
     const { created } = await saveWaitingEntry(
       serviceId,
       session.user.id,
       parsed.data.dispos,
       parsed.data.autoInscription,
+      parsed.data.periodIds ?? [],
     );
     if (created) {
       await sendWaitlistMail("waitlist_join", {
         userId: session.user.id,
         serviceId,
         dispos: parsed.data.dispos.join(","),
+        periodIds: parsed.data.periodIds ?? [],
       });
     }
   } catch (e) {

@@ -178,13 +178,15 @@ séance <strong>à venir</strong> (jour même inclus), tant qu&#39;elle n&#39;a 
 <h3 id="liste-d39attente">Liste d&#39;attente</h3>
 <p>Plus de place ? Si le service a activé la <strong>liste d&#39;attente</strong>, le bouton <strong>« Liste d&#39;attente »</strong>,
 à droite des onglets de période, ouvre une fenêtre où vous indiquez vos <strong>disponibilités par
-demi-journée</strong> (matin / après-midi, sur les jours d&#39;ouverture du service). Vous serez <strong>prévenu
+demi-journée</strong> (matin / après-midi, sur les jours d&#39;ouverture du service) et, si le service
+compte plusieurs périodes, les <strong>périodes souhaitées</strong> (toutes par défaut). Vous serez <strong>prévenu
 par e-mail</strong> dès que des créneaux correspondant à vos disponibilités se libéreront, dans l&#39;ordre
 d&#39;inscription. Cochez <strong>« Réservation automatique dès qu&#39;un créneau se libère »</strong> pour que la
 réservation soit faite en votre nom, avec les participants de votre fiche : vous en êtes informé
 par e-mail et retiré de la liste. Validez avec <strong>« S&#39;inscrire sur la liste d&#39;attente »</strong> ; une
 fois inscrit, le même bouton permet de <strong>mettre à jour</strong> vos disponibilités ou de vous
-<strong>retirer de la liste</strong>.</p>
+<strong>retirer de la liste</strong>. Si vous avez déjà atteint votre maximum de réservations (pour l&#39;année, ou
+sur chaque période), vous ne pouvez pas vous inscrire sur la liste d&#39;attente de ce service.</p>
 <h3 id="règles-appliquées-automatiquement">Règles appliquées automatiquement</h3>
 <p>Lors d&#39;une réservation, l&#39;application vérifie automatiquement :</p>
 <ul>
@@ -226,9 +228,12 @@ et quand ; la réservation reste en place. En <strong>mode pointage</strong>, le
 séance pose directement <strong>Absent</strong>.</li>
 <li><strong>Liste d&#39;attente</strong> (si activée dans Paramètres › Configuration) : le bouton <strong>« Liste d&#39;attente »</strong>
 de la barre d&#39;options, avec le nombre d&#39;inscrits, ouvre la liste des usagers inscrits, dans l&#39;ordre d&#39;inscription,
-avec leurs disponibilités et leur choix d&#39;inscription automatique ; un bouton permet de retirer
+avec leurs disponibilités, leurs périodes souhaitées et leur choix d&#39;inscription automatique ;
+un bouton permet de retirer
 une inscription. La tâche planifiée « Liste d&#39;attente » prévient ou inscrit les usagers dès
-qu&#39;un créneau réservable se libère.</li>
+qu&#39;un créneau réservable se libère. Chaque inscription terminée (inscrit automatiquement, a
+réservé lui-même, retiré sans place, retiré par le service) est conservée dans un historique
+qui alimente les <strong>Statistiques</strong>.</li>
 </ul>
 <blockquote>
 <p>💡 Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
@@ -261,6 +266,12 @@ passées (prévu / réalisé, taux de présence et de réalisation, absents pré
 <strong>graphiques</strong> de répartition (par jour, par mois, par structure, par niveau, taux de
 remplissage). Les données sont <strong>filtrables et
 exportables en CSV</strong>.</p>
+<p>Si le service utilise la <strong>liste d&#39;attente</strong>, le tableau de bord montre aussi qui n&#39;a <strong>pas
+trouvé de place</strong> : compteurs « Sans place trouvée » (inscriptions retirées sans réservation),
+« Placés depuis la liste » (inscription automatique ou réservation faite ensuite par l&#39;usager,
+avec le délai moyen) et « En attente aujourd&#39;hui », un anneau <strong>« Issue des inscriptions »</strong>,
+la répartition des sans-place <strong>par catégorie et par structure</strong> et les <strong>inscriptions par mois</strong>.
+Le filtre de dates s&#39;applique à la date d&#39;inscription.</p>
 <p><img src="img/08-statistiques.png" alt="Statistiques d&#39;un service"></p>
 <p><em>Figure 8 — Statistiques d&#39;un service</em></p>
 <h3 id="paramètres-périodes-et-réservations">Paramètres — Périodes et réservations</h3>
@@ -409,7 +420,7 @@ aux gestionnaires.</li>
 <li><strong>Notifications de validation</strong> regroupées : l&#39;e-mail de validation ou de remise en attente part
 après le délai réglé dans Échanges et ne reflète que l&#39;état final.</li>
 <li><strong>Liste d&#39;attente</strong> : toutes les 5 minutes, pour chaque inscrit et dans l&#39;ordre d&#39;inscription,
-recherche des créneaux réservables correspondant à ses disponibilités — inscription automatique
+recherche des créneaux réservables correspondant à ses disponibilités et périodes — inscription automatique
 si demandée, sinon e-mail « créneaux libérés » (nouveautés seulement).</li>
 <li><strong>Conservation des données</strong> : anonymisation des comptes inactifs après l&#39;avis de suppression.</li>
 </ul>

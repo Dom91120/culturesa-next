@@ -56,6 +56,18 @@ enum AbsenceSource {
   gestionnaire
 }
 
+// Issue d'une inscription en liste d'attente (historique liste_attente_historique) :
+// inscrit automatiquement par la tâche planifiée / a réservé lui-même après l'inscription
+// (déduit au retrait : une réservation postérieure existe) / retiré par l'usager sans
+// réservation / retiré par un gestionnaire sans réservation / compte anonymisé.
+enum WaitingListOutcome {
+  AUTO_BOOKED
+  BOOKED
+  LEFT
+  REMOVED
+  ANONYMIZED
+}
+
 // Mode de notification des gestionnaires (digest des auto-validations).
 // `each` = « Unitaires » : un e-mail par réservation, sans regroupement ni attente
 // d'échéance — le seul mode où rien ne s'accumule.
@@ -124,6 +136,7 @@ model User {
   accounts        Account[]
   bookings        Booking[]
   waitingList     WaitingListEntry[]
+  waitingListLogs WaitingListLog[]
   managedServices ServiceManager[]
   twoFactors      TwoFactor[]
 
@@ -270,6 +283,7 @@ model Service {
   bookings          Booking[]
   managers          ServiceManager[]
   waitingList       WaitingListEntry[]
+  waitingListLogs   WaitingListLog[]
 
   @@map("services")
 }
@@ -609,6 +623,9 @@ model Booking {
   parent    Booking?          @relation("BookingChildren", fields: [parentBookingId], references: [id], onDelete: Cascade)
   children  Booking[]         @relation("BookingChildren")
 
+  // Historique liste d'attente : inscription automatique ou réservation faite après l'inscription.
+  waitingListLogs WaitingListLog[]
+
   @@unique([userId, serviceId, slotId, periodId, week], name: "uq_recurring")
   @@index([userId])
   @@index([periodId])
@@ -701,6 +718,8 @@ model WaitingListEntry {
   updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz
   lastNotifiedAt  DateTime? @db.Timestamptz
   notifiedKeys    String    @default("")
+  // Périodes acceptées (ids CSV « 12,13 ») ; vide = toutes les périodes de l'exercice.
+  periodIds       String    @default("")
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -708,6 +727,37 @@ model WaitingListEntry {
   @@unique([serviceId, userId])
   @@index([serviceId, createdAt])
   @@map("liste_attente")
+}
+
+// Historique des inscriptions en liste d'attente, écrit à chaque CLÔTURE d'une entrée
+// (l'entrée vivante `liste_attente` est supprimée). Catégorie / structure figées au
+// moment de la clôture (comme le snapshot des réservations) : les statistiques
+// « demandeurs sans place » restent stables si la fiche change. `userId` mis à NULL à
+// l'anonymisation du compte (rgpd.ts) — les libellés figés restent.
+model WaitingListLog {
+  id              Int                @id @default(autoincrement())
+  serviceId       String
+  userId          String?
+  demandeurLabel  String             @default("")
+  structureLabel  String             @default("")
+  disponibilites  String             @default("")
+  periodIds       String             @default("")
+  autoInscription Boolean            @default(false)
+  inscritAt       DateTime           @db.Timestamptz
+  clotureAt       DateTime           @default(now()) @db.Timestamptz
+  issue           WaitingListOutcome
+  // Réservation obtenue (inscription automatique, ou réservation faite par l'usager
+  // après son inscription) ; NULL sinon ou si la réservation a été supprimée depuis.
+  bookingId       Int?
+
+  service Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([serviceId, inscritAt])
+  @@index([userId])
+  @@index([bookingId])
+  @@map("liste_attente_historique")
 }
 
 // Référentiel des déclencheurs d'e-mails de réservation (actions métier affichées dans

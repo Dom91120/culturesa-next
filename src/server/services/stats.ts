@@ -2,6 +2,7 @@ import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
 import { gaugeUnits } from "@/lib/gauge";
 import { schoolYearLabel } from "@/lib/school-year";
+import { computeWaitlistStats, type WaitlistStats } from "@/lib/waiting-list-stats";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
 
@@ -82,6 +83,10 @@ type ServiceStats = {
   // Deux lectures par exercice : total = cumul des séances (volume), distincts = règle
   // du max par usager appliquée à l'intérieur de l'exercice.
   effectifsByExercice: { label: string; total: number; distincts: number }[];
+  // Liste d'attente : qui n'a pas trouvé de place (historique liste_attente_historique +
+  // inscriptions ouvertes), filtre de dates sur la date d'INSCRIPTION, indépendant du
+  // type — cf. lib/waiting-list-stats. null si le service n'a jamais eu d'inscription.
+  waitlist: WaitlistStats | null;
 };
 
 /** Date UTC → 'YYYY-MM-DD'. */
@@ -365,6 +370,50 @@ export async function getServiceStats(
   // d'anneau exact, comme distinctUsers pour le ring « Top structures ».
   const themedCount = [...themeMap.values()].reduce((s, v) => s + v, 0);
 
+  // ── Liste d'attente ───────────────────────────────────────────────────────────
+  const [wlLogs, wlLive] = await Promise.all([
+    prisma.waitingListLog.findMany({
+      where: { serviceId },
+      select: {
+        inscritAt: true,
+        clotureAt: true,
+        issue: true,
+        demandeurLabel: true,
+        structureLabel: true,
+      },
+    }),
+    prisma.waitingListEntry.findMany({
+      where: { serviceId },
+      select: {
+        createdAt: true,
+        user: {
+          select: {
+            demandeur: { select: { label: true } },
+            structure: { select: { label: true } },
+          },
+        },
+      },
+    }),
+  ]);
+  const waitlist =
+    wlLogs.length + wlLive.length > 0
+      ? computeWaitlistStats(
+          wlLogs.map((r) => ({
+            inscritAt: r.inscritAt.toISOString(),
+            clotureAt: r.clotureAt.toISOString(),
+            issue: r.issue,
+            demandeurLabel: r.demandeurLabel,
+            structureLabel: shortStructureLabel(r.structureLabel),
+          })),
+          wlLive.map((r) => ({
+            inscritAt: r.createdAt.toISOString(),
+            demandeurLabel: r.user.demandeur?.label ?? "",
+            structureLabel: shortStructureLabel(r.user.structure?.label ?? ""),
+          })),
+          { dateFrom, dateTo, nowIso: new Date().toISOString() },
+        )
+      : null;
+
   return {
     total,
     distinctUsers,
@@ -393,5 +442,6 @@ export async function getServiceStats(
     themedCount,
     fillByStructure,
     effectifsByExercice,
+    waitlist,
   };
 }

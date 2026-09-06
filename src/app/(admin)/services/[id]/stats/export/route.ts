@@ -72,6 +72,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       lines.push([r.label, String(r.total), String(r.distincts)]);
     }
 
+    // Liste d'attente (filtre de dates sur la date d'inscription).
+    if (stats.waitlist) {
+      const w = stats.waitlist;
+      lines.push([]);
+      lines.push(["Liste d'attente", "Valeur"]);
+      lines.push(["En attente aujourd'hui", String(w.waitingNow)]);
+      lines.push([
+        "Ancienneté moyenne en attente (jours)",
+        w.waitingAvgDays != null ? String(w.waitingAvgDays) : "",
+      ]);
+      lines.push(["Sans place trouvée", String(w.noPlace)]);
+      lines.push(["Placés depuis la liste", String(w.placed)]);
+      lines.push([
+        "Délai moyen avant une place (jours)",
+        w.placedAvgDays != null ? String(w.placedAvgDays) : "",
+      ]);
+      section("Issue des inscriptions", "Inscriptions", w.outcomes);
+      section("Sans place par catégorie", "Inscriptions", w.noPlaceByDemandeur);
+      section("Sans place par structure", "Inscriptions", w.noPlaceByStructure);
+      section("Inscriptions en liste d'attente par mois", "Inscriptions", w.byMonth);
+    }
+
     return csvResponse(lines, `stats-${id}.csv`);
   });
 }

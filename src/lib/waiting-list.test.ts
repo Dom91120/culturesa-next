@@ -3,7 +3,10 @@ import {
   dispoLabel,
   dispoLabels,
   parseDispos,
+  parsePeriodIds,
+  periodAccepted,
   serializeDispos,
+  serializePeriodIds,
   slotHalfDays,
   slotMatchesDispos,
 } from "./waiting-list";
@@ -58,5 +61,19 @@ describe("libellés", () => {
   it("« Lundi matin », « Jeudi après-midi »", () => {
     expect(dispoLabel("lun-am")).toBe("Lundi matin");
     expect(dispoLabels("jeu-pm,lun-am")).toEqual(["Lundi matin", "Jeudi après-midi"]);
+  });
+});
+
+describe("périodes acceptées", () => {
+  it("parsePeriodIds : entiers positifs, dédoublonnés, triés ; vide → []", () => {
+    expect(parsePeriodIds(" 13, 12,12,x,-1,0 ")).toEqual([12, 13]);
+    expect(parsePeriodIds("")).toEqual([]);
+    expect(parsePeriodIds(null)).toEqual([]);
+    expect(serializePeriodIds([13, 12, 13])).toBe("12,13");
+  });
+  it("periodAccepted : aucune restriction = tout accepté, sinon appartenance", () => {
+    expect(periodAccepted(12, new Set())).toBe(true);
+    expect(periodAccepted(12, new Set([12, 13]))).toBe(true);
+    expect(periodAccepted(14, new Set([12, 13]))).toBe(false);
   });
 });

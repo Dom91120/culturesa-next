@@ -4085,6 +4085,7 @@ export function UserAgendaGrid({
         <WaitingListModal
           serviceId={service.id}
           days={waitlistDays}
+          periods={periods.map((p) => ({ id: p.id, label: p.label }))}
           entry={waitingEntry}
           onClose={() => setWaitlistOpen(false)}
           onSaved={(msg) => {
