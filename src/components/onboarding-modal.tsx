@@ -685,7 +685,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
         <>
           <p style={P}>
             Plus de place ? Inscrivez-vous sur la <strong>liste d'attente</strong>{" "}
-            <WaitingListButtonMock />
+            <WaitingListButtonMock /> du service.
             <br />
             Saisissez vos disponibilités{"\u00A0"}: vous serez prévenu dès qu'un créneau se libère.
           </p>

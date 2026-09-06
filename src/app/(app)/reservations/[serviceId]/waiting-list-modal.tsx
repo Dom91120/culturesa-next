@@ -115,7 +115,7 @@ export function WaitingListModal({
 
       <p style={{ fontSize: ".85rem", lineHeight: 1.55, margin: "0 0 .7rem" }}>
         Les séances qui vous intéressent sont complètes&nbsp;? Inscrivez-vous sur la liste d'attente
-        en indiquant vos <strong>disponibilités par demi-journée</strong>.
+        du service en indiquant vos <strong>disponibilités par demi-journée</strong>.
       </p>
 
       {/* Jours en COLONNES, demi-journées en LIGNES (Dom 2026-09-05). */}

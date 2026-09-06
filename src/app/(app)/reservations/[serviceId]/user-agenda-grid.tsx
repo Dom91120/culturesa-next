@@ -3127,28 +3127,25 @@ export function UserAgendaGrid({
   // « Prévenir d'une absence » (pictogramme inliné AbsenceGlyph), chacun selon le réglage du service ;
   // icône seule, libellé en infobulle (ToolbarIconButton). Rendus sur la ligne de titre,
   // à côté d'Imprimer sur bureau.
-  const actionIcons = (
-    <>
-      {/* Ordre : absence puis liste d'attente, à côté de l'imprimante (Dom 2026-09-05). */}
-      {service.absencePrevenue && (
-        <ToolbarIconButton
-          label="Prévenir d'une absence"
-          icon={<AbsenceGlyph size={15} />}
-          framed
-          onClick={() => setAbsenceHelpOpen(true)}
-        />
-      )}
-      {service.listeAttente && (
-        // Même bouton que l'agenda gestionnaire (Dom 2026-09-05) ; pastille « ✓ » si inscrit.
-        <WaitingListButton
-          tip={waitingEntry ? "Liste d'attente — vous êtes inscrit" : "Liste d'attente"}
-          ariaLabel="Liste d'attente"
-          badge={waitingEntry ? "✓" : null}
-          badgeColor="var(--accent)"
-          onClick={() => setWaitlistOpen(true)}
-        />
-      )}
-    </>
+  // Ordre sur la ligne de titre (Dom 2026-09-06) : liste d'attente, Imprimer (bureau),
+  // puis absence tout à droite.
+  const waitlistIcon = service.listeAttente && (
+    // Même bouton que l'agenda gestionnaire (Dom 2026-09-05) ; pastille « ✓ » si inscrit.
+    <WaitingListButton
+      tip={waitingEntry ? "Liste d'attente — vous êtes inscrit" : "Liste d'attente"}
+      ariaLabel="Liste d'attente"
+      badge={waitingEntry ? "✓" : null}
+      badgeColor="var(--accent)"
+      onClick={() => setWaitlistOpen(true)}
+    />
+  );
+  const absenceIcon = service.absencePrevenue && (
+    <ToolbarIconButton
+      label="Prévenir d'une absence"
+      icon={<AbsenceGlyph size={15} />}
+      framed
+      onClick={() => setAbsenceHelpOpen(true)}
+    />
   );
 
   return (
@@ -3380,15 +3377,16 @@ export function UserAgendaGrid({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            {/* Boutons à icône (absence / liste d'attente) à GAUCHE du bouton Imprimer
-                (bureau) ; sur mobile, seules les icônes (Dom 2026-09-05). */}
-            {actionIcons}
+            {/* Liste d'attente, Imprimer (bureau seulement), absence — icônes seules
+                (Dom 2026-09-05 / ordre 2026-09-06). */}
+            {waitlistIcon}
             {!isMobile && (
               <PrintIconButton
                 onClick={printMyBookings}
                 tip="Imprimer la liste de mes réservations"
               />
             )}
+            {absenceIcon}
           </div>
         </div>
       </div>
