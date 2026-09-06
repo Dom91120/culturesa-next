@@ -523,13 +523,20 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
         </>
       ),
       // Deux lignes séparées d'une LIGNE VIDE (maquette Dom 2026-08-30) : l'accroche,
-      // un saut de ligne, puis l'annonce.
+      // un saut de ligne, puis l'annonce ; une ligne vide aussi AVANT l'accroche
+      // (Dom 2026-09-06).
       body: (
         <>
-          <p style={{ margin: "0 0 1.2rem" }}>
-            Réservez vos activités culturelles en quelques clics.
+          <p style={{ margin: "1rem 0 1.2rem" }}>
+            Réservez vos activités culturelles en quelques clics…
           </p>
-          <p style={{ margin: 0 }}>Voici l'essentiel pour démarrer…</p>
+          <p style={{ margin: 0 }}>
+            Services, Réservations, Absences, <strong>Liste d'attente</strong>
+            {"\u00A0"}:
+            <br />
+            <br />
+            Voici l'essentiel pour démarrer…
+          </p>
         </>
       ),
     },
