@@ -5,6 +5,9 @@ import puppeteer from "puppeteer";
 
 const BASE = "http://localhost:3000";
 const OUT = process.argv[2] ?? "public/onboarding/reservation-badge-gauge.png";
+// 2e capture : le même badge SURVOLÉ (croix ×, poignée, macaron « A » gris) — page
+// « Prévenir d'une absence » de l'onboarding (Dom 2026-09-06).
+const OUT_HOVER = process.argv[3] ?? "public/onboarding/reservation-badge-hover.png";
 const USERS = [
   // Usager de test SANS réservation sur ce service (sinon « Limite de réservations atteinte »),
   // dont la catégorie est en mode validation → badge « en attente » (⏳), comme le mock.
@@ -145,6 +148,28 @@ try {
         box.text.replace(/\s+/g, " "),
         box.cls,
       );
+      // Survol : souris au centre du badge. Un BROUILLON ne porte pas encore le macaron
+      // « A » (absence déclarable seulement sur une réservation enregistrée) : on insère le
+      // même bouton, rendu par la même CSS (.slot-btn-absence), pour montrer le badge tel
+      // que l'usager le verra sur sa réservation.
+      await page.evaluate(() => {
+        const b = document.querySelector("[data-cap] .user-agenda-mine-badge.has-widgets");
+        if (!b.querySelector(".slot-btn-absence")) {
+          const a = document.createElement("button");
+          a.type = "button";
+          a.className = "slot-btn-absence";
+          a.textContent = "A";
+          b.insertBefore(a, b.querySelector(".slot-drag-handle"));
+        }
+      });
+      await page.mouse.move(box.x + box.w / 2, box.y + box.h / 2);
+      await sleep(400);
+      await page.screenshot({
+        path: OUT_HOVER,
+        omitBackground: true,
+        clip: { x: box.x - pad, y: box.y - pad, width: box.w + 2 * pad, height: box.h + 2 * pad },
+      });
+      console.log("✓", OUT_HOVER, "(survolé)");
       await ctx.close();
       await browser.close();
       process.exit(0);

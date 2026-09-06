@@ -147,7 +147,7 @@ séance **à venir** (jour même inclus), tant qu'elle n'a pas été pointée pa
 
 ### Liste d'attente
 
-Tout est complet ? Si le service a activé la **liste d'attente**, le bouton **« Liste d'attente »**,
+Plus de place ? Si le service a activé la **liste d'attente**, le bouton **« Liste d'attente »**,
 à droite des onglets de période, ouvre une fenêtre où vous indiquez vos **disponibilités par
 demi-journée** (matin / après-midi, sur les jours d'ouverture du service). Vous serez **prévenu
 par e-mail** dès que des créneaux correspondant à vos disponibilités se libéreront, dans l'ordre

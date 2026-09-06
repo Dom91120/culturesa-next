@@ -84,11 +84,58 @@ function ServicesLayout({ isMobile, children }: { isMobile: boolean; children: R
  *  vrai badge »). */
 function GaugeShot() {
   return (
-    <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
+    <BadgeShot
+      src="/onboarding/reservation-badge-gauge.png"
+      alt="Badge de réservation avec jauge : boutons − et + pour les enfants et les adultes"
+    />
+  );
+}
+
+/** Le même badge SURVOLÉ : croix ×, poignée et macaron « A » (page « Prévenir d'une
+ *  absence », Dom 2026-09-06) — 2e sortie de scripts/capture-onboarding-badge.mjs. */
+function HoverBadgeShot() {
+  return (
+    <BadgeShot
+      src="/onboarding/reservation-badge-hover.png"
+      alt="Badge de réservation survolé : le macaron A « Prévenir d'une absence » apparaît en haut à gauche"
+    />
+  );
+}
+
+/** Modale « S'inscrire sur la liste d'attente » : tableau des demi-journées et cadre
+ *  « Option » (capture ×2, scripts/capture-onboarding-waitlist.mjs — Dom 2026-09-06). */
+function WaitlistFormShot() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: 0 }}>
       {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
       <img
-        src="/onboarding/reservation-badge-gauge.png"
-        alt="Badge de réservation avec jauge : boutons − et + pour les enfants et les adultes"
+        src="/onboarding/waitlist-form.png"
+        alt="Formulaire de la liste d'attente : disponibilités par demi-journée et option de réservation automatique"
+        width={972}
+        height={416}
+        style={{
+          display: "block",
+          width: "100%",
+          maxWidth: 320,
+          height: "auto",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--rad-sm)",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Capture détourée d'un badge (582×168 = 194×56 px CSS à ×3, ombre comprise), centrée. */
+function BadgeShot({ src, alt }: { src: string; alt: string }) {
+  return (
+    // Sans marge propre : l'espacement vient des paragraphes voisins (page « Créer une
+    // réservation » inchangée, marges fusionnées ; page absence collée au texte, Dom 2026-09-06).
+    <div style={{ display: "flex", justifyContent: "center", margin: 0 }}>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src={src}
+        alt={alt}
         width={582}
         height={168}
         style={{ display: "block", width: "100%", maxWidth: 194, height: "auto" }}
@@ -273,11 +320,13 @@ function ToolbarButtonMock({ label, children }: { label: string; children: React
         padding: ".18rem .3rem",
         color: "inherit",
         lineHeight: 1,
-        // Le cadre (≈ 20 px) dépasse la ligne de texte (interligne 1,15 ≈ 16 px) : les
-        // marges verticales NÉGATIVES l'empêchent d'écarter les lignes du paragraphe,
-        // il déborde simplement un peu au-dessus et au-dessous (Dom 2026-09-05).
-        margin: "-4px 0",
-        verticalAlign: "-3px",
+        // Le cadre (≈ 20 px) dépasse la ligne de texte (interligne 1,15 ≈ 16 px) : la marge
+        // haute NÉGATIVE l'empêche d'écarter les lignes du paragraphe, il déborde simplement
+        // au-dessus (Dom 2026-09-05). Bas du cadre ~2 px sous la ligne de base du texte (Dom
+        // 2026-09-06, réglé à l'œil) : la ligne de base d'un inline-flex est celle de son
+        // pictogramme (bord bas du SVG, ≈ 3,7 px au-dessus du bord du cadre), d'où 2 px.
+        margin: "-10px 0 0",
+        verticalAlign: "2px",
       }}
     >
       {children}
@@ -594,13 +643,23 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
       ),
       body: (
         <>
+          {/* Un seul paragraphe ; marge basse = marge haute des paragraphes suivants, l'image
+              du badge (sans marge propre) suit (Dom 2026-09-06). */}
           <p style={P}>
-            Empêché pour <strong>une séance</strong> ? Survolez votre badge et cliquez sur le
-            macaron <MacaronA variant="gris" /> pour <strong>prévenir d'une absence à venir</strong>{" "}
-            : le service est informé, le macaron <MacaronA variant="orange" /> passe en orange et
-            votre réservation est conservée.
+            Empêché pour une séance ? Survolez votre badge et cliquez sur le macaron{" "}
+            <MacaronA variant="gris" /> pour <strong>prévenir d'une absence à venir</strong>. Vous
+            pouvez saisir un motif, le macaron <MacaronA variant="orange" /> passe en orange et le
+            service est informé.
           </p>
-          <p style={{ margin: 0 }}>
+          <HoverBadgeShot />
+          <p style={{ margin: ".55rem 0 0" }}>
+            Votre réservation est conservée{"\u00A0"}:{" "}
+            <strong>
+              si vous pouvez finalement venir, cliquez de nouveau sur le macaron pour le retirer
+            </strong>
+            .
+          </p>
+          <p style={{ margin: ".55rem 0 0" }}>
             Le bouton <AbsenceButtonMock /> en haut de l'agenda rappelle la marche à suivre.
           </p>
         </>
@@ -618,13 +677,15 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
       body: (
         <>
           <p style={P}>
-            Tout est complet ? Inscrivez-vous sur la <strong>liste d'attente</strong>{" "}
-            <WaitingListButtonMock /> avec vos disponibilités : vous serez prévenu dès qu'un créneau
-            se libère.
+            Plus de place ? Inscrivez-vous sur la <strong>liste d'attente</strong>{" "}
+            <WaitingListButtonMock />
+            <br />
+            Saisissez vos disponibilités{"\u00A0"}: vous serez prévenu dès qu'un créneau se libère.
           </p>
-          <p style={{ margin: 0 }}>
-            Avec l'option <strong>réservation automatique</strong>, la place est réservée en votre
-            nom dès qu'elle se libère, et vous en êtes informé par e-mail.
+          <WaitlistFormShot />
+          <p style={{ margin: ".55rem 0 0" }}>
+            Mieux{"\u00A0"}: avec l'option <strong>réservation automatique</strong>, la place est
+            réservée en votre nom dès qu'elle se libère, et vous en êtes informé par e-mail.
           </p>
         </>
       ),
