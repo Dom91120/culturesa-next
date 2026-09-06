@@ -452,7 +452,7 @@ function QuotaNote() {
     // (Dom 2026-09-06).
     <p style={{ margin: ".55rem 0 0" }}>
       Selon le service, votre nombre de réservations est <strong>limité par période</strong> (et par
-      an) — la limite est rappelée sous l'agenda.
+      an). La limite est rappelée sous l'agenda.
     </p>
   );
 }
