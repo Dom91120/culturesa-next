@@ -228,7 +228,9 @@ model Service {
   // true par défaut = comportement historique (enfants + accompagnants).
   gaugeAccompagnants    Boolean    @default(true)
   // E-mail générique de contact du service (référentiel Services) : proposé aux
-  // usagers pour joindre les gestionnaires (modale « plus de place disponible »).
+  // usagers pour joindre les gestionnaires (modale « plus de place disponible ») et,
+  // s'il est renseigné, DESTINATAIRE des e-mails adressés au service (déclencheurs
+  // « gestionnaires », récapitulatifs) à la place des comptes gestionnaire (2026-09-06).
   contactEmail          String?
   // Alerte « plus de place » : à l'arrivée sur l'agenda usager ou sur une période,
   // si plus aucune occurrence de la période affichée n'est réservable, une modale

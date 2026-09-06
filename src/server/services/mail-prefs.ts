@@ -371,6 +371,34 @@ export type ResolvedRecipient = { email: string; prenom: string; personal: boole
 const hasEmail = (e?: string | null): e is string => !!e && e.includes("@");
 
 /**
+ * Destinataires « gestionnaires » d'un service : l'E-MAIL DE CONTACT du service
+ * (référentiel Services) s'il est renseigné — une seule boîte, celle du service —, sinon
+ * chaque compte de rôle gestionnaire rattaché au service (Dom 2026-09-06). Même règle
+ * pour les récapitulatifs de réservations (manager-notice.ts).
+ */
+export async function serviceManagerRecipients(serviceId: string): Promise<ResolvedRecipient[]> {
+  const svc = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: {
+      contactEmail: true,
+      managers: {
+        where: { user: { role: "gestionnaire", anonymizedAt: null } },
+        select: { user: { select: { email: true, prenom: true } } },
+      },
+    },
+  });
+  const contact = svc?.contactEmail?.trim() ?? "";
+  if (hasEmail(contact)) return [{ email: contact, prenom: "", personal: false }];
+  return (svc?.managers ?? [])
+    .map((m) => ({
+      email: m.user.email?.trim() ?? "",
+      prenom: m.user.prenom?.trim() ?? "",
+      personal: false,
+    }))
+    .filter((r) => hasEmail(r.email));
+}
+
+/**
  * Résout les destinataires effectifs d'une action selon son réglage et le contexte
  * (usager concerné = `ctx.userId`). Liste filtrée sur des adresses valides.
  */
@@ -393,24 +421,7 @@ export async function resolveTriggerRecipients(
       : [];
   }
 
-  if (kind === "gestionnaires") {
-    const svc = await prisma.service.findUnique({
-      where: { id: serviceId },
-      select: {
-        managers: {
-          where: { user: { role: "gestionnaire" } },
-          select: { user: { select: { email: true, prenom: true } } },
-        },
-      },
-    });
-    return (svc?.managers ?? [])
-      .map((m) => ({
-        email: m.user.email?.trim() ?? "",
-        prenom: m.user.prenom?.trim() ?? "",
-        personal: false,
-      }))
-      .filter((r) => hasEmail(r.email));
-  }
+  if (kind === "gestionnaires") return serviceManagerRecipients(serviceId);
 
   if (kind === "administrateurs") {
     const admins = await prisma.user.findMany({

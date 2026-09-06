@@ -219,8 +219,8 @@ d&#39;absence, un clic sur le macaron <strong>A</strong> du badge ouvre la fiche
 un <strong>motif d&#39;absence</strong> (facultatif) — il apparaît ensuite dans l&#39;infobulle du badge et sur la
 feuille de pointage des Éditions, et il est conservé si le pointage est effacé puis remis.</li>
 <li><strong>Absence prévenue</strong> (si activée dans Paramètres › Configuration) : un usager peut signaler à
-l&#39;avance, depuis son agenda, qu&#39;il sera absent à une séance (les gestionnaires du service en
-sont informés par e-mail). Un
+l&#39;avance, depuis son agenda, qu&#39;il sera absent à une séance (le service en est informé par
+e-mail : à son e-mail de contact s&#39;il est renseigné, sinon à ses gestionnaires). Un
 gestionnaire prévenu par un autre canal l&#39;enregistre lui-même dans la <strong>fiche de la
 réservation</strong> (case <strong>« L&#39;usager a prévenu le »</strong> suivie de la date à laquelle il a prévenu,
 puis un motif facultatif, sur toute séance non encore pointée, même passée). La séance porte alors un macaron <strong>A</strong> orange et l&#39;infobulle indique qui a prévenu
@@ -350,7 +350,10 @@ services, ainsi que de la <strong>gestion globale</strong> de l&#39;application 
 URL, intervalles de rafraîchissement automatique, mode debug) et l&#39;accès aux <strong>référentiels</strong> :
 <strong>Services</strong>, <strong>Demandeurs</strong>, <strong>Structures</strong> et <strong>Niveaux</strong>. Le référentiel des services porte,
 en plus du nom et de l&#39;icône, un <strong>e-mail de contact</strong> générique (ex.
-<code>maisondesarts@chatillon92.fr</code>) proposé aux usagers quand plus aucune place n&#39;est disponible.</p>
+<code>maisondesarts@chatillon92.fr</code>) proposé aux usagers quand plus aucune place n&#39;est disponible ;
+s&#39;il est renseigné, c&#39;est aussi lui qui reçoit les e-mails adressés au service (absences prévenues,
+récapitulatifs de réservations, déclencheurs réglés sur « gestionnaires ») à la place des comptes
+gestionnaire rattachés.</p>
 <p><img src="img/12-configuration-referentiels.png" alt="Configuration générale et référentiels"></p>
 <p><em>Figure 12 — Configuration générale et référentiels</em></p>
 <h3 id="utilisateurs">Utilisateurs</h3>
@@ -415,7 +418,7 @@ vacances n&#39;est réservable que si le service et le demandeur sont ouverts.</
 <p>Plusieurs traitements s&#39;exécutent automatiquement, sans intervention :</p>
 <ul>
 <li><strong>Validation automatique</strong> des réservations après un délai paramétré, avec récapitulatif envoyé
-aux gestionnaires.</li>
+au service (à son e-mail de contact s&#39;il est renseigné, sinon à ses gestionnaires).</li>
 <li><strong>Rappels de réservation</strong> envoyés aux usagers (J-7 et J-1).</li>
 <li><strong>Notifications de validation</strong> regroupées : l&#39;e-mail de validation ou de remise en attente part
 après le délai réglé dans Échanges et ne reflète que l&#39;état final.</li>

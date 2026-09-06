@@ -6,6 +6,7 @@ import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
+import { serviceManagerRecipients } from "@/server/services/mail-prefs";
 import { buildTemplatedMail } from "@/server/services/mail-send";
 import { getMailTemplate } from "@/server/services/mail-templates";
 
@@ -159,12 +160,6 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
       mgrNoticeHour: true,
       mgrNoticeWeekday: true,
       mgrNoticeLastSentAt: true,
-      // Sécurité : seuls les comptes gestionnaire reçoivent le digest (au cas où la
-      // relation ServiceManager serait un jour réutilisée pour d'autres rôles).
-      managers: {
-        where: { user: { role: "gestionnaire" } },
-        select: { user: { select: { email: true } } },
-      },
     },
   });
 
@@ -194,9 +189,9 @@ export async function sendManagerDigest(now: Date = new Date()): Promise<{
       continue;
     }
 
-    const managers = svc.managers
-      .map((m) => m.user.email?.trim())
-      .filter((e): e is string => !!e?.includes("@"));
+    // Destinataires : e-mail de contact du service s'il est renseigné, sinon les comptes
+    // gestionnaire rattachés (même règle que les e-mails « gestionnaires », mail-prefs).
+    const managers = (await serviceManagerRecipients(svc.id)).map((r) => r.email);
 
     const [autoValidated, created] = await Promise.all([
       prisma.booking.findMany({

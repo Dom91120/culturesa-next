@@ -7,7 +7,16 @@ import { isDigestDue, sendManagerDigest } from "./manager-notice";
 // d'échéance et le DÉCOUPAGE des envois — pas le rendu des e-mails.
 vi.mock("@/server/db", () => ({
   prisma: {
-    service: { findMany: vi.fn(), update: vi.fn(async () => ({})) },
+    service: {
+      findMany: vi.fn(),
+      // Destinataires (mail-prefs.serviceManagerRecipients) : pas d'e-mail de contact →
+      // comptes gestionnaire rattachés.
+      findUnique: vi.fn(async () => ({
+        contactEmail: null,
+        managers: [{ user: { email: "gestion@exemple.test", prenom: "" } }],
+      })),
+      update: vi.fn(async () => ({})),
+    },
     booking: { findMany: vi.fn() },
   },
 }));
@@ -93,7 +102,6 @@ function serviceEn(mode: string) {
       mgrNoticeHour: 8,
       mgrNoticeWeekday: "lun",
       mgrNoticeLastSentAt: new Date("2026-08-27T06:00:00Z"),
-      managers: [{ user: { email: "gestion@exemple.test" } }],
     },
   ] as never);
 }

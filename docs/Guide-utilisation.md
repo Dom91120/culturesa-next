@@ -198,8 +198,8 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   un **motif d'absence** (facultatif) — il apparaît ensuite dans l'infobulle du badge et sur la
   feuille de pointage des Éditions, et il est conservé si le pointage est effacé puis remis.
 - **Absence prévenue** (si activée dans Paramètres › Configuration) : un usager peut signaler à
-  l'avance, depuis son agenda, qu'il sera absent à une séance (les gestionnaires du service en
-  sont informés par e-mail). Un
+  l'avance, depuis son agenda, qu'il sera absent à une séance (le service en est informé par
+  e-mail : à son e-mail de contact s'il est renseigné, sinon à ses gestionnaires). Un
   gestionnaire prévenu par un autre canal l'enregistre lui-même dans la **fiche de la
   réservation** (case **« L'usager a prévenu le »** suivie de la date à laquelle il a prévenu,
   puis un motif facultatif, sur toute séance non encore pointée, même passée). La séance porte alors un macaron **A** orange et l'infobulle indique qui a prévenu
@@ -361,7 +361,10 @@ La page **Configuration** regroupe les réglages de l'application (zone des vaca
 URL, intervalles de rafraîchissement automatique, mode debug) et l'accès aux **référentiels** :
 **Services**, **Demandeurs**, **Structures** et **Niveaux**. Le référentiel des services porte,
 en plus du nom et de l'icône, un **e-mail de contact** générique (ex.
-`maisondesarts@chatillon92.fr`) proposé aux usagers quand plus aucune place n'est disponible.
+`maisondesarts@chatillon92.fr`) proposé aux usagers quand plus aucune place n'est disponible ;
+s'il est renseigné, c'est aussi lui qui reçoit les e-mails adressés au service (absences prévenues,
+récapitulatifs de réservations, déclencheurs réglés sur « gestionnaires ») à la place des comptes
+gestionnaire rattachés.
 
 ![Configuration générale et référentiels](img/12-configuration-referentiels.png)
 
@@ -445,7 +448,7 @@ suppression** (délai de grâce de 30 jours), d'**anonymiser** des comptes et de
 Plusieurs traitements s'exécutent automatiquement, sans intervention :
 
 - **Validation automatique** des réservations après un délai paramétré, avec récapitulatif envoyé
-  aux gestionnaires.
+  au service (à son e-mail de contact s'il est renseigné, sinon à ses gestionnaires).
 - **Rappels de réservation** envoyés aux usagers (J-7 et J-1).
 - **Notifications de validation** regroupées : l'e-mail de validation ou de remise en attente part
   après le délai réglé dans Échanges et ne reflète que l'état final.

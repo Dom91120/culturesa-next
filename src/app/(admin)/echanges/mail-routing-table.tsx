@@ -7,7 +7,7 @@ import type { RoutingRow } from "./mail-rows";
 
 const RECIPIENT_OPTS: { value: string; label: string }[] = [
   { value: "usager", label: "L'usager concerné" },
-  { value: "gestionnaires", label: "Les gestionnaires du service" },
+  { value: "gestionnaires", label: "Le service (e-mail de contact, sinon ses gestionnaires)" },
   { value: "administrateurs", label: "Les administrateurs" },
   { value: "fixe", label: "Adresse(s) e-mail…" },
 ];
