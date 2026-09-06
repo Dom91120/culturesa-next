@@ -204,6 +204,11 @@ function StepBtn({
         lineHeight: 1,
         padding: 0,
         flexShrink: 0,
+        // Le bouton est centré sur la colonne chiffre + libellé (« Enfants » dessous) : il
+        // tombait sous le chiffre. Remonté de bu(7) (≈ 3 px au gabarit courant, et
+        // proportionnel) — réglage à l'œil de Dom (2026-09-06 : +5 px puis −2 px).
+        position: "relative",
+        top: bu(-7),
       }}
     >
       {sign}
