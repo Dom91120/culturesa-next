@@ -24,6 +24,7 @@ import {
   CalendarGlyph,
   ModalOverlay,
   PrintIconButton,
+  TodayGlyph,
   ToolbarIconButton,
   WaitingListButton,
 } from "@/components/agenda-shared";
@@ -3384,16 +3385,26 @@ export function UserAgendaGrid({
             {todayInVisiblePeriods && (
               <button
                 type="button"
-                className="btn btn-ghost pn-today"
+                className="pn-today"
+                data-tip="Aujourd'hui"
+                aria-label="Aujourd'hui"
+                // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
+                // chrome que les boutons de la ligne de titre (cadre fin, pictogramme gris).
                 // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
                 // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
                 // Desktop : ancré en absolu juste après ▶ (hors du centrage de la nav).
                 // Mobile : DANS LE FLUX, à droite de ▶ (Dom 2026-09-05) — la nav étant en
                 // flux calée à droite, le groupe nav + bouton se replie sans déborder.
                 style={{
-                  padding: ".05rem .45rem",
-                  fontSize: ".64rem",
-                  whiteSpace: "nowrap",
+                  background: "none",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--rad-sm)",
+                  padding: ".28rem .38rem",
+                  cursor: "pointer",
+                  color: "var(--muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  lineHeight: 1,
                   ...(isMobile
                     ? { position: "static", marginLeft: ".4rem" }
                     : {
@@ -3413,7 +3424,7 @@ export function UserAgendaGrid({
                   setAnchorMonday(ymd(mondayOf(new Date())));
                 }}
               >
-                Aujourd&apos;hui
+                <TodayGlyph size={15} />
               </button>
             )}
           </span>
