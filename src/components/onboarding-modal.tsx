@@ -23,7 +23,7 @@ function SidebarShot() {
     // Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile).
     <img
       src="/onboarding/services-sidebar.png"
-      alt="Le menu de gauche listant les services disponibles"
+      alt="Le panneau de gauche listant les services disponibles"
       width={319}
       height={300}
       // La capture est déjà une carte aux coins arrondis (fond transparent autour) :
@@ -42,54 +42,21 @@ function SidebarShot() {
   );
 }
 
-/** Petit compteur « − N + » + libellé, comme sur le badge de réservation. */
-function CounterMock({ n, label }: { n: number; label: string }) {
-  const round: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 18,
-    height: 18,
-    borderRadius: "50%",
-    fontSize: ".8rem",
-    fontWeight: 700,
-    color: "#9a7b3a",
-  };
-  return (
-    <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: ".15rem" }}>
-        <span style={round}>−</span>
-        <span style={{ fontSize: ".95rem", fontWeight: 700, color: "#7a6326", minWidth: 12 }}>
-          {n}
-        </span>
-        <span style={round}>+</span>
-      </span>
-      <span style={{ fontSize: ".58rem", color: "#9a7b3a", fontWeight: 700 }}>{label}</span>
-    </span>
-  );
-}
-
-/** Badge « ma réservation » miniature (jauge participants), pour l'étape « Réserver ». */
-function GaugeMock() {
+/** Badge « ma réservation » AVEC jauge : capture détourée du badge réel en brouillon
+ *  (− Enfants + ⏳ − Adultes +), fond transparent → thème clair comme sombre. Produite par
+ *  scripts/capture-onboarding-badge.mjs (Dom 2026-09-06 : « remplace cette image par le
+ *  vrai badge »). */
+function GaugeShot() {
   return (
     <div style={{ display: "flex", justifyContent: "center", margin: ".5rem 0 0" }}>
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: ".7rem",
-          background: "rgba(232,164,90,.16)",
-          border: "1px solid rgba(232,164,90,.5)",
-          borderRadius: 12,
-          padding: ".35rem .7rem",
-        }}
-      >
-        <CounterMock n={2} label="Enfants" />
-        <span aria-hidden style={{ fontSize: "1rem" }}>
-          ⏳
-        </span>
-        <CounterMock n={1} label="Adulte" />
-      </div>
+      {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
+      <img
+        src="/onboarding/reservation-badge-gauge.png"
+        alt="Badge de réservation avec jauge : boutons − et + pour les enfants et les adultes"
+        width={582}
+        height={168}
+        style={{ display: "block", width: "100%", maxWidth: 194, height: "auto" }}
+      />
     </div>
   );
 }
@@ -495,7 +462,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
                 </>
               ) : (
                 <>
-                  dans le <strong>menu de gauche</strong>
+                  dans le <strong>panneau de gauche</strong>
                   {"\u00A0"}:
                 </>
               )}
@@ -515,7 +482,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
             <strong>créneau libre</strong>, ajustez le nombre de participants avec les boutons{" "}
             <strong>−</strong> et <strong>+</strong>, puis enregistrez votre sélection.
           </p>
-          <GaugeMock />
+          <GaugeShot />
           <QuotaNote />
         </>
       ) : (

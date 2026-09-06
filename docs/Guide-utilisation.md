@@ -99,7 +99,7 @@ pouvez la parcourir avec **« Suivant »** ou la fermer avec **« Passer »**.
 
 ### L'agenda de réservation
 
-Sélectionnez un service dans le **menu de gauche** pour ouvrir son agenda. La vue présente une
+Sélectionnez un service dans le **panneau de gauche** pour ouvrir son agenda. La vue présente une
 semaine type avec les créneaux disponibles.
 
 - **Semaines A / B** — pour les activités en alternance, basculez entre la semaine A (semaines
