@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BookingStateSwatch, ModalOverlay, WaitingListGlyph } from "@/components/agenda-shared";
 import { markOnboardedAction } from "./onboarding-actions";
 
@@ -13,32 +13,63 @@ type Step = { title: ReactNode; body: ReactNode; image?: ReactNode };
 type ServiceLite = { label: string };
 
 /* ── Illustrations ────────────────────────────────────────────────────────────────────
-   Le menu de gauche est une vraie capture (public/onboarding/services-sidebar.png) : la barre
+   Le panneau de gauche est une vraie capture (public/onboarding/services-sidebar.png, produite
+   par scripts/capture-onboarding-sidebar.mjs) : la barre
    est toujours sombre (thèmes clair et sombre), donc cohérente partout. Les autres visuels
    sont reproduits en HTML/CSS (suivent le thème). */
 
-/** Capture (recadrée) de la barre de gauche listant les services. */
-function SidebarShot() {
+/** Capture (recadrée) de la barre de gauche listant les services ; `height` = hauteur du
+ *  texte à sa gauche (cf. ServicesLayout). */
+function SidebarShot({ height }: { height: number }) {
   return (
     // Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile).
     <img
       src="/onboarding/services-sidebar.png"
       alt="Le panneau de gauche listant les services disponibles"
-      width={319}
-      height={300}
+      width={494}
+      height={556}
       // La capture est déjà une carte aux coins arrondis (fond transparent autour) :
       // pas de bordure/borderRadius ajoutés, qui déborderaient des coins.
-      // Hauteur FIXE (largeur au ratio) : posée À CÔTÉ du texte de l'étape services,
-      // elle tient dans les 150px du corps — la page ne dépasse plus les autres
-      // (retour Dom 2026-08-30 : se caler sur les pages les MOINS hautes).
+      // Hauteur = celle du texte à sa gauche (largeur au ratio), posée À CÔTÉ du texte de
+      // l'étape services (Dom 2026-09-06 : « toute la hauteur du texte » ; 2026-08-30 :
+      // à côté et non dessous, pour rester dans la hauteur commune des pages).
       style={{
         display: "block",
-        height: 142,
+        height,
         width: "auto",
         maxWidth: "100%",
         flexShrink: 0,
       }}
     />
+  );
+}
+
+/**
+ * Étape services, desktop : texte à gauche, capture à droite dont la HAUTEUR suit celle
+ * du texte — mesurée (ResizeObserver) car le CSS seul ne déduit pas la largeur d'une image
+ * d'une hauteur « stretch » dans une rangée flex. Mobile : le texte seul (la maquette du
+ * bandeau ☰ est dans le slot image de l'étape).
+ */
+function ServicesLayout({ isMobile, children }: { isMobile: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(142);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setHeight(Math.round(el.getBoundingClientRect().height));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  if (isMobile) return <>{children}</>;
+  return (
+    <div style={{ display: "flex", gap: "1.25rem", alignItems: "flex-start" }}>
+      <div ref={ref} style={{ flex: 1, minWidth: 0 }}>
+        {children}
+      </div>
+      <SidebarShot height={height} />
+    </div>
   );
 }
 
@@ -432,8 +463,8 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
       // (retour Dom 2026-08-30 : se caler sur les pages les MOINS hautes). MOBILE :
       // colonne, maquette du bandeau sandwich sous le texte (slot image).
       body: (
-        <div style={isMobile ? undefined : { display: "flex", gap: "1.25rem" }}>
-          <div style={isMobile ? undefined : { flex: 1, minWidth: 0 }}>
+        <ServicesLayout isMobile={isMobile}>
+          <div>
             <p style={P}>
               Vous pouvez réserver des activités auprès {names.length > 1 ? "de " : "du "}
               <strong>{names.length > 1 ? "plusieurs services" : "service"}</strong>
@@ -468,8 +499,7 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
               )}
             </p>
           </div>
-          {!isMobile && <SidebarShot />}
-        </div>
+        </ServicesLayout>
       ),
       image: isMobile ? <BurgerMock label={names[0] ?? "Médiathèque"} /> : undefined,
     },

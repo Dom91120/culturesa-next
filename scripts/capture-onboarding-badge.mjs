@@ -92,6 +92,23 @@ try {
         console.log("  ", user.email, href, ": pas de badge à jauge —", JSON.stringify(dbg));
         continue;
       }
+      // Effectifs de l'illustration : 3 enfants, 1 adulte (Dom 2026-09-06) — on ramène les
+      // compteurs de la fiche de l'usager avec les boutons « − » du badge (brouillon).
+      const TARGET = [3, 1];
+      for (let i = 0; i < TARGET.length; i++) {
+        for (let guard = 0; guard < 40; guard++) {
+          const value = await page.evaluate((i) => {
+            const inputs = document.querySelectorAll("[data-cap] .user-agenda-mine-badge input");
+            return inputs[i] ? Number(inputs[i].value) : null;
+          }, i);
+          if (value === null || value <= TARGET[i]) break;
+          const minus = await page.$$(
+            "[data-cap] .user-agenda-mine-badge button[aria-label=Diminuer]",
+          );
+          await minus[i].click();
+          await sleep(120);
+        }
+      }
       // Tout transparent SAUF le badge (et pas de souris dessus : pas de survol).
       await page.mouse.move(5, 5);
       await page.addStyleTag({
