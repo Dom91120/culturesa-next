@@ -2626,6 +2626,7 @@ textarea.theme-pending:focus::placeholder {
   justify-content: center;
   text-align: center;
   padding: 2px 4px;
+  /* Rangée « journée entière » = hauteur d'une ligne d'une heure (ROW_H, 56px — Dom 2026-09-06). */
   height: 56px;
   box-sizing: border-box;
   line-height: 1.15;
@@ -2640,7 +2641,7 @@ textarea.theme-pending:focus::placeholder {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   border-left: 1px solid var(--border);
-  height: 56px;
+  height: 56px; /* = ROW_H (ligne d'une heure) */
   box-sizing: border-box;
   padding: 2px;
   display: flex;

@@ -3220,7 +3220,9 @@ export function UserAgendaGrid({
           // Desktop : plus de marge HAUTE non plus — les 2rem dégageaient l'ancienne
           // user-bar flottante en haut à droite, partie vivre en pied de sidebar
           // (2026-08-30) ; l'écran remonte d'autant.
-          margin: isMobile ? "0" : "0 0 .75rem",
+          // Ligne de titre : .2rem sous elle sur bureau (Dom 2026-09-06), aucune marge
+          // sur mobile.
+          marginBottom: isMobile ? 0 : ".2rem",
         }}
       >
         {/* Titre masqué sur MOBILE (Dom 2026-09-05) : la ligne ne porte que la nav de
@@ -3398,8 +3400,9 @@ export function UserAgendaGrid({
           justifyContent: "space-between",
           gap: ".75rem",
           flexWrap: "wrap",
-          // Conteneur des onglets de période : marge basse réduite sur smartphone.
-          marginBottom: isMobile ? "0.5rem" : ".75rem",
+          // Conteneur des onglets de période : marge basse réduite sur smartphone ;
+          // .6rem sur bureau (Dom 2026-09-06).
+          marginBottom: isMobile ? "0.5rem" : ".6rem",
         }}
       >
         <div className="period-tabs" id="agenda-period-tabs">
