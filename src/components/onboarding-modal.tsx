@@ -110,9 +110,9 @@ function WaitlistFormShot() {
       {/* Capture statique d'illustration (pas next/image : taille fixe, pas d'optimisation utile). */}
       <img
         src="/onboarding/waitlist-form.png"
-        alt="Formulaire de la liste d'attente : disponibilités par demi-journée et option de réservation automatique"
+        alt="Formulaire de la liste d'attente : disponibilités par demi-journée, périodes souhaitées et option de réservation automatique"
         width={972}
-        height={416}
+        height={650}
         style={{
           display: "block",
           width: "100%",

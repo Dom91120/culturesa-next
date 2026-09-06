@@ -1,6 +1,8 @@
 // Capture de la modale « S'inscrire sur la liste d'attente » pour l'onboarding usager :
-// public/onboarding/waitlist-form.png — tableau des demi-journées (lundi matin coché) et
-// cadre « Option » (réservation automatique cochée), rendu ×2. Aucune écriture en base :
+// public/onboarding/waitlist-form.png — du tableau des demi-journées (lundi et mardi
+// après-midi cochés) au cadre « Option » (réservation automatique cochée), en passant par
+// le paragraphe e-mail et le bloc « Périodes souhaitées » (service à plusieurs périodes,
+// seule la première cochée) — maquette Dom 2026-09-06, rendu ×2. Aucune écriture en base :
 // la modale n'est pas validée.
 // Usage : serveur sur http://localhost:3000, base seedée :
 //   node scripts/capture-onboarding-waitlist.mjs [chemin de sortie]
@@ -8,9 +10,9 @@ import puppeteer from "puppeteer";
 
 const BASE = process.env.CAPTURE_BASE_URL ?? "http://localhost:3000";
 const OUT = process.argv[2] ?? "public/onboarding/waitlist-form.png";
-// Usager de test d'un service dont la liste d'attente est active (défaut).
-const USER = { email: "marie.maternelle@test.fr", password: "Test0123456!" };
-const SERVICE = "svc_004";
+// Usager de test ayant accès à un service à PLUSIEURS périodes (bloc « Périodes souhaitées »).
+const USER = { email: "paul.elementaire@test.fr", password: "Test0123456!" };
+const SERVICE = "svc_003";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function login(page, { email, password }) {
@@ -36,19 +38,21 @@ try {
   await page.click('button[aria-label="Liste d\'attente"]');
   await page.waitForSelector("dialog[open] table input[type=checkbox]");
   await sleep(300);
-  // Lundi matin + option « Réservation automatique ».
-  const boxes = await page.$$("dialog[open] input[type=checkbox]");
-  await boxes[0].click();
-  await boxes[boxes.length - 1].click();
+  // Lundi et mardi APRÈS-MIDI (2e ligne du tableau) ; périodes : seule la première reste
+  // cochée ; option « Réservation automatique » cochée.
+  const rows = await page.$$("dialog[open] table tbody tr");
+  const pm = await rows[1].$$("input[type=checkbox]");
+  await pm[0].click();
+  await pm[1].click();
+  const others = await page.$$("dialog[open] input[type=checkbox]:not(table input)");
+  // Hors tableau : les périodes, puis l'option (dernière case).
+  for (const b of others.slice(1, others.length - 1)) await b.click();
+  await others[others.length - 1].click();
   await page.mouse.move(5, 5);
   await page.addStyleTag({ content: "nextjs-portal{display:none !important}" });
   await sleep(300);
   const clip = await page.evaluate(() => {
     const dlg = document.querySelector("dialog[open]");
-    // Cadrage voulu (Dom 2026-09-06) : le tableau puis le cadre « Option », sans le
-    // paragraphe « Vous serez prévenu par e-mail… » qui les sépare — masqué le temps de
-    // la capture.
-    for (const el of dlg.querySelectorAll("table ~ p")) el.style.display = "none";
     const table = dlg.querySelector("table").getBoundingClientRect();
     // Cadre « Option » = ancêtre encadré de la dernière case à cocher.
     const last = [...dlg.querySelectorAll("input[type=checkbox]")].pop();
