@@ -21,6 +21,7 @@ import {
   AgendaWeekHeader,
   PointagePill,
   PrintIconButton,
+  TodayGlyph,
   WaitingListButton,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
@@ -3149,8 +3150,22 @@ export function AgendaGrid({
           {todayInVisiblePeriods && (
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ padding: ".05rem .45rem", fontSize: ".64rem", marginLeft: ".4rem" }}
+              data-tip="Aujourd'hui"
+              aria-label="Aujourd'hui"
+              // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
+              // chrome que les boutons de la barre d'options ; identique à l'agenda usager.
+              style={{
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--rad-sm)",
+                padding: ".28rem .38rem",
+                cursor: "pointer",
+                color: "var(--muted)",
+                display: "flex",
+                alignItems: "center",
+                lineHeight: 1,
+                marginLeft: ".4rem",
+              }}
               onClick={() => {
                 // Retour à la semaine courante : on verrouille sur la période
                 // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
@@ -3160,7 +3175,7 @@ export function AgendaGrid({
                 setAnchorMonday(ymd(mondayOf(new Date())));
               }}
             >
-              Aujourd&apos;hui
+              <TodayGlyph size={15} />
             </button>
           )}
         </div>
