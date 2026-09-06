@@ -1,7 +1,12 @@
 "use client";
 
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BookingStateSwatch, ModalOverlay, WaitingListGlyph } from "@/components/agenda-shared";
+import {
+  AbsenceGlyph,
+  BookingStateSwatch,
+  ModalOverlay,
+  WaitingListGlyph,
+} from "@/components/agenda-shared";
 import { markOnboardedAction } from "./onboarding-actions";
 
 /** Événement global pour ré-ouvrir l'onboarding (« Revoir la présentation » du user-menu). */
@@ -191,18 +196,13 @@ function ReservationShot() {
 
 /** Légende des statuts (en attente / validée), comme sous l'agenda. */
 function LegendMock() {
-  // Vraies pastilles de la légende de l'agenda usager (BookingStateSwatch), les deux
-  // entrées sur UNE ligne, 50 % / 50 % (Dom 2026-09-05).
+  // Vraies pastilles de la légende de l'agenda usager (BookingStateSwatch), UNE entrée
+  // par ligne (Dom 2026-09-06 : « à la ligne », après un essai côte à côte la veille).
   const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: ".5rem" };
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: ".4rem .5rem",
-        margin: ".5rem 0 0",
-      }}
-    >
+    // Respiration autour et entre les deux entrées (Dom 2026-09-06 : « augmente ces
+    // paddings ») ; les marges verticales fusionnent avec celles des paragraphes voisins.
+    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: ".6rem", margin: "1rem 0" }}>
       <div style={row}>
         <BookingStateSwatch state="pending" />
         <span style={{ fontSize: ".82rem" }}>Demande en attente de validation</span>
@@ -282,6 +282,32 @@ function ToolbarButtonMock({ label, children }: { label: string; children: React
     >
       {children}
     </span>
+  );
+}
+
+/** Pictogramme en tête d'un TITRE d'étape (à la place de l'emoji) : inline-flex pour
+ *  contrer le preflight Tailwind (svg { display:block }) qui rejetterait le texte à la ligne ;
+ *  même gris que les boutons de la ligne de titre de l'agenda (Dom 2026-09-06). */
+function TitleGlyph({ children }: { children: ReactNode }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        verticalAlign: "-3px",
+        marginRight: ".1rem",
+        color: "var(--muted)",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function AbsenceButtonMock() {
+  return (
+    <ToolbarButtonMock label="bouton Prévenir d'une absence">
+      <AbsenceGlyph size={13} />
+    </ToolbarButtonMock>
   );
 }
 
@@ -422,7 +448,9 @@ const P: React.CSSProperties = { margin: "0 0 .55rem", lineHeight: 1.15 };
 /** Note : quota de réservations par période / an, variable selon le service. */
 function QuotaNote() {
   return (
-    <p style={{ margin: ".55rem 0 0", fontSize: ".82rem", color: "var(--muted)" }}>
+    // Même couleur et même corps que le paragraphe du dessus : plus de note atténuée
+    // (Dom 2026-09-06).
+    <p style={{ margin: ".55rem 0 0" }}>
       Selon le service, votre nombre de réservations est <strong>limité par période</strong> (et par
       an) — la limite est rappelée sous l'agenda.
     </p>
@@ -528,7 +556,13 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
       ),
     },
     {
-      title: "✅ Suivre vos réservations",
+      // Coche ✔ verte (celle de la pastille « Réservation validée ») plutôt que l'emoji ✅
+      // (Dom 2026-09-06).
+      title: (
+        <>
+          <span style={{ color: "#3e7e2f" }}>✔</span> Suivre vos réservations
+        </>
+      ),
       body: (
         <>
           <p style={P}>Vos réservations apparaissent directement sur l'agenda :</p>
@@ -544,16 +578,53 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
               </>
             )}
           </p>
-          <p style={{ ...P, margin: ".55rem 0 0" }}>
+        </>
+      ),
+    },
+    // Absence prévenue et liste d'attente : chacune sur SA page (Dom 2026-09-06), avec en
+    // titre le pictogramme du bouton correspondant de la ligne de titre de l'agenda.
+    {
+      title: (
+        <>
+          <TitleGlyph>
+            <AbsenceGlyph size={20} />
+          </TitleGlyph>{" "}
+          Prévenir d'une absence
+        </>
+      ),
+      body: (
+        <>
+          <p style={P}>
             Empêché pour <strong>une séance</strong> ? Survolez votre badge et cliquez sur le
             macaron <MacaronA variant="gris" /> pour <strong>prévenir d'une absence à venir</strong>{" "}
             : le service est informé, le macaron <MacaronA variant="orange" /> passe en orange et
             votre réservation est conservée.
           </p>
-          <p style={{ ...P, margin: ".55rem 0 0" }}>
+          <p style={{ margin: 0 }}>
+            Le bouton <AbsenceButtonMock /> en haut de l'agenda rappelle la marche à suivre.
+          </p>
+        </>
+      ),
+    },
+    {
+      title: (
+        <>
+          <TitleGlyph>
+            <WaitingListGlyph size={20} />
+          </TitleGlyph>{" "}
+          Liste d'attente
+        </>
+      ),
+      body: (
+        <>
+          <p style={P}>
             Tout est complet ? Inscrivez-vous sur la <strong>liste d'attente</strong>{" "}
             <WaitingListButtonMock /> avec vos disponibilités : vous serez prévenu dès qu'un créneau
             se libère.
+          </p>
+          <p style={{ margin: 0 }}>
+            Avec l'option <strong>réservation automatique</strong>, la place est réservée en votre
+            nom dès qu'elle se libère, et vous en êtes informé par e-mail.
           </p>
         </>
       ),
