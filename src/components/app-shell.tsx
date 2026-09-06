@@ -186,7 +186,7 @@ export const SIDEBAR_WRAP_STYLE: React.CSSProperties = {
   position: "relative",
 };
 
-/** Marque « CultuRésa » + baseline, en tête de sidebar. */
+/** Marque « CultuRésa » + baseline, en tête de sidebar ; monogramme « CR » en condensé. */
 export function SidebarBrand() {
   return (
     <div className="sidebar-header">
@@ -198,6 +198,13 @@ export function SidebarBrand() {
         <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
       </div>
       <div className="sidebar-tagline">Réservation d&apos;activités culturelles</div>
+      {/* Monogramme « CR » — C blanc, R vert italique comme le « Résa » de la marque — sur
+          un disque gris : mêmes dimensions, police et graisse que l'avatar de la barre
+          utilisateur (.user-bar .avatar), d'où un rendu HTML et non SVG (Dom 2026-09-06).
+          Visible seulement sidebar condensée (CSS .sidebar-mark), sous le bouton ☰. */}
+      <span className="sidebar-mark" aria-hidden="true">
+        C<em style={{ color: "var(--accent)", fontStyle: "italic" }}>R</em>
+      </span>
     </div>
   );
 }
