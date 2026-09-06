@@ -268,9 +268,10 @@ model Service {
   //   positif = N minutes calendaires après `booking.autoValidateFrom`.
   autoValidationDelay Int @default(0)
 
-  // Notification des gestionnaires sur les auto-validations (digest par service).
-  //   cf. services/manager-notice.ts.
-  mgrNoticeMode          MgrNoticeMode @default(none)
+  // Notification des gestionnaires (récapitulatifs par service, cf. manager-notice.ts).
+  //   Défaut « each » = unitaires, un e-mail par réservation (Dom 2026-09-06 ; « none »
+  //   auparavant — migration 20260906180000 bascule aussi les services existants).
+  mgrNoticeMode          MgrNoticeMode @default(each)
   mgrNoticeIntervalHours Int           @default(4)
   mgrNoticeHour          Int           @default(8)
   mgrNoticeWeekday       DayOfWeek     @default(lun)

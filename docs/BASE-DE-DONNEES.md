@@ -167,7 +167,7 @@ Activité réservable. PK = id applicatif (`svc_00N`).
 | absencePrevenue | booléen | true | « Absences prévenues » : signalement d'absence à l'avance (usager + gestionnaire) |
 | listeAttente | booléen | true | « Liste d'attente » : disponibilités des usagers, notification / inscription automatique |
 | autoValidationDelay | entier | 0 | délai d'auto-validation **signé** (0=off, <0=ouvré, >0=calendaire) |
-| mgrNoticeMode | texte | none | digest gestionnaires (none/hours/daily/weekly) |
+| mgrNoticeMode | texte | each | notification des gestionnaires (none / each = unitaires / hours / daily / weekly) — défaut « each » depuis le 2026-09-06 |
 | mgrNoticeIntervalHours / Hour / Weekday | entier/texte | 4 / 8 / lun | cadence du digest |
 | mgrNoticeLastSentAt | horodatage? | | dernier digest envoyé |
 | createdAt | horodatage | now() | |
