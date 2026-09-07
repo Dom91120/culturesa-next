@@ -9,6 +9,10 @@ import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { openingForDate } from "@/server/services/opening";
+import {
+  closeWaitingEntries,
+  markWaitlistBookingsDeleted,
+} from "@/server/services/waiting-list-close";
 import { getServiceDemandeurSettings } from "./demandeur-settings";
 import { deriveServiceModes } from "./service-modes";
 
@@ -622,7 +626,7 @@ export async function createUniqueBookingInTx(
     userId,
     periodId: slot.periodId ?? 0,
   });
-  return await tx.booking.create({
+  const created = await tx.booking.create({
     data: {
       bookingType: "unique",
       userId,
@@ -638,6 +642,9 @@ export async function createUniqueBookingInTx(
       autoValidateFrom: new Date(),
     },
   });
+  // Réservation obtenue sur le service : l'usager sort de la liste d'attente (historisé).
+  await closeWaitingEntries(tx, { serviceId: slot.serviceId, userId }, "BOOKED", created.id);
+  return created;
 }
 
 /**
@@ -667,6 +674,8 @@ export async function cancelUserBookingInTx(
   if (pointedChildren > 0) {
     throw new BookingError("Une séance de cette réservation est pointée, annulation impossible.");
   }
+  // Trace pour l'historique de la liste d'attente (réservation obtenue puis annulée).
+  await markWaitlistBookingsDeleted(tx, { id: bookingId }, "usager");
   const res = await tx.booking.deleteMany({ where: { id: bookingId, userId } });
   return res.count > 0;
 }

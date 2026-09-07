@@ -74,6 +74,10 @@ import {
   validationNoticeWindow,
 } from "@/server/services/validation-notice";
 import { deleteWaitingEntryById } from "@/server/services/waiting-list";
+import {
+  closeWaitingEntries,
+  markWaitlistBookingsDeleted,
+} from "@/server/services/waiting-list-close";
 
 // Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
 type DayKeyT = (typeof DAYS)[number];
@@ -1038,6 +1042,13 @@ export async function deleteBookingAdminAction(
     await prisma.$transaction(
       async (tx) => {
         await assertNotLockedByPointageInTx(tx, id.data, serviceId);
+        // Trace pour l'historique de la liste d'attente (réservation obtenue puis
+        // supprimée / refusée par le service).
+        await markWaitlistBookingsDeleted(
+          tx,
+          { id: id.data },
+          booking.validated ? "gestionnaire" : "refus",
+        );
         await tx.booking.delete({ where: { id: id.data } });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -1419,7 +1430,7 @@ export async function createUniqueBookingAction(input: {
           enfants: d.enfants,
           accompagnants: d.accompagnants,
         });
-        await tx.booking.create({
+        const created = await tx.booking.create({
           data: {
             bookingType: "unique",
             userId: d.userId,
@@ -1435,6 +1446,13 @@ export async function createUniqueBookingAction(input: {
             autoValidateFrom: new Date(),
           },
         });
+        // Réservation faite pour l'usager : il sort de la liste d'attente (historisé).
+        await closeWaitingEntries(
+          tx,
+          { serviceId: d.serviceId, userId: d.userId },
+          "BOOKED",
+          created.id,
+        );
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { BookingConfirmationParams } from "@/server/services/booking-mail";
 import { BookingError, bookingUserSnapshot } from "@/server/services/bookings";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
+import { closeWaitingEntries } from "@/server/services/waiting-list-close";
 
 // ════════════════════════════════════════════════════════════
 //  Cœur PARTAGÉ des réservations récurrentes — source unique de l'orchestration
@@ -130,6 +131,13 @@ export async function insertRecurringBookingInTx(
       autoValidateFrom: new Date(),
     },
   });
+  // Réservation obtenue sur le service : l'usager sort de la liste d'attente (historisé).
+  await closeWaitingEntries(
+    tx,
+    { serviceId: target.serviceId, userId: params.userId },
+    "BOOKED",
+    created.id,
+  );
   // La ligne créée EST le ParentForSync (mêmes champs) : plus de payload parallèle
   // à maintenir en phase avec le create.
   await syncRecurringChildren(

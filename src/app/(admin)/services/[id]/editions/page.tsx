@@ -16,8 +16,15 @@ const cellStyle: React.CSSProperties = {
 
 export default async function EditionsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
+  const service = await prisma.service.findUnique({
+    where: { id },
+    select: { label: true, listeAttente: true },
+  });
   if (!service) notFound();
+  // Éditions de la liste d'attente : proposées si le réglage est actif, ou s'il reste un
+  // historique à consulter (liste désactivée depuis).
+  const withWaitlist =
+    service.listeAttente || (await prisma.waitingListLog.count({ where: { serviceId: id } })) > 0;
 
   // Éditions proposées pour ce service. Une ligne par édition (façon « Modèles d'e-mails »).
   // L'export CSV télécharge un fichier (Content-Disposition) ; les autres ouvrent un écran dédié.
@@ -69,6 +76,78 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
     },
   ];
 
+  // Éditions de la liste d'attente (Dom 2026-09-07) : trois « état du jour » (liste en
+  // cours, demande par demi-journée, adresses) et deux « historique » par exercice
+  // (historique, placements) — à lire en fin de période / d'exercice.
+  const waitlistEditions: typeof editions = [
+    {
+      icon: "⏳",
+      label: "Liste d'attente en cours",
+      description:
+        "Les inscrits du jour dans l'ordre d'inscription : disponibilités, périodes souhaitées, réservation automatique, dates et échéance.",
+      href: `/services/${id}/editions/attente`,
+      action: "Ouvrir",
+    },
+    {
+      icon: "📊",
+      label: "Demande par demi-journée",
+      description:
+        "Combien d'inscrits se sont déclarés disponibles chaque demi-journée et sur chaque période : où ouvrir un créneau ferait le plus d'heureux.",
+      href: `/services/${id}/editions/attente-demande`,
+      action: "Ouvrir",
+    },
+    {
+      icon: "📜",
+      label: "Historique de la liste d'attente",
+      description:
+        "Toutes les inscriptions closes de l'exercice : issue (placé, périodes échues, retrait), délai et réservation obtenue — à lire en fin de période ou d'exercice.",
+      href: `/services/${id}/editions/attente-historique`,
+      action: "Ouvrir",
+    },
+    {
+      icon: "🎯",
+      label: "Placements depuis la liste d'attente",
+      description:
+        "Les inscriptions de l'exercice qui ont abouti à une réservation (automatique ou obtenue), avec le délai et le créneau.",
+      href: `/services/${id}/editions/attente-placements`,
+      action: "Ouvrir",
+    },
+    {
+      icon: "✉️",
+      label: "Adresses des inscrits",
+      description:
+        "Coordonnées des inscrits du jour, avec les adresses e-mail prêtes à coller pour un envoi groupé.",
+      href: `/services/${id}/editions/attente-adresses`,
+      action: "Ouvrir",
+    },
+  ];
+
+  const renderRows = (list: typeof editions) =>
+    list.map((e) => (
+      <tr key={e.href}>
+        <td style={cellStyle}>
+          <div style={{ fontWeight: 600 }}>
+            <span aria-hidden="true" style={{ marginRight: ".4rem" }}>
+              {e.icon}
+            </span>
+            {e.label}
+          </div>
+          <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
+            {e.description}
+          </div>
+        </td>
+        <td style={{ ...cellStyle, textAlign: "center" }}>
+          <a
+            href={e.href}
+            className="btn btn-ghost"
+            style={{ fontSize: ".78rem", textDecoration: "none", whiteSpace: "nowrap" }}
+          >
+            {e.action}
+          </a>
+        </td>
+      </tr>
+    ));
+
   return (
     <div>
       <div className="panel-title" style={{ marginBottom: "1rem" }}>
@@ -97,34 +176,38 @@ export default async function EditionsPage({ params }: { params: Promise<{ id: s
               <th style={{ ...thStyle, textAlign: "center", width: 160 }}>Action</th>
             </tr>
           </thead>
-          <tbody>
-            {editions.map((e) => (
-              <tr key={e.href}>
-                <td style={cellStyle}>
-                  <div style={{ fontWeight: 600 }}>
-                    <span aria-hidden="true" style={{ marginRight: ".4rem" }}>
-                      {e.icon}
-                    </span>
-                    {e.label}
-                  </div>
-                  <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
-                    {e.description}
-                  </div>
-                </td>
-                <td style={{ ...cellStyle, textAlign: "center" }}>
-                  <a
-                    href={e.href}
-                    className="btn btn-ghost"
-                    style={{ fontSize: ".78rem", textDecoration: "none", whiteSpace: "nowrap" }}
-                  >
-                    {e.action}
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          <tbody>{renderRows(editions)}</tbody>
         </table>
       </div>
+
+      {withWaitlist && (
+        <div className="panel" id="editions-attente-panel" style={{ marginTop: "1rem" }}>
+          <div className="panel-title">
+            <span className="dot" style={{ background: "var(--warn)" }} />
+            Liste d'attente
+          </div>
+          <p
+            style={{
+              fontSize: ".85rem",
+              lineHeight: 1.5,
+              color: "var(--muted)",
+              margin: "0 0 1rem",
+            }}
+          >
+            Qui attend, quand, et ce qu'il est advenu des inscriptions. Les trois premières
+            décrivent l'état du jour ; l'historique et les placements se lisent par exercice.
+          </p>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Édition</th>
+                <th style={{ ...thStyle, textAlign: "center", width: 160 }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>{renderRows(waitlistEditions)}</tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

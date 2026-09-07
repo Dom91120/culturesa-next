@@ -276,8 +276,9 @@ export function summarizeWaitingList(r: {
   entries: number;
   notified: number;
   booked: number;
+  expired: number;
 }): string {
-  return `${r.entries} inscrit(s) sur ${r.services} service(s) : ${r.booked} inscription(s) automatique(s), ${r.notified} e-mail(s) « créneaux libérés »`;
+  return `${r.entries} inscrit(s) sur ${r.services} service(s) : ${r.booked} inscription(s) automatique(s), ${r.notified} e-mail(s) « créneaux libérés », ${r.expired} inscription(s) échue(s)`;
 }
 
 export function summarizeRgpdRetention(r: { notified: number; anonymized: number }): string {

@@ -18,7 +18,15 @@ const KIND_TITLES: Record<string, string> = {
   pointages: "Pointages",
   inscrits: "Liste des inscrits",
   creneaux: "Liste des créneaux ouverts",
+  attente: "Liste d'attente en cours",
+  "attente-demande": "Demande par demi-journée",
+  "attente-historique": "Historique de la liste d'attente",
+  "attente-placements": "Placements depuis la liste d'attente",
+  "attente-adresses": "Adresses des inscrits en liste d'attente",
 };
+
+// Éditions qui tiennent en PORTRAIT (peu de colonnes) ; les autres sont en paysage.
+const PORTRAIT_KINDS = ["inscrits", "creneaux", "attente-demande", "attente-adresses"];
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -75,7 +83,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         // Tableaux larges (liste, planning, pointages) en paysage ; la liste des
         // inscrits (5 colonnes de contact) et celle des créneaux ouverts (6 colonnes
         // courtes) tiennent en portrait.
-        landscape: !["inscrits", "creneaux"].includes(kind),
+        landscape: !PORTRAIT_KINDS.includes(kind),
         printBackground: true,
         preferCSSPageSize: false,
         margin: { top: "16mm", bottom: "14mm", left: "8mm", right: "8mm" },

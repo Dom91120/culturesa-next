@@ -3,9 +3,18 @@
 // l'historique des inscriptions clôturées (liste_attente_historique) et des inscriptions
 // encore ouvertes (liste_attente). Répond à « quels demandeurs n'ont pas trouvé de place ? »
 // (Dom 2026-09-06). Le filtre de dates porte sur la DATE D'INSCRIPTION.
+// « Sans place » = inscriptions ÉCHUES (périodes souhaitées terminées, clôture
+// automatique) + retraits sans réservation : ce compteur ne prend son sens qu'en FIN de
+// période ou d'exercice, une fois les inscriptions échues (Dom 2026-09-07).
 // =====================================================================================
 
-export type WaitlistOutcome = "AUTO_BOOKED" | "BOOKED" | "LEFT" | "REMOVED" | "ANONYMIZED";
+export type WaitlistOutcome =
+  | "AUTO_BOOKED"
+  | "BOOKED"
+  | "LEFT"
+  | "REMOVED"
+  | "EXPIRED"
+  | "ANONYMIZED";
 
 /** Ligne d'historique (entrée clôturée). Dates ISO. */
 export type WaitlistLogRow = {
@@ -25,14 +34,16 @@ export type WaitlistStats = {
   // Inscrits encore en attente (toutes dates : c'est l'état du jour) + ancienneté moyenne (j).
   waitingNow: number;
   waitingAvgDays: number | null;
-  // Sur la plage (date d'inscription) : sans place (retrait usager / gestionnaire, sans
-  // réservation), placés (inscription automatique ou réservation faite par l'usager) et
-  // délai moyen inscription → réservation (j).
+  // Sur la plage (date d'inscription) : sans place (échues + retraits sans réservation),
+  // placés (inscription automatique ou réservation obtenue) et délai moyen
+  // inscription → réservation (j).
   noPlace: number;
   placed: number;
   placedAvgDays: number | null;
-  // Anneau « issue des inscriptions » sur la plage (entrées ouvertes comprises).
+  // Anneau « issue des inscriptions » sur la plage (entrées ouvertes comprises) : les
+  // sans-place y sont REGROUPÉS ; le détail (échues / retraits) est dans noPlaceDetail.
   outcomes: Labeled[];
+  noPlaceDetail: Labeled[];
   // Sans place : répartition par catégorie (demandeur) et par structure.
   noPlaceByDemandeur: Labeled[];
   noPlaceByStructure: Labeled[];
@@ -40,13 +51,15 @@ export type WaitlistStats = {
   byMonth: Labeled[];
 };
 
-export const OUTCOME_LABELS: Record<WaitlistOutcome | "WAITING", string> = {
+export const OUTCOME_LABELS: Record<WaitlistOutcome | "WAITING" | "NO_PLACE", string> = {
   AUTO_BOOKED: "Inscrits automatiquement",
-  BOOKED: "Ont réservé eux-mêmes",
-  LEFT: "Retirés sans place",
+  BOOKED: "Ont obtenu une réservation",
+  EXPIRED: "Périodes échues sans place",
+  LEFT: "Retirés par l'usager",
   REMOVED: "Retirés par le service",
   ANONYMIZED: "Comptes anonymisés",
   WAITING: "Toujours en attente",
+  NO_PLACE: "Sans place",
 };
 
 const DAY_MS = 86_400_000;
@@ -75,7 +88,8 @@ function topN(map: Map<string, number>, n: number): Labeled[] {
     .map(([label, value]) => ({ label, value }));
 }
 
-const isNoPlace = (o: WaitlistOutcome): boolean => o === "LEFT" || o === "REMOVED";
+const isNoPlace = (o: WaitlistOutcome): boolean =>
+  o === "EXPIRED" || o === "LEFT" || o === "REMOVED";
 const isPlaced = (o: WaitlistOutcome): boolean => o === "AUTO_BOOKED" || o === "BOOKED";
 
 export function computeWaitlistStats(
@@ -90,20 +104,19 @@ export function computeWaitlistStats(
   const noPlaceRows = inLogs.filter((r) => isNoPlace(r.issue));
   const placedRows = inLogs.filter((r) => isPlaced(r.issue));
 
-  const counts = new Map<WaitlistOutcome | "WAITING", number>();
-  for (const r of inLogs) counts.set(r.issue, (counts.get(r.issue) ?? 0) + 1);
+  const counts = new Map<WaitlistOutcome | "WAITING" | "NO_PLACE", number>();
+  for (const r of inLogs) {
+    const k = isNoPlace(r.issue) ? "NO_PLACE" : r.issue;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+    if (isNoPlace(r.issue)) counts.set(r.issue, (counts.get(r.issue) ?? 0) + 1);
+  }
   if (inLive.length > 0) counts.set("WAITING", inLive.length);
-  const order: (WaitlistOutcome | "WAITING")[] = [
-    "AUTO_BOOKED",
-    "BOOKED",
-    "LEFT",
-    "REMOVED",
-    "ANONYMIZED",
-    "WAITING",
-  ];
-  const outcomes = order
-    .filter((k) => (counts.get(k) ?? 0) > 0)
-    .map((k) => ({ label: OUTCOME_LABELS[k], value: counts.get(k) ?? 0 }));
+  const labeled = (keys: (WaitlistOutcome | "WAITING" | "NO_PLACE")[]): Labeled[] =>
+    keys
+      .filter((k) => (counts.get(k) ?? 0) > 0)
+      .map((k) => ({ label: OUTCOME_LABELS[k], value: counts.get(k) ?? 0 }));
+  const outcomes = labeled(["AUTO_BOOKED", "BOOKED", "NO_PLACE", "ANONYMIZED", "WAITING"]);
+  const noPlaceDetail = labeled(["EXPIRED", "LEFT", "REMOVED"]);
 
   const byDem = new Map<string, number>();
   const byStruct = new Map<string, number>();
@@ -130,6 +143,7 @@ export function computeWaitlistStats(
     placed: placedRows.length,
     placedAvgDays: avgDays(placedRows.map((r) => [r.inscritAt, r.clotureAt])),
     outcomes,
+    noPlaceDetail,
     noPlaceByDemandeur: topN(byDem, 10),
     noPlaceByStructure: topN(byStruct, 10),
     byMonth,

@@ -340,12 +340,16 @@ Historique des inscriptions en liste d'attente, une ligne par entrée **clôtur�
 | userId | texte? | | ↗ `user` (SetNull) | mis à NULL à l'anonymisation du compte |
 | demandeurLabel / structureLabel | texte | "" | | libellés figés au moment de la clôture |
 | disponibilites | texte | "" | | demi-journées demandées (CSV) |
-| periodIds | texte | "" | | périodes acceptées (ids CSV) ; vide = toutes |
+| periodIds | texte | "" | | périodes souhaitées (ids CSV, figés à l'inscription — l'échéance de l'inscription est la fin de la dernière) ; vide = toutes (anciennes entrées) |
 | autoInscription | booléen | false | | option « réservation automatique » |
 | inscritAt | horodatage | | | date d'inscription (= `createdAt` de l'entrée) — c'est sur elle que filtrent les statistiques |
 | clotureAt | horodatage | now() | | date de clôture |
-| issue | enum `WaitingListOutcome` | | | `AUTO_BOOKED` (inscrit automatiquement), `BOOKED` (a réservé lui-même après l'inscription — déduit au retrait), `LEFT` (retiré par l'usager, sans place), `REMOVED` (retiré par un gestionnaire, sans place), `ANONYMIZED` |
+| issue | enum `WaitingListOutcome` | | | `AUTO_BOOKED` (inscrit automatiquement), `BOOKED` (a obtenu une réservation : posé par les cœurs de création de réservation, déduit au retrait pour les anciennes entrées), `LEFT` (retiré par l'usager, sans place), `REMOVED` (retiré par un gestionnaire, sans place), `EXPIRED` (échue : périodes souhaitées terminées, clôture par la tâche planifiée — 2026-09-07), `ANONYMIZED` |
 | bookingId | entier? | | ↗ `bookings` (SetNull) | réservation obtenue, s'il y en a une |
+| creneauLabel / periodeLabel | texte | "" | | réservation obtenue **figée** à la clôture (« Lundi · 10:00 – 12:00 », période) — lisible après suppression de la réservation (2026-09-07) |
+| reservationSupprimeeAt | horodatage? | | | suppression de la réservation obtenue (renseigné AVANT le delete, cf. `markWaitlistBookingsDeleted`) |
+| reservationSupprimeePar | texte | "" | | « NOM Prénom » du gestionnaire / administrateur ; vide pour l'usager |
+| reservationSupprimeeMode | texte | "" | | `usager` (annulation), `gestionnaire` (suppression), `refus`, `creneau` / `periode` / `exercice` (retirée avec son créneau, sa période, son exercice) |
 
 Index `(serviceId, inscritAt)`, `(userId)`, `(bookingId)`.
 

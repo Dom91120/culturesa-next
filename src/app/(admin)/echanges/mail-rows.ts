@@ -97,6 +97,12 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
       "Envoyé à un inscrit de la liste d'attente ayant demandé l'inscription automatique, lorsqu'une réservation a été faite en son nom sur un créneau libéré (en plus de l'e-mail de réservation habituel).",
     recipient: "L'usager concerné",
   },
+  waitlist_expired: {
+    label: "Liste d'attente : inscription échue",
+    description:
+      "Envoyé à un inscrit de la liste d'attente lorsque les périodes qu'il souhaitait sont terminées sans qu'une place ait pu lui être proposée : son inscription est close automatiquement.",
+    recipient: "L'usager concerné",
+  },
   email_verification: {
     label: "Confirmation d'adresse e-mail",
     description: "Envoyé à l'inscription pour activer le compte (toujours envoyé).",

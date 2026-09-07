@@ -91,3 +91,48 @@ export function serializePeriodIds(ids: Iterable<number>): string {
 export function periodAccepted(periodId: number, accepted: ReadonlySet<number>): boolean {
   return accepted.size === 0 || accepted.has(periodId);
 }
+
+// ─── Échéance d'une inscription ──────────────────────────────────────────────────
+// Une inscription vaut jusqu'à la FIN DE LA DERNIÈRE PÉRIODE SOUHAITÉE (Dom 2026-09-07) :
+// passé ce terme, la tâche planifiée la clôt avec l'issue « échue » (EXPIRED) — c'est
+// ce qui donne leur sens aux statistiques « sans place », lues en fin de période ou
+// d'exercice. Les périodes passées ici sont celles de l'EXERCICE VISIBLE.
+
+export type WaitlistPeriod = { id: number; dateEnd: string | null }; // AAAA-MM-JJ
+
+/**
+ * Échéance (AAAA-MM-JJ) : fin la plus tardive parmi les périodes souhaitées (toutes si
+ * aucune restriction). `null` si aucune période ne correspond ou si l'une d'elles n'a pas
+ * de date de fin (période en cours de saisie) : pas d'échéance connue.
+ */
+export function waitlistDeadline(
+  periodIds: readonly number[],
+  periods: readonly WaitlistPeriod[],
+): string | null {
+  const wanted = new Set(periodIds);
+  const kept = wanted.size > 0 ? periods.filter((p) => wanted.has(p.id)) : periods;
+  if (kept.length === 0) return null;
+  let max: string | null = null;
+  for (const p of kept) {
+    if (!p.dateEnd) return null;
+    if (max === null || p.dateEnd > max) max = p.dateEnd;
+  }
+  return max;
+}
+
+/**
+ * Inscription ÉCHUE ? Oui si son échéance est dépassée, ou si plus AUCUNE de ses périodes
+ * souhaitées n'appartient à l'exercice visible (bascule d'exercice). Sans période visible,
+ * on ne peut pas juger : jamais échue.
+ */
+export function waitlistExpired(
+  periodIds: readonly number[],
+  periods: readonly WaitlistPeriod[],
+  today: string,
+): boolean {
+  if (periods.length === 0) return false;
+  const wanted = new Set(periodIds);
+  if (wanted.size > 0 && !periods.some((p) => wanted.has(p.id))) return true;
+  const deadline = waitlistDeadline(periodIds, periods);
+  return deadline !== null && deadline < today;
+}

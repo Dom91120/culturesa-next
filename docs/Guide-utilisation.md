@@ -158,6 +158,10 @@ par e-mail et retiré de la liste. Validez avec **« S'inscrire sur la liste d'a
 fois inscrit, le même bouton permet de **mettre à jour** vos disponibilités ou de vous
 **retirer de la liste**. Si vous avez déjà atteint votre maximum de réservations (pour l'année, ou
 sur chaque période), vous ne pouvez pas vous inscrire sur la liste d'attente de ce service.
+Votre inscription vaut **jusqu'à la fin de la dernière période souhaitée** (l'échéance est
+rappelée dans la fenêtre) : passé ce terme, elle est close automatiquement et vous en êtes
+informé par e-mail. **Toute réservation obtenue** sur le service — faite par vous, par un
+gestionnaire ou automatiquement — vous retire de la liste.
 La liste vous est aussi proposée au bon moment : un clic sur un créneau **complet** affiche un lien
 « s'inscrire sur la liste d'attente » (la demi-journée du créneau est précochée), la fenêtre
 **« Plus aucune place disponible »** porte un bouton d'inscription, et les e-mails de refus ou de
@@ -211,12 +215,15 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   séance pose directement **Absent**.
 - **Liste d'attente** (si activée dans Paramètres › Configuration) : le bouton **« Liste d'attente »**
   de la barre d'options, avec le nombre d'inscrits, ouvre la liste des usagers inscrits, dans l'ordre d'inscription,
-  avec leurs disponibilités, leurs périodes souhaitées et leur choix d'inscription automatique ;
-  un bouton permet de retirer
-  une inscription. La tâche planifiée « Liste d'attente » prévient ou inscrit les usagers dès
-  qu'un créneau réservable se libère. Chaque inscription terminée (inscrit automatiquement, a
-  réservé lui-même, retiré sans place, retiré par le service) est conservée dans un historique
-  qui alimente les **Statistiques**.
+  avec leurs disponibilités, leurs périodes souhaitées, leur choix d'inscription automatique
+  et l'**échéance** de l'inscription (fin de la dernière période souhaitée) ; un bouton permet
+  de retirer une inscription. La tâche planifiée « Liste d'attente » prévient ou inscrit les
+  usagers dès qu'un créneau réservable se libère, et **clôt les inscriptions échues** (périodes
+  souhaitées terminées, e-mail à l'usager). **Toute réservation obtenue** sur le service (par
+  l'usager, par un gestionnaire ou automatiquement) retire l'usager de la liste. Chaque
+  inscription close (inscrit automatiquement, a obtenu une réservation, périodes échues sans
+  place, retiré par l'usager, retiré par le service) est conservée dans un historique qui
+  alimente les **Statistiques**.
 
 > 💡 Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
 > vers un autre créneau pour la déplacer. Pour la déposer dans une **autre semaine**, survolez la
@@ -244,6 +251,21 @@ pointage** (avec les motifs d'absence ; une absence signalée à l'avance appara
 « Absence prévenue », puis « Absent (prévenu) » une fois pointée). Chaque écran s'imprime en **PDF**, et les listes
 (inscrits, créneaux ouverts, réservations) s'exportent en **CSV**.
 
+Si le service utilise la **liste d'attente**, un second panneau propose cinq éditions (PDF et
+CSV) : la **liste d'attente en cours** (les inscrits du jour dans l'ordre d'inscription, avec
+disponibilités, périodes souhaitées, réservation automatique, dates et échéance), la **demande
+par demi-journée** (combien d'inscrits se sont déclarés disponibles chaque matin et après-midi, et sur chaque
+période : où ouvrir un créneau ferait le plus d'heureux), l'**historique de la liste d'attente**
+(toutes les inscriptions closes de l'exercice, avec leur issue, le délai et la réservation
+obtenue — à lire en fin de période ou d'exercice), les **placements** (les inscriptions ayant
+abouti à une réservation, automatique ou obtenue, avec le délai moyen ; si la réservation a été
+supprimée depuis, le créneau reste affiché avec la mention de la suppression et sa date :
+annulée par l'usager, supprimée par le service ou refusée (avec le nom du gestionnaire), ou
+retirée avec son créneau ou sa période) et les **adresses des
+inscrits** (coordonnées du jour, avec les e-mails prêts à coller dans le champ « Cci » d'une
+messagerie). Les trois premières décrivent l'état du jour ; l'historique et les placements se
+lisent par exercice, à la date d'inscription.
+
 ![Liste des réservations (Éditions) et export CSV](img/07-editions-liste.png)
 
 *Figure 7 — Liste des réservations (Éditions) et export CSV*
@@ -258,11 +280,15 @@ remplissage). Les données sont **filtrables et
 exportables en CSV**.
 
 Si le service utilise la **liste d'attente**, le tableau de bord montre aussi qui n'a **pas
-trouvé de place** : compteurs « Sans place trouvée » (inscriptions retirées sans réservation),
-« Placés depuis la liste » (inscription automatique ou réservation faite ensuite par l'usager,
-avec le délai moyen) et « En attente aujourd'hui », un anneau **« Issue des inscriptions »**,
-la répartition des sans-place **par catégorie et par structure** et les **inscriptions par mois**.
-Le filtre de dates s'applique à la date d'inscription.
+trouvé de place** : compteurs « En attente aujourd'hui », « Placés depuis la liste »
+(inscription automatique ou réservation obtenue ensuite, avec le délai moyen) et
+« Sans place (périodes échues) » (inscriptions closes sans réservation : périodes souhaitées
+terminées, ou retrait par l'usager / le service — détail sous le compteur), un anneau
+**« Issue des inscriptions »**, la répartition des sans-place **par catégorie et par
+structure** et les **inscriptions par mois**. Le filtre de dates s'applique à la date
+d'inscription. « En attente » et « Placés » se lisent à tout moment ; le compteur **« Sans
+place »** ne prend son sens qu'**en fin de période ou d'exercice**, une fois les inscriptions
+échues : c'est la mesure de la demande non satisfaite de l'année.
 
 ![Statistiques d'un service](img/08-statistiques.png)
 
@@ -332,7 +358,7 @@ imposé).
 Chaque service peut personnaliser le **contenu** de ses e-mails de réservation : réservation
 confirmée, demande enregistrée, réservation annulée, réservation non validée (refus), rappel de
 réservation, absence prévenue et liste d'attente (inscription, créneaux libérés, inscription
-automatique). Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
+automatique, inscription échue). Le bouton **« Modifier »** personnalise le contenu ; à défaut, le gabarit global est
 utilisé. Le **routage, le destinataire et l'activation de l'envoi** sont, eux, **globaux** (voir
 [Administration → Échanges](#échanges-e-mails-réglages-globaux)).
 
@@ -464,7 +490,8 @@ Plusieurs traitements s'exécutent automatiquement, sans intervention :
 - **Rappels de réservation** envoyés aux usagers (J-7 et J-1).
 - **Notifications de validation** regroupées : l'e-mail de validation ou de remise en attente part
   après le délai réglé dans Échanges et ne reflète que l'état final.
-- **Liste d'attente** : toutes les 5 minutes, pour chaque inscrit et dans l'ordre d'inscription,
+- **Liste d'attente** : toutes les 5 minutes, clôture des inscriptions **échues** (périodes
+  souhaitées terminées, e-mail à l'usager) puis, pour chaque inscrit et dans l'ordre d'inscription,
   recherche des créneaux réservables correspondant à ses disponibilités et périodes — inscription automatique
   si demandée, sinon e-mail « créneaux libérés » (nouveautés seulement).
 - **Conservation des données** : anonymisation des comptes inactifs après l'avis de suppression.

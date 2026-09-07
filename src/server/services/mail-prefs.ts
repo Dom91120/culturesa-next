@@ -16,6 +16,7 @@ export const MAIL_KINDS = [
   "waitlist_joined",
   "waitlist_available",
   "waitlist_autobooked",
+  "waitlist_expired",
 ] as const;
 
 type MailKind = (typeof MAIL_KINDS)[number];
@@ -45,6 +46,7 @@ const BOOKING_TRIGGERS = [
   "waitlist_join",
   "waitlist_available",
   "waitlist_autobook",
+  "waitlist_expire",
 ] as const;
 export type BookingTrigger = (typeof BOOKING_TRIGGERS)[number];
 
@@ -154,6 +156,12 @@ const DEFAULT_MAIL_TRIGGERS: MailTriggerDef[] = [
     label: "Liste d'attente : inscription automatique sur un créneau libéré",
     defaultKind: "waitlist_autobooked",
     position: 15,
+  },
+  {
+    key: "waitlist_expire",
+    label: "Liste d'attente : inscription échue (périodes terminées)",
+    defaultKind: "waitlist_expired",
+    position: 16,
   },
 ];
 

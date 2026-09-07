@@ -12,6 +12,8 @@ export type WaitingEntryView = {
   periodIds: number[];
   autoInscription: boolean;
   createdAt: string; // ISO
+  // Fin de la dernière période souhaitée (AAAA-MM-JJ) : l'inscription est close après.
+  echeance: string | null;
 };
 
 export type WaitingPeriodOption = { id: number; label: string };
@@ -337,7 +339,11 @@ export function WaitingListModal({
 
       {inscrit && entry && (
         <p style={{ fontSize: ".74rem", color: "var(--muted)", margin: ".4rem 0 0" }}>
-          Inscrit depuis le {new Date(entry.createdAt).toLocaleDateString("fr-FR")}.
+          Inscrit depuis le {new Date(entry.createdAt).toLocaleDateString("fr-FR")}
+          {entry.echeance
+            ? `, jusqu'au ${new Date(`${entry.echeance}T12:00:00`).toLocaleDateString("fr-FR")} (fin de la dernière période souhaitée)`
+            : ""}
+          . Toute réservation obtenue sur ce service vous retire de la liste.
         </p>
       )}
 

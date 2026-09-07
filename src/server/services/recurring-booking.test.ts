@@ -153,7 +153,9 @@ describe("insertRecurringBookingInTx", () => {
       structure: { label: "École Jean Jaurès" },
       demandeur: { label: "Scolaire" },
     }));
-    return { tx: fakeTx({ booking: { create }, user: { findUnique } }), create };
+    // Clôture de la liste d'attente (waiting-list-close) : aucun inscrit.
+    const waitingListEntry = { findMany: vi.fn(async () => []) };
+    return { tx: fakeTx({ booking: { create }, user: { findUnique }, waitingListEntry }), create };
   }
 
   it("crée la réservation depuis la CIBLE (période/parité du créneau, jamais du client)", async () => {

@@ -12,6 +12,9 @@ import {
   serializeDispos,
   serializePeriodIds,
   slotMatchesDispos,
+  type WaitlistPeriod,
+  waitlistDeadline,
+  waitlistExpired,
 } from "@/lib/waiting-list";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
@@ -25,6 +28,7 @@ import {
 } from "@/server/services/mail-prefs";
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { reservePonctuelInTx, reserveRecurringInTx } from "@/server/services/user-booking";
+import { closeWaitingEntries } from "@/server/services/waiting-list-close";
 
 // ─── Liste d'attente (réglage PAR SERVICE, Paramètres > Configuration) ───────────
 // Un usager dépose ses DISPONIBILITÉS par demi-journée (cf. lib/waiting-list) et,
@@ -44,6 +48,11 @@ import { reservePonctuelInTx, reserveRecurringInTx } from "@/server/services/use
 // Décision Dom 2026-09-05 : tâche planifiée seule (pas de déclenchement immédiat à
 // l'annulation), récurrents (toute la série) ET ponctuels, entrée retirée après une
 // inscription automatique.
+// Dom 2026-09-07 : TOUTE réservation obtenue sur le service (par l'usager, par un
+// gestionnaire, ou automatique) clôt l'inscription (cœurs de réservation →
+// waiting-list-close.ts) ; une inscription dont les périodes souhaitées sont terminées
+// est ÉCHUE (clôture par la tâche planifiée + e-mail), ce qui rend les statistiques
+// « sans place » lisibles en fin de période / d'exercice.
 
 export const MAX_DISPOS = 14;
 /** Créneaux détaillés au maximum dans l'e-mail « créneaux libérés ». */
@@ -52,11 +61,22 @@ const MAX_MAIL_SLOTS = 12;
 export type WaitingEntryDto = {
   id: number;
   dispos: string[];
-  // Périodes acceptées (ids) ; [] = toutes.
+  // Périodes acceptées (ids) ; [] = toutes (anciennes inscriptions).
   periodIds: number[];
   autoInscription: boolean;
   createdAt: string; // ISO
+  // Échéance : fin de la dernière période souhaitée (AAAA-MM-JJ), null si inconnue.
+  echeance: string | null;
 };
+
+/** Périodes de l'exercice visible (id + fin AAAA-MM-JJ), pour l'échéance des inscriptions. */
+async function visiblePeriods(serviceId: string): Promise<WaitlistPeriod[]> {
+  const rows = await prisma.period.findMany({
+    where: { serviceId, exercice: { visibleToUsers: true } },
+    select: { id: true, dateEnd: true },
+  });
+  return rows.map((p) => ({ id: p.id, dateEnd: p.dateEnd ? toYmd(p.dateEnd) : null }));
+}
 
 /** Entrée de l'usager sur la liste d'attente d'un service (null si absent). */
 export async function getWaitingEntry(
@@ -73,15 +93,16 @@ export async function getWaitingEntry(
       createdAt: true,
     },
   });
-  return e
-    ? {
-        id: e.id,
-        dispos: [...parseDispos(e.disponibilites)],
-        periodIds: parsePeriodIds(e.periodIds),
-        autoInscription: e.autoInscription,
-        createdAt: e.createdAt.toISOString(),
-      }
-    : null;
+  if (!e) return null;
+  const periodIds = parsePeriodIds(e.periodIds);
+  return {
+    id: e.id,
+    dispos: [...parseDispos(e.disponibilites)],
+    periodIds,
+    autoInscription: e.autoInscription,
+    createdAt: e.createdAt.toISOString(),
+    echeance: waitlistDeadline(periodIds, await visiblePeriods(serviceId)),
+  };
 }
 
 /**
@@ -94,8 +115,9 @@ export async function saveWaitingEntry(
   userId: string,
   dispos: string[],
   autoInscription: boolean,
-  // Périodes acceptées : ids de l'exercice visible seulement ; toutes (ou aucune) = pas
-  // de restriction, stockée vide.
+  // Périodes acceptées : ids de l'exercice visible seulement ; toutes (ou aucune) =
+  // TOUTES les périodes de l'exercice visible, ids FIGÉS à l'inscription (l'inscription
+  // vise ces périodes-là et sera échue à leur terme, même après une bascule d'exercice).
   periodIds: number[] = [],
 ): Promise<{ created: boolean }> {
   const keys = serializeDispos(dispos.filter(isDispoKey));
@@ -106,8 +128,7 @@ export async function saveWaitingEntry(
   });
   const known = new Set(periods.map((p) => p.id));
   const wanted = parsePeriodIds(periodIds.join(",")).filter((id) => known.has(id));
-  const restriction =
-    wanted.length > 0 && wanted.length < known.size ? serializePeriodIds(wanted) : "";
+  const restriction = serializePeriodIds(wanted.length > 0 ? wanted : known);
   const existing = await prisma.waitingListEntry.findUnique({
     where: { serviceId_userId: { serviceId, userId } },
     select: { id: true },
@@ -127,75 +148,7 @@ export async function saveWaitingEntry(
   return { created: true };
 }
 
-/** Issue posée par l'appelant à la clôture (BOOKED est DÉDUIT, jamais passé). */
-export type WaitingListClosure = "AUTO_BOOKED" | "LEFT" | "REMOVED" | "ANONYMIZED";
-
-/**
- * CLÔTURE d'inscriptions en liste d'attente : chaque entrée vivante trouvée est copiée
- * dans l'historique (liste_attente_historique, catégorie / structure figées) puis
- * supprimée. Pour un retrait (usager ou gestionnaire), si l'usager a fait une réservation
- * sur le service APRÈS son inscription, l'issue devient « a réservé lui-même » (BOOKED) et
- * la réservation est liée : c'est le cas typique après un e-mail « créneau disponible ».
- * Renvoie le nombre d'entrées clôturées.
- */
-export async function closeWaitingEntries(
-  db: Prisma.TransactionClient,
-  where: Prisma.WaitingListEntryWhereInput,
-  outcome: WaitingListClosure,
-  bookingId: number | null = null,
-): Promise<number> {
-  const entries = await db.waitingListEntry.findMany({
-    where,
-    select: {
-      id: true,
-      serviceId: true,
-      userId: true,
-      disponibilites: true,
-      periodIds: true,
-      autoInscription: true,
-      createdAt: true,
-      user: {
-        select: { demandeur: { select: { label: true } }, structure: { select: { label: true } } },
-      },
-    },
-  });
-  for (const e of entries) {
-    let issue: Prisma.WaitingListLogCreateInput["issue"] = outcome;
-    let linked = bookingId;
-    if (outcome === "LEFT" || outcome === "REMOVED") {
-      const b = await db.booking.findFirst({
-        where: {
-          userId: e.userId,
-          serviceId: e.serviceId,
-          parentBookingId: null,
-          createdAt: { gt: e.createdAt },
-        },
-        orderBy: { createdAt: "asc" },
-        select: { id: true },
-      });
-      if (b) {
-        issue = "BOOKED";
-        linked = b.id;
-      }
-    }
-    await db.waitingListLog.create({
-      data: {
-        serviceId: e.serviceId,
-        userId: e.userId,
-        demandeurLabel: e.user.demandeur?.label ?? "",
-        structureLabel: e.user.structure?.label ?? "",
-        disponibilites: e.disponibilites,
-        periodIds: e.periodIds,
-        autoInscription: e.autoInscription,
-        inscritAt: e.createdAt,
-        issue,
-        bookingId: linked,
-      },
-    });
-    await db.waitingListEntry.delete({ where: { id: e.id } });
-  }
-  return entries.length;
-}
+export { closeWaitingEntries, type WaitingListClosure } from "./waiting-list-close";
 
 /** Retrait par l'usager lui-même (historisé : « a réservé » si une réservation a suivi). */
 export async function deleteWaitingEntry(serviceId: string, userId: string): Promise<boolean> {
@@ -217,6 +170,8 @@ export type WaitingAdminRow = {
   autoInscription: boolean;
   createdAt: string; // ISO
   lastNotifiedAt: string | null;
+  // Échéance (fin de la dernière période souhaitée, AAAA-MM-JJ), null si inconnue.
+  echeance: string | null;
 };
 
 /** Liste d'attente d'un service, dans l'ordre d'inscription (écran gestionnaire). */
@@ -243,25 +198,29 @@ export async function listWaitingEntries(serviceId: string): Promise<WaitingAdmi
       },
     },
   });
-  const periodLabel = new Map(
-    (await prisma.period.findMany({ where: { serviceId }, select: { id: true, label: true } })).map(
-      (p) => [p.id, p.label],
-    ),
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    userId: r.userId,
-    nom: r.user.nom,
-    prenom: r.user.prenom,
-    email: r.user.email ?? "",
-    structure: r.user.structure?.label ?? "",
-    demandeur: r.user.demandeur?.label ?? "",
-    dispos: dispoLabels(r.disponibilites),
-    periodes: parsePeriodIds(r.periodIds).map((id) => periodLabel.get(id) ?? `#${id}`),
-    autoInscription: r.autoInscription,
-    createdAt: r.createdAt.toISOString(),
-    lastNotifiedAt: r.lastNotifiedAt?.toISOString() ?? null,
-  }));
+  const [allPeriods, visible] = await Promise.all([
+    prisma.period.findMany({ where: { serviceId }, select: { id: true, label: true } }),
+    visiblePeriods(serviceId),
+  ]);
+  const periodLabel = new Map(allPeriods.map((p) => [p.id, p.label]));
+  return rows.map((r) => {
+    const periodIds = parsePeriodIds(r.periodIds);
+    return {
+      id: r.id,
+      userId: r.userId,
+      nom: r.user.nom,
+      prenom: r.user.prenom,
+      email: r.user.email ?? "",
+      structure: r.user.structure?.label ?? "",
+      demandeur: r.user.demandeur?.label ?? "",
+      dispos: dispoLabels(r.disponibilites),
+      periodes: periodIds.map((id) => periodLabel.get(id) ?? `#${id}`),
+      autoInscription: r.autoInscription,
+      createdAt: r.createdAt.toISOString(),
+      lastNotifiedAt: r.lastNotifiedAt?.toISOString() ?? null,
+      echeance: waitlistDeadline(periodIds, visible),
+    };
+  });
 }
 
 /** Retrait d'une entrée par le gestionnaire (bornée au service : anti-IDOR). */
@@ -274,38 +233,41 @@ export async function deleteWaitingEntryById(serviceId: string, id: number): Pro
 
 export type WaitlistTrigger = Extract<
   BookingTrigger,
-  "waitlist_join" | "waitlist_available" | "waitlist_autobook"
+  "waitlist_join" | "waitlist_available" | "waitlist_autobook" | "waitlist_expire"
 >;
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /**
- * E-mail de liste d'attente (inscription / créneaux libérés / inscription automatique) :
- * déclencheur global, destinataires du réglage, variables usager / service /
- * disponibilités / créneaux + bouton vers l'agenda. Best-effort, ne lève jamais.
- */
-/**
- * Libellés des périodes souhaitées d'une inscription, dans l'ordre des périodes de
- * l'exercice visible ; aucune restriction (CSV vide) = TOUTES les périodes de l'exercice
- * (variable {{periodes}} des e-mails de liste d'attente — Dom 2026-09-06).
+ * Libellés des périodes souhaitées d'une inscription, dans l'ordre chronologique ; aucune
+ * restriction (CSV vide, anciennes inscriptions) = TOUTES les périodes de l'exercice
+ * visible (variable {{periodes}} des e-mails de liste d'attente — Dom 2026-09-06). Les
+ * ids figés sont cherchés sur TOUT le service (une inscription échue après une bascule
+ * d'exercice cite encore ses périodes).
  */
 export async function waitlistPeriodLabels(
   serviceId: string,
   periodIds: string | number[],
 ): Promise<string[]> {
-  const periods = await prisma.period.findMany({
-    where: { serviceId, exercice: { visibleToUsers: true } },
-    orderBy: { dateStart: "asc" },
-    select: { id: true, label: true },
-  });
   const wanted = new Set(
     parsePeriodIds(Array.isArray(periodIds) ? periodIds.join(",") : periodIds),
   );
+  const periods = await prisma.period.findMany({
+    where: wanted.size > 0 ? { serviceId } : { serviceId, exercice: { visibleToUsers: true } },
+    orderBy: { dateStart: "asc" },
+    select: { id: true, label: true },
+  });
   const kept = wanted.size > 0 ? periods.filter((p) => wanted.has(p.id)) : periods;
-  return (kept.length > 0 ? kept : periods).map((p) => p.label);
+  return kept.map((p) => p.label);
 }
 
+/**
+ * E-mail de liste d'attente (inscription / créneaux libérés / inscription automatique /
+ * inscription échue) : déclencheur global, destinataires du réglage, variables usager /
+ * service / disponibilités / périodes / créneaux + bouton vers l'agenda. Best-effort, ne
+ * lève jamais.
+ */
 export async function sendWaitlistMail(
   trigger: WaitlistTrigger,
   params: {
@@ -536,20 +498,56 @@ function candidateLabel(c: Candidate): string {
   return c.kind === "rec" && c.periodLabel ? `${base} (${c.periodLabel})` : base;
 }
 
+export type WaitingListRunStats = {
+  services: number;
+  entries: number;
+  notified: number;
+  booked: number;
+  expired: number;
+};
+
 /**
- * Traitement planifié de TOUTES les listes d'attente (services où le réglage est actif),
- * entrées dans l'ordre d'inscription. Idempotent : ne renvoie un e-mail « créneaux
- * libérés » qu'en présence de NOUVEAUX créneaux depuis le dernier envoi.
+ * Traitement planifié de TOUTES les listes d'attente, entrées dans l'ordre d'inscription :
+ * 1. clôture des inscriptions ÉCHUES (périodes souhaitées terminées — tous les services,
+ *    même liste désactivée entre-temps) avec e-mail à l'usager ;
+ * 2. appariement (services où le réglage est actif). Idempotent : ne renvoie un e-mail
+ *    « créneaux libérés » qu'en présence de NOUVEAUX créneaux depuis le dernier envoi.
  */
-export async function runWaitingList(
-  now: Date = new Date(),
-): Promise<{ services: number; entries: number; notified: number; booked: number }> {
-  const stats = { services: 0, entries: 0, notified: 0, booked: 0 };
+export async function runWaitingList(now: Date = new Date()): Promise<WaitingListRunStats> {
+  const stats: WaitingListRunStats = {
+    services: 0,
+    entries: 0,
+    notified: 0,
+    booked: 0,
+    expired: 0,
+  };
+  const today = todayParisISO(now);
   const services = await prisma.service.findMany({
-    where: { listeAttente: true, waitingList: { some: {} } },
-    select: { id: true },
+    where: { waitingList: { some: {} } },
+    select: { id: true, listeAttente: true },
   });
   for (const svc of services) {
+    // 1. Inscriptions échues.
+    const visible = await visiblePeriods(svc.id);
+    const living = await prisma.waitingListEntry.findMany({
+      where: { serviceId: svc.id },
+      select: { id: true, userId: true, disponibilites: true, periodIds: true },
+    });
+    for (const e of living) {
+      if (!waitlistExpired(parsePeriodIds(e.periodIds), visible, today)) continue;
+      const n = await closeWaitingEntries(prisma, { id: e.id }, "EXPIRED");
+      if (n === 0) continue;
+      stats.expired++;
+      await sendWaitlistMail("waitlist_expire", {
+        userId: e.userId,
+        serviceId: svc.id,
+        dispos: e.disponibilites,
+        periodIds: e.periodIds,
+      });
+    }
+    if (!svc.listeAttente) continue;
+
+    // 2. Appariement.
     stats.services++;
     const candidates = await serviceCandidates(svc.id, now);
     const entries = await prisma.waitingListEntry.findMany({
@@ -618,8 +616,9 @@ export async function runWaitingList(
               periodIds: e.periodIds,
               creneaux: [candidateLabel(c)],
             });
-            // Historique : la réservation qui vient d'être créée (créneau + période pour
-            // un récurrent), pour le délai « inscription → place » des statistiques.
+            // Historique : le cœur de réservation a déjà clos l'inscription (issue BOOKED,
+            // réservation liée) dans la transaction — on la requalifie en « inscrit
+            // automatiquement ». Repli (entrée non clôturée) : clôture explicite.
             const booked = await prisma.booking.findFirst({
               where: {
                 userId: e.userId,
@@ -631,7 +630,20 @@ export async function runWaitingList(
               orderBy: { createdAt: "desc" },
               select: { id: true },
             });
-            await closeWaitingEntries(prisma, { id: e.id }, "AUTO_BOOKED", booked?.id ?? null);
+            const requalified = booked
+              ? await prisma.waitingListLog.updateMany({
+                  where: {
+                    userId: e.userId,
+                    serviceId: svc.id,
+                    bookingId: booked.id,
+                    issue: "BOOKED",
+                  },
+                  data: { issue: "AUTO_BOOKED" },
+                })
+              : { count: 0 };
+            if (requalified.count === 0) {
+              await closeWaitingEntries(prisma, { id: e.id }, "AUTO_BOOKED", booked?.id ?? null);
+            }
             stats.booked++;
             done = true;
             break;

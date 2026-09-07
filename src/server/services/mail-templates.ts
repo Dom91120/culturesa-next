@@ -21,6 +21,7 @@ export const TEMPLATE_KINDS = [
   "waitlist_joined",
   "waitlist_available",
   "waitlist_autobooked",
+  "waitlist_expired",
   "email_verification",
   "password_reset",
   "password_changed",
@@ -111,6 +112,7 @@ export const MAIL_VARS: Record<TemplateKind, MailVar[]> = {
   waitlist_joined: WAITLIST_VARS,
   waitlist_available: WAITLIST_VARS,
   waitlist_autobooked: WAITLIST_VARS,
+  waitlist_expired: WAITLIST_VARS,
   email_verification: LINK_VARS,
   password_reset: LINK_VARS,
   two_factor_changed: [
@@ -251,6 +253,14 @@ ${DETAILS_CONFIRMATION}
 <p>Un créneau correspondant à vos disponibilités ({{disponibilites}} — périodes : {{periodes}}) s'est libéré pour « {{service}} » : conformément à votre demande, la réservation a été faite <strong>en votre nom</strong>.</p>
 {{liste_creneaux}}
 <p>Vous recevez par ailleurs l'e-mail habituel de réservation. Vous avez été retiré de la liste d'attente ; vous pouvez consulter ou annuler cette réservation depuis l'agenda.</p>
+<p>{{bouton}}</p>
+<p>Cordialement,<br>L'équipe CultuRésa</p>`,
+  },
+  waitlist_expired: {
+    subject: "Liste d'attente : fin de votre inscription — {{service}}",
+    html: `<p>{{salutation}}</p>
+<p>Les périodes que vous souhaitiez sur la liste d'attente de « {{service}} » ({{periodes}}) sont terminées sans qu'un créneau correspondant à vos disponibilités ({{disponibilites}}) ait pu vous être proposé. Votre inscription est donc close.</p>
+<p>Vous pouvez vous réinscrire à tout moment pour les périodes à venir depuis l'agenda du service.</p>
 <p>{{bouton}}</p>
 <p>Cordialement,<br>L'équipe CultuRésa</p>`,
   },

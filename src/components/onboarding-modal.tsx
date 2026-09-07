@@ -694,6 +694,10 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
             Mieux{"\u00A0"}: avec l'option <strong>réservation automatique</strong>, la place est
             réservée en votre nom dès qu'elle se libère, et vous en êtes informé par e-mail.
           </p>
+          <p style={{ margin: ".55rem 0 0" }}>
+            Votre inscription est close dès que vous obtenez une réservation, ou à la fin des
+            périodes souhaitées.
+          </p>
         </>
       ),
     },

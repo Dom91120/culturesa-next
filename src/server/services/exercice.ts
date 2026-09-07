@@ -8,6 +8,7 @@ import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holida
 import { DEFAULT_OPENING, EXERCICE_OPENING_SELECT } from "@/server/services/opening";
 import { refreshPeriodHolidays } from "@/server/services/periods";
 import { buildMirrorRows, loadMirrorContext, newRecurId } from "@/server/services/slots";
+import { markWaitlistBookingsDeleted } from "@/server/services/waiting-list-close";
 
 // =====================================================================================
 // Types
@@ -559,6 +560,7 @@ export async function undoCycle(serviceId: string): Promise<void> {
       // puis slots (mêmes suppressions, populations disjointes).
       const uniqueSlotIds = [...newMirrorSlotIds, ...newMultiSlotIds];
       if (uniqueSlotIds.length > 0) {
+        await markWaitlistBookingsDeleted(tx, { slotId: { in: uniqueSlotIds } }, "creneau");
         await tx.booking.deleteMany({
           where: { slotId: { in: uniqueSlotIds }, bookingType: "unique" },
         });
@@ -567,6 +569,7 @@ export async function undoCycle(serviceId: string): Promise<void> {
 
       // 2. récurrents : bookings recurring puis slots
       if (newRecurringSlotIds.length > 0) {
+        await markWaitlistBookingsDeleted(tx, { slotId: { in: newRecurringSlotIds } }, "creneau");
         await tx.booking.deleteMany({
           where: { slotId: { in: newRecurringSlotIds }, bookingType: "recurring" },
         });
@@ -575,6 +578,7 @@ export async function undoCycle(serviceId: string): Promise<void> {
 
       // 3. périodes : bookings recurring, fériés, puis périodes
       if (newPeriodIds.length > 0) {
+        await markWaitlistBookingsDeleted(tx, { periodId: { in: newPeriodIds } }, "periode");
         await tx.booking.deleteMany({
           where: { periodId: { in: newPeriodIds }, bookingType: "recurring" },
         });

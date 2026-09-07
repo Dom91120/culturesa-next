@@ -21,48 +21,61 @@ describe("computeWaitlistStats", () => {
       placed: 0,
       placedAvgDays: null,
       outcomes: [],
+      noPlaceDetail: [],
       noPlaceByDemandeur: [],
       noPlaceByStructure: [],
       byMonth: [],
     });
   });
 
-  it("sans place = retraits usager/gestionnaire sans réservation ; placés = auto + réservé", () => {
+  it("sans place = échues + retraits sans réservation ; placés = auto + réservation obtenue", () => {
     const logs = [
       log("2026-09-01T08:00:00.000Z", "2026-09-03T08:00:00.000Z", "AUTO_BOOKED"),
       log("2026-09-01T08:00:00.000Z", "2026-09-05T08:00:00.000Z", "BOOKED"),
       log("2026-09-02T08:00:00.000Z", "2026-09-04T08:00:00.000Z", "LEFT", "Ecole élémentaire", ""),
       log("2026-09-02T08:00:00.000Z", "2026-09-04T08:00:00.000Z", "REMOVED"),
+      log(
+        "2026-09-02T08:00:00.000Z",
+        "2026-09-04T08:00:00.000Z",
+        "EXPIRED",
+        "Ecole élémentaire",
+        "",
+      ),
       log("2026-09-02T08:00:00.000Z", "2026-09-04T08:00:00.000Z", "ANONYMIZED"),
     ];
     const live = [
       { inscritAt: "2026-09-04T12:00:00.000Z", demandeurLabel: "Autres", structureLabel: "" },
     ];
     const s = computeWaitlistStats(logs, live, { dateFrom: null, dateTo: null, nowIso: NOW });
-    expect(s.noPlace).toBe(2);
+    expect(s.noPlace).toBe(3);
     expect(s.placed).toBe(2);
     expect(s.placedAvgDays).toBe(3); // (2 j + 4 j) / 2
     expect(s.waitingNow).toBe(1);
     expect(s.waitingAvgDays).toBe(2);
+    // Anneau : les sans-place sont regroupés ; le détail est à part.
     expect(s.outcomes.map((o) => `${o.label}=${o.value}`)).toEqual([
       "Inscrits automatiquement=1",
-      "Ont réservé eux-mêmes=1",
-      "Retirés sans place=1",
-      "Retirés par le service=1",
+      "Ont obtenu une réservation=1",
+      "Sans place=3",
       "Comptes anonymisés=1",
       "Toujours en attente=1",
+    ]);
+    expect(s.noPlaceDetail.map((o) => `${o.label}=${o.value}`)).toEqual([
+      "Périodes échues sans place=1",
+      "Retirés par l'usager=1",
+      "Retirés par le service=1",
     ]);
     // Sans place : catégorie et structure (repli catégorie quand pas de structure).
     // Égalité de valeurs → ordre alphabétique.
     expect(s.noPlaceByDemandeur).toEqual([
-      { label: "Ecole élémentaire", value: 1 },
+      { label: "Ecole élémentaire", value: 2 },
       { label: "Ecole maternelle", value: 1 },
     ]);
     expect(s.noPlaceByStructure).toEqual([
-      { label: "Ecole élémentaire", value: 1 },
+      { label: "Ecole élémentaire", value: 2 },
       { label: "Maternelle Jules Verne", value: 1 },
     ]);
-    expect(s.byMonth).toEqual([{ label: "9", value: 6 }]);
+    expect(s.byMonth).toEqual([{ label: "9", value: 7 }]);
   });
 
   it("le filtre de dates porte sur la date d'inscription ; « en attente » reste l'état du jour", () => {
@@ -82,7 +95,7 @@ describe("computeWaitlistStats", () => {
     expect(s.noPlace).toBe(1);
     expect(s.waitingNow).toBe(2);
     expect(s.outcomes).toEqual([
-      { label: "Retirés sans place", value: 1 },
+      { label: "Sans place", value: 1 },
       { label: "Toujours en attente", value: 1 },
     ]);
     expect(s.byMonth).toEqual([{ label: "9", value: 2 }]);

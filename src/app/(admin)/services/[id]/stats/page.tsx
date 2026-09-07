@@ -732,13 +732,16 @@ export default async function StatsPage({
         {stats.pending > 0 && (
           <MetricCard value={stats.pending} label="Demandes en attente" color="var(--warn)" />
         )}
-        {/* Liste d'attente (Dom 2026-09-06) : qui n'a pas trouvé de place. */}
-        {wl && (
+        {/* Liste d'attente (Dom 2026-09-06 / 07) : en attente (état du jour), placés, puis
+            sans place — ce dernier compteur se lit en FIN de période ou d'exercice, une fois
+            les inscriptions échues (périodes souhaitées terminées). */}
+        {wl && wl.waitingNow > 0 && (
           <MetricCard
-            value={wl.noPlace}
-            label="Sans place trouvée"
-            color={C_ABSENT}
-            hint="Inscriptions en liste d'attente retirées (par l'usager ou par le service) sans qu'une réservation ait suivi — sur la plage, à la date d'inscription"
+            value={wl.waitingNow}
+            label="En attente aujourd'hui"
+            color="var(--warn)"
+            sub={wl.waitingAvgDays != null ? `depuis ${wl.waitingAvgDays} j en moyenne` : undefined}
+            hint="Usagers actuellement inscrits sur la liste d'attente (état du jour, quel que soit le filtre)"
           />
         )}
         {wl && wl.placed > 0 && (
@@ -747,16 +750,20 @@ export default async function StatsPage({
             label="Placés depuis la liste"
             color={C_PRESENT}
             sub={wl.placedAvgDays != null ? `${wl.placedAvgDays} j en moyenne` : undefined}
-            hint="Inscriptions ayant abouti à une réservation (inscription automatique, ou réservation faite par l'usager après son inscription) et délai moyen inscription → réservation"
+            hint="Inscriptions ayant abouti à une réservation (inscription automatique, ou réservation obtenue après l'inscription) et délai moyen inscription → réservation"
           />
         )}
-        {wl && wl.waitingNow > 0 && (
+        {wl && (
           <MetricCard
-            value={wl.waitingNow}
-            label="En attente aujourd'hui"
-            color="var(--warn)"
-            sub={wl.waitingAvgDays != null ? `depuis ${wl.waitingAvgDays} j en moyenne` : undefined}
-            hint="Usagers actuellement inscrits sur la liste d'attente (état du jour, quel que soit le filtre)"
+            value={wl.noPlace}
+            label="Sans place (périodes échues)"
+            color={C_ABSENT}
+            sub={
+              wl.noPlaceDetail.length > 0
+                ? wl.noPlaceDetail.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(" · ")
+                : undefined
+            }
+            hint="Inscriptions closes sans réservation : périodes souhaitées terminées (clôture automatique) ou retrait par l'usager / le service — à lire en fin de période ou d'exercice, sur la plage (date d'inscription)"
           />
         )}
       </div>
@@ -820,16 +827,14 @@ export default async function StatsPage({
             data={wl.outcomes.map((o) => ({
               ...o,
               color:
-                o.label === "Inscrits automatiquement" || o.label === "Ont réservé eux-mêmes"
-                  ? o.label === "Inscrits automatiquement"
-                    ? C_PRESENT
-                    : "#6dceaa"
-                  : o.label === "Toujours en attente"
-                    ? "#e8a45a"
-                    : o.label === "Comptes anonymisés"
-                      ? C_NONE
-                      : o.label === "Retirés par le service"
-                        ? "#a07dd4"
+                o.label === "Inscrits automatiquement"
+                  ? C_PRESENT
+                  : o.label === "Ont obtenu une réservation"
+                    ? "#6dceaa"
+                    : o.label === "Toujours en attente"
+                      ? "#e8a45a"
+                      : o.label === "Comptes anonymisés"
+                        ? C_NONE
                         : C_ABSENT,
             }))}
             centerValue={String(wl.noPlace)}
@@ -894,7 +899,7 @@ export default async function StatsPage({
         {wl && (
           <Panel
             title="Liste d'attente — sans place par catégorie"
-            hint="Inscriptions retirées sans réservation, catégorie figée au retrait"
+            hint="Inscriptions closes sans réservation (périodes échues, retraits), catégorie figée à la clôture"
             empty={wl.noPlaceByDemandeur.length === 0}
           >
             {wl.noPlaceByDemandeur.map((r) => (
@@ -912,7 +917,7 @@ export default async function StatsPage({
         {wl && (
           <Panel
             title="Liste d'attente — sans place par structure"
-            hint="Inscriptions retirées sans réservation, structure figée au retrait"
+            hint="Inscriptions closes sans réservation (périodes échues, retraits), structure figée à la clôture"
             empty={wl.noPlaceByStructure.length === 0}
           >
             {wl.noPlaceByStructure.map((r) => (

@@ -82,13 +82,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         "Ancienneté moyenne en attente (jours)",
         w.waitingAvgDays != null ? String(w.waitingAvgDays) : "",
       ]);
-      lines.push(["Sans place trouvée", String(w.noPlace)]);
       lines.push(["Placés depuis la liste", String(w.placed)]);
       lines.push([
         "Délai moyen avant une place (jours)",
         w.placedAvgDays != null ? String(w.placedAvgDays) : "",
       ]);
+      lines.push(["Sans place (périodes échues, retraits)", String(w.noPlace)]);
       section("Issue des inscriptions", "Inscriptions", w.outcomes);
+      section("Sans place : détail", "Inscriptions", w.noPlaceDetail);
       section("Sans place par catégorie", "Inscriptions", w.noPlaceByDemandeur);
       section("Sans place par structure", "Inscriptions", w.noPlaceByStructure);
       section("Inscriptions en liste d'attente par mois", "Inscriptions", w.byMonth);

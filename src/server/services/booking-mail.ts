@@ -1,6 +1,6 @@
-import { DAY_NAMES } from "@/lib/agenda-core";
 import { escapeHtml } from "@/lib/email-theme";
 import { greeting } from "@/lib/mail-render";
+import { formatSlotLabel } from "@/lib/slot-label";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { sendMailOrQueue } from "@/server/mailer";
@@ -18,32 +18,9 @@ import { getMailTemplate } from "@/server/services/mail-templates";
 // Notification e-mail envoyée à l'usager lors de la création d'une réservation.
 // Best-effort : ne lève jamais (les échecs d'envoi partent en file via sendMailOrQueue).
 
-// Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
+// Libellé de créneau : lib/slot-label (pur, partagé).
 
-/** Libellé « créneau » lisible : date+heure (ponctuel) ou jour+heure (récurrent). */
-export function formatSlotLabel(slot: {
-  startTime: string;
-  endTime: string;
-  slotDate: Date | null;
-  slotDay: string | null;
-}): string {
-  const s = (slot.startTime || "").slice(0, 5);
-  const e = (slot.endTime || "").slice(0, 5);
-  const time = s && e ? `${s} – ${e}` : "Journée entière";
-  if (slot.slotDate) {
-    // slotDate stocké à minuit UTC → formatage en UTC pour éviter tout décalage de jour.
-    const d = slot.slotDate.toLocaleDateString("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: "UTC",
-    });
-    return `${d} · ${time}`;
-  }
-  const day = slot.slotDay ? (DAY_NAMES[slot.slotDay] ?? slot.slotDay) : "";
-  return [day, time].filter(Boolean).join(" · ");
-}
+export { formatSlotLabel };
 
 type PeriodLabelInput = {
   serviceId: string;

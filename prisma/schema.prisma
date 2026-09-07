@@ -65,6 +65,7 @@ enum WaitingListOutcome {
   BOOKED
   LEFT
   REMOVED
+  EXPIRED
   ANONYMIZED
 }
 
@@ -752,6 +753,14 @@ model WaitingListLog {
   // Réservation obtenue (inscription automatique, ou réservation faite par l'usager
   // après son inscription) ; NULL sinon ou si la réservation a été supprimée depuis.
   bookingId       Int?
+  // Réservation obtenue : créneau et période FIGÉS à la clôture (survivent à la
+  // suppression de la réservation, qui met bookingId à NULL) ; puis, si elle est
+  // supprimée : quand, par qui (gestionnaire) et comment (mode, cf. lib/slot-label).
+  creneauLabel           String    @default("")
+  periodeLabel           String    @default("")
+  reservationSupprimeeAt DateTime? @db.Timestamptz
+  reservationSupprimeePar String   @default("")
+  reservationSupprimeeMode String  @default("")
 
   service Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)

@@ -79,7 +79,8 @@ export function WaitingListAdminModal({
       >
         Dans l'ordre d'inscription. Les inscrits sont prévenus par e-mail dès qu'un créneau
         réservable correspond à leurs disponibilités ; ceux qui l'ont demandé sont inscrits
-        automatiquement, puis retirés de la liste.
+        automatiquement. Toute réservation obtenue retire l'usager de la liste ; une inscription est
+        close d'elle-même à la fin de ses périodes souhaitées (échéance).
       </p>
       {rows.length === 0 ? (
         <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>Aucun inscrit.</p>
@@ -95,6 +96,7 @@ export function WaitingListAdminModal({
                 <th style={{ ...th, textAlign: "center" }}>Auto</th>
                 <th style={th}>Inscrit le</th>
                 <th style={th}>Prévenu le</th>
+                <th style={th}>Échéance</th>
                 <th style={th} />
               </tr>
             </thead>
@@ -118,6 +120,11 @@ export function WaitingListAdminModal({
                   <td style={{ ...td, textAlign: "center" }}>{r.autoInscription ? "Oui" : "—"}</td>
                   <td style={td}>{fmt(r.createdAt)}</td>
                   <td style={td}>{r.lastNotifiedAt ? fmt(r.lastNotifiedAt) : "—"}</td>
+                  <td style={td}>
+                    {r.echeance
+                      ? new Date(`${r.echeance}T12:00:00`).toLocaleDateString("fr-FR")
+                      : "—"}
+                  </td>
                   <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                     <button
                       type="button"
