@@ -485,15 +485,13 @@ main {
   text-align: center;
   position: relative;
 }
-/* Monogramme « CR » : masqué en sidebar dépliée, centré sous le bouton ☰ en condensé.
-   Disque gris aux dimensions / police / graisse de l'avatar de la barre utilisateur
-   (.user-bar .avatar : 30px, .68rem, 700). */
+/* Monogramme « CR » : masqué en sidebar dépliée ; en condensé, dans le flux de l'en-tête
+   (le titre masqué a libéré sa place), juste sous le bouton ☰ (absolu : 12.8px + 22px →
+   bas à 34.8px), à 4px, centré. Disque aux dimensions de l'avatar de la barre utilisateur
+   (.user-bar .avatar : 30px). */
 .sidebar-mark {
   display: none;
-  position: absolute;
-  left: 50%;
-  top: 44px;
-  transform: translateX(-50%);
+  margin: 27px auto 0;
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -503,13 +501,17 @@ main {
   border: 1px solid var(--accent);
   box-sizing: border-box;
   color: #fff;
-  /* Lettres plus grandes et resserrées que l'avatar (Dom 2026-09-06). */
-  font-size: 0.8rem;
+  /* Lettres plus grandes que l'avatar (Dom 2026-09-07 : .9rem), resserrées par la marge
+     négative du C (pas de letter-spacing : il décalerait le duo vers la gauche). */
+  font-size: 0.9rem;
   font-weight: 700;
-  letter-spacing: -0.1em;
+  letter-spacing: 0;
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+.sidebar-mark-c {
+  margin-right: -0.1em;
 }
 .sidebar-tagline {
   font-weight: bold;
@@ -562,18 +564,20 @@ main {
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sb-label {
   display: none !important;
 }
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-title-resa,
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-title em,
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-title,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-tagline,
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-label {
-  visibility: hidden;
-}
-:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-header {
-  /* ☰ (22px à 12.8px du haut) puis le monogramme CR (30px à 44px) + marge : 86px. */
-  height: 86px;
+  /* Masqués ET sans réserver leur place (Dom 2026-09-07) : l'en-tête ne contient plus
+     que le bouton ☰ et le monogramme CR. */
+  display: none;
 }
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sidebar-mark {
   display: flex;
+}
+/* Bouton ☰ absent (fenêtre étroite : réduction forcée, cf. SidebarToggle) → le monogramme
+   prend sa place, en haut (Dom 2026-09-07). */
+#service-sidebar-wrap:not(:has(#sidebar-toggle)) .sidebar-mark {
+  margin-top: 1px;
 }
 :is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap)
   #service-sidebar

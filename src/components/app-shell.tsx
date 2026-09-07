@@ -198,12 +198,16 @@ export function SidebarBrand() {
         <em style={{ color: "var(--accent)", fontStyle: "italic" }}>Résa</em>
       </div>
       <div className="sidebar-tagline">Réservation d&apos;activités culturelles</div>
-      {/* Monogramme « CR » — C blanc, R vert italique comme le « Résa » de la marque — sur
-          un disque gris : mêmes dimensions, police et graisse que l'avatar de la barre
-          utilisateur (.user-bar .avatar), d'où un rendu HTML et non SVG (Dom 2026-09-06).
-          Visible seulement sidebar condensée (CSS .sidebar-mark), sous le bouton ☰. */}
+      {/* Monogramme « CR » (sidebar condensée seulement, CSS .sidebar-mark) : C blanc, R vert
+          italique comme le « Résa » de la marque, disque fond sidebar cerné d'un filet vert ;
+          police, taille et graisse calées sur l'avatar de la barre utilisateur, d'où un rendu
+          HTML. Sous le bouton ☰ ; À SA PLACE quand ce bouton n'est pas affiché (fenêtre
+          étroite, cf. SidebarToggle) — Dom 2026-09-07. Le resserrement C/R est une marge
+          négative sur le C (pas de letter-spacing, qui ajouterait un blanc après le R et
+          décentrerait le duo). */}
       <span className="sidebar-mark" aria-hidden="true">
-        C<em style={{ color: "var(--accent)", fontStyle: "italic" }}>R</em>
+        <span className="sidebar-mark-c">C</span>
+        <em style={{ color: "var(--accent)", fontStyle: "italic" }}>R</em>
       </span>
     </div>
   );
