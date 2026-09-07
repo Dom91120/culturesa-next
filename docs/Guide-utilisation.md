@@ -412,7 +412,9 @@ administrateur, plafond de 24 h ou 8 h), avec leur dernière action (pastille ve
 5 dernières minutes, orange au-delà), la date de connexion, les appareils et le nombre de
 sessions ; le tableau se rafraîchit toutes les 30 secondes. **« Déconnecter »** révoque toutes les sessions d'un compte sur tous ses
 appareils (poste resté ouvert…) et laisse une trace dans le Journal. Aucune adresse IP n'est
-affichée.
+affichée. Le nombre de sessions reste contenu : un utilisateur déjà connecté qui rouvre la page
+de connexion est renvoyé à l'accueil, chaque nouvelle connexion ferme les sessions précédentes
+du même navigateur, et un compte ne garde que ses cinq sessions les plus récentes.
 
 ![Gestion des comptes utilisateurs](img/13-utilisateurs.png)
 

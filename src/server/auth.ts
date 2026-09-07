@@ -25,6 +25,7 @@ import { clearLoginFailures, loginLockSeconds, recordLoginFailure } from "@/serv
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { resolveStructureLibre } from "@/server/services/structures";
 import { SESSION_EXPIRES_IN, SESSION_FRESH_AGE, SESSION_UPDATE_AGE } from "@/server/session-policy";
+import { pruneUserSessions } from "@/server/session-prune";
 
 // Endpoints Better Auth qui définissent/changent un mot de passe : on y impose la
 // politique de complexité (Better Auth ne valide nativement que la longueur min).
@@ -475,8 +476,9 @@ export const auth = betterAuth({
     }),
   },
 
-  // Met à jour `lastLoginAt` à chaque création de session (= chaque connexion,
-  // tous flux confondus). Alimente la détection d'inactivité RGPD (cf. rgpd.ts).
+  // À chaque création de session (= chaque connexion, tous flux confondus) :
+  //  • `lastLoginAt` — alimente la détection d'inactivité RGPD (cf. rgpd.ts) ;
+  //  • élagage des sessions du compte (même navigateur, plafond) — cf. session-prune.ts.
   databaseHooks: {
     session: {
       create: {
@@ -489,6 +491,13 @@ export const auth = betterAuth({
           } catch (e) {
             console.error("[auth] maj lastLoginAt échouée:", e);
           }
+          await pruneUserSessions({
+            id: session.id,
+            userId: session.userId,
+            createdAt: session.createdAt,
+            userAgent: session.userAgent ?? null,
+            ipAddress: session.ipAddress ?? null,
+          });
         },
       },
     },
