@@ -259,7 +259,8 @@ export function UsersTable({
   }
 
   return (
-    <div>
+    // Panneau autour du contenu, comme le sous-onglet « Connectés » (Dom 2026-09-07).
+    <div className="panel">
       <div className="panel-title" style={{ justifyContent: "space-between", gap: ".75rem" }}>
         <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
           <span className="dot" style={{ background: "var(--warn)" }} />

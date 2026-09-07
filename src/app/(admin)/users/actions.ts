@@ -239,7 +239,7 @@ export async function updateUserAction(
     await recordAudit(AUDIT.USER_UPDATED, { target: before?.email ?? d.id });
   }
 
-  revalidatePath("/users");
+  revalidatePath("/users/comptes");
   return { ok: true };
 }
 
@@ -308,7 +308,7 @@ export async function createUserAction(input: CreateUserInput): Promise<ActionSt
     // Non bloquant : le compte existe, l'admin pourra renvoyer un lien.
   }
 
-  revalidatePath("/users");
+  revalidatePath("/users/comptes");
   return { ok: true };
 }
 
@@ -336,7 +336,7 @@ export async function anonymizeUserAction(id: string, password: string): Promise
     target: cible?.email ?? parsed.data,
     details: { mode: "anonymisation" },
   });
-  revalidatePath("/users");
+  revalidatePath("/users/comptes");
   return { ok: true };
 }
 
@@ -364,7 +364,7 @@ export async function deleteEmptyUserAction(id: string): Promise<ActionState> {
     target: victime?.email ?? parsed.data,
     details: { mode: "suppression definitive" },
   });
-  revalidatePath("/users");
+  revalidatePath("/users/comptes");
   return { ok: true };
 }
 
@@ -449,6 +449,32 @@ export async function resetTwoFactorAction(id: string, password: string): Promis
   // privilégié : l'acte doit laisser une trace au même titre qu'un changement de
   // rôle (constat BAC4).
   await recordAudit(AUDIT.USER_2FA_RESET, { target: cible.email });
-  revalidatePath("/users");
+  revalidatePath("/users/comptes");
+  return { ok: true };
+}
+
+/**
+ * Déconnexion FORCÉE d'un compte (Administration › Utilisateurs › Connectés) : révoque
+ * toutes ses sessions, sur tous ses appareils — poste resté ouvert dans une école, compte
+ * suspect… Pas son propre compte (« Se déconnecter » existe pour cela). Journalisé.
+ */
+export async function disconnectUserAction(id: string): Promise<ActionState> {
+  const session = await requireRole("administrateur");
+  const parsed = z.string().min(1).safeParse(id);
+  if (!parsed.success) return { ok: false, error: "Compte introuvable" };
+  if (parsed.data === session.user.id) {
+    return { ok: false, error: "Utilisez « Se déconnecter » pour votre propre compte." };
+  }
+  const cible = await prisma.user.findUnique({
+    where: { id: parsed.data },
+    select: { email: true },
+  });
+  if (!cible) return { ok: false, error: "Compte introuvable" };
+  const r = await prisma.session.deleteMany({ where: { userId: parsed.data } });
+  await recordAudit(AUDIT.USER_SESSIONS_REVOKED, {
+    target: cible.email,
+    details: { sessions: r.count },
+  });
+  revalidatePath("/users/connectes");
   return { ok: true };
 }

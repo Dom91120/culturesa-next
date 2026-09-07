@@ -824,7 +824,7 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
     },
     {
       title: "🛡️ Comptes, messagerie et RGPD",
-      body: "Gérez les utilisateurs et leurs rôles, la messagerie (e-mails) et la conservation des données personnelles (RGPD).",
+      body: "Gérez les utilisateurs et leurs rôles (et voyez qui est connecté), la messagerie (e-mails) et la conservation des données personnelles (RGPD).",
     },
   ],
 };

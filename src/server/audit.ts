@@ -43,6 +43,9 @@ export const AUDIT = {
   // catégorie commande l'accès aux services, le mode validation et le thème
   // obligatoire — un changement en libre-service doit laisser une trace.
   USER_AFFILIATION_CHANGED: "user.affiliation_changed",
+  // Déconnexion forcée d'un compte par un administrateur (Utilisateurs › Connectés) :
+  // toutes ses sessions révoquées.
+  USER_SESSIONS_REVOKED: "user.sessions_revoked",
   // ── Sauvegardes ──
   BACKUP_CREATED: "backup.created",
   BACKUP_RESTORED: "backup.restored",

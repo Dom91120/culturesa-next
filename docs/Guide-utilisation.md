@@ -376,9 +376,17 @@ gestionnaire rattachés.
 
 ### Utilisateurs
 
-La liste des utilisateurs permet de rechercher, filtrer et modifier les comptes : informations,
-**rôle** (utilisateur, gestionnaire, administrateur), structure / service rattaché, services
-gérés et statut RGPD.
+L'onglet a deux sous-onglets. **« Comptes »** : la liste des utilisateurs permet de rechercher,
+filtrer et modifier les comptes : informations, **rôle** (utilisateur, gestionnaire,
+administrateur), structure / service rattaché, services gérés et statut RGPD.
+
+**« Connectés »** liste les comptes dont une session est encore valide au sens de la
+déconnexion automatique (2 h sans action pour un usager, 15 min pour un gestionnaire ou un
+administrateur, plafond de 24 h ou 8 h), avec leur dernière action (pastille verte dans les
+5 dernières minutes, orange au-delà), la date de connexion, les appareils et le nombre de
+sessions ; le tableau se rafraîchit toutes les 30 secondes. **« Déconnecter »** révoque toutes les sessions d'un compte sur tous ses
+appareils (poste resté ouvert…) et laisse une trace dans le Journal. Aucune adresse IP n'est
+affichée.
 
 ![Gestion des comptes utilisateurs](img/13-utilisateurs.png)
 
