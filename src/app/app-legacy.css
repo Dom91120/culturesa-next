@@ -3253,3 +3253,258 @@ textarea.theme-pending:focus::placeholder {
      aussi sur mobile → centrée par rapport à #tab-content-agenda, sur la ligne du titre,
      et hors flux donc sans faire passer le titre à la ligne. (Pas d'override ici.) */
 }
+
+/* ── Comptes / Connectés : tableau de comptes (refonte Dom 2026-09-08) ──────────
+   En-tête clair (plus de bandeau vert), filets fins, pas de zébrures, avatar à
+   initiales, pastilles de statut et de rôle, actions à pictogramme au survol. */
+.acct-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.5rem;
+}
+.acct-toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.acct-toolbar-right .search-wrap {
+  margin-left: 0;
+  flex: 0 1 260px;
+}
+.acct-toolbar .search-wrap input,
+.acct-toolbar .btn {
+  padding-top: 0.22rem;
+  padding-bottom: 0.22rem;
+}
+/* Fenêtre étroite : le bouton « ＋ Ajouter » ne garde que son signe (Dom 2026-09-08). */
+@media (max-width: 1200px) {
+  .acct-add-label {
+    display: none;
+  }
+  .acct-toolbar-right .search-wrap {
+    flex-basis: 200px;
+  }
+}
+.acct-chip {
+  border: 1px solid var(--border-hover);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 99px;
+  padding: 0.16rem 0.6rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.acct-chip:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+.acct-chip.is-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+.acct-chip .n {
+  opacity: 0.7;
+  margin-left: 0.25rem;
+}
+.acct-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  table-layout: fixed;
+}
+.acct-table th {
+  text-align: left;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.2rem 0.55rem;
+  border-bottom: 1px solid var(--border-hover);
+  white-space: nowrap;
+  user-select: none;
+  line-height: 1.4;
+}
+.acct-table th.sortable {
+  cursor: pointer;
+}
+.acct-table th.sortable:hover,
+.acct-table th.sorted {
+  color: var(--text);
+}
+.acct-table td {
+  padding: calc(0.15rem + 3px) 0.55rem;
+  height: 37px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Lignes vides de complément (hauteur de page constante) : pas de filet entre elles,
+   seul le trait de fin de tableau subsiste (Dom 2026-09-08). */
+.acct-table tbody tr[aria-hidden] td {
+  border-bottom: none;
+}
+.acct-table tbody tr[aria-hidden]:last-child td {
+  border-bottom: 1px solid var(--border);
+}
+.acct-table tbody tr[aria-hidden]:hover td {
+  background: transparent;
+}
+.acct-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.acct-table tr.row-checked td {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.acct-table tr.is-anon td {
+  color: var(--muted);
+}
+.acct-table th.col-check,
+.acct-table td.col-check {
+  padding-left: 0.5rem;
+  padding-right: 0.2rem;
+  overflow: visible;
+}
+.acct-who {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.acct-who .name {
+  font-weight: 600;
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct-who .mail {
+  font-size: 0.66rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+  margin-top: 1px;
+}
+.acct-avatar {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.acct-avatar.role-administrateur,
+.acct-pill.role-administrateur {
+  background: rgba(220, 80, 80, 0.15);
+  color: #e05555;
+}
+.acct-avatar.role-gestionnaire,
+.acct-pill.role-gestionnaire {
+  background: rgba(232, 164, 90, 0.16);
+  color: var(--warn);
+}
+.acct-avatar.role-utilisateur,
+.acct-pill.role-utilisateur {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.acct-avatar.is-anon,
+.acct-pill.is-anon {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+}
+.acct-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.08rem 0.5rem;
+  border-radius: 99px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.acct-pill.is-ok {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.acct-pill.is-warn {
+  background: rgba(232, 164, 90, 0.16);
+  color: var(--warn);
+}
+.acct-aff {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.acct-aff svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.acct-aff span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acct-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.15rem;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+.acct-table tbody tr:hover .acct-actions,
+.acct-actions:focus-within {
+  opacity: 1;
+}
+.acct-action {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.acct-action:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--accent);
+}
+.acct-action.is-warn {
+  color: var(--warn);
+}
+.acct-action.is-danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+.acct-action:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.acct-empty td {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--muted);
+}

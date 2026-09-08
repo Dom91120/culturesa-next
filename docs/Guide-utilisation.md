@@ -402,9 +402,18 @@ gestionnaire rattachés.
 
 ### Utilisateurs
 
-L'onglet a deux sous-onglets. **« Comptes »** : la liste des utilisateurs permet de rechercher,
-filtrer et modifier les comptes : informations, **rôle** (utilisateur, gestionnaire,
-administrateur), structure / service rattaché, services gérés et statut RGPD.
+L'onglet a deux sous-onglets. **« Comptes »** : la liste des utilisateurs permet de rechercher
+(nom, e-mail, structure), filtrer et modifier les comptes : informations, **rôle** (utilisateur,
+gestionnaire, administrateur), structure / service rattaché, services gérés et statut RGPD. Des
+**filtres rapides** au-dessus du tableau isolent une population avec son effectif : tous,
+utilisateurs, gestionnaires, administrateurs, **non confirmés**, anonymisés. Chaque ligne montre
+l'avatar et l'e-mail du compte, son **statut** — « Confirmé » (adresse e-mail confirmée),
+« En attente » (le compte ne peut pas encore se connecter) ou « Anonymisé » — son rôle et son
+affiliation. Les actions apparaissent au survol de la ligne : **modifier la fiche** (crayon),
+**exporter les données** RGPD (flèche), **anonymiser** (personne barrée) et, pour un compte en
+attente, **renvoyer le mail de confirmation** (avion). La case à cocher ouvre la barre d'actions
+du bas pour les opérations rares (suppression d'un compte vide, réinitialisation de la double
+authentification).
 
 **« Connectés »** liste les comptes dont une session est encore valide au sens de la
 déconnexion automatique (2 h sans action pour un usager, 15 min pour un gestionnaire ou un

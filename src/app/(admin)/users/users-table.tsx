@@ -7,6 +7,19 @@ import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import type { Role } from "@/generated/prisma/client";
 import { formatTel } from "@/lib/format";
 import {
+  ActionIconButton,
+  Avatar,
+  BuildingGlyph,
+  DownloadGlyph,
+  PencilGlyph,
+  RolePill,
+  SchoolGlyph,
+  SendGlyph,
+  StatusPill,
+  UserOffGlyph,
+  UsersGlyph,
+} from "./account-ui";
+import {
   anonymizeUserAction,
   deleteEmptyUserAction,
   resendVerificationAction,
@@ -45,25 +58,43 @@ export type StructureRef = { id: number; label: string; demandeurId: number };
 export type NiveauRef = { id: number; label: string; demandeurId: number | null };
 export type ServiceRef = { id: string; label: string };
 
-type SortKey = "default" | "nom" | "email" | "role";
+type SortKey = "default" | "nom" | "role";
 
-const ROLE_META: Record<Role, { cls: string; label: string }> = {
-  administrateur: { cls: "role-admin", label: "Admin" },
-  gestionnaire: { cls: "role-gestionnaire", label: "Gestionnaire" },
-  utilisateur: { cls: "role-utilisateur", label: "Utilisateur" },
-};
+// Filtres rapides (puces au-dessus du tableau — refonte Dom 2026-09-08).
+type Filter = "all" | "utilisateur" | "gestionnaire" | "administrateur" | "pending" | "anonymized";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "Tous" },
+  { key: "utilisateur", label: "Utilisateurs" },
+  { key: "gestionnaire", label: "Gestionnaires" },
+  { key: "administrateur", label: "Administrateurs" },
+  { key: "pending", label: "Non confirmés" },
+  { key: "anonymized", label: "Anonymisés" },
+];
+function matchFilter(u: UserRow, f: Filter): boolean {
+  switch (f) {
+    case "all":
+      return true;
+    case "pending":
+      return !u.emailVerified && !u.anonymized;
+    case "anonymized":
+      return u.anonymized;
+    default:
+      return u.role === f;
+  }
+}
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
-// ── Largeurs de colonnes (cf. <colgroup> du tableau) ──
-// Les colonnes d'appoint sont calées en pixels sur leurs contrôles, PADDING DE CELLULE
-// COMPRIS (`.admin-table td` : 0.6rem de chaque côté, soit ~19 px) ; Identité, E-mail et
-// Structure / Service se partagent à parts égales tout ce qui reste.
-const COL_CHECK = 36; // case à cocher 15 px + son padding propre (.col-check)
-const COL_TEL = 116; // « 06 12 34 56 78 » à 0.75rem
-const COL_ROLE = 108; // pastille « GESTIONNAIRE » (0.5rem, majuscules espacées)
-const COL_RGPD = 92; // boutons 📥 et 🗑️ côte à côte
-const COL_TEXT = `calc((100% - ${COL_CHECK + COL_TEL + COL_ROLE + COL_RGPD}px) / 3)`;
+// ── Largeurs de colonnes (cf. <colgroup>) : colonnes d'appoint en pixels, « Compte »
+// et « Structure / Service » se partagent le reste (58 % – 42 %).
+const COL_CHECK = 34;
+const COL_STATUT = 112; // pastille « En attente » avec son pictogramme
+const COL_ROLE = 120; // pastille « Administrateur »
+const COL_TEL = 112; // « 06 12 34 56 78 »
+const COL_ACTIONS = 122; // 4 boutons de 26 px
+const COL_REST = COL_CHECK + COL_STATUT + COL_ROLE + COL_TEL + COL_ACTIONS;
+const COL_COMPTE = `calc((100% - ${COL_REST}px) * 0.58)`;
+const COL_AFF = `calc((100% - ${COL_REST}px) * 0.42)`;
 
 // Barre d'actions sous le tableau : gabarit commun des 4 boutons (rembourrage
 // horizontal resserré pour que le groupe reste compact face à la pagination).
@@ -75,11 +106,10 @@ const ACTION_BTN_STYLE = {
   padding: ".2rem .45rem",
   whiteSpace: "nowrap",
   flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: ".3rem",
 } as const;
-
-// Colonnes d'appoint : la troncature ne les concerne pas — sans ça, elles héritent de
-// l'ellipse de `.admin-table td` et affichent « … » dès qu'un contrôle frôle le bord.
-const NO_ELLIPSIS = { overflow: "visible", textOverflow: "clip" } as const;
 
 // Recherche accent-insensible (réimplémente _normSearch du legacy).
 function normSearch(s: string): string {
@@ -89,12 +119,20 @@ function normSearch(s: string): string {
     .toLowerCase();
 }
 
-function affiliation(u: UserRow): string {
-  if (u.serviceLabels.length) return u.serviceLabels.join(", ");
-  if (u.structureLabel) return u.structureLabel;
-  if (u.demandeurLabel) return u.demandeurLabel;
-  return "—";
+// Affiliation : services gérés (gestionnaire), sinon structure, sinon catégorie — avec un
+// pictogramme qui dit lequel des trois on lit.
+type AffKind = "service" | "structure" | "categorie";
+function affiliation(u: UserRow): { label: string; kind: AffKind | null } {
+  if (u.serviceLabels.length) return { label: u.serviceLabels.join(", "), kind: "service" };
+  if (u.structureLabel) return { label: u.structureLabel, kind: "structure" };
+  if (u.demandeurLabel) return { label: u.demandeurLabel, kind: "categorie" };
+  return { label: "—", kind: null };
 }
+const AFF_GLYPH: Record<AffKind, React.ReactNode> = {
+  service: <BuildingGlyph size={14} />,
+  structure: <SchoolGlyph size={14} />,
+  categorie: <UsersGlyph size={14} />,
+};
 
 // En-tête de colonne triable. Défini HORS du composant : sinon recréé à chaque rendu
 // (nouveau type de composant) → les <th> sont démontés/remontés à chaque rendu.
@@ -113,8 +151,8 @@ function SortTh({
 }) {
   return (
     <th
-      className={sortKey === sk ? "sorted" : undefined}
-      style={{ minWidth, textAlign: "center", cursor: "pointer" }}
+      className={`sortable${sortKey === sk ? " sorted" : ""}`}
+      style={{ minWidth }}
       onClick={() => onSort(sk)}
     >
       {label} <span className="sort-arrow">↕</span>
@@ -139,6 +177,7 @@ export function UsersTable({
   const [pending, startTransition] = useTransition();
 
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("default");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -158,11 +197,23 @@ export function UsersTable({
   // ressaisir pour une simple faute de frappe.
   const [resetErreur, setResetErreur] = useState<string | null>(null);
 
+  // Effectifs des puces (sur TOUS les comptes, indépendants de la recherche).
+  const counts = useMemo(() => {
+    const c = {} as Record<Filter, number>;
+    for (const f of FILTERS) c[f.key] = users.filter((u) => matchFilter(u, f.key)).length;
+    return c;
+  }, [users]);
+
   const filtered = useMemo(() => {
     const q = normSearch(query.trim());
-    const list = q
-      ? users.filter((u) => normSearch(`${u.nom}${u.prenom}${u.email}`).includes(q))
-      : users.slice();
+    const list = users.filter(
+      (u) =>
+        matchFilter(u, filter) &&
+        (!q ||
+          normSearch(
+            `${u.nom}${u.prenom}${u.email}${u.structureLabel ?? ""}${u.serviceLabels.join("")}`,
+          ).includes(q)),
+    );
     list.sort((a, b) => {
       if (sortKey === "default") {
         return (
@@ -178,7 +229,7 @@ export function UsersTable({
       );
     });
     return list;
-  }, [users, query, sortKey]);
+  }, [users, query, filter, sortKey]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -251,82 +302,115 @@ export function UsersTable({
     });
   }
 
-  function resendConfirmation() {
-    if (!selected) return;
+  function resendConfirmation(u: UserRow | null = selected) {
+    if (!u) return;
     startTransition(async () => {
-      await resendVerificationAction(selected.email);
+      await resendVerificationAction(u.email);
     });
   }
 
   return (
     // Panneau autour du contenu, comme le sous-onglet « Connectés » (Dom 2026-09-07).
     <div className="panel">
-      <div className="panel-title" style={{ justifyContent: "space-between", gap: ".75rem" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
-          <span className="dot" style={{ background: "var(--warn)" }} />
-          Comptes utilisateurs
-        </span>
-        <div className="search-wrap">
-          {/* biome-ignore lint/a11y/noSvgWithoutTitle: icône décorative copiée du legacy */}
-          <svg
-            className="search-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-            />
-          </svg>
-          <input
-            type="text"
-            placeholder="Nom, e-mail…"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(0);
-            }}
-          />
-        </div>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => setModal({ mode: "create", user: null })}
-          style={{ padding: ".25rem .65rem", fontSize: ".68rem" }}
-        >
-          ＋ Ajouter
-        </button>
+      <div className="panel-title" style={{ marginBottom: ".55rem" }}>
+        <span className="dot" style={{ background: "var(--warn)" }} />
+        Comptes utilisateurs
+        <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {users.length}</span>
       </div>
 
-      <div className="admin-table-wrap">
-        {/* `table-layout: fixed` : sans lui les largeurs du <colgroup> ne sont que des
-            indications, la répartition suivant le contenu. */}
-        <table className="admin-table zebra" style={{ tableLayout: "fixed" }}>
+      {/* Barre d'outils sur UNE ligne (Dom 2026-09-08) : filtres rapides à gauche — un clic
+          isole une population, l'effectif est celui de tous les comptes, la recherche
+          s'applique ensuite, retour à la page 1 à chaque changement — recherche et
+          « Ajouter » à droite. */}
+      <div className="acct-toolbar">
+        <fieldset
+          aria-label="Filtrer les comptes"
+          style={{
+            border: "none",
+            padding: 0,
+            margin: 0,
+            display: "flex",
+            gap: ".4rem",
+            flexWrap: "wrap",
+          }}
+        >
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              className={`acct-chip${filter === f.key ? " is-on" : ""}`}
+              aria-pressed={filter === f.key}
+              onClick={() => {
+                setFilter(f.key);
+                setPage(0);
+              }}
+            >
+              {f.label}
+              <span className="n">{counts[f.key]}</span>
+            </button>
+          ))}
+        </fieldset>
+        {/* Recherche + « Ajouter » : un seul bloc, qui passe à la ligne d'un tenant et
+            reste aligné à droite quand la place manque (Dom 2026-09-08). */}
+        <div className="acct-toolbar-right">
+          <div className="search-wrap">
+            {/* biome-ignore lint/a11y/noSvgWithoutTitle: icône décorative copiée du legacy */}
+            <svg
+              className="search-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+              />
+            </svg>
+            <input
+              type="text"
+              placeholder="Nom, e-mail, structure…"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setModal({ mode: "create", user: null })}
+            style={{ padding: ".25rem .65rem", fontSize: ".68rem", whiteSpace: "nowrap" }}
+            title="Ajouter un compte"
+          >
+            ＋<span className="acct-add-label"> Ajouter</span>
+          </button>
+        </div>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table className="acct-table" style={{ minWidth: 860 }}>
           <colgroup>
             <col style={{ width: COL_CHECK }} />
-            <col style={{ width: COL_TEXT }} />
-            <col style={{ width: COL_TEXT }} />
-            <col style={{ width: COL_TEL }} />
-            <col style={{ width: COL_TEXT }} />
+            <col style={{ width: COL_COMPTE }} />
+            <col style={{ width: COL_STATUT }} />
             <col style={{ width: COL_ROLE }} />
-            <col style={{ width: COL_RGPD }} />
+            <col style={{ width: COL_AFF }} />
+            <col style={{ width: COL_TEL }} />
+            <col style={{ width: COL_ACTIONS }} />
           </colgroup>
           <thead>
             <tr>
               <th className="col-check" />
-              {/* (Plus de minWidth : les largeurs viennent du <colgroup>.) */}
-              <SortTh label="Identité" sk="nom" sortKey={sortKey} onSort={sortBy} />
-              <SortTh label="E-mail" sk="email" sortKey={sortKey} onSort={sortBy} />
-              <th style={{ textAlign: "center" }}>Téléphone</th>
-              <th style={{ textAlign: "center" }}>Structure / Service</th>
+              <SortTh label="Compte" sk="nom" sortKey={sortKey} onSort={sortBy} />
+              <th title="Adresse e-mail confirmée par l'usager">Statut</th>
               <SortTh label="Rôle" sk="role" sortKey={sortKey} onSort={sortBy} />
-              <th style={{ textAlign: "center" }} title="Export RGPD">
-                RGPD
-              </th>
+              <th>Structure / Service</th>
+              <th>Téléphone</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -337,19 +421,17 @@ export function UsersTable({
                 prev != null &&
                 prev.role !== u.role;
               const checked = selectedId === u.id;
-              const meta = ROLE_META[u.role];
-              const rowClasses = [roleBreak ? "role-break" : "", checked ? "row-checked" : ""]
+              const aff = affiliation(u);
+              const rowClasses = [
+                roleBreak ? "role-break" : "",
+                checked ? "row-checked" : "",
+                u.anonymized ? "is-anon" : "",
+              ]
                 .filter(Boolean)
                 .join(" ");
-              // Compte anonymisé : contenus estompés. Restent pleinement actives la case
-              // à cocher (barre d'actions : modification, suppression d'un compte vide)
-              // et l'exportation RGPD ; la corbeille, elle, est désactivée d'elle-même.
-              const dim: React.CSSProperties | undefined = u.anonymized
-                ? { opacity: 0.45 }
-                : undefined;
               return (
                 <tr key={u.id} className={rowClasses || undefined}>
-                  <td className="col-check" style={NO_ELLIPSIS}>
+                  <td className="col-check">
                     <input
                       type="checkbox"
                       className="admin-cb"
@@ -357,76 +439,85 @@ export function UsersTable({
                       onChange={() => toggleRow(u.id)}
                     />
                   </td>
-                  {/* nowrap : ellipse au lieu de replier sur 2 lignes (hauteur de ligne
-                      constante) ; valeur complète en infobulle. La troncature elle-même
-                      vient de `.admin-table td` (overflow + text-overflow). */}
-                  <td
-                    style={{ whiteSpace: "nowrap", ...dim }}
-                    title={`${u.nom} ${u.prenom}`.trim()}
-                  >
-                    {`${u.nom} ${u.prenom}`.trim() || "—"}
+                  <td>
+                    <div className="acct-who">
+                      <Avatar
+                        prenom={u.prenom}
+                        nom={u.nom}
+                        email={u.email}
+                        role={u.role}
+                        anonymized={u.anonymized}
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="name" title={`${u.nom} ${u.prenom}`.trim()}>
+                          {u.anonymized ? "Compte anonymisé" : `${u.nom} ${u.prenom}`.trim() || "—"}
+                        </div>
+                        <div className="mail" title={u.email}>
+                          {u.email}
+                        </div>
+                      </div>
+                    </div>
                   </td>
-                  <td
-                    style={{ color: "var(--muted)", whiteSpace: "nowrap", ...dim }}
-                    title={u.email}
-                  >
-                    {u.email}
+                  <td>
+                    <StatusPill
+                      status={
+                        u.anonymized ? "anonymized" : u.emailVerified ? "confirmed" : "pending"
+                      }
+                    />
                   </td>
-                  <td style={{ whiteSpace: "nowrap", ...NO_ELLIPSIS, ...dim }}>
-                    {formatTel(u.tel)}
+                  <td>
+                    <RolePill role={u.role} dim={u.anonymized} />
                   </td>
-                  <td style={{ whiteSpace: "nowrap", ...dim }} title={affiliation(u)}>
-                    {affiliation(u)}
-                  </td>
-                  <td style={{ ...NO_ELLIPSIS, ...dim }}>
-                    <span className={`role-pill ${meta.cls}`}>{meta.label}</span>
-                  </td>
-                  <td style={{ textAlign: "center", whiteSpace: "nowrap", ...NO_ELLIPSIS }}>
-                    <a
-                      className="btn btn-ghost"
-                      href={`/rgpd/export?userId=${u.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        padding: ".05rem .45rem",
-                        fontSize: ".7rem",
-                        textDecoration: "none",
-                        marginRight: ".2rem",
-                      }}
-                      title="Exporter (RGPD art. 15)"
-                    >
-                      📥
-                    </a>
-                    {/* Compte déjà anonymisé : même bouton, désactivé (l'info-bulle est
-                        portée par le <span>, un bouton désactivé ne reçoit pas le survol). */}
-                    <span
-                      style={{ display: "inline-block" }}
-                      title={u.anonymized ? "Anonymisé" : "Anonymiser ce compte (RGPD)"}
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        disabled={u.anonymized}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAnonymizeTarget(u);
-                        }}
-                        style={{
-                          padding: ".05rem .45rem",
-                          fontSize: ".7rem",
-                          borderColor: "rgba(224,107,107,.4)",
-                          color: "var(--danger)",
-                        }}
-                      >
-                        🗑️
-                      </button>
+                  <td title={aff.label}>
+                    <span className="acct-aff">
+                      {aff.kind && AFF_GLYPH[aff.kind]}
+                      <span>{aff.label}</span>
                     </span>
+                  </td>
+                  <td>{formatTel(u.tel)}</td>
+                  <td>
+                    {/* Actions de ligne (crayon / flèche / personne barrée / avion — Dom
+                        2026-09-08), révélées au survol ; un compte anonymisé ne garde que
+                        l'export. Les actions rares (suppression d'un compte vide, second
+                        facteur) restent dans la barre sous le tableau, via la case à cocher. */}
+                    <div className="acct-actions">
+                      {!u.anonymized && !u.emailVerified && (
+                        <ActionIconButton
+                          label="Renvoyer le mail de confirmation"
+                          tone="warn"
+                          disabled={pending}
+                          onClick={() => resendConfirmation(u)}
+                        >
+                          <SendGlyph />
+                        </ActionIconButton>
+                      )}
+                      <ActionIconButton
+                        label="Modifier la fiche"
+                        onClick={() => setModal({ mode: "edit", user: u })}
+                      >
+                        <PencilGlyph />
+                      </ActionIconButton>
+                      <ActionIconButton
+                        label="Exporter les données (RGPD art. 15)"
+                        href={`/rgpd/export?userId=${u.id}`}
+                      >
+                        <DownloadGlyph />
+                      </ActionIconButton>
+                      {!u.anonymized && (
+                        <ActionIconButton
+                          label="Anonymiser ce compte (RGPD) : efface les données personnelles, conserve les réservations"
+                          tone="danger"
+                          onClick={() => setAnonymizeTarget(u)}
+                        >
+                          <UserOffGlyph />
+                        </ActionIconButton>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
             })}
-            {/* Lignes vides de complément : hauteur de page constante (20 lignes) */}
+            {/* Lignes vides de complément : hauteur de page constante (15 lignes) */}
             {total > 0 &&
               pageRows.length < PAGE_SIZE &&
               Array.from({ length: PAGE_SIZE - pageRows.length }, (_, i) => (
@@ -436,13 +527,8 @@ export function UsersTable({
                 </tr>
               ))}
             {total === 0 && (
-              <tr>
-                <td
-                  colSpan={7}
-                  style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)" }}
-                >
-                  Aucun compte utilisateur.
-                </td>
+              <tr className="acct-empty">
+                <td colSpan={7}>Aucun compte ne correspond.</td>
               </tr>
             )}
           </tbody>
@@ -520,7 +606,7 @@ export function UsersTable({
               ...ACTION_BTN_STYLE,
             }}
           >
-            ✏️ Modifier
+            <PencilGlyph size={13} /> Modifier
           </button>
           {!selected?.anonymized && (
             <button
@@ -531,7 +617,7 @@ export function UsersTable({
               style={{ ...GHOST_DANGER_STYLE, ...ACTION_BTN_STYLE }}
               title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
             >
-              🗑️ Anonymiser
+              <UserOffGlyph size={13} /> Anonymiser
             </button>
           )}
           {selected?.bookingCount === 0 && (
@@ -550,7 +636,7 @@ export function UsersTable({
             <button
               type="button"
               className="btn btn-ghost"
-              onClick={resendConfirmation}
+              onClick={() => resendConfirmation()}
               disabled={pending}
               style={{
                 borderColor: "rgba(232,164,90,.4)",
@@ -558,7 +644,7 @@ export function UsersTable({
                 ...ACTION_BTN_STYLE,
               }}
             >
-              🖅 Renvoyer le mail de confirmation
+              <SendGlyph size={13} /> Renvoyer le mail de confirmation
             </button>
           )}
           {/* N'apparaît que si un second facteur est effectivement actif : proposer

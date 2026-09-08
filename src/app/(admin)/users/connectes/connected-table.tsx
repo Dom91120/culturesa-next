@@ -2,14 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import type { Role } from "@/generated/prisma/client";
 import type { ConnectedSummary } from "@/lib/connected-users";
+import { ActionIconButton, Avatar, LogoutGlyph, RolePill } from "../account-ui";
 import { disconnectUserAction } from "../actions";
-
-const ROLE_LABEL: Record<string, string> = {
-  utilisateur: "utilisateur",
-  gestionnaire: "gestionnaire",
-  administrateur: "administrateur",
-};
 
 /** « à l'instant », « il y a 12 min », « il y a 5 h », « hier 17:02 »… */
 function relative(iso: string, nowMs: number): string {
@@ -37,11 +33,11 @@ function absolute(iso: string): string {
 }
 
 /**
- * Tableau des utilisateurs connectés (Dom 2026-09-07) : compteurs, un compte par ligne
- * (pastille verte = action dans les 5 dernières minutes, orange = session valide mais sans
- * action récente ; les sessions hors politique d'inactivité ne sont pas listées), bouton
- * « Déconnecter » (révoque toutes les sessions du compte, journalisé). Se rafraîchit
- * toutes les 30 s. Pas d'adresse IP.
+ * Tableau des utilisateurs connectés (Dom 2026-09-07, style commun aux Comptes depuis le
+ * 2026-09-08) : compteurs, un compte par ligne (avatar, pastille verte = action dans les
+ * 5 dernières minutes, orange = session valide sans action récente ; les sessions hors
+ * politique d'inactivité ne sont pas listées), bouton « Déconnecter » (révoque toutes les
+ * sessions du compte, journalisé). Se rafraîchit toutes les 30 s. Pas d'adresse IP.
  */
 export function ConnectedTable({
   summary,
@@ -82,22 +78,6 @@ export function ConnectedTable({
     border: "1px solid var(--border)",
     borderRadius: "var(--radius)",
     padding: ".75rem 1rem",
-  };
-  const th: React.CSSProperties = {
-    textAlign: "left",
-    fontWeight: 600,
-    fontSize: ".62rem",
-    textTransform: "uppercase",
-    letterSpacing: ".08em",
-    color: "var(--muted)",
-    padding: ".35rem .5rem",
-    borderBottom: "1px solid var(--border)",
-  };
-  const td: React.CSSProperties = {
-    padding: ".45rem .5rem",
-    borderBottom: "1px solid var(--border)",
-    fontSize: ".82rem",
-    verticalAlign: "top",
   };
 
   return (
@@ -142,75 +122,99 @@ export function ConnectedTable({
         <p style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucune session ouverte.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="acct-table" style={{ minWidth: 720 }}>
+            <colgroup>
+              <col style={{ width: "34%" }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: 120 }} />
+              <col />
+              <col style={{ width: 52 }} />
+            </colgroup>
             <thead>
               <tr>
-                <th style={th}>Utilisateur</th>
-                <th style={th}>Rôle</th>
-                <th style={th}>Dernière activité</th>
-                <th style={th}>Connecté depuis</th>
-                <th style={th}>Appareils</th>
-                <th style={th} />
+                <th>Compte</th>
+                <th>Rôle</th>
+                <th>Dernière action</th>
+                <th>Connecté depuis</th>
+                <th>Appareils</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {summary.users.map((u) => {
                 const label = `${u.prenom} ${u.nom}`.trim() || u.email;
                 const self = u.userId === selfUserId;
+                const role = u.role as Role;
                 return (
                   <tr key={u.userId}>
-                    <td style={td}>
-                      <span
-                        title={
-                          u.active
-                            ? "Action dans les 5 dernières minutes"
-                            : "Session valide, sans action récente"
-                        }
-                        style={{
-                          display: "inline-block",
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          marginRight: 8,
-                          background: u.active ? "var(--accent)" : "var(--warn)",
-                        }}
-                      />
-                      <span style={{ fontWeight: 600 }}>{label}</span>
-                      {self && (
-                        <span style={{ marginLeft: 6, fontSize: ".68rem", color: "var(--muted)" }}>
-                          (vous)
-                        </span>
-                      )}
-                      <div style={{ fontSize: ".72rem", color: "var(--muted)" }}>{u.email}</div>
+                    <td>
+                      <div className="acct-who">
+                        <Avatar prenom={u.prenom} nom={u.nom} email={u.email} role={role} />
+                        <div style={{ minWidth: 0 }}>
+                          <div className="name" style={{ display: "flex", alignItems: "center" }}>
+                            <span
+                              title={
+                                u.active
+                                  ? "Action dans les 5 dernières minutes"
+                                  : "Session valide, sans action récente"
+                              }
+                              style={{
+                                display: "inline-block",
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                marginRight: 6,
+                                flex: "0 0 auto",
+                                background: u.active ? "var(--accent)" : "var(--warn)",
+                              }}
+                            />
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {label}
+                            </span>
+                            {self && (
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  fontSize: ".68rem",
+                                  color: "var(--muted)",
+                                  fontWeight: 400,
+                                }}
+                              >
+                                (vous)
+                              </span>
+                            )}
+                          </div>
+                          <div className="mail">{u.email}</div>
+                        </div>
+                      </div>
                     </td>
-                    <td style={td}>
-                      <span className="badge">{ROLE_LABEL[u.role] ?? u.role}</span>
+                    <td>
+                      <RolePill role={role} />
                     </td>
-                    <td style={td} title={absolute(u.lastActivity)}>
-                      {relative(u.lastActivity, nowMs)}
-                    </td>
-                    <td style={td}>{absolute(u.since)}</td>
-                    <td style={td}>
+                    <td title={absolute(u.lastActivity)}>{relative(u.lastActivity, nowMs)}</td>
+                    <td>{absolute(u.since)}</td>
+                    <td title={u.devices.join(", ")}>
                       {u.devices.join(", ")}
                       {u.sessions > 1 && (
-                        <div style={{ fontSize: ".72rem", color: "var(--muted)" }}>
-                          {u.sessions} sessions
-                        </div>
+                        <span style={{ color: "var(--muted)" }}> · {u.sessions} sessions</span>
                       )}
                     </td>
-                    <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        style={{ fontSize: ".66rem", padding: ".2rem .5rem" }}
-                        disabled={pending || self}
-                        title={
-                          self ? "Utilisez « Se déconnecter » pour votre propre compte" : undefined
-                        }
-                        onClick={() => disconnect(u.userId, label)}
-                      >
-                        Déconnecter
-                      </button>
+                    <td>
+                      <div className="acct-actions">
+                        <ActionIconButton
+                          label={
+                            self
+                              ? "Utilisez « Se déconnecter » pour votre propre compte"
+                              : `Déconnecter ${label} de tous ses appareils`
+                          }
+                          tone="danger"
+                          disabled={pending || self}
+                          onClick={() => disconnect(u.userId, label)}
+                        >
+                          <LogoutGlyph />
+                        </ActionIconButton>
+                      </div>
                     </td>
                   </tr>
                 );
