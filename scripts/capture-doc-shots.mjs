@@ -142,6 +142,18 @@ try {
     await page.goto(`${BASE}/users/comptes`, { waitUntil: "networkidle0" });
     await page.waitForSelector(".acct-table tbody tr");
     await hideDevtools(page);
+    // Noms et e-mails des personnes RÉELLES floutés (Dom 2026-09-08) ; les comptes de
+    // démonstration (@test.fr, admin seedé, anonymisés) restent lisibles.
+    await page.evaluate(() => {
+      const demo = /@test\.fr$|^informatique@chatillon92\.fr$|@anonymise\.local$/;
+      for (const who of document.querySelectorAll(".acct-table .acct-who")) {
+        const mail = who.querySelector(".mail")?.textContent?.trim() ?? "";
+        if (demo.test(mail)) continue;
+        for (const el of who.querySelectorAll(".name, .mail, .acct-avatar")) {
+          el.style.filter = "blur(5px)";
+        }
+      }
+    });
     const rows = await page.$$(".acct-table tbody tr");
     if (rows[1]) await rows[1].hover();
     await sleep(600);
