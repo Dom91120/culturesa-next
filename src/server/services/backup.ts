@@ -277,7 +277,7 @@ const AUTO_RETAIN = 7;
 // Compté en JOURS et non en « mois » : trois mois calendaires durent entre 89 et 92
 // jours selon la date de départ. Une durée fixe rend la purge prévisible et le test
 // reproductible ; l'écart avec un trimestre exact est sans portée ici.
-const AGE_RETAIN_DAYS = 90; // ≈ 3 mois — arbitrage d'exploitation, 2026-07-30
+export const AGE_RETAIN_DAYS = 90; // ≈ 3 mois — arbitrage d'exploitation, 2026-07-30
 const AGE_RETAIN_MS = AGE_RETAIN_DAYS * 24 * 60 * 60 * 1000;
 
 /** Familles soumises à la rétention par âge (les `culturesa-*` relèvent d'AUTO_RETAIN). */

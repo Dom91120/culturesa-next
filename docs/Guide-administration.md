@@ -133,7 +133,7 @@ docker compose logs -f cron
 ```
 
 Un dump immédiat se déclenche depuis l'admin : « Exécuter maintenant » (Tâches planifiées ›
-CRON) ou « Créer un export maintenant » (Tâches planifiées › Exports).
+CRON) ou « Créer un export » (Tâches planifiées › Exports).
 
 > ⚠️ **Copie hors-site indispensable.** `./backups/` se trouve sur le même disque que la
 > base : en cas de perte du serveur, les sauvegardes disparaissent avec lui. Planifiez une

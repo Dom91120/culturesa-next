@@ -1,13 +1,33 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { ConfirmPasswordModal } from "@/components/confirm-password-modal";
+import {
+  DatabaseExportGlyph,
+  DatabaseGlyph,
+  LockGlyph,
+  LockOpenGlyph,
+  RefreshGlyph,
+  RestoreGlyph,
+  UploadGlyph,
+} from "@/components/ui-glyphs";
 import { INPUT_CHROME } from "@/components/ui-styles";
 import { DATETIME_FMT_FR as dtFmt } from "@/lib/format";
+import type { CronSchedule } from "@/server/services/cron-tasks";
+import { ActionIconButton, DownloadGlyph, TrashGlyph } from "../../users/account-ui";
 import { createBackupAction, deleteBackupAction, restoreBackupAction } from "./actions";
 
-/** Dump sérialisé reçu du serveur (date en ISO string). */
+// ════════════════════════════════════════════════════════════════════════════
+//  Exports de la base — refonte Dom 2026-09-08 (même famille que les Tâches planifiées) :
+//  trois tuiles (dernier export automatique avec point d'état, volume conservé, dumps en
+//  clair à traiter), une ligne par export avec pictogramme teinté par type, avertissement
+//  « en clair » en toutes lettres, date relative et échéance de purge, actions au survol
+//  (télécharger / restaurer / supprimer), bloc de restauration cerné de rouge, explication
+//  en pied.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Dump sérialisé reçu du serveur (dates en ISO string). */
 export type BackupRow = {
   name: string;
   kind: "auto" | "manuel" | "televerse";
@@ -15,12 +35,14 @@ export type BackupRow = {
   mtime: string;
   /** Chiffré au repos ? `false` = dump en clair antérieur au chiffrement (constat D1). */
   encrypted: boolean;
+  /** Purge par âge (manuels / téléversés), ISO ; null pour les automatiques (rotation). */
+  purgeAt: string | null;
 };
 
-const KIND_META: Record<BackupRow["kind"], { label: string; color: string }> = {
-  auto: { label: "Automatique", color: "var(--accent)" },
-  manuel: { label: "Manuel", color: "#e8a45a" },
-  televerse: { label: "Téléversé", color: "var(--slot-uniq-color)" },
+const KIND_META: Record<BackupRow["kind"], { label: string; cls: string }> = {
+  auto: { label: "Automatique", cls: "is-auto" },
+  manuel: { label: "Manuel", cls: "is-manuel" },
+  televerse: { label: "Téléversé", cls: "is-televerse" },
 };
 
 function fmtSize(bytes: number): string {
@@ -29,12 +51,42 @@ function fmtSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+/** « il y a 3 j », « dans 27 j », « à l'instant »… */
+function relative(iso: string, nowMs: number): string {
+  const diff = new Date(iso).getTime() - nowMs;
+  const min = Math.round(Math.abs(diff) / 60000);
+  let txt: string;
+  if (min < 1) txt = "moins d'une minute";
+  else if (min < 60) txt = `${min} min`;
+  else if (min < 48 * 60) txt = `${Math.round(min / 60)} h`;
+  else txt = `${Math.round(min / 1440)} j`;
+  return diff >= 0 ? `dans ${txt}` : `il y a ${txt}`;
+}
+
+/** Libellé court de la planification de l'export automatique. */
+function scheduleText(s: CronSchedule): string {
+  if (s.type === "everyMinutes")
+    return s.step % 60 === 0 ? `toutes les ${s.step / 60} h` : `toutes les ${s.step} min`;
+  return `chaque nuit à ${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")}`;
+}
+
+/** Délai « normal » entre deux exports automatiques : 3 intervalles, ou 26 h à heure fixe. */
+function staleAfterMs(s: CronSchedule): number {
+  return s.type === "everyMinutes" ? s.step * 3 * 60000 : 26 * 3600000;
+}
+
 export function BackupsPanel({
   rows,
   toolsAvailable,
+  schedule,
+  generatedAt,
 }: {
   rows: BackupRow[];
   toolsAvailable: boolean;
+  /** Planification de l'export automatique (sous-onglet CRON). */
+  schedule: CronSchedule;
+  /** Instant du relevé serveur (ISO) : base des libellés relatifs, stable à l'hydratation. */
+  generatedAt: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -46,6 +98,10 @@ export function BackupsPanel({
   // la base entière ne doit pas tenir à un cookie de session.
   const [confirmRestore, setConfirmRestore] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [nowMs, setNowMs] = useState(() => new Date(generatedAt).getTime());
+  useEffect(() => {
+    setNowMs(new Date(generatedAt).getTime());
+  }, [generatedAt]);
 
   function refresh() {
     startTransition(() => {
@@ -62,7 +118,7 @@ export function BackupsPanel({
         setError(res.error ?? "Échec de l'export.");
         return;
       }
-      setInfo("Export créé ✓");
+      setInfo("Export créé.");
       router.refresh();
     });
   }
@@ -106,6 +162,12 @@ export function BackupsPanel({
     }
   }
 
+  function askRestore(name: string) {
+    setRestoreName(name);
+    setError(null);
+    setConfirmRestore(true);
+  }
+
   function restore(password: string) {
     if (!restoreName) return;
     setError(null);
@@ -117,13 +179,24 @@ export function BackupsPanel({
         return;
       }
       setConfirmRestore(false);
-      setInfo("Base restaurée ✓ — rechargement…");
+      setInfo("Base restaurée — rechargement…");
       // Rechargement complet : tout l'état client (données, session) peut avoir changé.
       window.location.reload();
     });
   }
 
-  const btnGhostSmall = { padding: ".25rem .7rem", fontSize: ".72rem" } as const;
+  // Tuiles.
+  const lastAuto = rows
+    .filter((r) => r.kind === "auto")
+    .sort((a, b) => a.mtime.localeCompare(b.mtime))
+    .at(-1);
+  const autoState = !lastAuto
+    ? "warn"
+    : nowMs - new Date(lastAuto.mtime).getTime() > staleAfterMs(schedule)
+      ? "warn"
+      : "ok";
+  const totalSize = rows.reduce((s, r) => s + r.size, 0);
+  const clearCount = rows.filter((r) => !r.encrypted).length;
 
   const modaleRestauration = confirmRestore ? (
     <ConfirmPasswordModal
@@ -146,30 +219,54 @@ export function BackupsPanel({
     </ConfirmPasswordModal>
   ) : null;
 
+  const headBtn = {
+    padding: ".25rem .65rem",
+    fontSize: ".68rem",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: ".35rem",
+  } as const;
+
   return (
     <>
       {modaleRestauration}
       <div className="panel">
-        {/* ── Exports ── */}
-        <div className="panel-title" style={{ padding: ".3rem 0" }}>
-          <span className="dot" style={{ background: "var(--warn)" }} />
-          Exports de la base
-        </div>
-        <p
-          style={{
-            fontSize: ".78rem",
-            color: "var(--muted)",
-            marginBottom: "1rem",
-            lineHeight: 1.5,
-          }}
+        <div
+          className="panel-title"
+          style={{ justifyContent: "space-between", gap: ".75rem", marginBottom: ".7rem" }}
         >
-          Dumps PostgreSQL complets (schéma + données), restaurables tels quels. Un export
-          automatique est créé selon la planification configurée dans le sous-onglet CRON (défaut :
-          chaque nuit à 02h00 ; rotation : les 7 plus récents). Les exports manuels et téléversés
-          échappent à cette rotation mais sont supprimés au bout de <strong>90 jours</strong> : ce
-          sont des copies nominatives complètes, qu&apos;il n&apos;y a pas lieu de conserver
-          indéfiniment. Le dernier export disponible n&apos;est jamais supprimé.
-        </p>
+          <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+            <span className="dot" style={{ background: "var(--warn)" }} />
+            Exports de la base
+            <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {rows.length}</span>
+          </span>
+          <span style={{ display: "inline-flex", gap: ".5rem" }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={refresh}
+              disabled={pending}
+              style={headBtn}
+            >
+              <RefreshGlyph size={13} /> Rafraîchir
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={createNow}
+              disabled={pending || !toolsAvailable}
+              title={toolsAvailable ? "Dump complet immédiat" : "Outils PostgreSQL indisponibles"}
+              style={{
+                ...headBtn,
+                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                color: "var(--accent)",
+                opacity: toolsAvailable ? 1 : 0.4,
+              }}
+            >
+              <DatabaseExportGlyph size={13} /> Créer un export
+            </button>
+          </span>
+        </div>
 
         {!toolsAvailable && (
           <p
@@ -186,50 +283,74 @@ export function BackupsPanel({
           </p>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: ".4rem",
-            flexWrap: "wrap",
-            marginBottom: ".75rem",
-          }}
-        >
-          <span style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={refresh}
-            disabled={pending}
-            style={btnGhostSmall}
-          >
-            🔄 Rafraîchir
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={createNow}
-            disabled={pending || !toolsAvailable}
-            style={{
-              ...btnGhostSmall,
-              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-              color: "var(--accent)",
-              opacity: toolsAvailable ? 1 : 0.4,
-            }}
-          >
-            📦 Créer un export maintenant
-          </button>
+        <div className="cron-kpis">
+          <div className="cron-kpi">
+            <div className="l">Dernier export automatique</div>
+            {lastAuto ? (
+              <>
+                <div className="v" title={dtFmt.format(new Date(lastAuto.mtime))}>
+                  <span className={`cron-dot is-${autoState}`} />
+                  {relative(lastAuto.mtime, nowMs)}
+                </div>
+                <div className="s">
+                  {dtFmt.format(new Date(lastAuto.mtime))} · attendu {scheduleText(schedule)}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="v">
+                  <span className="cron-dot is-warn" />
+                  aucun
+                </div>
+                <div className="s">attendu {scheduleText(schedule)}</div>
+              </>
+            )}
+          </div>
+          <div className="cron-kpi">
+            <div className="l">Exports conservés</div>
+            <div className="v">
+              {rows.length} · {fmtSize(totalSize)}
+            </div>
+            <div className="s">rotation : 7 automatiques ; 90 jours pour les autres</div>
+          </div>
+          <div className="cron-kpi">
+            <div className="l">À traiter</div>
+            {clearCount > 0 ? (
+              <>
+                <div className="v">
+                  <span className="cron-dot is-warn" />
+                  {clearCount} en clair
+                </div>
+                <div className="s">dumps antérieurs au chiffrement : à recréer puis supprimer</div>
+              </>
+            ) : (
+              <>
+                <div className="v">
+                  <span className="cron-dot is-ok" />
+                  rien
+                </div>
+                <div className="s">tous les exports sont chiffrés au repos</div>
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="admin-table-wrap">
-          <table className="admin-table zebra">
+        <div style={{ overflowX: "auto" }}>
+          <table className="acct-table cron-table" style={{ minWidth: 820 }}>
+            <colgroup>
+              <col style={{ width: "46%" }} />
+              <col style={{ width: 120 }} />
+              <col />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 96 }} />
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ textAlign: "center" }}>Fichier</th>
-                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Type</th>
-                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Date</th>
-                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Taille</th>
-                <th style={{ textAlign: "center", width: "1%", whiteSpace: "nowrap" }}>Action</th>
+                <th>Export</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th style={{ textAlign: "right" }}>Taille</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -237,141 +358,140 @@ export function BackupsPanel({
                 const meta = KIND_META[f.kind];
                 return (
                   <tr key={f.name}>
-                    <td style={{ fontFamily: "monospace", fontSize: ".72rem" }}>
-                      {f.name}{" "}
-                      {/* Un dump en clair reste restaurable, mais expose des données
-                        nominatives de mineurs : on le signale sans ambiguïté. */}
-                      <span
-                        title={
-                          f.encrypted
-                            ? "Chiffré au repos (AES-256-GCM)"
-                            : "EN CLAIR — dump antérieur au chiffrement. Recréez-en un puis supprimez celui-ci."
-                        }
-                        style={{ cursor: "help" }}
-                      >
-                        {f.encrypted ? "🔒" : "⚠️"}
-                      </span>
+                    <td>
+                      <div className="cron-task" style={{ alignItems: "center" }}>
+                        <span className={`cron-ico bk-ico ${meta.cls}`}>
+                          {f.kind === "televerse" ? (
+                            <UploadGlyph size={16} />
+                          ) : (
+                            <DatabaseGlyph size={16} />
+                          )}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            className="name"
+                            style={{ fontFamily: "monospace", fontWeight: 500 }}
+                          >
+                            {f.name}
+                          </div>
+                          {/* Un dump en clair reste restaurable, mais expose des données
+                              nominatives de mineurs : on le dit en toutes lettres. */}
+                          {f.encrypted ? (
+                            <div className="cron-sub">
+                              <LockGlyph size={12} /> Chiffré au repos (AES-256-GCM)
+                            </div>
+                          ) : (
+                            <div className="cron-sub" style={{ color: "var(--warn)" }}>
+                              <LockOpenGlyph size={12} /> En clair, antérieur au chiffrement :
+                              recréez un export puis supprimez celui-ci
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </td>
-                    <td style={{ textAlign: "center" }}>
-                      <span style={{ color: meta.color, fontWeight: 600, fontSize: ".7rem" }}>
-                        {meta.label}
-                      </span>
+                    <td>
+                      <span className={`acct-pill bk-pill ${meta.cls}`}>{meta.label}</span>
                     </td>
-                    <td
-                      style={{ textAlign: "center", whiteSpace: "nowrap", color: "var(--muted)" }}
-                    >
-                      {dtFmt.format(new Date(f.mtime))}
+                    <td>
+                      <div>{dtFmt.format(new Date(f.mtime))}</div>
+                      <div className="cron-sub">
+                        {relative(f.mtime, nowMs)}
+                        {f.purgeAt && ` · supprimé ${relative(f.purgeAt, nowMs)}`}
+                      </div>
                     </td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap", color: "var(--muted)" }}>
-                      {fmtSize(f.size)}
-                    </td>
-                    <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                      <a
-                        className="btn btn-ghost"
-                        href={`/api/backups/download?file=${encodeURIComponent(f.name)}`}
-                        style={{
-                          padding: ".05rem .3rem",
-                          fontSize: ".72rem",
-                          textDecoration: "none",
-                          marginRight: ".3rem",
-                        }}
-                        title="Télécharger ce dump"
-                      >
-                        ⬇️
-                      </a>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => deleteOne(f.name)}
-                        disabled={pending}
-                        style={{
-                          padding: ".05rem .3rem",
-                          fontSize: ".72rem",
-                          borderColor: "rgba(224,107,107,.4)",
-                          color: "var(--danger)",
-                        }}
-                        title="Supprimer ce dump"
-                      >
-                        🗑️
-                      </button>
+                    <td style={{ textAlign: "right" }}>{fmtSize(f.size)}</td>
+                    <td>
+                      <div className="acct-actions">
+                        <ActionIconButton
+                          label="Télécharger ce dump"
+                          href={`/api/backups/download?file=${encodeURIComponent(f.name)}`}
+                        >
+                          <DownloadGlyph />
+                        </ActionIconButton>
+                        <ActionIconButton
+                          label="Restaurer la base à partir de cet export"
+                          tone="warn"
+                          disabled={pending || uploading || !toolsAvailable}
+                          onClick={() => askRestore(f.name)}
+                        >
+                          <RestoreGlyph />
+                        </ActionIconButton>
+                        <ActionIconButton
+                          label="Supprimer ce dump"
+                          tone="danger"
+                          disabled={pending}
+                          onClick={() => deleteOne(f.name)}
+                        >
+                          <TrashGlyph />
+                        </ActionIconButton>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
               {rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    style={{
-                      textAlign: "center",
-                      padding: "1.5rem",
-                      color: "var(--muted)",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Aucun export pour l'instant.
-                  </td>
+                <tr className="acct-empty">
+                  <td colSpan={5}>Aucun export pour l'instant.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
 
-        <div style={{ marginTop: ".5rem", fontSize: ".7rem", color: "var(--muted)" }}>
-          {rows.length} export{rows.length > 1 ? "s" : ""}
-        </div>
-
-        {/* ── Restauration ── */}
-        <div className="panel-title" style={{ padding: ".3rem 0", marginTop: "2rem" }}>
-          <span className="dot" style={{ background: "var(--danger)" }} />
-          Restaurer à partir d'un dump
-        </div>
-        <p
-          style={{
-            fontSize: ".78rem",
-            color: "var(--muted)",
-            marginBottom: ".75rem",
-            lineHeight: 1.5,
-          }}
-        >
-          Remplace <strong>l'intégralité</strong> de la base par le contenu du dump sélectionné
-          (tout-ou-rien : en cas d'erreur, la base actuelle est conservée). Choisissez un export de
-          la liste ci-dessus ou téléversez un fichier <code>.sql</code>, <code>.sql.gz</code> ou{" "}
-          <code>.sql.gz.enc</code>. Tout dump téléversé est chiffré avant d&apos;être stocké.
-        </p>
-
-        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
+        {/* ── Restauration : bloc à part, cerné de rouge (remplace toute la base). ── */}
+        <div className="bk-restore">
+          <div style={{ marginRight: "auto", minWidth: 0 }}>
+            <div
+              style={{
+                fontWeight: 600,
+                color: "var(--danger)",
+                display: "flex",
+                alignItems: "center",
+                gap: ".35rem",
+              }}
+            >
+              <RestoreGlyph size={15} /> Restaurer la base
+            </div>
+            <div className="cron-sub">
+              Remplace l'intégralité de la base par un export (tout-ou-rien : en cas d'erreur, la
+              base actuelle est conservée). Un fichier téléversé <code>.sql</code>,{" "}
+              <code>.sql.gz</code> ou <code>.sql.gz.enc</code> est chiffré avant d'être stocké.
+            </div>
+          </div>
           <select
             value={restoreName}
             onChange={(e) => setRestoreName(e.target.value)}
             disabled={pending || uploading}
-            style={{
-              fontSize: ".78rem",
-              padding: ".3rem .5rem",
-              ...INPUT_CHROME,
-              minWidth: 280,
-            }}
+            aria-label="Export à restaurer"
+            style={{ fontSize: ".75rem", padding: ".3rem .5rem", ...INPUT_CHROME, minWidth: 250 }}
           >
-            <option value="">— Choisir un dump —</option>
+            <option value="">Choisir un export…</option>
             {rows.map((f) => (
               <option key={f.name} value={f.name}>
                 {f.name} ({fmtSize(f.size)})
               </option>
             ))}
           </select>
-
           <input
             ref={fileInputRef}
             type="file"
             accept=".sql,.gz,.enc"
             disabled={pending || uploading}
+            hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) void upload(file);
             }}
-            style={{ fontSize: ".72rem", color: "var(--muted)", maxWidth: 260 }}
           />
-
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={pending || uploading}
+            style={headBtn}
+          >
+            <UploadGlyph size={13} /> {uploading ? "Téléversement…" : "Téléverser un fichier"}
+          </button>
           <button
             type="button"
             className="btn btn-ghost"
@@ -381,28 +501,37 @@ export function BackupsPanel({
             }}
             disabled={pending || uploading || !restoreName || !toolsAvailable}
             style={{
-              padding: ".3rem .9rem",
-              fontSize: ".75rem",
+              ...headBtn,
               borderColor: "rgba(224,107,107,.4)",
               color: "var(--danger)",
               opacity: restoreName && toolsAvailable ? 1 : 0.4,
             }}
           >
-            ♻️ Restaurer la base
+            <RestoreGlyph size={13} /> Restaurer
           </button>
         </div>
 
-        {(error || info || uploading) && (
+        {(error || info) && (
           <p
             style={{
-              marginTop: ".75rem",
+              marginTop: ".6rem",
               fontSize: ".78rem",
               color: error ? "var(--danger)" : "var(--accent)",
             }}
           >
-            {error ?? (uploading ? "Téléversement…" : info)}
+            {error ?? info}
           </p>
         )}
+
+        <div className="cron-foot">
+          <span>
+            Dumps PostgreSQL complets (schéma + données), restaurables tels quels. L'export
+            automatique suit la planification du sous-onglet CRON ; seuls les 7 plus récents sont
+            conservés. Les exports manuels et téléversés sont supprimés au bout de 90 jours : ce
+            sont des copies nominatives complètes, qu'il n'y a pas lieu de garder indéfiniment. Le
+            dernier export disponible n'est jamais supprimé.
+          </span>
+        </div>
       </div>
     </>
   );

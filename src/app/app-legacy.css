@@ -644,6 +644,12 @@ main {
 #service-sidebar-wrap #sidebar-admin-btn {
   padding: 0 0.6rem;
 }
+/* Filet services / administration : même trait que le haut du bloc utilisateur. */
+.sidebar-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0.75rem 0.6rem 0.55rem;
+}
 #service-sidebar button,
 #service-sidebar .sidebar-compte-btn,
 #service-sidebar-wrap #sidebar-admin-btn {
@@ -3730,4 +3736,37 @@ textarea.theme-pending:focus::placeholder {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+}
+
+/* ── Exports de la base (refonte Dom 2026-09-08) ─────────────────────────────── */
+.bk-ico.is-auto,
+.bk-pill.is-auto {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.bk-ico.is-manuel,
+.bk-pill.is-manuel {
+  background: rgba(232, 164, 90, 0.16);
+  color: var(--warn);
+}
+.bk-ico.is-televerse,
+.bk-pill.is-televerse {
+  background: color-mix(in srgb, var(--slot-uniq-color) 18%, transparent);
+  color: var(--slot-uniq-color);
+}
+.cron-sub svg {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 0.15rem;
+}
+.bk-restore {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(224, 107, 107, 0.35);
+  border-radius: var(--radius);
+  background: var(--danger-dim);
 }

@@ -145,17 +145,21 @@ export function ConnectedShell({
             ))}
 
             {isAdmin && (
-              <button
-                type="button"
-                id="sidebar-admin-btn"
-                className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
-                style={{ marginTop: "1rem" }}
-                title={effCollapsed ? "Administration" : undefined}
-                onClick={goToAdmin}
-              >
-                <span className="sb-icon">⚙️</span>
-                <span className="sb-label">Administration</span>
-              </button>
+              <>
+                {/* Filet entre les services et l'administration, même trait que celui
+                    qui surmonte le bloc utilisateur (Dom 2026-09-08). */}
+                <hr className="sidebar-divider" />
+                <button
+                  type="button"
+                  id="sidebar-admin-btn"
+                  className={`sidebar-admin-btn${adminActive ? " active" : ""}`}
+                  title={effCollapsed ? "Administration" : undefined}
+                  onClick={goToAdmin}
+                >
+                  <span className="sb-icon">⚙️</span>
+                  <span className="sb-label">Administration</span>
+                </button>
+              </>
             )}
 
             {/* (Plus d'entrée « Mon compte » ici : elle vit dans le menu du bloc

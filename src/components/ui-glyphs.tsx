@@ -129,3 +129,48 @@ export const FileCodeGlyph = (p: GlyphProps) => (
     <path d="M14 13l1 2l-1 2" />
   </Svg>
 );
+
+/** Base de données — export. */
+export const DatabaseGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M12 6m-8 0a8 3 0 1 0 16 0a8 3 0 1 0 -16 0" />
+    <path d="M4 6v6a8 3 0 0 0 16 0v-6" />
+    <path d="M4 12v6a8 3 0 0 0 16 0v-6" />
+  </Svg>
+);
+
+/** Flèche montante — téléverser. */
+export const UploadGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" />
+    <path d="M7 9l5 -5l5 5" />
+    <path d="M12 4l0 12" />
+  </Svg>
+);
+
+/** Cadenas fermé — chiffré. */
+export const LockGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z" />
+    <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" />
+    <path d="M8 11v-4a4 4 0 1 1 8 0v4" />
+  </Svg>
+);
+
+/** Cadenas ouvert — en clair. */
+export const LockOpenGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z" />
+    <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" />
+    <path d="M8 11v-5a4 4 0 0 1 8 0" />
+  </Svg>
+);
+
+/** Flèche de retour circulaire — restaurer. */
+export const RestoreGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
+    <path d="M3 4.001v5h5" />
+    <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+  </Svg>
+);
