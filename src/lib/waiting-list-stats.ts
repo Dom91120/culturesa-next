@@ -67,8 +67,8 @@ export const OUTCOME_LABELS_ROW: Record<WaitlistOutcome, string> = {
   AUTO_BOOKED: "Inscrit automatiquement",
   BOOKED: "A obtenu une réservation",
   EXPIRED: "Périodes échues sans place",
-  LEFT: "Retiré par l'usager",
-  REMOVED: "Retiré par le service",
+  LEFT: "Retiré de la liste d'attente par l'usager",
+  REMOVED: "Retiré de la liste d'attente par le service",
   ANONYMIZED: "Compte anonymisé",
 };
 

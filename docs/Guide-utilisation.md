@@ -222,7 +222,7 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   souhaitées terminées, e-mail à l'usager). **Toute réservation obtenue** sur le service (par
   l'usager, par un gestionnaire ou automatiquement) retire l'usager de la liste. Chaque
   inscription close (inscrit automatiquement, a obtenu une réservation, périodes échues sans
-  place, retiré par l'usager, retiré par le service) est conservée dans un historique qui
+  place, retiré de la liste d'attente par l'usager ou par le service) est conservée dans un historique qui
   alimente les **Statistiques**.
 
 > 💡 Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation

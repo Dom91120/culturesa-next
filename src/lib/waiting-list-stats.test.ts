@@ -120,7 +120,7 @@ describe("OUTCOME_LABELS_ROW", () => {
       expect(OUTCOME_LABELS_ROW[k]).toBeTruthy();
       expect(OUTCOME_LABELS[k]).toBeTruthy();
     }
-    expect(OUTCOME_LABELS_ROW.REMOVED).toBe("Retiré par le service");
+    expect(OUTCOME_LABELS_ROW.REMOVED).toBe("Retiré de la liste d'attente par le service");
     expect(OUTCOME_LABELS_ROW.BOOKED).toBe("A obtenu une réservation");
   });
 });
