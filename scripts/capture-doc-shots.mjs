@@ -2,7 +2,9 @@
 // Usage : le serveur dev (ou prod locale) tourne sur http://localhost:3000, base SEEDÉE
 // (comptes de démo du seed), puis :  node scripts/capture-doc-shots.mjs
 // Produit : docs/img/06-agenda-admin.png, docs/img/03-mon-compte.png,
+//           docs/img/13-utilisateurs.png,
 //           public/onboarding/pointage-mode.png, public/onboarding/validation-mode.png
+// Une seule capture : CAPTURE_ONLY=agenda | compte | utilisateurs
 // Après validation des images : `pnpm gen:docs && pnpm gen:docs:word` (artefacts).
 import fs from "node:fs";
 import puppeteer from "puppeteer";
@@ -16,6 +18,9 @@ const ADMIN = { email: "informatique@chatillon92.fr", password: "Admin123456!" }
 const USAGER = { email: "paul.elementaire@test.fr", password: "Test0123456!" };
 // Gabarit des captures existantes : fenêtre 1380×940 rendue en ×2 (2760×1880).
 const VIEWPORT = { width: 1380, height: 940, deviceScaleFactor: 2 };
+const ONLY = process.env.CAPTURE_ONLY ?? "";
+const want = (name) => !ONLY || ONLY === name;
+const produced = [];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -40,7 +45,7 @@ async function login(page, { email, password }) {
 const browser = await puppeteer.launch({ headless: true, args: ["--hide-scrollbars"] });
 try {
   // ── 1. Agenda admin (docs/img/06-agenda-admin.png) ────────────────────────────────
-  {
+  if (want("agenda")) {
     const ctx = await browser.createBrowserContext();
     const page = await ctx.newPage();
     await page.setViewport(VIEWPORT);
@@ -54,6 +59,7 @@ try {
     await sleep(800); // polices/transitions
     await page.screenshot({ path: "docs/img/06-agenda-admin.png" });
     console.log("✓ docs/img/06-agenda-admin.png");
+    produced.push("docs/img/06-agenda-admin.png");
 
     // ── 3. Barre d'options (public/onboarding) : « Mode pointage » coché, puis
     //      « Mode validation » coché — même cadrage (cases + boutons liste d'attente /
@@ -101,12 +107,13 @@ try {
       path: "public/onboarding/validation-mode.png",
       clip: await optionsClip(),
     });
+    produced.push("public/onboarding/pointage-mode.png", "public/onboarding/validation-mode.png");
     console.log("✓ public/onboarding/validation-mode.png");
     await ctx.close();
   }
 
   // ── 2. Mon compte, côté USAGER (docs/img/03-mon-compte.png) ───────────────────────
-  {
+  if (want("compte")) {
     const ctx = await browser.createBrowserContext();
     const page = await ctx.newPage();
     await page.setViewport(VIEWPORT);
@@ -120,17 +127,33 @@ try {
     await sleep(500);
     await page.screenshot({ path: "docs/img/03-mon-compte.png", fullPage: true });
     console.log("✓ docs/img/03-mon-compte.png");
+    produced.push("docs/img/03-mon-compte.png");
+    await ctx.close();
+  }
+
+  // ── 3. Administration › Utilisateurs › Comptes (docs/img/13-utilisateurs.png) ─────
+  //      Tableau refondu (2026-09-08) : puces de filtre, colonne Compte, pastilles, actions
+  //      au survol de la 2e ligne (compte non confirmé → 4 pictogrammes visibles).
+  if (want("utilisateurs")) {
+    const ctx = await browser.createBrowserContext();
+    const page = await ctx.newPage();
+    await page.setViewport(VIEWPORT);
+    await login(page, ADMIN);
+    await page.goto(`${BASE}/users/comptes`, { waitUntil: "networkidle0" });
+    await page.waitForSelector(".acct-table tbody tr");
+    await hideDevtools(page);
+    const rows = await page.$$(".acct-table tbody tr");
+    if (rows[1]) await rows[1].hover();
+    await sleep(600);
+    await page.screenshot({ path: "docs/img/13-utilisateurs.png" });
+    console.log("✓ docs/img/13-utilisateurs.png");
+    produced.push("docs/img/13-utilisateurs.png");
     await ctx.close();
   }
 } finally {
   await browser.close();
 }
-for (const f of [
-  "docs/img/06-agenda-admin.png",
-  "docs/img/03-mon-compte.png",
-  "public/onboarding/pointage-mode.png",
-  "public/onboarding/validation-mode.png",
-]) {
+for (const f of produced) {
   const { size } = fs.statSync(f);
   console.log(`  ${f} — ${Math.round(size / 1024)} Ko`);
 }
