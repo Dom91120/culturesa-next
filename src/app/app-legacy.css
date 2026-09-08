@@ -3503,6 +3503,40 @@ textarea.theme-pending:focus::placeholder {
   opacity: 0.3;
   cursor: not-allowed;
 }
+/* Variante aérée (Connectés — Dom 2026-09-08 : réglages d'avant la condensation des
+   Comptes) : lignes de 38 px, avatar 28 px, interligne nom / e-mail normal. */
+.acct-table.is-airy td {
+  padding: 0.3rem 0.55rem;
+  height: 38px;
+}
+.acct-table.is-airy th {
+  padding: 0.35rem 0.55rem;
+  font-size: 0.68rem;
+}
+.acct-table.is-airy .acct-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 0.66rem;
+}
+.acct-table.is-airy .acct-who {
+  gap: 0.55rem;
+}
+.acct-table.is-airy .acct-who .name {
+  line-height: 1.2;
+}
+.acct-table.is-airy .acct-who .mail {
+  font-size: 0.7rem;
+  line-height: 1.25;
+  margin-top: 0;
+}
+.acct-table.is-airy .acct-pill {
+  padding: 0.14rem 0.55rem;
+  font-size: 0.68rem;
+}
+.acct-table.is-airy .acct-action {
+  width: 26px;
+  height: 26px;
+}
 .acct-empty td {
   text-align: center;
   padding: 1.5rem;

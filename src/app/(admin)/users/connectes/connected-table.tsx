@@ -122,7 +122,7 @@ export function ConnectedTable({
         <p style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucune session ouverte.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table className="acct-table" style={{ minWidth: 720 }}>
+          <table className="acct-table is-airy" style={{ minWidth: 720 }}>
             <colgroup>
               <col style={{ width: "34%" }} />
               <col style={{ width: 130 }} />
