@@ -3770,3 +3770,290 @@ textarea.theme-pending:focus::placeholder {
   border-radius: var(--radius);
   background: var(--danger-dim);
 }
+
+/* ── RGPD : conservation des données + journal (refonte Dom 2026-09-08) ─────────── */
+.rg-steps {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 0;
+  padding-bottom: 0.85rem;
+}
+.rg-step {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  background: var(--surface1);
+  border: 1px solid var(--border);
+}
+.rg-step .n {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.rg-step .n.is-ok {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.rg-step .n.is-warn {
+  background: rgba(232, 164, 90, 0.2);
+  color: var(--warn);
+}
+.rg-step .n.is-ko {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+.rg-step .l {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.rg-step .v {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-top: 0.1rem;
+}
+.rg-step .v small {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.rg-step .s {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+.rg-arrow {
+  align-self: center;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.rg-settings {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin: 0.2rem 0.2rem 0.4rem;
+}
+.rg-settings label {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+/* Note : bloc calé à droite, texte aligné à gauche ; à l'étroit il se replie sur lui-même
+   (deux lignes, interligne serré) sans quitter la ligne des réglages (Dom 2026-09-08). */
+.rg-settings .note {
+  margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.15;
+}
+.rg-settings input {
+  width: 42px;
+  font-size: 0.7rem;
+  padding: 0.12rem 0.3rem;
+  text-align: center;
+  margin: 0 0.3rem;
+}
+.rg-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0.8rem 0 0.25rem;
+}
+/* Liste des comptes : les colonnes s'adaptent à la largeur du panneau (pas d'ascenseur,
+   Dom 2026-09-08) ; à l'étroit, « Dernière activité » disparaît — le texte de la jauge
+   dit déjà depuis quand le compte est inactif — et les autres colonnes se resserrent. */
+.rg-list {
+  container-type: inline-size;
+}
+/* Ligne d'en-têtes de colonnes (même grille que les lignes de comptes). */
+.rg-head {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) 118px minmax(150px, 1fr) 160px 88px;
+  gap: 0.7rem;
+  padding: 0.3rem 0.5rem;
+  margin-top: 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.rg-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) 118px minmax(150px, 1fr) 160px 88px;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.rg-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.rg-row.is-eligible {
+  background: rgba(232, 164, 90, 0.1);
+}
+.rg-row.is-eligible:hover {
+  background: rgba(232, 164, 90, 0.16);
+}
+.rg-row:hover .acct-actions {
+  opacity: 1;
+}
+/* À l'étroit (voir .rg-list) : placé APRÈS les règles de base pour les surcharger. */
+@container (max-width: 860px) {
+  .rg-head,
+  .rg-row {
+    grid-template-columns: minmax(150px, 1fr) minmax(200px, 1.3fr) 140px 88px;
+    gap: 0.5rem;
+  }
+  .rg-head > :nth-child(2),
+  .rg-row > :nth-child(2) {
+    display: none;
+  }
+}
+.rg-gauge {
+  position: relative;
+  height: 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.rg-gauge i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.rg-gauge i.is-warn {
+  background: var(--warn);
+}
+.rg-gauge b {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--muted);
+}
+.rg-gauge b::after {
+  content: "seuil";
+  position: absolute;
+  top: -13px;
+  left: -11px;
+  font-size: 0.55rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.rg-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+/* Journal : frise chronologique par jour. */
+.rg-tl {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-top: 0.4rem;
+}
+.rg-tl::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  bottom: 6px;
+  border-left: 1.5px solid var(--border-hover);
+}
+.rg-day {
+  position: relative;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0.8rem 0 0.25rem;
+}
+.rg-day::before {
+  content: "";
+  position: absolute;
+  left: -1.25rem;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.rg-ev {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 28px minmax(0, 1fr) 220px;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.rg-ev:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.rg-ev::before {
+  content: "";
+  position: absolute;
+  left: -1.2rem;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--surface1);
+  border: 1.5px solid var(--muted);
+}
+.rg-ico {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.rg-ico.is-danger {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+.rg-ico.is-warn {
+  background: rgba(232, 164, 90, 0.16);
+  color: var(--warn);
+}
+.rg-ico.is-info {
+  background: color-mix(in srgb, var(--slot-uniq-color) 18%, transparent);
+  color: var(--slot-uniq-color);
+}
+.rg-ico.is-neutral {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+}
+.rg-mono {
+  font-family: monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+}

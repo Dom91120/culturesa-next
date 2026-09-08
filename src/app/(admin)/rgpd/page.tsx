@@ -61,6 +61,7 @@ export default async function RgpdAdminPage() {
 
   const auditEntries: AuditEntry[] = logs.map((l) => ({
     id: l.id,
+    at: l.createdAt.toISOString(),
     dateLabel: dtFmt.format(l.createdAt),
     action: l.action,
     target: resolveParty(l.targetUserId),
@@ -68,17 +69,18 @@ export default async function RgpdAdminPage() {
     ip: l.ip,
   }));
 
+  // Instant du relevé : base des délais côté client (stable à l'hydratation).
+  const generatedAt = new Date().toISOString();
+
   return (
     <div>
-      <img
-        src="/RGPD.png"
-        alt="Logo RGPD"
-        style={{ display: "block", height: 100, width: "auto", margin: "1.5rem 0" }}
+      <InactivityScan
+        rows={scanRows}
+        retentionYears={retentionYears}
+        graceDays={graceDays}
+        generatedAt={generatedAt}
       />
-
-      <InactivityScan rows={scanRows} retentionYears={retentionYears} graceDays={graceDays} />
-
-      <AuditLog entries={auditEntries} />
+      <AuditLog entries={auditEntries} generatedAt={generatedAt} />
     </div>
   );
 }

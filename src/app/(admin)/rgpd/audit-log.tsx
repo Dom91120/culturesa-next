@@ -1,8 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { ClockGlyph, HistoryGlyph, MailGlyph, RefreshGlyph } from "@/components/ui-glyphs";
 import { csvCell } from "@/lib/csv";
+import { Avatar, DownloadGlyph, KeyGlyph, TrashGlyph, UserOffGlyph } from "../users/account-ui";
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Journal d'audit RGPD — refonte Dom 2026-09-08 : frise chronologique groupée par jour
+//  (heure, pictogramme teinté par nature d'action, cible, acteur — personne avec avatar
+//  ou tâche planifiée avec horloge), filtres par nature d'action avec effectifs, export
+//  CSV inchangé (l'adresse IP y reste, elle n'est plus affichée à l'écran).
+// ════════════════════════════════════════════════════════════════════════════
 
 /** Personne (cible ou acteur) résolue côté serveur. */
 export type AuditParty = {
@@ -15,6 +24,7 @@ export type AuditParty = {
 /** Entrée de journal sérialisée pour le client. */
 export type AuditEntry = {
   id: number;
+  at: string; // ISO
   dateLabel: string;
   action: string;
   target: AuditParty;
@@ -22,57 +32,152 @@ export type AuditEntry = {
   ip: string | null;
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
 
-// Étiquette lisible (emoji) — port du legacy _rgpdActionLabel, complété des actions Next.
-const ACTION_LABELS: Record<string, string> = {
-  anonymize: "🗑️ Anonymisation",
-  export: "📥 Export JSON",
-  export_json: "📥 Export JSON",
-  export_pdf: "🖨️ Export imprimable",
-  self_delete_requested: "✉️ Demande de suppression",
-  self_delete: "🗑️ Suppression self-service",
-  notice_sent: "📧 Préavis d'inactivité",
-  deletion_notice: "📧 Préavis d'inactivité",
-  password_reset: "🔑 Mot de passe réinitialisé",
-  password_reset_admin_trigger: "🔑 Lien reset envoyé par admin",
-  hard_delete: "🗑️ Suppression dure (compte vide)",
+type Family = "anonymisation" | "export" | "suppression" | "preavis" | "acces";
+const FAMILY_LABEL: Record<Family, string> = {
+  anonymisation: "Anonymisations",
+  export: "Exports",
+  suppression: "Suppressions",
+  preavis: "Préavis",
+  acces: "Accès",
 };
 
-function actionLabel(a: string): string {
-  return ACTION_LABELS[a] ?? a;
+// Libellé lisible + famille (pictogramme, teinte) — port du legacy _rgpdActionLabel,
+// complété des actions Next.
+const ACTION_META: Record<string, { label: string; family: Family }> = {
+  anonymize: { label: "Anonymisation", family: "anonymisation" },
+  export: { label: "Export des données (art. 15)", family: "export" },
+  export_json: { label: "Export des données (art. 15)", family: "export" },
+  export_pdf: { label: "Export imprimable", family: "export" },
+  self_delete_requested: { label: "Demande de suppression par l'usager", family: "suppression" },
+  self_delete: { label: "Suppression par l'usager", family: "suppression" },
+  notice_sent: { label: "Préavis d'inactivité envoyé", family: "preavis" },
+  deletion_notice: { label: "Préavis d'inactivité envoyé", family: "preavis" },
+  password_reset: { label: "Mot de passe réinitialisé", family: "acces" },
+  password_reset_admin_trigger: { label: "Lien de réinitialisation envoyé", family: "acces" },
+  hard_delete: { label: "Suppression définitive d'un compte vide", family: "suppression" },
+};
+
+function actionMeta(a: string): { label: string; family: Family } {
+  return ACTION_META[a] ?? { label: a, family: "acces" };
 }
 
-/** Cellule cible/acteur : "Nom Prénom" + email dessous, ou "—" si vide. */
-function PartyCell({ party, anonTag }: { party: AuditParty; anonTag: boolean }) {
-  if (!party) return <span style={{ color: "var(--muted)" }}>—</span>;
-  const label = party.name || party.email || `#${party.id}`;
+function FamilyIcon({ family }: { family: Family }) {
+  const cls =
+    family === "suppression"
+      ? "is-danger"
+      : family === "anonymisation" || family === "preavis"
+        ? "is-warn"
+        : family === "export"
+          ? "is-info"
+          : "is-neutral";
   return (
-    <span title={`user #${party.id}`}>
-      {label}
-      {anonTag && party.anonymized && (
-        <span style={{ fontSize: ".62rem", color: "var(--muted)" }}> (anonymisé)</span>
-      )}
-      {party.name && party.email && (
-        <>
-          <br />
-          <span style={{ fontSize: ".65rem", color: "var(--muted)" }}>{party.email}</span>
-        </>
-      )}
+    <span className={`rg-ico ${cls}`}>
+      {family === "suppression" && <TrashGlyph size={14} />}
+      {family === "anonymisation" && <UserOffGlyph size={14} />}
+      {family === "preavis" && <MailGlyph size={14} />}
+      {family === "export" && <DownloadGlyph size={14} />}
+      {family === "acces" && <KeyGlyph size={14} />}
     </span>
   );
 }
 
-export function AuditLog({ entries }: { entries: AuditEntry[] }) {
+/** Cible : nom si connu, sinon identifiant technique en chasse fixe. */
+function Target({ party }: { party: AuditParty }) {
+  if (!party) return null;
+  const label = party.name || party.email;
+  if (!label) return <span className="rg-mono">#{party.id}</span>;
+  return (
+    <span style={{ color: "var(--muted)" }}>
+      · {label}
+      {party.anonymized && <span style={{ fontSize: ".66rem" }}> (anonymisé)</span>}
+    </span>
+  );
+}
+
+/** Acteur : personne (avatar) ou automate (tâche planifiée / auto-service). */
+function Actor({ party, action }: { party: AuditParty; action: string }) {
+  if (party?.name || party?.email) {
+    const [nom, ...rest] = (party.name || "").split(" ");
+    return (
+      <div className="acct-who">
+        <Avatar prenom={rest.join(" ")} nom={nom} email={party.email} role="administrateur" />
+        <div style={{ minWidth: 0 }}>
+          <div className="name" style={{ fontWeight: 500 }}>
+            {party.name || party.email}
+          </div>
+          {party.name && party.email && <div className="mail">{party.email}</div>}
+        </div>
+      </div>
+    );
+  }
+  const self = action.startsWith("self_") || action.startsWith("password_reset");
+  return (
+    <div className="acct-who">
+      <span className="rg-ico is-neutral">
+        <ClockGlyph size={14} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div className="name" style={{ fontWeight: 500 }}>
+          {self ? "L'usager lui-même" : "Tâche planifiée"}
+        </div>
+        <div className="mail">{self ? "auto-service" : "rétention RGPD"}</div>
+      </div>
+    </div>
+  );
+}
+
+const DAY_FMT = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+const TIME_FMT = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+function dayLabel(iso: string, todayYmd: string, yesterdayYmd: string): string {
+  const d = new Date(iso);
+  const ymd = d.toISOString().slice(0, 10);
+  const long = DAY_FMT.format(d);
+  const cap = long.charAt(0).toUpperCase() + long.slice(1);
+  if (ymd === todayYmd) return `Aujourd'hui · ${cap}`;
+  if (ymd === yesterdayYmd) return `Hier · ${cap}`;
+  return `${cap}${d.getFullYear() !== new Date(todayYmd).getFullYear() ? ` ${d.getFullYear()}` : ""}`;
+}
+
+export function AuditLog({ entries, generatedAt }: { entries: AuditEntry[]; generatedAt: string }) {
   const router = useRouter();
   const [page, setPage] = useState(0);
+  const [family, setFamily] = useState<Family | "all">("all");
   const [pending, startTransition] = useTransition();
 
-  const total = entries.length;
+  const counts = useMemo(() => {
+    const c: Record<Family, number> = {
+      anonymisation: 0,
+      export: 0,
+      suppression: 0,
+      preavis: 0,
+      acces: 0,
+    };
+    for (const e of entries) c[actionMeta(e.action).family]++;
+    return c;
+  }, [entries]);
+
+  const filtered = useMemo(
+    () =>
+      family === "all" ? entries : entries.filter((e) => actionMeta(e.action).family === family),
+    [entries, family],
+  );
+  const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const current = Math.min(page, totalPages - 1);
   const from = current * PAGE_SIZE;
-  const pageRows = entries.slice(from, from + PAGE_SIZE);
+  const pageRows = filtered.slice(from, from + PAGE_SIZE);
+
+  const todayYmd = generatedAt.slice(0, 10);
+  const yesterdayYmd = new Date(new Date(generatedAt).getTime() - 86_400_000)
+    .toISOString()
+    .slice(0, 10);
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -83,7 +188,7 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
     const lines = entries.map((e) =>
       [
         e.dateLabel,
-        actionLabel(e.action),
+        actionMeta(e.action).label,
         e.target?.name || e.target?.email || (e.target ? `#${e.target.id}` : ""),
         e.target?.email ?? "",
         e.actor?.name || e.actor?.email || (e.actor ? `#${e.actor.id}` : ""),
@@ -104,132 +209,149 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
     URL.revokeObjectURL(url);
   }
 
-  return (
-    <div style={{ marginTop: "2rem" }}>
-      <div className="panel-title" style={{ padding: ".3rem 0" }}>
-        <span className="dot" style={{ background: "var(--warn)" }} />
-        Journal d&apos;audit
-      </div>
-      <p
-        style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          marginBottom: "1rem",
-          lineHeight: 1.5,
-          textAlign: "justify",
-        }}
-      >
-        Trace toutes les actions RGPD effectuées sur l&apos;application (anonymisations, exports,
-        etc.). Cette journalisation est requise par le principe de redevabilité (RGPD art. 5.2) — ne
-        contient pas de données nominatives.
-      </p>
+  const headBtn = {
+    padding: ".25rem .65rem",
+    fontSize: ".68rem",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: ".35rem",
+  } as const;
 
+  let lastDay = "";
+
+  return (
+    <div className="panel" style={{ marginTop: "1rem" }}>
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: ".5rem",
-          flexWrap: "wrap",
-          marginBottom: ".5rem",
-        }}
+        className="panel-title"
+        style={{ justifyContent: "space-between", gap: ".75rem", marginBottom: ".5rem" }}
       >
-        <div style={{ marginLeft: "auto", display: "flex", gap: ".4rem" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+          <span className="rg-ico is-neutral">
+            <HistoryGlyph size={16} />
+          </span>
+          Journal d&apos;audit RGPD
+          <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {entries.length}</span>
+        </span>
+        <span style={{ display: "inline-flex", gap: ".5rem" }}>
           <button
             type="button"
             className="btn btn-ghost"
             onClick={refresh}
             disabled={pending}
-            style={{ padding: ".15rem .55rem", fontSize: ".7rem" }}
+            style={headBtn}
           >
-            🔄 Rafraîchir
+            <RefreshGlyph size={13} /> Rafraîchir
           </button>
           <button
             type="button"
             className="btn btn-ghost"
             onClick={exportCsv}
-            disabled={total === 0}
-            style={{ padding: ".15rem .55rem", fontSize: ".7rem" }}
+            disabled={entries.length === 0}
+            style={headBtn}
           >
-            📥 Export CSV
+            <DownloadGlyph size={13} /> CSV
           </button>
-        </div>
+        </span>
+      </div>
+
+      <div className="acct-toolbar" style={{ marginBottom: ".2rem" }}>
+        <button
+          type="button"
+          className={`acct-chip${family === "all" ? " is-on" : ""}`}
+          aria-pressed={family === "all"}
+          onClick={() => {
+            setFamily("all");
+            setPage(0);
+          }}
+        >
+          Tout<span className="n">{entries.length}</span>
+        </button>
+        {(Object.keys(FAMILY_LABEL) as Family[])
+          .filter((f) => counts[f] > 0)
+          .map((f) => (
+            <button
+              key={f}
+              type="button"
+              className={`acct-chip${family === f ? " is-on" : ""}`}
+              aria-pressed={family === f}
+              onClick={() => {
+                setFamily(f);
+                setPage(0);
+              }}
+            >
+              {FAMILY_LABEL[f]}
+              <span className="n">{counts[f]}</span>
+            </button>
+          ))}
       </div>
 
       {total === 0 ? (
-        <div
-          style={{
-            fontSize: ".78rem",
-            color: "var(--muted)",
-            fontStyle: "italic",
-            padding: ".5rem",
-          }}
-        >
+        <p style={{ fontSize: ".8rem", color: "var(--muted)", margin: ".8rem 0 0" }}>
           Aucune action RGPD journalisée pour le moment.
-        </div>
+        </p>
       ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table zebra">
-            <thead>
-              <tr>
-                <th style={{ textAlign: "center" }}>Date</th>
-                <th style={{ textAlign: "center" }}>Action</th>
-                <th style={{ textAlign: "center" }}>Cible</th>
-                <th style={{ textAlign: "center" }}>Acteur</th>
-                <th style={{ textAlign: "center" }}>IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((e) => (
-                <tr key={e.id}>
-                  <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{e.dateLabel}</td>
-                  <td>{actionLabel(e.action)}</td>
-                  <td>
-                    <PartyCell party={e.target} anonTag />
-                  </td>
-                  <td>
-                    <PartyCell party={e.actor} anonTag={false} />
-                  </td>
-                  <td style={{ color: "var(--muted)", fontFamily: "monospace", fontSize: ".7rem" }}>
-                    {e.ip || "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="rg-tl">
+          {pageRows.map((e) => {
+            const day = dayLabel(e.at, todayYmd, yesterdayYmd);
+            const showDay = day !== lastDay;
+            lastDay = day;
+            const meta = actionMeta(e.action);
+            return (
+              <div key={e.id}>
+                {showDay && <div className="rg-day">{day}</div>}
+                <div className="rg-ev">
+                  <span style={{ color: "var(--muted)", fontSize: ".72rem" }}>
+                    {TIME_FMT.format(new Date(e.at))}
+                  </span>
+                  <FamilyIcon family={meta.family} />
+                  <div
+                    style={{
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {meta.label} <Target party={e.target} />
+                  </div>
+                  <Actor party={e.actor} action={e.action} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {total > 0 && (
-        <div style={{ display: "flex", alignItems: "center", marginTop: ".6rem" }}>
-          <span style={{ flex: 1, fontSize: ".72rem", color: "var(--muted)" }}>
-            {total} entrée{total > 1 ? "s" : ""}
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
-              disabled={current === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >
-              ‹
-            </button>
-            <span style={{ fontSize: ".7rem", color: "var(--muted)" }}>
-              {current + 1} / {totalPages}
-            </span>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
-              disabled={current >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            >
-              ›
-            </button>
-          </div>
-          <span style={{ flex: 1 }} />
-        </div>
-      )}
+      <div className="rg-foot">
+        <span>
+          {total === 0
+            ? "Journal immuable, sans donnée nominative"
+            : `${from + 1}–${from + pageRows.length} sur ${total} · journal immuable, sans donnée nominative`}
+        </span>
+        <span
+          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: ".4rem" }}
+        >
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
+            disabled={current === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            ‹
+          </button>
+          {current + 1} / {totalPages}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
+            disabled={current >= totalPages - 1}
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+          >
+            ›
+          </button>
+        </span>
+      </div>
     </div>
   );
 }

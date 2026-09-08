@@ -174,3 +174,53 @@ export const RestoreGlyph = (p: GlyphProps) => (
     <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
   </Svg>
 );
+
+/** Bouclier et coche — conservation des données (RGPD). */
+export const ShieldCheckGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06" />
+    <path d="M15 19l2 2l4 -4" />
+  </Svg>
+);
+
+/** Horloge et flèche — journal / historique. */
+export const HistoryGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M12 8l0 4l2 2" />
+    <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5" />
+  </Svg>
+);
+
+/** Horloge — tâche planifiée (acteur automatique). */
+export const ClockGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+    <path d="M12 7v5l3 3" />
+  </Svg>
+);
+
+/** Enveloppe — préavis, e-mail. */
+export const MailGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" />
+    <path d="M3 7l9 6l9 -6" />
+  </Svg>
+);
+
+/** Triangle d'alerte — au-delà du seuil. */
+export const AlertGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M12 9v4" />
+    <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z" />
+    <path d="M12 16h.01" />
+  </Svg>
+);
+
+/** Flèche droite — enchaînement des étapes. */
+export const ArrowRightGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M5 12l14 0" />
+    <path d="M13 18l6 -6" />
+    <path d="M13 6l6 6" />
+  </Svg>
+);

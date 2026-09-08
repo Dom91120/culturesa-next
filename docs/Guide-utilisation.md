@@ -457,9 +457,14 @@ système** (vérification de compte, réinitialisation de mot de passe, etc.) et
 
 ### RGPD et conservation des données
 
-L'onglet **RGPD** permet de repérer les **comptes inactifs**, de déclencher un **avis de
-suppression** (délai de grâce de 30 jours), d'**anonymiser** des comptes et de consulter le
-**journal d'audit** (historique immuable des actions liées aux données personnelles).
+L'onglet **RGPD** présente la **conservation des données** en trois étapes : inactivité
+tolérée (seuil en années), **préavis** de suppression par e-mail, puis **anonymisation** passé
+le délai de grâce (30 jours par défaut), avec l'effectif de comptes à chaque étape. Les comptes
+sont regroupés — « Au-delà du seuil » d'abord, puis « Actifs » — avec une jauge d'inactivité
+rapportée au seuil et, au survol, les actions : export des données, envoi du préavis,
+anonymisation. Le **journal d'audit** (historique immuable des actions liées aux données
+personnelles) se lit en frise chronologique par jour, filtrable par nature d'action, et
+s'exporte en CSV.
 
 ![RGPD : conservation des données et journal d'audit](img/15-rgpd.png)
 
