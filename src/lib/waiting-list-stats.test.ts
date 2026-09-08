@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeWaitlistStats, type WaitlistLogRow } from "./waiting-list-stats";
+import {
+  computeWaitlistStats,
+  OUTCOME_LABELS,
+  OUTCOME_LABELS_ROW,
+  type WaitlistLogRow,
+} from "./waiting-list-stats";
 
 const log = (
   inscritAt: string,
@@ -99,5 +104,23 @@ describe("computeWaitlistStats", () => {
       { label: "Toujours en attente", value: 1 },
     ]);
     expect(s.byMonth).toEqual([{ label: "9", value: 2 }]);
+  });
+});
+
+describe("OUTCOME_LABELS_ROW", () => {
+  it("une issue par ligne, au singulier, pour chaque valeur de l'enum", () => {
+    for (const k of [
+      "AUTO_BOOKED",
+      "BOOKED",
+      "LEFT",
+      "REMOVED",
+      "EXPIRED",
+      "ANONYMIZED",
+    ] as const) {
+      expect(OUTCOME_LABELS_ROW[k]).toBeTruthy();
+      expect(OUTCOME_LABELS[k]).toBeTruthy();
+    }
+    expect(OUTCOME_LABELS_ROW.REMOVED).toBe("Retiré par le service");
+    expect(OUTCOME_LABELS_ROW.BOOKED).toBe("A obtenu une réservation");
   });
 });

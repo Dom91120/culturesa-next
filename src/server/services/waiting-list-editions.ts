@@ -9,7 +9,7 @@ import {
   demandByPeriod,
   type PeriodDemand,
 } from "@/lib/waiting-list-editions";
-import { OUTCOME_LABELS, type WaitlistOutcome } from "@/lib/waiting-list-stats";
+import { OUTCOME_LABELS_ROW, type WaitlistOutcome } from "@/lib/waiting-list-stats";
 import { prisma } from "@/server/db";
 
 // ─── Éditions de la liste d'attente (onglet Éditions, Dom 2026-09-07) ─────────────
@@ -166,7 +166,7 @@ export async function listWaitingHistory(
       clotureYmd: toYmd(r.clotureAt),
       delaiJours: daysBetween(r.inscritAt.toISOString(), r.clotureAt.toISOString()),
       issue: r.issue,
-      issueLabel: OUTCOME_LABELS[r.issue],
+      issueLabel: OUTCOME_LABELS_ROW[r.issue],
       reservation,
       suppression,
     };

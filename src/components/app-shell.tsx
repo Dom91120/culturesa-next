@@ -204,8 +204,8 @@ export function SidebarBrand() {
           HTML. Sous le bouton ☰ ; À SA PLACE quand ce bouton n'est pas affiché (fenêtre
           étroite, cf. SidebarToggle) — Dom 2026-09-07. Le resserrement C/R est une marge
           négative sur le C (pas de letter-spacing, qui ajouterait un blanc après le R et
-          décentrerait le duo). */}
-      <span className="sidebar-mark" aria-hidden="true">
+          décentrerait le duo). Info-bulle native « CultuRésa » au survol (Dom 2026-09-08). */}
+      <span className="sidebar-mark" aria-hidden="true" title="CultuRésa">
         <span className="sidebar-mark-c">C</span>
         <em style={{ color: "var(--accent)", fontStyle: "italic" }}>R</em>
       </span>

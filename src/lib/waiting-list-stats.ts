@@ -62,6 +62,16 @@ export const OUTCOME_LABELS: Record<WaitlistOutcome | "WAITING" | "NO_PLACE", st
   NO_PLACE: "Sans place",
 };
 
+/** Mêmes issues au SINGULIER, pour une ligne d'historique (éditions — Dom 2026-09-08). */
+export const OUTCOME_LABELS_ROW: Record<WaitlistOutcome, string> = {
+  AUTO_BOOKED: "Inscrit automatiquement",
+  BOOKED: "A obtenu une réservation",
+  EXPIRED: "Périodes échues sans place",
+  LEFT: "Retiré par l'usager",
+  REMOVED: "Retiré par le service",
+  ANONYMIZED: "Compte anonymisé",
+};
+
 const DAY_MS = 86_400_000;
 
 function ymd(iso: string): string {
