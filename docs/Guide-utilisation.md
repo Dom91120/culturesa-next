@@ -393,8 +393,8 @@ URL, intervalles de rafraîchissement automatique, mode debug) et l'accès aux *
 en plus du nom et de l'icône, un **e-mail de contact** générique (ex.
 `maisondesarts@chatillon92.fr`) proposé aux usagers quand plus aucune place n'est disponible ;
 s'il est renseigné, c'est aussi lui qui reçoit les e-mails adressés au service (absences prévenues,
-récapitulatifs de réservations, déclencheurs réglés sur « gestionnaires ») à la place des comptes
-gestionnaire rattachés.
+récapitulatifs de réservations, déclencheurs dont le destinataire est « Le service ») à la place
+des comptes gestionnaire rattachés.
 
 ![Configuration générale et référentiels](img/12-configuration-referentiels.png)
 

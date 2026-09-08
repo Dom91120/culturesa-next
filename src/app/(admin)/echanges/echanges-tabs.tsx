@@ -66,8 +66,10 @@ export function EchangesAdminTabs({
           >
             Pour chaque action, choisissez le type d&apos;e-mail envoyé, son destinataire et
             activez/désactivez son envoi. Ces réglages sont{" "}
-            <strong>communs à tous les services</strong>. Le contenu de chaque type se règle dans
-            «&nbsp;Modèles d&apos;e-mails&nbsp;».
+            <strong>communs à tous les services</strong>. Le destinataire «&nbsp;Le service&nbsp;»
+            désigne l&apos;e-mail de contact du service s&apos;il est renseigné dans le référentiel
+            Services, sinon les comptes de ses gestionnaires. Le contenu de chaque type se règle
+            dans «&nbsp;Modèles d&apos;e-mails&nbsp;».
           </p>
           <MailRoutingTable rows={routingRows} kindOptions={kindOptions} />
           <ValidationNoticeDelayField initial={validationNoticeDelay} />
