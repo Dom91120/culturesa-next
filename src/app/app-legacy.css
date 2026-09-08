@@ -3542,3 +3542,192 @@ textarea.theme-pending:focus::placeholder {
   padding: 1.5rem;
   color: var(--muted);
 }
+
+/* ── Tâches planifiées (refonte Dom 2026-09-08, même famille que les Comptes) ─────── */
+.cron-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.6rem;
+  margin: 0 0 0.9rem;
+}
+.cron-kpi {
+  background: var(--surface1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.9rem;
+  min-width: 0;
+}
+.cron-kpi .l {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.cron-kpi .v {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cron-kpi .s {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 0.1rem;
+}
+.cron-ico {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cron-ico.is-metier {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.cron-ico.is-tech {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+}
+.cron-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.cron-task .name {
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cron-task .desc {
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: normal;
+  margin-top: 0.1rem;
+  /* Deux lignes au plus ; texte complet en infobulle. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Médaillon de planification, sur DEUX lignes (Dom 2026-09-08) : pictogramme à gauche,
+   type (« Toutes les » / « Tous les jours à ») au-dessus de la valeur. Les champs vivent
+   dans le médaillon, sans bordure. */
+.cron-sched {
+  display: inline-grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.4rem;
+  row-gap: 0.05rem;
+  align-items: center;
+  padding: 0.2rem 0.6rem 0.2rem 0.5rem;
+  border: 1px solid var(--border-hover);
+  border-radius: 12px;
+  font-size: 0.7rem;
+  color: var(--text);
+  white-space: nowrap;
+  /* Largeur FIXE (Dom 2026-09-08) : les champs se dimensionnent sur leur valeur
+     (field-sizing) sans faire varier le médaillon. */
+  width: 8.6rem;
+  box-sizing: border-box;
+}
+.cron-sched svg {
+  color: var(--muted);
+  grid-row: 1 / 3;
+}
+.cron-sched select,
+.cron-sched input {
+  font-family: inherit;
+  font-size: 0.7rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 0;
+}
+.cron-sched select {
+  /* Largeur = option SÉLECTIONNÉE (et non la plus longue) : le chevron colle au texte.
+     Navigateurs sans field-sizing : largeur native (option la plus longue). */
+  field-sizing: content;
+  max-width: 7.2rem;
+  justify-self: start;
+}
+.cron-sched input[type="time"] {
+  /* Largeur au contenu (l'horloge colle à l'heure, comme le chevron au texte) ;
+     repli 4.6rem sans field-sizing. Le texte d'un <select> natif est en retrait de
+     quelques pixels : on cale l'heure sur le texte du type, juste au-dessus. */
+  width: 4.6rem;
+  field-sizing: content;
+  padding-left: 4px;
+  justify-self: start;
+}
+@supports (field-sizing: content) {
+  .cron-sched input[type="time"] {
+    width: auto;
+  }
+}
+/* Horloge du sélecteur d'heure (Chrome / Edge) collée à l'heure : plus de marge propre. */
+.cron-sched input[type="time"]::-webkit-calendar-picker-indicator {
+  margin: 0 0 0 2px;
+  padding: 0;
+}
+.cron-sched select:disabled,
+.cron-sched input:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.cron-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: 1px;
+}
+.cron-dot.is-ok {
+  background: var(--accent);
+}
+.cron-dot.is-warn {
+  background: var(--warn);
+}
+.cron-dot.is-ko {
+  background: var(--danger);
+}
+.cron-sub {
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: normal;
+  line-height: 1.35;
+  margin-top: 0.1rem;
+}
+.acct-table.cron-table td {
+  white-space: normal;
+  vertical-align: top;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+  height: auto;
+}
+.cron-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.cron-foot > span {
+  flex: 1 1 100%;
+}
+.cron-foot details {
+  flex: 1 1 100%;
+}
+.cron-foot summary {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}

@@ -52,11 +52,19 @@ export default async function CronPage() {
     };
   });
 
+  // Dernier passage du conteneur cron = déclenchement planifié le plus récent, toutes
+  // tâches confondues (posé à chaque échéance atteinte, cf. markCronAt).
+  const lastCronPass = Object.values(lastCronAts)
+    .filter((d): d is Date => d instanceof Date)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+
   return (
     <CronPanel
       rows={rows}
       cronSecretConfigured={Boolean(process.env.CRON_SECRET)}
       crontab={crontab}
+      lastCronPass={lastCronPass ? lastCronPass.toISOString() : null}
+      generatedAt={now.toISOString()}
     />
   );
 }

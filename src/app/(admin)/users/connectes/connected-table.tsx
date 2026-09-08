@@ -34,9 +34,9 @@ function absolute(iso: string): string {
 
 /**
  * Tableau des utilisateurs connectés (Dom 2026-09-07, style commun aux Comptes depuis le
- * 2026-09-08) : compteurs, un compte par ligne (avatar, pastille verte = action dans les
- * 5 dernières minutes, orange = session valide sans action récente ; les sessions hors
- * politique d'inactivité ne sont pas listées), bouton « Déconnecter » (révoque toutes les
+ * 2026-09-08) : compteurs, un compte par ligne (avatar ; la fraîcheur se lit dans la colonne
+ * « Dernière action » et la tuile « Actifs » — plus de pastille depuis Dom 2026-09-08 ; les
+ * sessions hors politique d'inactivité ne sont pas listées), bouton « Déconnecter » (révoque toutes les
  * sessions du compte, journalisé). Se rafraîchit toutes les 30 s. Pas d'adresse IP.
  */
 export function ConnectedTable({
@@ -122,14 +122,17 @@ export function ConnectedTable({
         <p style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucune session ouverte.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table className="acct-table is-airy" style={{ minWidth: 720 }}>
+          {/* Largeurs : toutes explicites (table-layout fixed) — une colonne sans largeur
+              se faisait écraser dès que la fenêtre se resserrait (Dom 2026-09-08). */}
+          <table className="acct-table is-airy" style={{ minWidth: 900 }}>
             <colgroup>
-              <col style={{ width: "34%" }} />
-              <col style={{ width: 130 }} />
-              <col style={{ width: "16%" }} />
+              <col style={{ width: "28%" }} />
               <col style={{ width: 120 }} />
-              <col />
-              <col style={{ width: 52 }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: "21%" }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 44 }} />
             </colgroup>
             <thead>
               <tr>
@@ -138,6 +141,7 @@ export function ConnectedTable({
                 <th>Dernière action</th>
                 <th>Connecté depuis</th>
                 <th>Appareils</th>
+                <th style={{ textAlign: "center" }}>Sessions</th>
                 <th />
               </tr>
             </thead>
@@ -153,22 +157,6 @@ export function ConnectedTable({
                         <Avatar prenom={u.prenom} nom={u.nom} email={u.email} role={role} />
                         <div style={{ minWidth: 0 }}>
                           <div className="name" style={{ display: "flex", alignItems: "center" }}>
-                            <span
-                              title={
-                                u.active
-                                  ? "Action dans les 5 dernières minutes"
-                                  : "Session valide, sans action récente"
-                              }
-                              style={{
-                                display: "inline-block",
-                                width: 8,
-                                height: 8,
-                                borderRadius: "50%",
-                                marginRight: 6,
-                                flex: "0 0 auto",
-                                background: u.active ? "var(--accent)" : "var(--warn)",
-                              }}
-                            />
                             <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                               {label}
                             </span>
@@ -194,12 +182,8 @@ export function ConnectedTable({
                     </td>
                     <td title={absolute(u.lastActivity)}>{relative(u.lastActivity, nowMs)}</td>
                     <td>{absolute(u.since)}</td>
-                    <td title={u.devices.join(", ")}>
-                      {u.devices.join(", ")}
-                      {u.sessions > 1 && (
-                        <span style={{ color: "var(--muted)" }}> · {u.sessions} sessions</span>
-                      )}
-                    </td>
+                    <td title={u.devices.join(", ")}>{u.devices.join(", ")}</td>
+                    <td style={{ textAlign: "center", fontWeight: 600 }}>{u.sessions}</td>
                     <td>
                       <div className="acct-actions">
                         <ActionIconButton
