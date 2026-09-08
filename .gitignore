@@ -46,3 +46,6 @@ docs/AUDIT-SECURITE.md
 
 # Fichiers temporaires Office (verrous ~$… créés quand un .docx est ouvert)
 ~$*
+
+# Liste des personnes réelles à flouter sur les captures (scripts/capture-blur-list.ts)
+.capture-blur.json

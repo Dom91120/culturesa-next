@@ -266,9 +266,9 @@ inscrits** (coordonnées du jour, avec les e-mails prêts à coller dans le cham
 messagerie). Les trois premières décrivent l'état du jour ; l'historique et les placements se
 lisent par exercice, à la date d'inscription.
 
-![Liste des réservations (Éditions) et export CSV](img/07-editions-liste.png)
+![Onglet Éditions d'un service : éditions et liste d'attente](img/07-editions-liste.png)
 
-*Figure 7 — Liste des réservations (Éditions) et export CSV*
+*Figure 7 — Onglet Éditions d'un service : éditions et liste d'attente*
 
 ### Statistiques
 
@@ -410,10 +410,10 @@ utilisateurs, gestionnaires, administrateurs, **non confirmés**, anonymisés. C
 l'avatar et l'e-mail du compte, son **statut** — « Confirmé » (adresse e-mail confirmée),
 « En attente » (le compte ne peut pas encore se connecter) ou « Anonymisé » — son rôle et son
 affiliation. Les actions apparaissent au survol de la ligne : **modifier la fiche** (crayon),
-**exporter les données** RGPD (flèche), **anonymiser** (personne barrée) et, pour un compte en
-attente, **renvoyer le mail de confirmation** (avion). La case à cocher ouvre la barre d'actions
-du bas pour les opérations rares (suppression d'un compte vide, réinitialisation de la double
-authentification).
+**exporter les données** RGPD (flèche), **anonymiser** (personne barrée), et selon le compte :
+**renvoyer le mail de confirmation** (avion, compte en attente), **réinitialiser la double
+authentification** (clé, second facteur actif) ou **supprimer définitivement** (corbeille, compte
+sans aucune réservation : test, spam).
 
 **« Connectés »** liste les comptes dont une session est encore valide au sens de la
 déconnexion automatique (2 h sans action pour un usager, 15 min pour un gestionnaire ou un

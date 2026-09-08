@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { ConfirmPasswordModal } from "@/components/confirm-password-modal";
-import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import type { Role } from "@/generated/prisma/client";
 import { formatTel } from "@/lib/format";
 import {
@@ -11,11 +10,13 @@ import {
   Avatar,
   BuildingGlyph,
   DownloadGlyph,
+  KeyGlyph,
   PencilGlyph,
   RolePill,
   SchoolGlyph,
   SendGlyph,
   StatusPill,
+  TrashGlyph,
   UserOffGlyph,
   UsersGlyph,
 } from "./account-ui";
@@ -87,29 +88,13 @@ const PAGE_SIZE = 15;
 
 // ── Largeurs de colonnes (cf. <colgroup>) : colonnes d'appoint en pixels, « Compte »
 // et « Structure / Service » se partagent le reste (58 % – 42 %).
-const COL_CHECK = 34;
 const COL_STATUT = 112; // pastille « En attente » avec son pictogramme
 const COL_ROLE = 120; // pastille « Administrateur »
 const COL_TEL = 112; // « 06 12 34 56 78 »
-const COL_ACTIONS = 122; // 4 boutons de 26 px
-const COL_REST = COL_CHECK + COL_STATUT + COL_ROLE + COL_TEL + COL_ACTIONS;
+const COL_ACTIONS = 160; // jusqu'à 6 boutons de 24 px
+const COL_REST = COL_STATUT + COL_ROLE + COL_TEL + COL_ACTIONS;
 const COL_COMPTE = `calc((100% - ${COL_REST}px) * 0.58)`;
 const COL_AFF = `calc((100% - ${COL_REST}px) * 0.42)`;
-
-// Barre d'actions sous le tableau : gabarit commun des 4 boutons (rembourrage
-// horizontal resserré pour que le groupe reste compact face à la pagination).
-// `nowrap` + `flexShrink: 0` : à l'étroit, le libellé ne se replie pas sur deux lignes
-// (le bouton garderait sa largeur mais doublerait de hauteur) — le groupe déborde
-// plutôt vers la pagination.
-const ACTION_BTN_STYLE = {
-  fontSize: ".68rem",
-  padding: ".2rem .45rem",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: ".3rem",
-} as const;
 
 // Recherche accent-insensible (réimplémente _normSearch du legacy).
 function normSearch(s: string): string {
@@ -179,7 +164,6 @@ export function UsersTable({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("default");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
   const [modal, setModal] = useState<{ mode: "create" | "edit"; user: UserRow | null } | null>(
@@ -237,25 +221,8 @@ export function UsersTable({
   const from = current * PAGE_SIZE;
   const pageRows = filtered.slice(from, from + PAGE_SIZE);
 
-  // Résolu dans `filtered` (pas `users`) : si la recherche exclut la ligne sélectionnée,
-  // la barre d'actions disparaît au lieu d'agir sur une ligne devenue invisible.
-  const selected = selectedId ? (filtered.find((u) => u.id === selectedId) ?? null) : null;
-
   function sortBy(key: SortKey) {
     setSortKey(key);
-  }
-
-  function toggleRow(id: string) {
-    setSelectedId((cur) => (cur === id ? null : id));
-  }
-
-  function clearSelection() {
-    setSelectedId(null);
-  }
-
-  function editSelected() {
-    if (!selected) return;
-    setModal({ mode: "edit", user: selected });
   }
 
   function confirmAnonymize(password: string) {
@@ -265,7 +232,6 @@ export function UsersTable({
       const res = await anonymizeUserAction(id, password);
       if (!res?.ok) alert(res?.error ?? "Échec de l'anonymisation.");
       setAnonymizeTarget(null);
-      if (selectedId === id) setSelectedId(null);
       router.refresh();
     });
   }
@@ -297,13 +263,11 @@ export function UsersTable({
       const res = await deleteEmptyUserAction(id);
       if (!res?.ok) alert(res?.error ?? "Échec de la suppression.");
       setDeleteTarget(null);
-      setSelectedId(null);
       router.refresh();
     });
   }
 
-  function resendConfirmation(u: UserRow | null = selected) {
-    if (!u) return;
+  function resendConfirmation(u: UserRow) {
     startTransition(async () => {
       await resendVerificationAction(u.email);
     });
@@ -394,7 +358,6 @@ export function UsersTable({
       <div style={{ overflowX: "auto" }}>
         <table className="acct-table" style={{ minWidth: 860 }}>
           <colgroup>
-            <col style={{ width: COL_CHECK }} />
             <col style={{ width: COL_COMPTE }} />
             <col style={{ width: COL_STATUT }} />
             <col style={{ width: COL_ROLE }} />
@@ -404,7 +367,6 @@ export function UsersTable({
           </colgroup>
           <thead>
             <tr>
-              <th className="col-check" />
               <SortTh label="Compte" sk="nom" sortKey={sortKey} onSort={sortBy} />
               <th title="Adresse e-mail confirmée par l'usager">Statut</th>
               <SortTh label="Rôle" sk="role" sortKey={sortKey} onSort={sortBy} />
@@ -420,25 +382,12 @@ export function UsersTable({
                 (sortKey === "default" || sortKey === "role") &&
                 prev != null &&
                 prev.role !== u.role;
-              const checked = selectedId === u.id;
               const aff = affiliation(u);
-              const rowClasses = [
-                roleBreak ? "role-break" : "",
-                checked ? "row-checked" : "",
-                u.anonymized ? "is-anon" : "",
-              ]
+              const rowClasses = [roleBreak ? "role-break" : "", u.anonymized ? "is-anon" : ""]
                 .filter(Boolean)
                 .join(" ");
               return (
                 <tr key={u.id} className={rowClasses || undefined}>
-                  <td className="col-check">
-                    <input
-                      type="checkbox"
-                      className="admin-cb"
-                      checked={checked}
-                      onChange={() => toggleRow(u.id)}
-                    />
-                  </td>
                   <td>
                     <div className="acct-who">
                       <Avatar
@@ -476,10 +425,11 @@ export function UsersTable({
                   </td>
                   <td>{formatTel(u.tel)}</td>
                   <td>
-                    {/* Actions de ligne (crayon / flèche / personne barrée / avion — Dom
-                        2026-09-08), révélées au survol ; un compte anonymisé ne garde que
-                        l'export. Les actions rares (suppression d'un compte vide, second
-                        facteur) restent dans la barre sous le tableau, via la case à cocher. */}
+                    {/* Actions de ligne (Dom 2026-09-08), révélées au survol : avion (compte
+                        en attente), crayon, flèche (export RGPD), personne barrée (anonymiser),
+                        clé (second facteur actif), corbeille (compte sans réservation). Un
+                        compte anonymisé ne garde que l'export. Plus de case à cocher ni de
+                        barre d'actions : on agit rarement sur plusieurs comptes. */}
                     <div className="acct-actions">
                       {!u.anonymized && !u.emailVerified && (
                         <ActionIconButton
@@ -512,6 +462,32 @@ export function UsersTable({
                           <UserOffGlyph />
                         </ActionIconButton>
                       )}
+                      {/* N'apparaît que si un second facteur est effectivement actif :
+                          proposer de réinitialiser ce qui n'existe pas n'apprendrait rien à
+                          personne, et le serveur refuserait de toute façon. */}
+                      {u.twoFactorEnabled && (
+                        <ActionIconButton
+                          label="Réinitialiser la double authentification (téléphone ou codes de secours perdus)"
+                          tone="warn"
+                          disabled={pending}
+                          onClick={() => {
+                            setResetErreur(null);
+                            setResetTarget(u);
+                          }}
+                        >
+                          <KeyGlyph />
+                        </ActionIconButton>
+                      )}
+                      {u.bookingCount === 0 && (
+                        <ActionIconButton
+                          label="Supprimer définitivement (compte sans réservation : test, spam)"
+                          tone="danger"
+                          disabled={pending}
+                          onClick={() => setDeleteTarget(u)}
+                        >
+                          <TrashGlyph />
+                        </ActionIconButton>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -523,12 +499,12 @@ export function UsersTable({
               Array.from({ length: PAGE_SIZE - pageRows.length }, (_, i) => (
                 // biome-ignore lint/a11y/noAriaHiddenOnFocusable: ligne purement décorative (aucun contenu focusable) — le masquage aux lecteurs d'écran est voulu
                 <tr key={`filler-${i}`} aria-hidden="true">
-                  <td colSpan={7}>&nbsp;</td>
+                  <td colSpan={6}>&nbsp;</td>
                 </tr>
               ))}
             {total === 0 && (
               <tr className="acct-empty">
-                <td colSpan={7}>Aucun compte ne correspond.</td>
+                <td colSpan={6}>Aucun compte ne correspond.</td>
               </tr>
             )}
           </tbody>
@@ -536,29 +512,12 @@ export function UsersTable({
       </div>
 
       <div style={{ marginTop: ".5rem", display: "flex", alignItems: "center", gap: ".75rem" }}>
-        {/* Bloc de gauche : compteur de lignes, ou « 1 sélectionné » à sa place. De même
-            poids que la barre d'actions à droite, il centre la pagination sur la largeur. */}
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: ".75rem",
-          }}
-        >
-          {selected ? (
-            <span style={{ fontSize: ".82rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-              1 sélectionné
-            </span>
-          ) : (
-            <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-              {total === 0
-                ? "0 compte"
-                : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
-            </span>
-          )}
-        </div>
+        {/* Compteur à gauche, pagination centrée (ressort symétrique à droite). */}
+        <span style={{ flex: 1, fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+          {total === 0
+            ? "0 compte"
+            : `${from + 1}–${from + pageRows.length} sur ${total} compte${total > 1 ? "s" : ""}`}
+        </span>
         <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
           <button
             type="button"
@@ -582,103 +541,7 @@ export function UsersTable({
             ›
           </button>
         </div>
-        {/* Barre d'actions : après la pagination, alignée à droite. Rendue en
-            `visibility: hidden` hors sélection (et non démontée) — elle réserve ainsi sa
-            hauteur, plus grande que celle du compteur, et la ligne ne saute pas.
-            Ressort symétrique du bloc de gauche → pagination centrée. */}
-        <div
-          style={{
-            visibility: selected ? "visible" : "hidden",
-            flex: 1,
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: ".75rem",
-          }}
-        >
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={editSelected}
-            style={{
-              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-              color: "var(--accent)",
-              ...ACTION_BTN_STYLE,
-            }}
-          >
-            <PencilGlyph size={13} /> Modifier
-          </button>
-          {!selected?.anonymized && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => selected && setAnonymizeTarget(selected)}
-              disabled={pending}
-              style={{ ...GHOST_DANGER_STYLE, ...ACTION_BTN_STYLE }}
-              title="Anonymisation RGPD : efface les données personnelles, conserve les réservations"
-            >
-              <UserOffGlyph size={13} /> Anonymiser
-            </button>
-          )}
-          {selected?.bookingCount === 0 && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => selected && setDeleteTarget(selected)}
-              disabled={pending}
-              style={{ ...GHOST_DANGER_STYLE, ...ACTION_BTN_STYLE }}
-              title="Compte sans réservation : suppression physique de la base (test, spam)"
-            >
-              🗑️ Supprimer définitivement
-            </button>
-          )}
-          {selected && !selected.emailVerified && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => resendConfirmation()}
-              disabled={pending}
-              style={{
-                borderColor: "rgba(232,164,90,.4)",
-                color: "var(--warn)",
-                ...ACTION_BTN_STYLE,
-              }}
-            >
-              <SendGlyph size={13} /> Renvoyer le mail de confirmation
-            </button>
-          )}
-          {/* N'apparaît que si un second facteur est effectivement actif : proposer
-              de réinitialiser ce qui n'existe pas n'apprendrait rien à personne, et
-              le serveur refuserait de toute façon. */}
-          {selected?.twoFactorEnabled && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => {
-                setResetErreur(null);
-                if (selected) setResetTarget(selected);
-              }}
-              disabled={pending}
-              style={{
-                borderColor: "rgba(232,164,90,.4)",
-                color: "var(--warn)",
-                ...ACTION_BTN_STYLE,
-              }}
-              title="Téléphone ou codes de secours perdus : retire le second facteur, la personne se réenrôle à sa prochaine visite"
-            >
-              🔑 Réinitialiser la double authentification
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={clearSelection}
-            style={ACTION_BTN_STYLE}
-            title="Désélectionner le compte"
-          >
-            Annuler
-          </button>
-        </div>
+        <span style={{ flex: 1 }} />
       </div>
 
       {anonymizeTarget && (
@@ -743,7 +606,6 @@ export function UsersTable({
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null);
-            setSelectedId(null);
             router.refresh();
           }}
         />
