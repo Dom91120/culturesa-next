@@ -3971,6 +3971,34 @@ textarea.theme-pending:focus::placeholder {
   font-size: 0.7rem;
   color: var(--muted);
 }
+/* Note de pied (renvoi vers l'administration) : bloc calé à droite, texte à gauche. */
+.rg-foot .note {
+  margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.15;
+}
+/* Vue par service (Paramètres › RGPD) : pas de colonne Préavis — 4 colonnes. */
+.rg-list.is-service .rg-head,
+.rg-list.is-service .rg-row {
+  grid-template-columns: minmax(180px, 1.15fr) 118px minmax(200px, 1.3fr) 88px;
+}
+.rg-list.is-service .rg-head > :nth-child(2),
+.rg-list.is-service .rg-row > :nth-child(2) {
+  display: block;
+}
+@container (max-width: 640px) {
+  .rg-list.is-service .rg-head,
+  .rg-list.is-service .rg-row {
+    grid-template-columns: minmax(150px, 1fr) minmax(200px, 1.3fr) 88px;
+    gap: 0.5rem;
+  }
+  .rg-list.is-service .rg-head > :nth-child(2),
+  .rg-list.is-service .rg-row > :nth-child(2) {
+    display: none;
+  }
+}
 /* Journal : frise chronologique par jour. */
 .rg-tl {
   position: relative;

@@ -374,8 +374,14 @@ exercices antérieurs restent consultables.
 
 ### Paramètres — RGPD (usagers du service)
 
-Vue RGPD **limitée aux usagers rattachés au service** : repérer les comptes inactifs concernés.
-Le pilotage RGPD global (avis de suppression, anonymisation, journal d'audit) reste dans
+Vue RGPD **limitée aux usagers rattachés au service**. Deux cartes rappellent les droits
+exerçables ici : **Exporter** (droit d'accès, article 15 : profil + historique des réservations,
+téléchargement JSON) et **Anonymiser** (droit à l'effacement, article 17 : nom, prénom, e-mail et
+téléphone vidés, compte verrouillé, réservations conservées ; irréversible). La liste présente
+chaque usager avec sa dernière activité et une **jauge d'inactivité** graduée sur le seuil de
+rétention ; une pastille signale les comptes **au-delà du seuil**. Les actions se lancent depuis
+la ligne (flèche = exporter, personne barrée = anonymiser). Le pilotage RGPD global (préavis,
+anonymisation en masse, journal d'audit) reste dans
 [Administration → RGPD](#rgpd-et-conservation-des-données).
 
 ---

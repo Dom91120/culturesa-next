@@ -19,6 +19,7 @@ import {
   setGraceDaysAction,
   setRetentionYearsAction,
 } from "./actions";
+import { fmtSpan, GAUGE_THRESHOLD_PCT, gaugeFor } from "./inactivity-format";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Conservation des données (ex-« Scan d'inactivité ») — refonte Dom 2026-09-08 :
@@ -31,8 +32,6 @@ import {
 
 const PAGE_SIZE = 10;
 const MS_PER_DAY = 86_400_000;
-// Position du repère « seuil » sur la jauge : ce qui reste à droite montre le dépassement.
-const GAUGE_THRESHOLD_PCT = 86;
 
 /** Ligne sérialisée reçue du serveur (dates en ISO string). */
 export type InactiveRow = {
@@ -45,24 +44,6 @@ export type InactiveRow = {
   lastSeen: string;
   lastSeenSource: "connexion" | "réservation" | "création";
 };
-
-/** « 2 ans 3 mois », « 4 jours », « aujourd'hui » (sans « il y a »). */
-function fmtSpan(days: number): string {
-  if (days < 1) return "aujourd'hui";
-  if (days < 30) return `${days} jour${days > 1 ? "s" : ""}`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months} mois`;
-  let years = Math.floor(days / 365);
-  let remMonths = Math.floor((days - years * 365) / 30);
-  // 365 j = 12,17 mois de 30 j : le reste peut atteindre 12 → on bascule sur l'année.
-  if (remMonths >= 12) {
-    years += 1;
-    remMonths = 0;
-  }
-  return remMonths
-    ? `${years} an${years > 1 ? "s" : ""} ${remMonths} mois`
-    : `${years} an${years > 1 ? "s" : ""}`;
-}
 
 function countWord(n: number): string {
   return n > 1 ? "comptes utilisateurs" : "compte utilisateur";
@@ -409,18 +390,8 @@ export function InactivityScan({
           const showHeader = group !== lastGroup;
           lastGroup = group;
           const fullName = `${u.nom} ${u.prenom}`.trim() || u.email;
-          // Jauge : le repère « seuil » est à GAUGE_THRESHOLD_PCT ; au-delà, la barre file
-          // jusqu'au bout en orange.
-          const ratio = thresholdDays > 0 ? u.daysInactive / thresholdDays : 1;
-          const fill = eligible
-            ? 100
-            : Math.max(1, Math.min(GAUGE_THRESHOLD_PCT, ratio * GAUGE_THRESHOLD_PCT));
-          const remain = thresholdDays - u.daysInactive;
-          const gaugeText = eligible
-            ? thresholdDays > 0
-              ? `${fmtSpan(u.daysInactive)} · seuil dépassé de ${fmtSpan(u.daysInactive - thresholdDays)}`
-              : `${fmtSpan(u.daysInactive)} · seuil à 0`
-            : `${fmtSpan(u.daysInactive)} · encore ${fmtSpan(remain)}`;
+          // Jauge partagée avec la vue par service (inactivity-format.ts).
+          const { fill, text: gaugeText } = gaugeFor(u.daysInactive, thresholdDays);
           const age = noticeAge(u.deletionNoticeSentAt, nowMs);
           const graceLeft = grace - age;
           return (

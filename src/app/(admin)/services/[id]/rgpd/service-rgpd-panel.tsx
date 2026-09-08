@@ -2,10 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { AlertGlyph, CircleCheckGlyph, ShieldCheckGlyph } from "@/components/ui-glyphs";
 import { DATE_FMT_FR as dateFmt } from "@/lib/format";
+import { fmtSpan, GAUGE_THRESHOLD_PCT, gaugeFor } from "../../../rgpd/inactivity-format";
+import { ActionIconButton, DownloadGlyph, initials, UserOffGlyph } from "../../../users/account-ui";
 import { anonymizeServiceUserAction } from "./actions";
 
 const PAGE_SIZE = 10;
+const MS_PER_DAY = 86_400_000;
 
 /** Ligne sérialisée reçue du serveur (date en ISO string ou null). */
 export type ServiceRgpdRow = {
@@ -24,38 +28,68 @@ function normSearch(s: string): string {
     .toLowerCase();
 }
 
-function countWord(n: number): string {
-  return n > 1 ? "utilisateurs" : "utilisateur";
+function plural(n: number, one: string, many: string): string {
+  return n > 1 ? many : one;
 }
 
+/**
+ * Paramètres › RGPD d'un service : droits d'accès (export) et d'effacement (anonymisation)
+ * exercés usager par usager, sur les seuls usagers rattachés au service. Même famille
+ * graphique que Administration › RGPD (Dom 2026-09-08) : deux cartes de droits en tête,
+ * liste avatar + jauge d'inactivité, actions en pictogrammes. Le préavis, l'anonymisation
+ * en masse et le journal restent globaux (renvoi en pied).
+ */
 export function ServiceRgpdPanel({
   serviceId,
   users,
+  retentionYears,
+  generatedAt,
 }: {
   serviceId: string;
   users: ServiceRgpdRow[];
+  retentionYears: number;
+  generatedAt: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
 
+  // Instant du relevé côté serveur : base stable des délais (pas de dérive à l'hydratation).
+  const nowMs = useMemo(() => new Date(generatedAt).getTime(), [generatedAt]);
+  const thresholdDays = retentionYears * 365;
+
+  const rows = useMemo(
+    () =>
+      users.map((u) => {
+        const t = u.lastSeen ? new Date(u.lastSeen).getTime() : Number.NaN;
+        const daysInactive = Number.isNaN(t)
+          ? 0
+          : Math.max(0, Math.floor((nowMs - t) / MS_PER_DAY));
+        return { ...u, daysInactive };
+      }),
+    [users, nowMs],
+  );
+  const overCount = rows.filter((r) => r.daysInactive >= thresholdDays).length;
+
   const filtered = useMemo(() => {
     const q = normSearch(query.trim());
-    if (!q) return users;
-    return users.filter((u) => normSearch(`${u.nom}${u.prenom}${u.email}`).includes(q));
-  }, [users, query]);
+    if (!q) return rows;
+    return rows.filter((u) => normSearch(`${u.nom}${u.prenom}${u.email}`).includes(q));
+  }, [rows, query]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const current = Math.min(page, totalPages - 1);
   const from = current * PAGE_SIZE;
   const pageRows = filtered.slice(from, from + PAGE_SIZE);
-
+  const usagerWord = plural(users.length, "usager", "usagers");
   const cntLbl =
     query.trim() && total !== users.length
-      ? `${total} / ${users.length} ${countWord(users.length)}`
-      : `${users.length} ${countWord(users.length)}`;
+      ? `${total} / ${users.length} ${usagerWord}`
+      : total === 0
+        ? `0 ${usagerWord}`
+        : `${from + 1}–${from + pageRows.length} sur ${total} ${plural(total, "usager", "usagers")}`;
 
   function anonymizeOne(id: string, label: string) {
     if (
@@ -72,77 +106,99 @@ export function ServiceRgpdPanel({
 
   return (
     <div className="panel">
-      <img
-        src="/RGPD.png"
-        alt="Logo RGPD"
-        style={{ display: "block", height: 100, width: "auto", margin: ".5rem 0 1.5rem" }}
-      />
-
-      <p
-        style={{
-          fontSize: ".82rem",
-          color: "var(--text)",
-          marginBottom: "1.25rem",
-          lineHeight: 1.5,
-          textAlign: "justify",
-        }}
-      >
-        Cet écran vous permet d&apos;exercer les droits RGPD des utilisateurs de ce service. Pour
-        chaque personne, deux actions sont possibles :{" "}
-        <strong style={{ marginRight: ".3em" }}>exporter</strong> ses données personnelles afin de
-        les lui transmettre, par exemple lorsqu&apos;elle en fait la demande (droit d&apos;accès) ;
-        ou <strong style={{ marginRight: ".3em" }}>effacer</strong> ses informations nominatives en
-        anonymisant son compte, de façon irréversible (droit à l&apos;effacement).
-        <br />
-        <br />
-        Utilisez la recherche pour retrouver un utilisateur, puis lancez l&apos;action
-        correspondante depuis sa ligne dans le tableau ci-dessous.
-      </p>
-
       <div
+        className="panel-title"
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "1rem",
+          justifyContent: "space-between",
+          gap: ".75rem",
+          marginBottom: ".7rem",
           flexWrap: "wrap",
-          marginBottom: ".5rem",
         }}
       >
-        <label
-          htmlFor="rgpd-service-search"
-          style={{
-            fontSize: ".75rem",
-            margin: 0,
-            color: "var(--muted)",
-            display: "flex",
-            alignItems: "center",
-            alignSelf: "stretch",
-          }}
-        >
-          Liste des utilisateurs du service
-        </label>
-        <input
-          id="rgpd-service-search"
-          type="search"
-          placeholder="🔍 Rechercher (nom, prénom, e-mail)…"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(0);
-          }}
-          style={{
-            marginLeft: "auto",
-            flex: 1,
-            minWidth: 240,
-            maxWidth: 330,
-            fontSize: ".78rem",
-            padding: ".35rem .6rem",
-            borderRadius: "var(--rad-sm)",
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-            color: "var(--text)",
-          }}
-        />
+        <span style={{ display: "flex", alignItems: "center", gap: ".6rem", whiteSpace: "nowrap" }}>
+          <span className="rg-ico is-info" style={{ color: "var(--accent)" }}>
+            <ShieldCheckGlyph size={16} />
+          </span>
+          Droits RGPD
+          <span style={{ color: "var(--muted)", fontWeight: 400 }}>
+            · {users.length} {usagerWord} du service
+          </span>
+        </span>
+        <span className="acct-toolbar-right">
+          {users.length > 0 &&
+            (overCount === 0 ? (
+              <span className="acct-pill is-ok">
+                <CircleCheckGlyph size={12} strokeWidth={2.2} /> Aucun compte au-delà du seuil
+              </span>
+            ) : (
+              <span className="acct-pill is-warn">
+                <AlertGlyph size={12} strokeWidth={2.2} /> {overCount} compte
+                {overCount > 1 ? "s" : ""} au-delà du seuil
+              </span>
+            ))}
+          <div className="search-wrap">
+            {/* biome-ignore lint/a11y/noSvgWithoutTitle: icône décorative copiée du legacy */}
+            <svg
+              className="search-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+              />
+            </svg>
+            <input
+              id="rgpd-service-search"
+              type="text"
+              aria-label="Rechercher un usager"
+              placeholder="Nom, prénom, e-mail…"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
+            />
+          </div>
+        </span>
+      </div>
+
+      {/* Les deux droits exerçables ici, à la place d'un long paragraphe d'introduction. */}
+      <div className="rg-steps">
+        <div className="rg-step">
+          <span className="n is-ok">
+            <DownloadGlyph size={13} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div className="l">Droit d&apos;accès · article 15</div>
+            <div className="v">
+              Exporter <small>profil + historique des réservations</small>
+            </div>
+            <div className="s">
+              Ouvre une vue des données personnelles à transmettre à l&apos;usager qui en fait la
+              demande. Téléchargement JSON.
+            </div>
+          </div>
+        </div>
+        <div className="rg-step">
+          <span className="n is-ko">
+            <UserOffGlyph size={13} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div className="l">Droit à l&apos;effacement · article 17</div>
+            <div className="v">
+              Anonymiser <small>irréversible</small>
+            </div>
+            <div className="s">
+              Vide nom, prénom, e-mail et téléphone puis verrouille le compte. Les réservations
+              passées sont conservées pour les statistiques.
+            </div>
+          </div>
+        </div>
       </div>
 
       {users.length === 0 ? (
@@ -154,130 +210,130 @@ export function ServiceRgpdPanel({
             fontStyle: "italic",
           }}
         >
-          Aucun utilisateur éligible pour ce service.
+          Aucun usager rattaché à ce service.
         </div>
       ) : (
-        <>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Nom</th>
-                  <th>E-mail</th>
-                  <th>Dernière activité</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {pageRows.map((u) => {
-                  const fullName = `${u.nom} ${u.prenom}`.trim() || u.email;
-                  return (
-                    <tr key={u.id}>
-                      <td>{fullName}</td>
-                      <td style={{ color: "var(--muted)" }}>{u.email}</td>
-                      <td style={{ color: "var(--muted)" }}>
-                        {u.lastSeen ? dateFmt.format(new Date(u.lastSeen)) : "—"}
-                      </td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        <a
-                          className="btn btn-ghost"
-                          href={`/rgpd/export?userId=${u.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Exporter (RGPD art. 15)"
-                          style={{
-                            padding: ".05rem .5rem",
-                            fontSize: ".72rem",
-                            textDecoration: "none",
-                            marginRight: ".3rem",
-                          }}
-                        >
-                          📥
-                        </a>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={() => anonymizeOne(u.id, fullName)}
-                          disabled={pending}
-                          title="Anonymiser ce compte (RGPD)"
-                          style={{
-                            padding: ".05rem .5rem",
-                            fontSize: ".72rem",
-                            borderColor: "rgba(224,107,107,.4)",
-                            color: "var(--danger)",
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {total === 0 && (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      style={{
-                        textAlign: "center",
-                        padding: "1.5rem",
-                        color: "var(--muted)",
-                        fontStyle: "italic",
-                      }}
+        <div className="rg-list is-service">
+          <div className="rg-head">
+            <span>Compte</span>
+            <span title="Plus récent entre dernière connexion, dernière réservation et création">
+              Dernière activité
+            </span>
+            <span>Inactivité</span>
+            <span style={{ textAlign: "right" }}>Actions</span>
+          </div>
+          <div style={{ marginTop: ".35rem" }}>
+            {pageRows.map((u) => {
+              const fullName = `${u.nom} ${u.prenom}`.trim() || u.email;
+              const { eligible, fill, text } = gaugeFor(u.daysInactive, thresholdDays);
+              return (
+                <div key={u.id} className={`rg-row${eligible ? " is-eligible" : ""}`}>
+                  <div className="acct-who">
+                    <span
+                      className={`acct-avatar ${eligible ? "role-gestionnaire" : "role-utilisateur"}`}
                     >
-                      Aucun utilisateur.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", marginTop: ".6rem" }}>
-            <span style={{ flex: 1, fontSize: ".7rem", color: "var(--muted)" }}>{cntLbl}</span>
-            <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
-                disabled={current === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      {initials(u.prenom, u.nom, u.email)}
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="name" title={fullName}>
+                        {fullName}
+                      </div>
+                      <div className="mail" title={u.email}>
+                        {u.email}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    {u.lastSeen ? dateFmt.format(new Date(u.lastSeen)) : "—"}
+                    <div className="cron-sub">
+                      {u.daysInactive < 1 ? "aujourd'hui" : `il y a ${fmtSpan(u.daysInactive)}`}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="rg-gauge">
+                      <i
+                        className={eligible ? "is-warn" : undefined}
+                        style={{ width: `${fill}%` }}
+                      />
+                      <b style={{ left: `${GAUGE_THRESHOLD_PCT}%` }} />
+                    </div>
+                    <div
+                      className="cron-sub"
+                      style={eligible ? { color: "var(--warn)" } : undefined}
+                    >
+                      {text}
+                    </div>
+                  </div>
+                  <div className="acct-actions">
+                    <ActionIconButton
+                      label="Exporter les données (RGPD art. 15)"
+                      href={`/rgpd/export?userId=${u.id}`}
+                    >
+                      <DownloadGlyph />
+                    </ActionIconButton>
+                    <ActionIconButton
+                      label="Anonymiser ce compte (irréversible)"
+                      tone="danger"
+                      disabled={pending}
+                      onClick={() => anonymizeOne(u.id, fullName)}
+                    >
+                      <UserOffGlyph />
+                    </ActionIconButton>
+                  </div>
+                </div>
+              );
+            })}
+            {total === 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "1.2rem",
+                  fontSize: ".78rem",
+                  color: "var(--muted)",
+                  fontStyle: "italic",
+                }}
               >
-                ‹
-              </button>
-              <span style={{ fontSize: ".7rem", color: "var(--muted)" }}>
-                {current + 1} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
-                disabled={current >= totalPages - 1}
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              >
-                ›
-              </button>
-            </div>
-            <span style={{ flex: 1 }} />
+                Aucun usager ne correspond à la recherche.
+              </div>
+            )}
           </div>
-        </>
+        </div>
       )}
 
-      <p
-        style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          marginTop: "1.25rem",
-          lineHeight: 1.5,
-        }}
-      >
-        <strong style={{ color: "var(--text)", marginRight: ".3em" }}>🗑️ Anonymiser</strong> vide les
-        champs nom, prénom, e-mail et téléphone, et verrouille le compte. L&apos;enregistrement est
-        conservé pour préserver les statistiques (réservations passées notamment).
-        <br />
-        <strong style={{ color: "var(--text)", marginRight: ".3em" }}>📥 Exporter</strong> ouvre une
-        vue des données personnelles (profil + historique des réservations) — droit d&apos;accès
-        RGPD (article 15). Téléchargement JSON.
-      </p>
+      <div className="rg-foot">
+        <span>{cntLbl}</span>
+        {users.length > 0 && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: ".4rem" }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
+              disabled={current === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              ‹
+            </button>
+            {current + 1} / {totalPages}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: ".1rem .45rem", fontSize: ".72rem" }}
+              disabled={current >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            >
+              ›
+            </button>
+          </span>
+        )}
+        <span className="note">
+          Seuil d&apos;inactivité : {retentionYears} an{retentionYears > 1 ? "s" : ""}. Préavis,
+          anonymisation en masse et journal :{" "}
+          <a href="/rgpd" style={{ color: "var(--accent)", textDecoration: "none" }}>
+            Administration → RGPD
+          </a>
+          .
+        </span>
+      </div>
     </div>
   );
 }

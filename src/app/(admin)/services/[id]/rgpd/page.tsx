@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { listServiceRgpdUsers } from "@/server/services/rgpd";
+import { getRetentionYears, listServiceRgpdUsers } from "@/server/services/rgpd";
 import { getService } from "@/server/services/services";
 import { ParamsSubnav } from "../params-subnav";
 import { ServiceRgpdPanel } from "./service-rgpd-panel";
@@ -9,7 +9,10 @@ export default async function ServiceRgpdPage({ params }: { params: Promise<{ id
   const service = await getService(id);
   if (!service) notFound();
 
-  const users = await listServiceRgpdUsers(id);
+  const [users, retentionYears] = await Promise.all([
+    listServiceRgpdUsers(id),
+    getRetentionYears(),
+  ]);
 
   // Sérialisation des dates pour la frontière serveur → client.
   const rows = users.map((u) => ({
@@ -23,7 +26,12 @@ export default async function ServiceRgpdPage({ params }: { params: Promise<{ id
   return (
     <div>
       <ParamsSubnav serviceId={id} />
-      <ServiceRgpdPanel serviceId={id} users={rows} />
+      <ServiceRgpdPanel
+        serviceId={id}
+        users={rows}
+        retentionYears={retentionYears}
+        generatedAt={new Date().toISOString()}
+      />
     </div>
   );
 }
