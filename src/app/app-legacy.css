@@ -4879,8 +4879,8 @@ textarea.theme-pending:focus::placeholder {
 }
 .ed-card .n small {
   font-size: 0.68rem;
-  font-weight: 400;
-  color: inherit; /* même couleur que le chiffre (Dom 2026-09-09) */
+  font-weight: 700; /* même graisse et même couleur que le chiffre (Dom 2026-09-09) */
+  color: inherit;
 }
 .ed-acts {
   margin-left: auto;
