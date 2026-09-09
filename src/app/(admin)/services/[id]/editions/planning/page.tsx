@@ -22,50 +22,55 @@ export default async function PlanningPage({
     return (
       <section key={first.date} style={{ marginBottom: "1.25rem", breakInside: "avoid" }}>
         <h3 className="ed-h3">{formatDateHeading(first.date)}</h3>
-        {daySessions.map((s) => (
-          <div key={`${s.startTime}-${s.endTime}`} style={{ marginBottom: ".6rem" }}>
-            <div style={{ fontWeight: 600, fontSize: ".85rem", marginBottom: ".15rem" }}>
-              {s.startTime && s.endTime
-                ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
-                : "Journée entière"}{" "}
-              <span style={{ color: "var(--muted)", fontWeight: 400 }}>
-                ({s.attendees.length} inscrit{s.attendees.length > 1 ? "s" : ""})
-              </span>
-            </div>
-            {/* Cartes participants : côte à côte (flex-wrap) — elles passent à la ligne
+        {daySessions.map((s) => {
+          // Comptes anonymisés (RGPD, plus ni nom ni contact) : rien à afficher sur un
+          // planning, ni carte ni décompte (Dom 2026-09-09).
+          const visibles = s.attendees.filter((a) => `${a.nom}${a.prenom}`.trim() !== "");
+          return (
+            <div key={`${s.startTime}-${s.endTime}`} style={{ marginBottom: ".6rem" }}>
+              <div style={{ fontWeight: 600, fontSize: ".85rem", marginBottom: ".15rem" }}>
+                {s.startTime && s.endTime
+                  ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
+                  : "Journée entière"}{" "}
+                <span style={{ color: "var(--muted)", fontWeight: 400 }}>
+                  ({visibles.length} inscrit{visibles.length > 1 ? "s" : ""})
+                </span>
+              </div>
+              {/* Cartes participants : côte à côte (flex-wrap) — elles passent à la ligne
                 seulement quand la largeur ne suffit plus. */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem" }}>
-              {s.attendees.map((a, i) => (
-                <div key={`${a.nom}-${a.prenom}-${i}`} className="ed-att">
-                  {/* Cinq lignes tronquées (points de suspension, texte complet en infobulle),
+              <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem" }}>
+                {visibles.map((a, i) => (
+                  <div key={`${a.nom}-${a.prenom}-${i}`} className="ed-att">
+                    {/* Cinq lignes tronquées (points de suspension, texte complet en infobulle),
                       sans réserve de hauteur : les cartes se resserrent sur leur contenu
                       (Dom 2026-09-09). Compte anonymisé : pas d'adresse technique. */}
-                  <div className="ed-att-line" style={{ fontWeight: 600 }}>
-                    {`${a.nom} ${a.prenom}`.trim() || "—"}
+                    <div className="ed-att-line" style={{ fontWeight: 600 }}>
+                      {`${a.nom} ${a.prenom}`.trim() || "—"}
+                    </div>
+                    <div className="ed-att-line" title={a.structure || a.demandeur || undefined}>
+                      {a.structure || a.demandeur || "—"}
+                    </div>
+                    <div className="ed-att-line ed-mu">Tel : {formatTel(a.tel)}</div>
+                    <div className="ed-att-line ed-mu" title={a.email || undefined}>
+                      {a.email || "—"}
+                    </div>
+                    <div className="ed-att-line ed-mu" title={a.theme || undefined}>
+                      {a.theme || "—"}
+                    </div>
+                    <div className="ed-att-foot">
+                      <span>
+                        {a.enfants} enfant{a.enfants > 1 ? "s" : ""}
+                      </span>
+                      <span>
+                        {a.accompagnants} adulte{a.accompagnants > 1 ? "s" : ""}
+                      </span>
+                    </div>
                   </div>
-                  <div className="ed-att-line" title={a.structure || a.demandeur || undefined}>
-                    {a.structure || a.demandeur || "—"}
-                  </div>
-                  <div className="ed-att-line ed-mu">Tel : {formatTel(a.tel)}</div>
-                  <div className="ed-att-line ed-mu" title={a.email || undefined}>
-                    {`${a.nom}${a.prenom}`.trim() !== "" && a.email ? a.email : "—"}
-                  </div>
-                  <div className="ed-att-line ed-mu" title={a.theme || undefined}>
-                    {a.theme || "—"}
-                  </div>
-                  <div className="ed-att-foot">
-                    <span>
-                      {a.enfants} enfant{a.enfants > 1 ? "s" : ""}
-                    </span>
-                    <span>
-                      {a.accompagnants} adulte{a.accompagnants > 1 ? "s" : ""}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
     );
   };
