@@ -256,7 +256,16 @@ export default async function EditionsListePage({
                   )}
                 </span>
               </td>
-              <td style={tdCenter}>{pointageCell(a.pointage, a.absencePrevenue) || "—"}</td>
+              <td style={tdCenter}>
+                {pointageCell(a.pointage, a.absencePrevenue) || "—"}
+                {/* Motif d'absence (prévenue ou constatée) en sous-ligne (Dom 2026-09-09). */}
+                {(a.pointage === "absent" || (!a.pointage && a.absencePrevenue)) &&
+                  a.pointageMotif.trim() !== "" && (
+                    <span className="ed-sub ed-nowrap" title={a.pointageMotif}>
+                      {a.pointageMotif}
+                    </span>
+                  )}
+              </td>
             </tr>
           ))}
         </tbody>
