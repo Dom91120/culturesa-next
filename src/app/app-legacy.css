@@ -4760,3 +4760,8 @@ textarea.theme-pending:focus::placeholder {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
+/* Effectif et signalement calés sur le titre (à droite du pictogramme), pas sur le bord. */
+.cf-tile .n,
+.cf-tile .s {
+  padding-left: calc(26px + 0.5rem);
+}
