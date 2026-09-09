@@ -5145,3 +5145,14 @@ textarea.theme-pending:focus::placeholder {
     background: transparent;
   }
 }
+
+/* Pagination à la feuille des écrans datés (Plannings / Pointages). */
+.ed-paging {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0.8rem 0 0.4rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+}

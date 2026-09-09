@@ -33,7 +33,37 @@ export type EditionSearchParams = {
   trim?: string;
   ruptures?: string;
   exercice?: string;
+  page?: string;
 };
+
+// ── Pagination à la feuille (Dom 2026-09-09) ────────────────────────────────────────
+// L'écran découpe les séances en pages dont chacune tient à peu près sur une feuille A4
+// paysage (celle du PDF). Une séance ne se coupe jamais ; son « poids » est estimé en
+// lignes : en-tête + une ligne par inscrit (pointages), en-tête + rangées de cartes
+// (planning, 4 cartes de 7 lignes par rangée). Le PDF, lui, reste complet (bloc
+// `.print-block-only`) : Puppeteer pagine lui-même.
+const PAGE_UNITS = 18; // calé sur le PDF : ~5 séances de pointage par feuille A4 paysage
+function sessionWeight(screen: EditionScreen, s: DatedSession): number {
+  const n = s.attendees.length;
+  return screen === "pointages" ? 2 + n : 2 + Math.max(1, Math.ceil(n / 4)) * 7;
+}
+function paginateSessions(screen: EditionScreen, sessions: DatedSession[]): DatedSession[][] {
+  const pages: DatedSession[][] = [];
+  let cur: DatedSession[] = [];
+  let load = 0;
+  for (const s of sessions) {
+    const w = sessionWeight(screen, s);
+    if (cur.length > 0 && load + w > PAGE_UNITS) {
+      pages.push(cur);
+      cur = [];
+      load = 0;
+    }
+    cur.push(s);
+    load += w;
+  }
+  if (cur.length > 0) pages.push(cur);
+  return pages;
+}
 
 // Titre de l'écran selon la plage affichée (accords propres à chaque écran).
 const TITLES: Record<EditionScreen, Record<RangeMode, string>> = {
@@ -62,6 +92,13 @@ export type EditionScreenData = {
   buckets: SessionBucket[];
   withSubtotals: boolean;
   pdfHref: string;
+  /** Pagination écran : page courante (1-based), nombre de pages, séances de la page, lien. */
+  paging: {
+    page: number;
+    pages: number;
+    pageSessions: DatedSession[];
+    href: (n: number) => string;
+  };
 };
 
 /**
@@ -93,6 +130,14 @@ export async function loadEditionScreen(
     : sessions.length > 0
       ? [{ key: "all", label: "", sessions }]
       : [];
+  const pageList = paginateSessions(screen, sessions);
+  const pages = Math.max(1, pageList.length);
+  const page = Math.min(Math.max(1, Number(sp.page) || 1), pages);
+  const href = (n: number) => {
+    const q = rangeSearchParams(range, selected?.id ?? null, withRuptures);
+    q.set("page", String(n));
+    return `/services/${id}/editions/${screen}?${q.toString()}`;
+  };
   return {
     serviceLabel: service.label,
     exercices,
@@ -104,6 +149,7 @@ export async function loadEditionScreen(
     buckets,
     withSubtotals: withRuptures && buckets.length > 1,
     pdfHref: `/services/${id}/editions/pdf?kind=${screen}&${pdfParams.toString()}`,
+    paging: { page, pages, pageSessions: pageList[page - 1] ?? [], href },
   };
 }
 
@@ -123,8 +169,47 @@ export function EditionScreenView({
   data: EditionScreenData;
   renderBucket: (b: SessionBucket) => React.ReactNode;
 }) {
-  const { exercices, selected, range, titleLabel, sessions, withRuptures, buckets, withSubtotals } =
-    data;
+  const {
+    exercices,
+    selected,
+    range,
+    titleLabel,
+    sessions,
+    withRuptures,
+    buckets,
+    withSubtotals,
+    paging,
+  } = data;
+
+  // Rendu des buckets restreints à un sous-ensemble de séances (page écran) ou complets
+  // (impression). En-tête « (suite) » si le bucket a commencé sur une page précédente ;
+  // sous-total seulement sur la page où il se termine.
+  const renderBuckets = (subset: Set<DatedSession> | null) =>
+    buckets.map((b) => {
+      const list = subset ? b.sessions.filter((x) => subset.has(x)) : b.sessions;
+      if (list.length === 0) return null;
+      const isContinuation = !!subset && b.sessions[0] !== list[0];
+      const endsHere = !subset || b.sessions[b.sessions.length - 1] === list[list.length - 1];
+      return (
+        <div key={b.key}>
+          {b.label && (
+            <RuptureHeading>
+              {b.label}
+              {isContinuation ? " (suite)" : ""}
+            </RuptureHeading>
+          )}
+          {renderBucket({ ...b, sessions: list })}
+          {withSubtotals && endsHere && (
+            <TotalsLine
+              label={`Sous-total — ${b.label}`}
+              totals={computeTotals(b.sessions)}
+              variant={screen}
+            />
+          )}
+        </div>
+      );
+    });
+  const pageSet = new Set(paging.pageSessions);
   return (
     <div className="panel ed-screen">
       <RangeBar
@@ -146,25 +231,59 @@ export function EditionScreenView({
         <p className="ed-empty">Aucune séance sur cette période.</p>
       ) : (
         <>
-          {buckets.map((b) => (
-            <div key={b.key}>
-              {b.label && <RuptureHeading>{b.label}</RuptureHeading>}
-              {renderBucket(b)}
-              {withSubtotals && (
-                <TotalsLine
-                  label={`Sous-total — ${b.label}`}
-                  totals={computeTotals(b.sessions)}
-                  variant={screen}
-                />
-              )}
-            </div>
-          ))}
-          <TotalsLine
-            label="Total général"
-            totals={computeTotals(sessions)}
-            variant={screen}
-            strong
-          />
+          {/* Écran : page courante (une feuille), masquée à l'impression. */}
+          <div className="no-print">
+            {renderBuckets(pageSet)}
+            {paging.pages > 1 && (
+              <div className="ed-paging">
+                {paging.page > 1 ? (
+                  <a
+                    href={paging.href(paging.page - 1)}
+                    className="acct-action"
+                    aria-label="Page précédente"
+                  >
+                    ‹
+                  </a>
+                ) : (
+                  <span className="acct-action is-off">‹</span>
+                )}
+                <span>
+                  Feuille {paging.page} / {paging.pages} · {sessions.length} séance
+                  {sessions.length > 1 ? "s" : ""}
+                </span>
+                {paging.page < paging.pages ? (
+                  <a
+                    href={paging.href(paging.page + 1)}
+                    className="acct-action"
+                    aria-label="Page suivante"
+                  >
+                    ›
+                  </a>
+                ) : (
+                  <span className="acct-action is-off">›</span>
+                )}
+              </div>
+            )}
+            {paging.page === paging.pages && (
+              <TotalsLine
+                label="Total général"
+                totals={computeTotals(sessions)}
+                variant={screen}
+                strong
+              />
+            )}
+          </div>
+
+          {/* Impression (PDF Puppeteer) : toutes les séances en un flux, Puppeteer pagine. */}
+          <div className="print-block-only">
+            {renderBuckets(null)}
+            <TotalsLine
+              label="Total général"
+              totals={computeTotals(sessions)}
+              variant={screen}
+              strong
+            />
+          </div>
         </>
       )}
     </div>

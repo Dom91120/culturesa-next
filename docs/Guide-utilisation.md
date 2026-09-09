@@ -256,7 +256,9 @@ période, places et demandeurs de chaque créneau, avec total et rupture par dem
 tableau de **toutes les réservations** (période, date, créneau, demandeur, participant, thème,
 nombre d'enfants, statut, pointage), une vue **Planning** hebdomadaire et la **feuille de
 pointage** (avec les motifs d'absence ; une absence signalée à l'avance apparaît comme
-« Absence prévenue », puis « Absent (prévenu) » une fois pointée). Chaque écran s'imprime en **PDF**, et les listes
+« Absence prévenue », puis « Absent (prévenu) » une fois pointée). À l'écran, Planning et
+Pointages se feuillettent feuille par feuille, chaque feuille correspondant à une page du PDF ;
+une séance n'est jamais coupée en deux. Chaque écran s'imprime en **PDF**, et les listes
 (inscrits, créneaux ouverts, réservations) s'exportent en **CSV**.
 
 Si le service utilise la **liste d'attente**, un second panneau propose cinq éditions (PDF et
