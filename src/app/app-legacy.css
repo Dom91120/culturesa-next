@@ -4880,7 +4880,7 @@ textarea.theme-pending:focus::placeholder {
 .ed-card .n small {
   font-size: 0.68rem;
   font-weight: 400;
-  color: var(--muted);
+  color: inherit; /* même couleur que le chiffre (Dom 2026-09-09) */
 }
 .ed-acts {
   margin-left: auto;
