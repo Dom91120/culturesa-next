@@ -240,7 +240,12 @@ pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶
 
 ### Éditions — listes et suivi
 
-L'onglet **Éditions** présente la **liste des inscrits** (les usagers ayant réservé sur
+L'onglet **Éditions** présente ses éditions en cartes groupées par usage — « Sur l'exercice »
+pour les listes complètes, « Par semaine ou par période » pour ce qui s'imprime avant les
+séances — avec, sur chaque carte, un chiffre du jour (inscrits, créneaux, réservations, séances
+de la semaine, séances restant à pointer sur trente jours), les formats disponibles et, au
+survol, le téléchargement direct du CSV et **« Ouvrir »**. Le sélecteur d'exercice en tête de
+page pré-règle les écrans ouverts depuis les cartes. On y trouve la **liste des inscrits** (les usagers ayant réservé sur
 l'exercice — identité, structure, niveau, contact et date d'inscription ; tableau **triable par
 clic sur les en-têtes de colonnes** ; les comptes anonymisés sont masqués par défaut), la
 **liste des créneaux ouverts** (l'offre de réservation du service : jour, horaires, type,
@@ -252,7 +257,8 @@ pointage** (avec les motifs d'absence ; une absence signalée à l'avance appara
 (inscrits, créneaux ouverts, réservations) s'exportent en **CSV**.
 
 Si le service utilise la **liste d'attente**, un second panneau propose cinq éditions (PDF et
-CSV) : la **liste d'attente en cours** (les inscrits du jour dans l'ordre d'inscription, avec
+CSV), en deux groupes — l'état du jour (avec le nombre d'inscrits en attente et la demi-journée
+la plus demandée) et l'exercice (inscriptions closes, placements et délai moyen) : la **liste d'attente en cours** (les inscrits du jour dans l'ordre d'inscription, avec
 disponibilités, périodes souhaitées, réservation automatique, dates et échéance), la **demande
 par demi-journée** (combien d'inscrits se sont déclarés disponibles chaque matin et après-midi, et sur chaque
 période : où ouvrir un créneau ferait le plus d'heureux), l'**historique de la liste d'attente**

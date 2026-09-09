@@ -334,3 +334,43 @@ export const GripGlyph = (p: GlyphProps) => (
     <path d="M15 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
   </Svg>
 );
+
+/** Imprimante — éditions. */
+export const PrinterGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M17 17h2a2 2 0 0 0 2 -2v-4a2 2 0 0 0 -2 -2h-14a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h2" />
+    <path d="M17 9v-4a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v4" />
+    <path d="M7 13m0 2a2 2 0 0 1 2 -2h6a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2z" />
+  </Svg>
+);
+
+/** Liste détaillée — tableau des réservations. */
+export const ListDetailsGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M13 5h8" />
+    <path d="M13 9h5" />
+    <path d="M13 15h8" />
+    <path d="M13 19h5" />
+    <path d="M3 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+    <path d="M3 14m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+  </Svg>
+);
+
+/** Barres — demande par demi-journée. */
+export const ChartBarGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M3 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+    <path d="M15 9a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+    <path d="M9 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" />
+    <path d="M4 20h14" />
+  </Svg>
+);
+
+/** Cible — placements depuis la liste d'attente. */
+export const TargetGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+    <path d="M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0" />
+    <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+  </Svg>
+);
