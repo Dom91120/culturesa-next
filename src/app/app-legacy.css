@@ -5374,7 +5374,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   cursor: pointer;
 }
 .xc-foot {
-  margin-top: 0.7rem;
+  margin-top: 1.1rem; /* même respiration qu'entre le paragraphe et la 1re option */
 }
 .xc-btn {
   display: inline-flex;
