@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
-import { ListDetailsGlyph } from "@/components/ui-glyphs";
+import { CircleCheckGlyph, HourglassGlyph, ListDetailsGlyph } from "@/components/ui-glyphs";
 import { formatTel } from "@/lib/format";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
@@ -34,13 +34,13 @@ type SortKey =
   | "pointage";
 const COLS: { key: SortKey; label: string; width: string; center?: boolean }[] = [
   // Largeurs (Dom 2026-09-09) : date et créneau entiers, identité avec le contact dessous.
-  { key: "date", label: "Date", width: "14%" },
+  { key: "date", label: "Date", width: "15%" },
   { key: "creneau", label: "Créneau", width: "10%" },
-  { key: "demandeur", label: "Demandeur", width: "14%" },
-  { key: "identite", label: "Identité", width: "21%" },
+  { key: "demandeur", label: "Demandeur", width: "15%" },
+  { key: "identite", label: "Identité", width: "22%" },
   { key: "theme", label: "Thème", width: "13%" },
   { key: "participants", label: "Participants", width: "8%", center: true },
-  { key: "statut", label: "Statut", width: "9%" },
+  { key: "statut", label: "Statut", width: "6%", center: true },
   { key: "pointage", label: "Pointage", width: "11%", center: true },
 ];
 const SORT_KEYS = new Set<string>(COLS.map((c) => c.key));
@@ -244,12 +244,21 @@ export default async function EditionsListePage({
               <td style={tdCenter}>
                 {a.enfants} + {a.accompagnants}
               </td>
-              <td style={tdNoWrap}>
+              <td style={tdCenter}>
+                {/* Statut en pictogramme (Dom 2026-09-09) : coche verte « Validée », sablier
+                    orange « En attente » ; libellé en infobulle et pour les lecteurs d'écran. */}
                 <span
-                  className={`role-pill ${a.statut === "Validée" ? "role-utilisateur" : "role-gestionnaire"}`}
-                  style={{ whiteSpace: "nowrap" }}
+                  className={`rg-ico ${a.statut === "Validée" ? "is-ok" : "is-warn"}`}
+                  title={a.statut}
+                  aria-label={a.statut}
+                  role="img"
+                  style={{ width: 22, height: 22 }}
                 >
-                  {a.statut}
+                  {a.statut === "Validée" ? (
+                    <CircleCheckGlyph size={13} />
+                  ) : (
+                    <HourglassGlyph size={13} />
+                  )}
                 </span>
               </td>
               <td style={tdCenter}>{pointageCell(a.pointage, a.absencePrevenue) || "—"}</td>
