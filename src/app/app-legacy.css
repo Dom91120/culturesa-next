@@ -4602,6 +4602,7 @@ textarea.theme-pending:focus::placeholder {
   gap: 0.5rem;
   flex-wrap: wrap;
   margin-bottom: 0.4rem;
+  padding-bottom: 0.5rem;
 }
 .rf-head {
   display: grid;
