@@ -43,7 +43,7 @@ export default async function EditionsAttenteAdressesPage({
             ]}
           />
           <div className="ed-table-wrap">
-            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 760 }}>
+            <table className="ed-table" style={{ tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <th style={{ width: "22%" }}>Identité</th>

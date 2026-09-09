@@ -194,7 +194,7 @@ export default async function EditionsListePage({
 
   const renderRows = (rows: FlatRow[]) => (
     <div className="ed-table-wrap">
-      <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 1080 }}>
+      <table className="ed-table" style={{ tableLayout: "fixed" }}>
         <thead>
           <tr>
             {COLS.map((col) => (

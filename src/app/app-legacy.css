@@ -4977,8 +4977,10 @@ textarea.theme-pending:focus::placeholder {
   margin: 0.5rem 0;
 }
 /* Tableau clair : en-têtes gris discrets, colonne triée en vert, lignes filetées. */
+/* Pas d'ascenseur horizontal (Dom) : le tableau tient dans la largeur, les cellules
+   longues se tronquent ou passent à la ligne. */
 .ed-table-wrap {
-  overflow-x: auto;
+  overflow: visible;
 }
 .ed-table {
   width: 100%;
@@ -4995,6 +4997,8 @@ textarea.theme-pending:focus::placeholder {
   padding: 0.35rem 0.5rem;
   border-bottom: 1px solid var(--border-hover);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   vertical-align: middle;
 }
 .ed-table th.is-on {

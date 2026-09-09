@@ -61,7 +61,7 @@ export default async function EditionsAttentePlacementsPage({
             ]}
           />
           <div className="ed-table-wrap">
-            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 900 }}>
+            <table className="ed-table" style={{ tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <th style={{ width: "20%" }}>Usager</th>

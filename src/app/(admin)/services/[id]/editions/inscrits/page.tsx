@@ -122,7 +122,7 @@ export default async function EditionsInscritsPage({
             right={`trié par ${SORT_LABEL[tri]}, ${dir === "asc" ? "A → Z" : "Z → A"}`}
           />
           <div className="ed-table-wrap">
-            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 760 }}>
+            <table className="ed-table" style={{ tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <SortTh

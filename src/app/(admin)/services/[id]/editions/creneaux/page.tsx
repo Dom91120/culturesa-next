@@ -119,7 +119,7 @@ export default async function EditionsCreneauxPage({
             <div key={b.key}>
               {b.label && <RuptureHeading>{b.label}</RuptureHeading>}
               <div className="ed-table-wrap">
-                <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 820 }}>
+                <table className="ed-table" style={{ tableLayout: "fixed" }}>
                   <thead>
                     <tr>
                       <th style={{ width: "20%" }}>Jour / Date</th>

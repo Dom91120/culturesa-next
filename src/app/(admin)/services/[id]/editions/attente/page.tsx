@@ -38,7 +38,7 @@ export default async function EditionsAttentePage({ params }: { params: Promise<
             ]}
           />
           <div className="ed-table-wrap">
-            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 980 }}>
+            <table className="ed-table" style={{ tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <th style={{ width: 34 }}>#</th>

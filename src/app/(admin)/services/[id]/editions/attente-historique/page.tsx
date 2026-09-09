@@ -64,7 +64,7 @@ export default async function EditionsAttenteHistoriquePage({
             ]}
           />
           <div className="ed-table-wrap">
-            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 1180 }}>
+            <table className="ed-table" style={{ tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <th style={{ width: "15%" }}>Usager</th>
