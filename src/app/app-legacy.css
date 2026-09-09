@@ -5233,11 +5233,25 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   flex: 0 0 auto;
 }
 .xc-tile .n.xc-exo {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
 }
-/* Tuile de l'exercice (trois lignes) : libellé calé sur les deux premières. */
-.xc-tile:has(.xc-exo) {
-  align-items: flex-start;
+/* Libellé + pastille de statut : à l'étroit, c'est le libellé qui se tronque, jamais la
+   pastille. */
+.xc-tile-l {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.xc-tile-l > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xc-tile-l .ms-pill {
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  padding: 0 0.4rem;
 }
 .xc-tile .cf-tile-txt small {
   white-space: nowrap;

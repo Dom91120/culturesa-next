@@ -151,17 +151,25 @@ export function ExercicePanel({ serviceId, serviceLabel, data }: Props) {
         <div className="xc-tile">
           <div className="n xc-exo">{data.currentName}</div>
           <div className="cf-tile-txt">
-            <small>dernier exercice</small>
-            {data.currentRange && (
-              <small>
-                {frDate(data.currentRange.start)} → {frDate(data.currentRange.end)}
-              </small>
-            )}
-            {data.currentVisible ? (
-              <small className="xc-ok">affiché aux utilisateurs</small>
-            ) : (
-              <small>non affiché aux utilisateurs</small>
-            )}
+            {/* Deux lignes comme les autres tuiles (Dom 2026-09-09) : le statut d'affichage
+              tient en pastille à côté du libellé, les bornes en seconde ligne. */}
+            <small className="xc-tile-l">
+              <span>dernier exercice</span>
+              {data.currentVisible ? (
+                <span className="ms-pill is-ok" title="Affiché aux utilisateurs">
+                  affiché
+                </span>
+              ) : (
+                <span className="ms-pill is-neutral" title="Non affiché aux utilisateurs">
+                  non affiché
+                </span>
+              )}
+            </small>
+            <small>
+              {data.currentRange
+                ? `${frDate(data.currentRange.start)} → ${frDate(data.currentRange.end)}`
+                : "sans dates"}
+            </small>
           </div>
         </div>
         <div className="xc-tile">
