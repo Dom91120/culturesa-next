@@ -42,18 +42,14 @@ const fmtMonth = new Intl.DateTimeFormat("fr-FR", {
   year: "numeric",
   timeZone: "UTC",
 });
-const fmtHeading = new Intl.DateTimeFormat("fr-FR", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+const fmtWeekday = new Intl.DateTimeFormat("fr-FR", { weekday: "long", timeZone: "UTC" });
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** En-tête de section d'une date (« Lundi 22 juin 2026 »). */
-export const formatDateHeading = (ymdStr: string): string =>
-  cap(fmtHeading.format(parseYmd(ymdStr)));
+/** En-tête de section d'une date (« Lundi 22/06/2026 » — jour en lettres, date courte, Dom). */
+export const formatDateHeading = (ymdStr: string): string => {
+  const d = parseYmd(ymdStr);
+  return `${cap(fmtWeekday.format(d))} ${fmtShort.format(d)}`;
+};
 
 export type EditionExercice = {
   label: string;
