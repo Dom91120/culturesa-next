@@ -35,14 +35,13 @@ type SortKey =
   | "pointage";
 const COLS: { key: SortKey; label: string; width: string; center?: boolean }[] = [
   // Largeurs (Dom 2026-09-09) : date et créneau entiers, identité avec le contact dessous.
-  { key: "date", label: "Date", width: "15%" },
-  { key: "creneau", label: "Créneau", width: "10%" },
-  { key: "demandeur", label: "Demandeur", width: "15%" },
-  { key: "identite", label: "Identité", width: "22%" },
-  { key: "theme", label: "Thème", width: "13%" },
-  { key: "participants", label: "Participants", width: "8%", center: true },
-  { key: "statut", label: "Statut", width: "6%", center: true },
-  { key: "pointage", label: "Pointage", width: "11%", center: true },
+  { key: "date", label: "Date", width: "16%" },
+  { key: "demandeur", label: "Demandeur", width: "17%" },
+  { key: "identite", label: "Identité", width: "24%" },
+  { key: "theme", label: "Thème", width: "14%" },
+  { key: "participants", label: "Participants", width: "9%", center: true },
+  { key: "statut", label: "Statut", width: "7%", center: true },
+  { key: "pointage", label: "Pointage", width: "13%", center: true },
 ];
 const SORT_KEYS = new Set<string>(COLS.map((c) => c.key));
 
@@ -217,19 +216,14 @@ export default async function EditionsListePage({
         <tbody>
           {rows.map(({ gi, s, a }) => (
             <tr key={gi}>
+              {/* Date, créneau en sous-ligne (Dom 2026-09-09). */}
               <td style={tdNoWrap}>
-                {s.dayLabel} <span className="pr-2l">{s.dateLabel}</span>
-              </td>
-              <td style={tdNoWrap}>
-                {s.startTime && s.endTime ? (
-                  <>
-                    {s.startTime.slice(0, 5)}
-                    <span className="pr-dash">–</span>
-                    <span className="pr-2l">{s.endTime.slice(0, 5)}</span>
-                  </>
-                ) : (
-                  "Journée entière"
-                )}
+                {s.dayLabel} {s.dateLabel}
+                <span className="ed-sub">
+                  {s.startTime && s.endTime
+                    ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
+                    : "Journée entière"}
+                </span>
               </td>
               <td style={tdNoWrap}>{a.demandeur || "—"}</td>
               <td style={tdNoWrap}>
@@ -249,18 +243,16 @@ export default async function EditionsListePage({
                 {/* Statut en pictogramme (Dom 2026-09-09) : coche verte « Validée », sablier
                     orange « En attente » ; libellé en infobulle et pour les lecteurs d'écran. */}
                 <span
+                  className={`rg-ico ${a.statut === "Validée" ? "is-ok" : "is-warn"}`}
                   title={a.statut}
                   aria-label={a.statut}
                   role="img"
-                  style={{
-                    display: "inline-flex",
-                    color: a.statut === "Validée" ? "var(--accent)" : "var(--warn)",
-                  }}
+                  style={{ width: 22, height: 22 }}
                 >
                   {a.statut === "Validée" ? (
-                    <CheckGlyph size={17} strokeWidth={2.4} />
+                    <CheckGlyph size={14} strokeWidth={2.6} />
                   ) : (
-                    <HourglassGlyph size={15} />
+                    <HourglassGlyph size={13} />
                   )}
                 </span>
               </td>
