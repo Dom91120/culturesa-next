@@ -4918,12 +4918,22 @@ textarea.theme-pending:focus::placeholder {
   margin-bottom: 0.6rem;
 }
 .edh-back {
-  font-size: 0.68rem;
-  padding: 0.25rem 0.6rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+  flex: 0 0 auto;
   text-decoration: none;
+  transition: all 0.15s;
+}
+.edh-back:hover {
+  border-color: var(--border-hover);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 .edh-title {
   display: inline-flex;

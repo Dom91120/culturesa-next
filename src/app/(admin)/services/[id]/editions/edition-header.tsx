@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { initials, UserOffGlyph } from "@/app/(admin)/users/account-ui";
-import { ArrowLeftGlyph } from "@/components/ui-glyphs";
+import { ArrowBackGlyph } from "@/components/ui-glyphs";
 import { ExerciceNav } from "./exercice-nav";
 import { ExportButton } from "./export-button";
 import { PrintButton } from "./print-button";
@@ -51,8 +51,15 @@ export function EditionHeader({
 }) {
   return (
     <div className="edh">
-      <a href={`/services/${serviceId}/editions`} className="btn btn-ghost edh-back no-print">
-        <ArrowLeftGlyph size={13} /> Éditions
+      {/* Retour aux Éditions en icône seule (Dom 2026-09-09) : flèche « revenir » courbée,
+        libellé en infobulle et pour les lecteurs d'écran. */}
+      <a
+        href={`/services/${serviceId}/editions`}
+        className="edh-back no-print"
+        title="Retour aux Éditions"
+        aria-label="Retour aux Éditions"
+      >
+        <ArrowBackGlyph size={15} />
       </a>
       <span className="edh-title">
         <span className={`rg-ico ${TONE[tone]}`}>{icon}</span>

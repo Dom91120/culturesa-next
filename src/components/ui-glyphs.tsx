@@ -384,6 +384,14 @@ export const ArrowLeftGlyph = (p: GlyphProps) => (
   </Svg>
 );
 
+/** Flèche « revenir » courbée — bouton de retour aux Éditions (Dom 2026-09-09, choix C). */
+export const ArrowBackGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M9 14l-4 -4l4 -4" />
+    <path d="M5 10h11a4 4 0 1 1 0 8h-1" />
+  </Svg>
+);
+
 /** Flèche haut / bas — sens du tri. */
 export const ArrowUpGlyph = (p: GlyphProps) => (
   <Svg {...p}>
