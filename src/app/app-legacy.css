@@ -5213,7 +5213,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 }
 .xc-tile {
   display: flex;
-  align-items: flex-start;
+  align-items: center; /* contenu centré dans la hauteur de la rangée (Dom 2026-09-09) */
   gap: 0.55rem;
   padding: 0.65rem 0.85rem;
   border-radius: var(--radius);
@@ -5234,6 +5234,10 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 }
 .xc-tile .n.xc-exo {
   font-size: 1.15rem;
+}
+/* Tuile de l'exercice (trois lignes) : libellé calé sur les deux premières. */
+.xc-tile:has(.xc-exo) {
+  align-items: flex-start;
 }
 .xc-tile .cf-tile-txt small {
   white-space: nowrap;
