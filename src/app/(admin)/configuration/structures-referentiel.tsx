@@ -27,7 +27,7 @@ export function StructuresReferentiel({
       }
       count={structures.length}
       subtitle="Unités rattachées à un demandeur ; un usager rattaché à une structure hérite du demandeur. Supprimer une structure détache ses usagers sans les supprimer."
-      countSuffix={`· ${usagers} usager${usagers > 1 ? "s" : ""} rattaché${usagers > 1 ? "s" : ""}`}
+      countSuffix={`${usagers} usager${usagers > 1 ? "s" : ""} rattaché${usagers > 1 ? "s" : ""}`}
       detail={vides === 0 ? "toutes ont des usagers" : `${vides} sans aucun usager`}
       maxWidth={730}
     >

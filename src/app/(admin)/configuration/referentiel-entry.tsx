@@ -57,11 +57,11 @@ export function ReferentielEntry({
         </span>
         {/* Chiffre en grand à gauche, signalement à sa droite sur la ligne de base (Dom). */}
         <span className="cf-tile-body">
-          <span className="n">
-            {count}
+          <span className="n">{count}</span>
+          <span className="cf-tile-txt">
             {countSuffix && <small>{countSuffix}</small>}
+            <span className="s">{detail}</span>
           </span>
-          <span className="s">{detail}</span>
         </span>
       </button>
 
