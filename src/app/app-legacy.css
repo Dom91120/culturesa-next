@@ -4765,3 +4765,24 @@ textarea.theme-pending:focus::placeholder {
 .cf-tile .s {
   padding-left: calc(26px + 0.5rem);
 }
+/* Corps de tuile : chiffre à gauche, signalement à sa droite, alignés sur la ligne de base. */
+.cf-tile-body {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap; /* à l'étroit, le signalement passe sous le chiffre */
+  gap: 0.1rem 0.55rem;
+  padding-left: calc(26px + 0.5rem);
+  min-width: 0;
+  width: 100%;
+}
+.cf-tile-body .n,
+.cf-tile-body .s {
+  padding-left: 0;
+}
+.cf-tile-body .n {
+  flex: 0 0 auto;
+}
+.cf-tile-body .s {
+  flex: 1 1 120px;
+  min-width: 0;
+}
