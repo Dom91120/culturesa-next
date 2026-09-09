@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { ListDetailsGlyph } from "@/components/ui-glyphs";
+import { formatTel } from "@/lib/format";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import {
@@ -32,14 +33,15 @@ type SortKey =
   | "statut"
   | "pointage";
 const COLS: { key: SortKey; label: string; width: string; center?: boolean }[] = [
-  { key: "date", label: "Date", width: "12%" },
-  { key: "creneau", label: "Créneau", width: "9%" },
-  { key: "demandeur", label: "Demandeur", width: "15%" },
-  { key: "identite", label: "Identité", width: "17%" },
-  { key: "theme", label: "Thème", width: "17%" },
-  { key: "participants", label: "Participants", width: "10%", center: true },
-  { key: "statut", label: "Statut", width: "11%" },
-  { key: "pointage", label: "Pointage", width: "9%", center: true },
+  // Largeurs (Dom 2026-09-09) : date et créneau entiers, identité avec le contact dessous.
+  { key: "date", label: "Date", width: "14%" },
+  { key: "creneau", label: "Créneau", width: "10%" },
+  { key: "demandeur", label: "Demandeur", width: "14%" },
+  { key: "identite", label: "Identité", width: "21%" },
+  { key: "theme", label: "Thème", width: "13%" },
+  { key: "participants", label: "Participants", width: "8%", center: true },
+  { key: "statut", label: "Statut", width: "9%" },
+  { key: "pointage", label: "Pointage", width: "11%", center: true },
 ];
 const SORT_KEYS = new Set<string>(COLS.map((c) => c.key));
 
@@ -229,8 +231,14 @@ export default async function EditionsListePage({
                 )}
               </td>
               <td style={tdNoWrap}>{a.demandeur || "—"}</td>
-              <td style={{ ...tdNoWrap, fontWeight: 600 }}>
-                {`${a.nom} ${a.prenom}`.trim() || "—"}
+              <td style={tdNoWrap}>
+                <span style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</span>
+                {/* Contact sous le nom (Dom 2026-09-09) ; rien pour un compte anonymisé. */}
+                {`${a.nom}${a.prenom}`.trim() !== "" && (a.email || a.tel) && (
+                  <span className="ed-sub">
+                    {[a.email, formatTel(a.tel)].filter((x) => x && x !== "—").join(" · ")}
+                  </span>
+                )}
               </td>
               <td style={tdNoWrap}>{a.theme || "—"}</td>
               <td style={tdCenter}>
