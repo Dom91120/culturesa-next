@@ -1,3 +1,4 @@
+import { DatabaseGlyph } from "@/components/ui-glyphs";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
@@ -11,11 +12,14 @@ import { NiveauxReferentiel } from "./niveaux-referentiel";
 import { ServicesReferentiel } from "./services-referentiel";
 import { StructuresReferentiel } from "./structures-referentiel";
 
+// Page Configuration — refonte Dom 2026-09-09 : réglages en lignes (pictogramme, libellé,
+// description, contrôle à droite), référentiels en tuiles avec effectif et signalement.
 export default async function ConfigurationPage() {
   // Administration réservée aux administrateurs (les gestionnaires n'y ont pas accès).
   await requireRole("administrateur");
   const cfg = await getConfigMany([
     "school.zone",
+    "school.holidaysImportedAt",
     "reservations.autoRefreshSeconds",
     "agenda.autoRefreshSeconds",
     "debug.mode",
@@ -67,6 +71,7 @@ export default async function ConfigurationPage() {
       <ConfigurationPanel
         zone={zone}
         holidayCount={holidayCount}
+        holidaysImportedAt={cfg["school.holidaysImportedAt"] || null}
         refreshSeconds={refreshSeconds}
         agendaRefreshSeconds={agendaRefreshSeconds}
         debugMode={debugMode}
@@ -74,18 +79,27 @@ export default async function ConfigurationPage() {
       />
 
       <div className="panel">
-        <div className="panel-title">
-          <span className="dot" />
-          Référentiels
+        <div className="panel-title" style={{ marginBottom: ".75rem" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+            <span className="rg-ico is-ok">
+              <DatabaseGlyph size={16} />
+            </span>
+            Référentiels
+          </span>
         </div>
-        <p style={{ fontSize: ".85rem", color: "var(--muted)", marginBottom: "1rem" }}>
-          Paramètres généraux et référentiels.
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: ".5rem", maxWidth: 480 }}>
+        <div className="cf-tiles">
           <ServicesReferentiel services={services} />
           <DemandeursReferentiel demandeurs={demandeurs} />
           <StructuresReferentiel structures={structures} demandeurs={demandeurOptions} />
           <NiveauxReferentiel niveaux={niveaux} demandeurs={demandeurOptions} />
+        </div>
+        <div className="rg-foot">
+          <span style={{ lineHeight: 1.45 }}>
+            Une tuile ouvre l&apos;éditeur du référentiel. La ligne sous l&apos;effectif signale ce
+            qui mérite un coup d&apos;œil : un service sans e-mail de contact reçoit les e-mails du
+            service sur les comptes de ses gestionnaires ; un demandeur ouvert pendant les vacances
+            autorise ses usagers à réserver ces jours-là si le service l&apos;est aussi.
+          </span>
         </div>
       </div>
     </div>

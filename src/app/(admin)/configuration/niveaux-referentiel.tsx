@@ -1,5 +1,7 @@
 "use client";
 
+import { ListNumbersGlyph } from "@/components/ui-glyphs";
+
 import { NiveauxEditor } from "../niveaux/niveaux-editor";
 import { ReferentielEntry } from "./referentiel-entry";
 
@@ -14,8 +16,26 @@ export function NiveauxReferentiel({
   niveaux: Niveau[];
   demandeurs: DemandeurOption[];
 }) {
+  const nbDem = new Set(niveaux.map((n) => n.demandeurId).filter((d) => d !== null)).size;
+  const communs = niveaux.filter((n) => n.demandeurId === null).length;
   return (
-    <ReferentielEntry title="Niveaux" subtitle="Référentiel des niveaux scolaires">
+    <ReferentielEntry
+      title="Niveaux"
+      icon={
+        <span className="rg-ico is-warn">
+          <ListNumbersGlyph size={14} />
+        </span>
+      }
+      count={niveaux.length}
+      detail={
+        [
+          nbDem > 0 ? `répartis sur ${nbDem} demandeur${nbDem > 1 ? "s" : ""}` : null,
+          communs > 0 ? `${communs} commun${communs > 1 ? "s" : ""} à tous` : null,
+        ]
+          .filter((p): p is string => p !== null)
+          .join(" · ") || "aucun niveau"
+      }
+    >
       {(close) => <NiveauxEditor initial={niveaux} demandeurs={demandeurs} onClose={close} />}
     </ReferentielEntry>
   );

@@ -97,6 +97,8 @@ export async function refreshSchoolHolidaysAction(zone: string): Promise<Refresh
   try {
     const imported = await refreshSchoolHolidaysFromGov(parsed.data);
     const count = await countSchoolHolidays(parsed.data);
+    // Date du dernier import, affichée sur la ligne « Calendrier des vacances ».
+    await setConfig("school.holidaysImportedAt", new Date().toISOString());
     revalidatePath("/configuration");
     return { ok: true, imported, count };
   } catch (e) {

@@ -2,6 +2,7 @@
 
 import { type ReactNode, useState } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import { ArrowUpRightGlyph } from "@/components/ui-glyphs";
 
 /**
  * Entrée du panneau Référentiels (page Configuration) : un bouton (titre + sous-titre)
@@ -18,12 +19,22 @@ import { ModalOverlay } from "@/components/agenda-shared";
  */
 export function ReferentielEntry({
   title,
-  subtitle,
+  icon,
+  count,
+  countSuffix,
+  detail,
   maxWidth = 720,
   children,
 }: {
   title: string;
-  subtitle: string;
+  /** Pictogramme teinté (`.rg-ico …`), rendu par la page serveur. */
+  icon: ReactNode;
+  /** Effectif du référentiel, en grand. */
+  count: number;
+  /** Complément à côté de l'effectif (ex. « · 37 usagers rattachés »). */
+  countSuffix?: string;
+  /** Ligne de signalement (ce qui mérite un coup d'œil), ou état neutre. */
+  detail: string;
   maxWidth?: number;
   children: (close: () => void) => ReactNode;
 }) {
@@ -32,22 +43,20 @@ export function ReferentielEntry({
 
   return (
     <>
-      <button
-        type="button"
-        className="btn btn-ghost"
-        onClick={() => setOpen(true)}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          gap: ".15rem",
-          padding: ".6rem .9rem",
-          textAlign: "left",
-          cursor: "pointer",
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>{title}</span>
-        <span style={{ fontSize: ".72rem", color: "var(--muted)" }}>{subtitle}</span>
+      {/* Tuile (refonte Dom 2026-09-09) : toute la surface ouvre l'éditeur. */}
+      <button type="button" className="cf-tile" onClick={() => setOpen(true)}>
+        <span className="cf-tile-open" aria-hidden="true">
+          <ArrowUpRightGlyph size={14} />
+        </span>
+        <span className="h">
+          {icon}
+          {title}
+        </span>
+        <span className="n">
+          {count}
+          {countSuffix && <small>{countSuffix}</small>}
+        </span>
+        <span className="s">{detail}</span>
       </button>
 
       {open && (

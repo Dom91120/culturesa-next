@@ -260,3 +260,65 @@ export const InfoGlyph = (p: GlyphProps) => (
     <path d="M11 12h1v4h1" />
   </Svg>
 );
+
+/** Maillon — adresse publique. */
+export const LinkGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M9 15l6 -6" />
+    <path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464" />
+    <path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463" />
+  </Svg>
+);
+
+/** Insecte — mode debug. */
+export const BugGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M9 9v-1a3 3 0 0 1 6 0v1" />
+    <path d="M8 9h8a6 6 0 0 1 1 3v3a5 5 0 0 1 -10 0v-3a6 6 0 0 1 1 -3" />
+    <path d="M3 13l4 0" />
+    <path d="M17 13l4 0" />
+    <path d="M12 20l0 -6" />
+    <path d="M4 19l3.35 -2" />
+    <path d="M20 19l-3.35 -2" />
+    <path d="M4 7l3.75 2.4" />
+    <path d="M20 7l-3.75 2.4" />
+  </Svg>
+);
+
+/** Repère — zone académique. */
+export const MapPinGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+    <path d="M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0z" />
+  </Svg>
+);
+
+/** Flèche oblique — ouvre un éditeur. */
+export const ArrowUpRightGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M17 7l-10 10" />
+    <path d="M8 7l9 0l0 9" />
+  </Svg>
+);
+
+/** Devanture — référentiel des services. */
+export const StoreGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M3 21l18 0" />
+    <path d="M3 7v1a3 3 0 0 0 6 0v-1m0 1a3 3 0 0 0 6 0v-1m0 1a3 3 0 0 0 6 0v-1h-18l2 -4h14l2 4" />
+    <path d="M5 21l0 -10.15" />
+    <path d="M19 21l0 -10.15" />
+    <path d="M9 21v-4a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v4" />
+  </Svg>
+);
+
+/** Liste numérotée — niveaux (ordonnés). */
+export const ListNumbersGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M11 6h9" />
+    <path d="M11 12h9" />
+    <path d="M12 18h8" />
+    <path d="M4 16a2 2 0 1 1 4 0c0 .591 -.5 1 -1 1.5l-3 2.5h4" />
+    <path d="M6 10v-6l-2 2" />
+  </Svg>
+);

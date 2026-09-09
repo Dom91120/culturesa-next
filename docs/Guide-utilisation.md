@@ -393,14 +393,23 @@ services, ainsi que de la **gestion globale** de l'application via l'onglet **«
 
 ### Configuration et référentiels
 
-La page **Configuration** regroupe les réglages de l'application (zone des vacances scolaires,
-URL, intervalles de rafraîchissement automatique, mode debug) et l'accès aux **référentiels** :
-**Services**, **Demandeurs**, **Structures** et **Niveaux**. Le référentiel des services porte,
-en plus du nom et de l'icône, un **e-mail de contact** générique (ex.
-`maisondesarts@chatillon92.fr`) proposé aux usagers quand plus aucune place n'est disponible ;
-s'il est renseigné, c'est aussi lui qui reçoit les e-mails adressés au service (absences prévenues,
-récapitulatifs de réservations, déclencheurs dont le destinataire est « Le service ») à la place
-des comptes gestionnaire rattachés.
+La page **Configuration** présente les réglages de l'application en lignes, chacune avec son
+pictogramme, son libellé et une phrase qui dit à quoi elle sert ; chaque réglage s'enregistre dès
+qu'il change et une pastille « enregistré » le confirme dans l'en-tête. Groupes : **Vacances
+scolaires** (zone académique A, B ou C ; calendrier des vacances avec le nombre de périodes en
+base, la date du dernier import et le bouton **« Mettre à jour »** depuis data.education.gouv.fr),
+**Application** (adresse publique utilisée par le lien « Portail CultuRésa » des e-mails ; une
+pastille « IP locale » signale une adresse privée qui ne serait pas joignable hors du réseau),
+**Rafraîchissement automatique** (réservations côté usager, agenda côté gestionnaire) et
+**Avancé** (interrupteur du mode debug, à couper en exploitation). En dessous, les
+**référentiels** — **Services**, **Demandeurs**, **Structures** et **Niveaux** — se présentent en
+tuiles avec leur effectif et une ligne de signalement (services sans e-mail de contact, demandeurs
+ouverts pendant les vacances, structures sans usager, répartition des niveaux) ; une tuile ouvre
+l'éditeur. Le référentiel des services porte, en plus du nom et de l'icône, un **e-mail de
+contact** générique (ex. `maisondesarts@chatillon92.fr`) proposé aux usagers quand plus aucune
+place n'est disponible ; s'il est renseigné, c'est aussi lui qui reçoit les e-mails adressés au
+service (absences prévenues, récapitulatifs de réservations, déclencheurs dont le destinataire
+est « Le service ») à la place des comptes gestionnaire rattachés.
 
 ![Configuration générale et référentiels](img/12-configuration-referentiels.png)
 
