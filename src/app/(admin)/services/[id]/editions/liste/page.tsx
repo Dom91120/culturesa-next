@@ -21,7 +21,9 @@ import {
 import { RangeBar } from "../range-bar";
 import { RuptureHeading, TotalsLine } from "../totals";
 
-const PER_PAGE = 20;
+// Pagination à la feuille (Dom 2026-09-09) : calée sur le PDF A4 paysage, qui tient
+// une quinzaine de lignes à deux niveaux (date + créneau, nom + contact) par page.
+const PER_PAGE = 15;
 
 // Colonnes triables (clic sur l'en-tête → ?sort=<key>&dir=asc|desc).
 type SortKey =
@@ -72,7 +74,7 @@ function sortValue({ s, a }: OccRow, key: SortKey): string | number {
 // Édition « Liste des réservations » : occurrences datées de la plage choisie
 // (Hebdomadaire / Mensuel / Trimestriel / Annuel), TRIABLES par colonne. Case « avec
 // ruptures » → regroupement (semaine/mois) + sous-totaux ; le tri s'applique dans chaque
-// groupe. Paginée (20/page) + total général.
+// groupe. Paginée à la feuille (cf. PER_PAGE) + total général.
 export default async function EditionsListePage({
   params,
   searchParams,
@@ -345,7 +347,7 @@ export default async function EditionsListePage({
                   <span className="acct-action is-off">‹</span>
                 )}
                 <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
-                  Page {page} / {pages} · {flat.length} ligne{flat.length > 1 ? "s" : ""}
+                  Feuille {page} / {pages} · {flat.length} ligne{flat.length > 1 ? "s" : ""}
                 </span>
                 {page < pages ? (
                   <a href={pageHref(page + 1)} className="acct-action" aria-label="Page suivante">
