@@ -310,7 +310,7 @@ export default async function EditionsPage({
         </div>
 
         <div className="ms-grp">
-          Sur l&apos;exercice
+          {"Sur l'exercice"}
           <span className="hint">· listes complètes, triables, exportables</span>
         </div>
         <div className="ed-cards">{onExercice.map(renderCard)}</div>
@@ -341,7 +341,7 @@ export default async function EditionsPage({
           <div className="ed-cards">{waitToday.map(renderCard)}</div>
 
           <div className="ms-grp">
-            Sur l&apos;exercice
+            {"Sur l'exercice"}
             <span className="hint">· à lire en fin de période ou d&apos;exercice</span>
           </div>
           <div className="ed-cards">{waitExercice.map(renderCard)}</div>
