@@ -36,11 +36,11 @@ type SortKey =
 const COLS: { key: SortKey; label: string; width: string; center?: boolean }[] = [
   // Largeurs (Dom 2026-09-09) : date et créneau entiers, identité avec le contact dessous.
   { key: "date", label: "Date", width: "16%" },
-  { key: "demandeur", label: "Demandeur", width: "17%" },
-  { key: "identite", label: "Identité", width: "24%" },
-  { key: "theme", label: "Thème", width: "14%" },
-  { key: "participants", label: "Participants", width: "9%", center: true },
-  { key: "statut", label: "Statut", width: "7%", center: true },
+  { key: "demandeur", label: "Demandeur", width: "18%" },
+  { key: "identite", label: "Identité", width: "26%" },
+  { key: "theme", label: "Thème", width: "16%" },
+  { key: "participants", label: "Partic.", width: "6%", center: true },
+  { key: "statut", label: "Statut", width: "5%", center: true },
   { key: "pointage", label: "Pointage", width: "13%", center: true },
 ];
 const SORT_KEYS = new Set<string>(COLS.map((c) => c.key));
