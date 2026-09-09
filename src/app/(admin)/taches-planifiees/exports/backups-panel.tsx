@@ -13,7 +13,7 @@ import {
   UploadGlyph,
 } from "@/components/ui-glyphs";
 import { INPUT_CHROME } from "@/components/ui-styles";
-import { DATETIME_FMT_FR as dtFmt } from "@/lib/format";
+import { DATETIME_FMT_FR as dtFmt, relativeLabel as relative } from "@/lib/format";
 import type { CronSchedule } from "@/server/services/cron-tasks";
 import { ActionIconButton, DownloadGlyph, TrashGlyph } from "../../users/account-ui";
 import { createBackupAction, deleteBackupAction, restoreBackupAction } from "./actions";
@@ -49,18 +49,6 @@ function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-}
-
-/** « il y a 3 j », « dans 27 j », « à l'instant »… */
-function relative(iso: string, nowMs: number): string {
-  const diff = new Date(iso).getTime() - nowMs;
-  const min = Math.round(Math.abs(diff) / 60000);
-  let txt: string;
-  if (min < 1) txt = "moins d'une minute";
-  else if (min < 60) txt = `${min} min`;
-  else if (min < 48 * 60) txt = `${Math.round(min / 60)} h`;
-  else txt = `${Math.round(min / 1440)} j`;
-  return diff >= 0 ? `dans ${txt}` : `il y a ${txt}`;
 }
 
 /** Libellé court de la planification de l'export automatique. */

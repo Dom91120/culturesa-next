@@ -65,7 +65,7 @@ export async function saveMailConfigAction(
   if (d.password !== "") entries["mail.password"] = encryptSecret(d.password);
 
   await setConfigMany(entries);
-  revalidatePath("/configuration");
+  revalidatePath("/messagerie");
   return { ok: true };
 }
 
@@ -75,13 +75,25 @@ export async function sendTestMailAction(to: string): Promise<ActionState> {
   const parsed = z.string().trim().pipe(z.email()).safeParse(to);
   if (!parsed.success) return { ok: false, error: "Adresse destinataire invalide." };
 
+  // Le résultat du dernier test est mémorisé (date, destinataire, issue, durée) :
+  // c'est la seule preuve que le relais fonctionne, elle mérite d'être visible à
+  // la prochaine visite plutôt que perdue à la fermeture de l'onglet.
+  const t0 = Date.now();
+  let error: string | null = null;
   try {
     await sendTemplatedMail({ to: parsed.data, kind: "email_test", mode: "direct" });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Échec de l'envoi.";
-    return { ok: false, error: msg };
+    error = e instanceof Error ? e.message : "Échec de l'envoi.";
   }
-  return { ok: true };
+  await setConfigMany({
+    "mail.lastTest.at": new Date().toISOString(),
+    "mail.lastTest.to": parsed.data,
+    "mail.lastTest.ok": error ? "0" : "1",
+    "mail.lastTest.error": error ?? "",
+    "mail.lastTest.ms": String(Date.now() - t0),
+  });
+  revalidatePath("/messagerie");
+  return error ? { ok: false, error } : { ok: true };
 }
 
 // ─── File d'attente des e-mails en échec (renvoi best-effort) ────────────────

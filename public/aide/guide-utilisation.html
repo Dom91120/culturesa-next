@@ -431,9 +431,17 @@ servent de <strong>base surchargeable par chaque service</strong> (onglet Échan
 personnalisés globaux</strong>.</li>
 </ul>
 <h3 id="messagerie">Messagerie</h3>
-<p>L&#39;onglet <strong>Messagerie</strong> configure l&#39;envoi des e-mails (paramètres SMTP), gère les <strong>e-mails
-système</strong> (vérification de compte, réinitialisation de mot de passe, etc.) et permet de
-<strong>relancer les envois en échec</strong>.</p>
+<p>L&#39;onglet <strong>Messagerie</strong> configure l&#39;envoi des e-mails et permet de <strong>relancer les envois en
+échec</strong>. Quatre tuiles résument l&#39;état : le relais SMTP enregistré (serveur, port, chiffrement),
+l&#39;expéditeur tel que le voit le destinataire, le <strong>dernier e-mail de test</strong> (date, destinataire,
+issue, durée ; mémorisé d&#39;une visite à l&#39;autre) et le nombre d&#39;e-mails en échec. Le mode d&#39;envoi
+(SMTP, mail système, Sendmail) se choisit dans l&#39;en-tête du panneau ; les champs du relais
+s&#39;estompent quand l&#39;envoi est confié au système. Le formulaire est découpé en trois groupes :
+<strong>Expéditeur</strong>, <strong>Relais SMTP</strong> (le mot de passe déjà enregistré est signalé « conservé », laissez
+le champ vide pour le garder) et <strong>Vérifier l&#39;envoi</strong>. Une pastille « modifié » apparaît dès qu&#39;un
+champ change ; <strong>« Enregistrer »</strong> demande le mot de passe de l&#39;administrateur. Les e-mails en
+échec sont listés avec leur cause, le nombre d&#39;essais et, au survol, <strong>« Renvoyer »</strong> ou la
+corbeille qui abandonne l&#39;envoi ; rien n&#39;est renvoyé automatiquement.</p>
 <p><img src="img/14-messagerie.png" alt="Configuration de la messagerie"></p>
 <p><em>Figure 14 — Configuration de la messagerie</em></p>
 <h3 id="rgpd-et-conservation-des-données">RGPD et conservation des données</h3>

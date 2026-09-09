@@ -16,7 +16,7 @@ import {
   RepeatGlyph,
   ShieldLockGlyph,
 } from "@/components/ui-glyphs";
-import { DATETIME_FMT_FR as dtFmt } from "@/lib/format";
+import { DATETIME_FMT_FR as dtFmt, relativeLabel as relative } from "@/lib/format";
 import type { CronSchedule, CronTaskKey } from "@/server/services/cron-tasks";
 import { ActionIconButton } from "../../users/account-ui";
 import { runCronTaskAction, updateCronScheduleAction } from "./actions";
@@ -55,19 +55,6 @@ const TASK_ICON: Record<CronTaskKey, { glyph: React.ReactNode; tech: boolean }> 
   "rgpd-retention": { glyph: <ShieldLockGlyph size={16} />, tech: true },
   backup: { glyph: <DatabaseExportGlyph size={16} />, tech: true },
 };
-
-/** « dans 3 min », « dans 2 h », « dans 12 h », « il y a 47 j »… */
-function relative(iso: string, nowMs: number): string {
-  const diff = new Date(iso).getTime() - nowMs;
-  const abs = Math.abs(diff);
-  const min = Math.round(abs / 60000);
-  let txt: string;
-  if (min < 1) txt = "moins d'une minute";
-  else if (min < 60) txt = `${min} min`;
-  else if (min < 48 * 60) txt = `${Math.round(min / 60)} h`;
-  else txt = `${Math.round(min / 1440)} j`;
-  return diff >= 0 ? `dans ${txt}` : `il y a ${txt}`;
-}
 
 /** Délai maximal « normal » entre deux exécutions : 3 intervalles, ou 26 h à heure fixe. */
 function staleAfterMs(s: CronSchedule): number {

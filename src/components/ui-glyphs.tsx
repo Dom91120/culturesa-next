@@ -224,3 +224,39 @@ export const ArrowRightGlyph = (p: GlyphProps) => (
     <path d="M13 6l6 6" />
   </Svg>
 );
+
+/** Serveur — relais SMTP. */
+export const ServerGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M3 4m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" />
+    <path d="M3 12m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" />
+    <path d="M7 8l0 .01" />
+    <path d="M7 16l0 .01" />
+  </Svg>
+);
+
+/** Engrenage — configuration. */
+export const SettingsGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z" />
+    <path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+  </Svg>
+);
+
+/** Disquette — enregistrer. */
+export const SaveGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" />
+    <path d="M12 14m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+    <path d="M14 4l0 4l-6 0l0 -4" />
+  </Svg>
+);
+
+/** Cercle « i » — explication en pied de panneau. */
+export const InfoGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
+    <path d="M12 9h.01" />
+    <path d="M11 12h1v4h1" />
+  </Svg>
+);

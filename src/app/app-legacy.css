@@ -4117,3 +4117,158 @@ textarea.theme-pending:focus::placeholder {
 .jr-sub svg {
   flex: 0 0 auto;
 }
+
+/* ── Messagerie (refonte Dom 2026-09-09) ────────────────────────────────────────
+   Tuiles d'état, groupes de champs, sélecteur segmenté du mode d'envoi, pastilles,
+   liste des e-mails en échec. Pictogrammes teintés : .rg-ico (journal RGPD). */
+.ms-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.6rem;
+  margin: 0 0 0.85rem;
+}
+.ms-tile {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  background: var(--surface1);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.ms-tile.is-danger {
+  border-color: rgba(224, 107, 107, 0.35);
+  background: var(--danger-dim);
+}
+.ms-tile .l {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.ms-tile .v {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-tile .s {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-grp {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 0 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ms-grp::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+.ms-seg {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.ms-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.08rem 0.5rem;
+  border-radius: 99px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.ms-pill.is-ok {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.ms-pill.is-warn {
+  background: rgba(232, 164, 90, 0.16);
+  color: var(--warn);
+}
+.ms-pill.is-neutral {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+}
+/* Mot de passe : pastille « conservé » posée dans le champ, à droite. */
+.ms-pwd {
+  position: relative;
+}
+.ms-pwd input {
+  width: 100%;
+  padding-right: 6.2rem;
+}
+.ms-pwd .ms-pill {
+  position: absolute;
+  right: 0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ms-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.2rem;
+}
+.ms-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.ms-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.ms-subj {
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-sub {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-err {
+  font-family: monospace;
+  font-size: 0.66rem;
+  color: var(--danger);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-acts {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+.ms-row:hover .ms-acts,
+.ms-acts:focus-within {
+  opacity: 1;
+}

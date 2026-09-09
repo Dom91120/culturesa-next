@@ -453,9 +453,17 @@ deux volets :
 
 ### Messagerie
 
-L'onglet **Messagerie** configure l'envoi des e-mails (paramètres SMTP), gère les **e-mails
-système** (vérification de compte, réinitialisation de mot de passe, etc.) et permet de
-**relancer les envois en échec**.
+L'onglet **Messagerie** configure l'envoi des e-mails et permet de **relancer les envois en
+échec**. Quatre tuiles résument l'état : le relais SMTP enregistré (serveur, port, chiffrement),
+l'expéditeur tel que le voit le destinataire, le **dernier e-mail de test** (date, destinataire,
+issue, durée ; mémorisé d'une visite à l'autre) et le nombre d'e-mails en échec. Le mode d'envoi
+(SMTP, mail système, Sendmail) se choisit dans l'en-tête du panneau ; les champs du relais
+s'estompent quand l'envoi est confié au système. Le formulaire est découpé en trois groupes :
+**Expéditeur**, **Relais SMTP** (le mot de passe déjà enregistré est signalé « conservé », laissez
+le champ vide pour le garder) et **Vérifier l'envoi**. Une pastille « modifié » apparaît dès qu'un
+champ change ; **« Enregistrer »** demande le mot de passe de l'administrateur. Les e-mails en
+échec sont listés avec leur cause, le nombre d'essais et, au survol, **« Renvoyer »** ou la
+corbeille qui abandonne l'envoi ; rien n'est renvoyé automatiquement.
 
 ![Configuration de la messagerie](img/14-messagerie.png)
 

@@ -68,3 +68,15 @@ export function formatTel(tel: string | null | undefined): string {
   if (d.length !== 10) return tel;
   return (d.match(/.{2}/g) ?? []).join(" ");
 }
+
+/** « il y a 3 j », « dans 27 j », « à l'instant »… (écart entre `iso` et `nowMs`). */
+export function relativeLabel(iso: string, nowMs: number): string {
+  const diff = new Date(iso).getTime() - nowMs;
+  const min = Math.round(Math.abs(diff) / 60000);
+  let txt: string;
+  if (min < 1) txt = "moins d'une minute";
+  else if (min < 60) txt = `${min} min`;
+  else if (min < 48 * 60) txt = `${Math.round(min / 60)} h`;
+  else txt = `${Math.round(min / 1440)} j`;
+  return diff >= 0 ? `dans ${txt}` : `il y a ${txt}`;
+}
