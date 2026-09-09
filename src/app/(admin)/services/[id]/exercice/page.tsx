@@ -13,7 +13,7 @@ export default async function ExercicePage({ params }: { params: Promise<{ id: s
   return (
     <div>
       <ParamsSubnav serviceId={id} />
-      <ExercicePanel serviceId={id} data={data} />
+      <ExercicePanel serviceId={id} serviceLabel={service.label} data={data} />
     </div>
   );
 }

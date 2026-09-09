@@ -68,12 +68,13 @@ export async function cycleAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Valeurs invalides." };
   }
-  await requireServiceManager(parsed.data.serviceId);
+  const session = await requireServiceManager(parsed.data.serviceId);
   try {
     const res = await cycleService(parsed.data.serviceId, {
       recreatePeriods: parsed.data.recreatePeriods,
       recreateSlots: parsed.data.recreateSlots,
       recreateMultiSlots: parsed.data.recreateMultiSlots,
+      actorId: session.user.id,
     });
     revalidate(parsed.data.serviceId);
     return {

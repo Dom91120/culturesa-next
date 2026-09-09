@@ -26,6 +26,9 @@ type CycleOptions = {
   // semaine / horaires / capacité / jauge / parité / demandeurs, aux dates régénérées
   // dans la nouvelle période (même filtrage qu'à la création multiple).
   recreateMultiSlots: boolean;
+  // Compte qui lance la bascule — mémorisé dans le CycleEvent pour la ligne
+  // « Dernière bascule … par … » du panneau (Dom 2026-09-09).
+  actorId?: string;
 };
 
 type CycleResult = {
@@ -38,13 +41,21 @@ type UndoInfo = {
   hasUndo: boolean;
   createdAt: string | null;
   bookingsCount: number;
+  /** Auteur de la dernière bascule (« Prénom Nom »), null si inconnu (bascule ancienne). */
+  actorLabel: string | null;
 };
 
 export type ExercicePaneData = {
   currentName: string;
   nextName: string;
+  /** Exercice qui redeviendrait courant après annulation (le précédent), null s'il n'y en a pas. */
+  previousName: string | null;
   currentRange: { start: string; end: string } | null;
+  /** L'exercice courant est celui « Affiché aux utilisateurs ». */
+  currentVisible: boolean;
   hasActivePeriods: boolean;
+  /** Ce que la bascule reconduirait : périodes, créneaux récurrents, lots multi-ponctuels. */
+  counts: { periods: number; recurring: number; multiLots: number };
   showPreviousExercices: boolean;
   undo: UndoInfo;
 };
@@ -61,6 +72,8 @@ type CycleEventData = {
   // Exercice qui portait « Affiché aux utilisateurs » avant la bascule (le flag est
   // transféré au nouvel exercice) — restauré à l'annulation. Absent/null : aucun.
   visibleFromExerciceId?: number | null;
+  // Compte qui a lancé la bascule (absent sur les événements antérieurs au 2026-09-09).
+  actorId?: string;
 };
 
 // =====================================================================================
@@ -172,7 +185,7 @@ type MultiLotSnapshot = {
 // =====================================================================================
 
 export async function cycleService(serviceId: string, opts: CycleOptions): Promise<CycleResult> {
-  const { recreatePeriods, recreateSlots, recreateMultiSlots } = opts;
+  const { recreatePeriods, recreateSlots, recreateMultiSlots, actorId } = opts;
   // Legacy (api/periods.php) : si « Recréer les périodes » est décoché, la bascule ne
   // fait rien (no-op). `recreateSlots`/`recreateMultiSlots` ne gatent, eux, que le
   // clonage des créneaux (récurrents / lots multi-ponctuels).
@@ -520,6 +533,7 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         newMultiSlotIds,
         newExerciceId: exId,
         visibleFromExerciceId,
+        ...(actorId ? { actorId } : {}),
       };
       await tx.cycleEvent.create({
         data: { serviceId, data: payload as unknown as Prisma.InputJsonValue },
@@ -634,7 +648,7 @@ async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
     where: { serviceId },
     orderBy: { id: "desc" },
   });
-  if (!ev) return { hasUndo: false, createdAt: null, bookingsCount: 0 };
+  if (!ev) return { hasUndo: false, createdAt: null, bookingsCount: 0, actorLabel: null };
 
   const data = ev.data as unknown as CycleEventData;
   const newPeriodIds = data.newPeriodIds ?? [];
@@ -657,10 +671,18 @@ async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
   if (allSlotIds.length > 0) {
     or.push({ slotId: { in: allSlotIds } });
   }
-  const count =
-    or.length > 0 ? await prisma.booking.count({ where: { parentBookingId: null, OR: or } }) : 0;
+  const [count, actor] = await Promise.all([
+    or.length > 0 ? prisma.booking.count({ where: { parentBookingId: null, OR: or } }) : 0,
+    data.actorId
+      ? prisma.user.findUnique({
+          where: { id: data.actorId },
+          select: { prenom: true, nom: true, name: true },
+        })
+      : null,
+  ]);
+  const actorLabel = actor ? `${actor.prenom} ${actor.nom}`.trim() || actor.name || null : null;
 
-  return { hasUndo: true, createdAt: ev.createdAt.toISOString(), bookingsCount: count };
+  return { hasUndo: true, createdAt: ev.createdAt.toISOString(), bookingsCount: count, actorLabel };
 }
 
 // =====================================================================================
@@ -751,7 +773,14 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
   const [exercices, svc] = await Promise.all([
     prisma.exercice.findMany({
       where: { serviceId },
-      select: { id: true, label: true, type: true, dateStart: true, dateEnd: true },
+      select: {
+        id: true,
+        label: true,
+        type: true,
+        dateStart: true,
+        dateEnd: true,
+        visibleToUsers: true,
+      },
     }),
     prisma.service.findUnique({
       where: { id: serviceId },
@@ -761,13 +790,30 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
 
   // Exercice courant = le plus récent (comparateur unique — même départage que la
   // bascule et currentExerciceIdForService, cf. byMostRecentExercice).
-  const current = exercices.slice().sort(byMostRecentExercice)[0] ?? null;
+  const sorted = exercices.slice().sort(byMostRecentExercice);
+  const current = sorted[0] ?? null;
+  const previous = sorted[1] ?? null;
 
   // La bascule reconduit les périodes de l'exercice COURANT (portée par exercice
-  // depuis la suppression de la notion d'état actif/archivé).
-  const activeCount = await prisma.period.count({
-    where: current ? { serviceId, exerciceId: current.id } : { serviceId },
-  });
+  // depuis la suppression de la notion d'état actif/archivé). Les tuiles du panneau
+  // annoncent aussi ce qu'elle recréerait : créneaux récurrents et lots multi-ponctuels
+  // (un lot = un batchId, cf. cycleService) des périodes de cet exercice.
+  const periodWhere = current ? { serviceId, exerciceId: current.id } : { serviceId };
+  const [activeCount, recurringCount, multiRows] = await Promise.all([
+    prisma.period.count({ where: periodWhere }),
+    prisma.slot.count({ where: { serviceId, period: periodWhere, slotType: "recurring" } }),
+    prisma.slot.findMany({
+      where: {
+        serviceId,
+        period: periodWhere,
+        slotType: "unique",
+        batchId: { not: null },
+        parentSlotId: null,
+      },
+      select: { batchId: true },
+      distinct: ["batchId"],
+    }),
+  ]);
 
   const currentName = current?.label ?? "—";
   const startYmd = fmtDateUtc(current?.dateStart ?? null);
@@ -791,8 +837,11 @@ export async function getExercicePaneData(serviceId: string): Promise<ExercicePa
   return {
     currentName,
     nextName,
+    previousName: previous?.label ?? null,
     currentRange,
+    currentVisible: current?.visibleToUsers ?? false,
     hasActivePeriods: activeCount > 0,
+    counts: { periods: activeCount, recurring: recurringCount, multiLots: multiRows.length },
     showPreviousExercices: svc?.showPreviousExercices ?? false,
     undo,
   };

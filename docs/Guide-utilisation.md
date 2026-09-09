@@ -381,7 +381,16 @@ utilisé. Le **routage, le destinataire et l'activation de l'envoi** sont, eux, 
 
 Bascule le service vers un **nouvel exercice** (nouvelle saison / année scolaire) : les périodes
 du nouvel exercice sont créées avec des **dates décalées** à partir de l'exercice précédent ; les
-exercices antérieurs restent consultables.
+exercices antérieurs restent consultables. Le panneau s'ouvre sur trois tuiles qui annoncent ce
+que la bascule reconduirait : le dernier exercice (bornes, affiché ou non aux utilisateurs), les
+périodes à reconduire, les créneaux à recréer (récurrents et lots multi-ponctuels). En dessous,
+deux cartes côte à côte. **Créer l'exercice** propose trois interrupteurs — périodes à
+l'identique, créneaux récurrents, lots multi-ponctuels — chacun avec le nombre concerné en
+pastille ; sans les périodes, rien n'est reconduit et le bouton se grise. **Revenir à l'exercice
+précédent** n'apparaît que si la dernière bascule est annulable : une bande rouge compte les
+réservations qui seraient supprimées (orange s'il n'y en a aucune) et une case « J'ai compris »
+déverrouille le bouton. Les deux actions demandent une confirmation en modale, et une ligne en
+pied rappelle la date et l'auteur de la dernière bascule.
 
 ### Paramètres — RGPD (usagers du service)
 

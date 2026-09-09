@@ -2,29 +2,41 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { CheckGlyph, TrashGlyph } from "@/app/(admin)/users/account-ui";
 import { ModalOverlay } from "@/components/agenda-shared";
+import {
+  AlertGlyph,
+  ArrowBackGlyph,
+  ArrowRightGlyph,
+  CircleCheckGlyph,
+  HistoryGlyph,
+  RefreshGlyph,
+} from "@/components/ui-glyphs";
 import type { ExercicePaneData } from "@/server/services/exercice";
 import { cycleAction, undoCycleAction } from "./actions";
 
 type Props = {
   serviceId: string;
+  serviceLabel: string;
   data: ExercicePaneData;
 };
 
-type Mode = "none" | "create" | "undo";
-
 // AAAA-MM-JJ → JJ/MM/AAAA (affichage français des bornes d'exercice).
 const frDate = (ymd: string) => ymd.split("-").reverse().join("/");
+const plural = (n: number) => (n > 1 ? "s" : "");
+const DT_FMT = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
-export function ExercicePanel({ serviceId, data }: Props) {
+// Refonte Dom 2026-09-09 : en-tête à médaillon, trois tuiles de chiffres (ce que la bascule
+// reconduirait), puis deux cartes d'action toujours visibles — création à gauche, retour
+// arrière à droite (seulement si une bascule est annulable) — avec options en
+// interrupteurs et bande rouge/orange sur ce que l'annulation supprimerait.
+export function ExercicePanel({ serviceId, serviceLabel, data }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  // Message de succès, teinté : accent pour une création, orange (--warn)
-  // pour une suppression d'exercice.
-  const [info, setInfo] = useState<{ text: string; tone: "accent" | "warn" } | null>(null);
+  // Message de succès, teinté : vert pour une création, orange pour une suppression.
+  const [info, setInfo] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
 
-  const [mode, setMode] = useState<Mode>("none");
   const [recreatePeriods, setRecreatePeriods] = useState(true);
   const [recreateSlots, setRecreateSlots] = useState(true);
   const [recreateMultiSlots, setRecreateMultiSlots] = useState(true);
@@ -32,24 +44,19 @@ export function ExercicePanel({ serviceId, data }: Props) {
   // Modale de confirmation ouverte (port des modales legacy exercice-create/delete-confirm).
   const [confirm, setConfirm] = useState<"create" | "undo" | null>(null);
 
-  const bookingsCount = data.undo.bookingsCount;
+  const { counts, undo } = data;
+  const bookingsCount = undo.bookingsCount;
   const undoButtonReady = bookingsCount === 0 || undoAck;
-  // Teinte de la section « supprimer le dernier exercice » : danger (rouge) si la
-  // suppression entraîne la perte de réservations, warn (orange) sinon (port legacy).
-  const undoAccent = bookingsCount > 0 ? "var(--danger)" : "var(--warn)";
+  // Teinte du retour arrière : danger (rouge) si des réservations seront perdues, warn
+  // (orange) sinon (port legacy).
+  const undoTone = bookingsCount > 0 ? "danger" : "warn";
+  // Sans les périodes, la bascule ne reconduit rien du tout (cycleService = no-op).
+  const canCreate = data.hasActivePeriods && recreatePeriods;
 
-  function toggleMode(next: Exclude<Mode, "none">) {
-    setError(null);
-    setInfo(null);
-    setUndoAck(false);
-    setMode((prev) => (prev === next ? "none" : next));
-  }
-
-  // Ouvre la modale de confirmation de création (remplace window.confirm).
   function askCreate() {
     setError(null);
     setInfo(null);
-    if (!data.hasActivePeriods) return;
+    if (!canCreate) return;
     setConfirm("create");
   }
 
@@ -62,15 +69,13 @@ export function ExercicePanel({ serviceId, data }: Props) {
         return;
       }
       setInfo({
-        text: `Exercice ${data.nextName} créé : ${res.created} période(s), ${res.slotsCreated} créneau(x) récurrent(s), ${res.multiSlotsCreated} créneau(x) multi-ponctuel(s).`,
-        tone: "accent",
+        text: `Exercice ${data.nextName} créé : ${res.created} période${plural(res.created)}, ${res.slotsCreated} créneau${plural(res.slotsCreated) ? "x" : ""} récurrent${plural(res.slotsCreated)}, ${res.multiSlotsCreated} créneau${plural(res.multiSlotsCreated) ? "x" : ""} multi-ponctuel${plural(res.multiSlotsCreated)}.`,
+        tone: "ok",
       });
-      setMode("none");
       router.refresh();
     });
   }
 
-  // Ouvre la modale de confirmation de suppression (remplace window.confirm).
   function askUndo() {
     setError(null);
     setInfo(null);
@@ -85,342 +90,294 @@ export function ExercicePanel({ serviceId, data }: Props) {
         setError(res?.error ?? "Échec de l'annulation.");
         return;
       }
-      setInfo({ text: "Exercice supprimé, retour à l'année précédente effectué.", tone: "warn" });
-      setMode("none");
+      setInfo({ text: "Exercice supprimé, retour à l'exercice précédent effectué.", tone: "warn" });
       setUndoAck(false);
       router.refresh();
     });
   }
 
-  const headerRow = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    flexWrap: "wrap" as const,
-  };
-  const columnsRow = {
-    display: "flex",
-    gap: 16,
-    marginTop: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap" as const,
-  };
-  const columnStyle = {
-    background: "var(--surface2)",
-    flex: 1,
-    minWidth: 280,
-  };
+  const Switch = ({
+    on,
+    onChange,
+    label,
+    count,
+    disabled,
+  }: {
+    on: boolean;
+    onChange: (v: boolean) => void;
+    label: string;
+    count: number;
+    disabled?: boolean;
+  }) => (
+    <div className="xc-opt">
+      <span className="xc-opt-l">
+        {label}
+        <span className={`ms-pill ${count > 0 ? "is-ok" : "is-neutral"}`}>{count}</span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        className={`ex-sw${on ? " is-on" : ""}`}
+        disabled={disabled || isPending}
+        onClick={() => onChange(!on)}
+      />
+    </div>
+  );
 
   return (
-    <div className="panel">
-      <div style={headerRow}>
-        <div>
-          <div className="panel-title">
-            <span className="dot" style={{ background: "var(--warn)" }} />🔄 Changement
-            d&apos;exercice
+    <div className="panel xc">
+      <div className="panel-title xc-hd">
+        <span className="rg-ico is-warn">
+          <RefreshGlyph size={16} />
+        </span>
+        Changement d&apos;exercice
+        <span className="edh-svc">· {serviceLabel}</span>
+        <span style={{ flex: 1 }} />
+        {error && (
+          <span className="ms-pill is-warn" role="alert">
+            <AlertGlyph size={11} /> {error}
+          </span>
+        )}
+        {info && (
+          <span className={`ms-pill ${info.tone === "ok" ? "is-ok" : "is-warn"}`} role="status">
+            <CircleCheckGlyph size={11} /> {info.text}
+          </span>
+        )}
+      </div>
+
+      <div className="xc-tiles">
+        <div className="xc-tile">
+          <div className="n xc-exo">{data.currentName}</div>
+          <div className="cf-tile-txt">
+            <small>dernier exercice</small>
+            {data.currentRange && (
+              <small>
+                {frDate(data.currentRange.start)} → {frDate(data.currentRange.end)}
+              </small>
+            )}
+            {data.currentVisible ? (
+              <small className="xc-ok">affiché aux utilisateurs</small>
+            ) : (
+              <small>non affiché aux utilisateurs</small>
+            )}
           </div>
-          <p style={{ margin: "6px 0 0", fontSize: ".9rem" }}>
-            Dernier exercice : <strong>{data.currentName}</strong>
-            {data.currentRange ? (
-              <span className="muted">
-                {" "}
-                ({frDate(data.currentRange.start)} → {frDate(data.currentRange.end)})
-              </span>
-            ) : null}
-          </p>
+        </div>
+        <div className="xc-tile">
+          <div className="n">{counts.periods}</div>
+          <div className="cf-tile-txt">
+            <small>{`période${plural(counts.periods)} à reconduire`}</small>
+            <small>
+              {counts.periods > 0 ? "décalées d'un an" : "aucune période sur l'exercice"}
+            </small>
+          </div>
+        </div>
+        <div className="xc-tile">
+          <div className="n">{counts.recurring + counts.multiLots}</div>
+          <div className="cf-tile-txt">
+            <small>{`créneau${counts.recurring + counts.multiLots > 1 ? "x" : ""} à recréer`}</small>
+            <small>
+              {`${counts.recurring} récurrent${plural(counts.recurring)} · ${counts.multiLots} lot${plural(counts.multiLots)} multi-ponctuel${plural(counts.multiLots)}`}
+            </small>
+          </div>
         </div>
       </div>
 
-      {error ? (
-        <p className="error-text" style={{ marginTop: 12 }}>
-          {error}
-        </p>
-      ) : null}
-      {info ? (
-        <p style={{ color: `var(--${info.tone})`, marginTop: 12, fontSize: ".9rem" }}>
-          {info.text}
-        </p>
-      ) : null}
-
-      <div style={{ display: "flex", gap: 24, marginTop: 16, flexWrap: "wrap" }}>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={mode === "create"}
-            disabled={isPending}
-            onChange={() => toggleMode("create")}
-          />{" "}
-          Créer un nouvel exercice
-        </label>
-        {data.undo.hasUndo ? (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={mode === "undo"}
-              disabled={isPending}
-              onChange={() => toggleMode("undo")}
-            />{" "}
-            Supprimer le dernier exercice
-          </label>
-        ) : null}
-      </div>
-
-      <div style={columnsRow}>
-        {mode === "create" ? (
-          <div className="panel" style={columnStyle}>
-            <div className="panel-title">Création d&apos;un nouvel exercice</div>
-            <p style={{ fontSize: ".85rem", color: "var(--muted)", marginTop: 6 }}>
-              Pour chaque période de l&apos;exercice en cours : une nouvelle période sera créée avec
-              des dates décalées d&apos;un an. L&apos;originale est conservée, et si l&apos;exercice
-              en cours était « Affiché aux utilisateurs », le nouvel exercice prend le relais.
-            </p>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                margin: "12px 0",
-              }}
-            >
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={recreatePeriods}
-                  disabled={isPending}
-                  onChange={(e) => setRecreatePeriods(e.target.checked)}
-                />{" "}
-                Recréer les périodes à l&apos;identique
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={recreateSlots}
-                  disabled={isPending}
-                  onChange={(e) => setRecreateSlots(e.target.checked)}
-                />{" "}
-                Recréer les créneaux récurrents à l&apos;identique
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={recreateMultiSlots}
-                  disabled={isPending}
-                  onChange={(e) => setRecreateMultiSlots(e.target.checked)}
-                />{" "}
-                Recréer les créneaux multi-ponctuels à l&apos;identique
-              </label>
+      <div className="xc-cards">
+        <div className="xc-card">
+          <h3 className="ms-grp xc-grp">
+            <span className="xc-ok">
+              <ArrowRightGlyph size={13} />
+            </span>
+            Créer l&apos;exercice {data.nextName}
+          </h3>
+          {/* Phrases en gabarit : le compilateur JSX perd l'espace qui suit une expression
+            quand la ligne se poursuit — même parade que « 2 000 entrées ». */}
+          <p className="xc-desc">
+            {`Chaque période de ${data.currentName} est recréée avec des dates décalées d'un an. L'originale est conservée ; si ${data.currentName} est « Affiché aux utilisateurs », le nouvel exercice prend le relais.`}
+          </p>
+          <Switch
+            on={recreatePeriods}
+            onChange={setRecreatePeriods}
+            label="Périodes à l'identique"
+            count={counts.periods}
+          />
+          <Switch
+            on={recreateSlots}
+            onChange={setRecreateSlots}
+            label="Créneaux récurrents"
+            count={counts.recurring}
+            disabled={!recreatePeriods}
+          />
+          <Switch
+            on={recreateMultiSlots}
+            onChange={setRecreateMultiSlots}
+            label="Lots multi-ponctuels"
+            count={counts.multiLots}
+            disabled={!recreatePeriods}
+          />
+          {!data.hasActivePeriods ? (
+            <div className="xc-band is-warn">
+              <AlertGlyph size={14} />
+              <span>Aucune période à reconduire sur {data.currentName}.</span>
             </div>
-            {data.hasActivePeriods ? null : (
-              <p
-                style={{
-                  color: "var(--warn)",
-                  border: "1px solid var(--warn)",
-                  borderRadius: "var(--radius)",
-                  padding: "8px 12px",
-                  fontSize: ".85rem",
-                }}
-              >
-                Aucune période active à reconduire
-              </p>
-            )}
+          ) : !recreatePeriods ? (
+            <div className="xc-band is-warn">
+              <AlertGlyph size={14} />
+              <span>Sans les périodes, rien n&apos;est reconduit.</span>
+            </div>
+          ) : null}
+          <div className="xc-foot">
             <button
               type="button"
-              className="btn primary"
-              style={{ background: "var(--accent)", borderColor: "var(--accent)" }}
-              disabled={isPending || !data.hasActivePeriods}
+              className="btn btn-primary xc-btn"
+              disabled={isPending || !canCreate}
               onClick={askCreate}
             >
-              Créer l&apos;exercice {data.nextName}
+              <ArrowRightGlyph size={13} /> Créer l&apos;exercice {data.nextName}
             </button>
           </div>
-        ) : null}
+        </div>
 
-        {mode === "undo" && data.undo.hasUndo ? (
-          <div style={{ flex: 1, minWidth: 280 }}>
-            {/* Libellé « utilisateur expérimenté » au-dessus de la boîte, affiché
-                seulement si des réservations seront perdues (port legacy #pc-undo-label). */}
-            {bookingsCount > 0 ? (
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: "var(--danger)",
-                  fontSize: ".78rem",
-                  margin: "0 0 .35rem",
-                }}
-              >
-                ⚠️ Utilisateur expérimenté :
-              </div>
-            ) : null}
-            {/* Boîte (port legacy #pc-undo-section) : bordure + fond surface2. */}
-            <div
-              style={{
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".75rem 1rem",
-                background: "var(--surface2)",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: ".85rem",
-                  color: undoAccent,
-                  marginBottom: ".4rem",
-                }}
-              >
-                ↩ Retour à l&apos;année précédente
-              </div>
-              <p
-                style={{
-                  fontSize: ".85rem",
-                  lineHeight: 1.55,
-                  color: "var(--text)",
-                  marginBottom: ".5rem",
-                }}
-              >
-                Supprime entièrement l&apos;exercice en cours (périodes, créneaux et réservations
-                compris). Restaure l&apos;exercice précédent.
-              </p>
-              <p
-                style={{
-                  fontSize: ".78rem",
-                  lineHeight: 1.5,
-                  marginBottom: ".6rem",
-                  color: bookingsCount > 0 ? "var(--danger)" : "var(--accent)",
-                }}
-              >
-                {bookingsCount > 0
-                  ? `⚠️ ${bookingsCount} réservation${bookingsCount > 1 ? "s" : ""} seront supprimées.`
-                  : "✓ Aucune réservation existante."}
-              </p>
+        {undo.hasUndo && (
+          <div className="xc-card">
+            <h3 className="ms-grp xc-grp">
+              <span className={`xc-${undoTone}`}>
+                <ArrowBackGlyph size={13} />
+              </span>
+              Revenir à {data.previousName ?? "l'exercice précédent"}
+            </h3>
+            <p className="xc-desc">
+              {`Supprime entièrement ${data.currentName} : périodes, créneaux et réservations. L'exercice précédent est restauré tel quel.`}
+            </p>
+            <div className={`xc-band is-${undoTone}`}>
               {bookingsCount > 0 ? (
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: ".5rem",
-                    fontSize: ".78rem",
-                    color: "var(--text)",
-                    cursor: "pointer",
-                    userSelect: "none",
-                    marginBottom: ".6rem",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={undoAck}
-                    disabled={isPending}
-                    onChange={(e) => setUndoAck(e.target.checked)}
-                    style={{ accentColor: "var(--danger)", cursor: "pointer" }}
-                  />
+                <>
+                  <AlertGlyph size={14} />
                   <span>
-                    J&apos;ai compris : {bookingsCount} réservation{bookingsCount > 1 ? "s" : ""}{" "}
-                    seront supprimées.
+                    <strong>
+                      {bookingsCount} réservation{plural(bookingsCount)}
+                    </strong>{" "}
+                    {bookingsCount > 1 ? "seront supprimées" : "sera supprimée"}
                   </span>
-                </label>
-              ) : null}
+                </>
+              ) : (
+                <>
+                  <CheckGlyph size={14} />
+                  <span>Aucune réservation sur cet exercice.</span>
+                </>
+              )}
+            </div>
+            {bookingsCount > 0 && (
+              <label className="xc-ack">
+                <input
+                  type="checkbox"
+                  checked={undoAck}
+                  disabled={isPending}
+                  onChange={(e) => setUndoAck(e.target.checked)}
+                />
+                <span>
+                  J&apos;ai compris, {bookingsCount} réservation{plural(bookingsCount)}{" "}
+                  {bookingsCount > 1 ? "seront perdues" : "sera perdue"}.
+                </span>
+              </label>
+            )}
+            <div className="xc-foot">
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{
-                  fontSize: ".7rem",
-                  padding: ".3rem .7rem",
-                  background: undoAccent,
-                  border: "none",
-                  color: "var(--text)",
-                }}
+                className={`btn btn-ghost xc-btn is-${undoTone}`}
                 disabled={isPending || !undoButtonReady}
                 onClick={askUndo}
               >
-                Supprimer l&apos;exercice {data.currentName}
+                <TrashGlyph size={13} /> Supprimer l&apos;exercice {data.currentName}
               </button>
             </div>
           </div>
-        ) : null}
+        )}
       </div>
 
-      {confirm === "create" ? (
-        <ModalOverlay onClose={() => setConfirm(null)}>
-          <div className="modal-title" style={{ color: "var(--accent)" }}>
-            🔄 Créer un nouvel exercice
-          </div>
-          <p style={{ fontSize: ".85rem", lineHeight: 1.5, marginBottom: ".75rem" }}>
-            Vous êtes sur le point de créer <strong>l&apos;exercice {data.nextName}</strong>. Les
-            périodes de l&apos;exercice actuel seront recréées avec les dates décalées d&apos;un an
-            ; l&apos;exercice actuel est conservé et, s&apos;il était « Affiché aux utilisateurs »,
-            le nouvel exercice prend le relais.
-          </p>
-          <p
-            style={{
-              fontSize: ".78rem",
-              color: "var(--accent)",
-              fontWeight: 600,
-              marginBottom: "1rem",
-            }}
-          >
-            Confirmer la création ?
-          </p>
-          <div className="btn-row">
-            <button type="button" className="btn btn-ghost" onClick={() => setConfirm(null)}>
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={doCreate}
-              style={{ background: "var(--accent)", borderColor: "var(--accent)" }}
-            >
-              Créer
-            </button>
-          </div>
-        </ModalOverlay>
-      ) : null}
+      <p className="xc-hist">
+        <HistoryGlyph size={13} />
+        {undo.hasUndo && undo.createdAt ? (
+          <span>
+            Dernière bascule : {data.currentName} créé le {DT_FMT.format(new Date(undo.createdAt))}
+            {undo.actorLabel ? ` par ${undo.actorLabel}` : ""}
+          </span>
+        ) : (
+          <span>Aucune bascule enregistrée pour ce service.</span>
+        )}
+      </p>
 
-      {confirm === "undo" ? (
-        <ModalOverlay onClose={() => setConfirm(null)}>
-          <div
-            className="modal-title"
-            style={{ color: bookingsCount > 0 ? "var(--danger)" : "var(--warn)" }}
-          >
-            ↩ Supprimer l&apos;exercice en cours
+      {confirm === "create" && (
+        <ModalOverlay onClose={() => setConfirm(null)} boxStyle={{ maxWidth: 520 }}>
+          <div className="modal-title xc-mtitle">
+            <span className="rg-ico is-ok">
+              <RefreshGlyph size={15} />
+            </span>
+            Créer l&apos;exercice {data.nextName}
           </div>
-          <p style={{ fontSize: ".85rem", lineHeight: 1.5, marginBottom: ".75rem" }}>
-            Vous êtes sur le point de supprimer définitivement{" "}
-            <strong>l&apos;exercice {data.currentName}</strong>. Toutes ses périodes et créneaux
-            récurrents seront perdus
-            {bookingsCount > 0 ? `, ainsi que ${bookingsCount} réservation(s)` : ""}, et
-            l&apos;exercice précédent sera restauré.
+          <p className="xc-mtext">
+            {`Les périodes de ${data.currentName} seront recréées avec les dates décalées d'un an. L'exercice actuel est conservé et, s'il était « Affiché aux utilisateurs », le nouvel exercice prend le relais.`}
           </p>
-          <p
-            style={{
-              fontSize: ".78rem",
-              color: bookingsCount > 0 ? "var(--danger)" : "var(--warn)",
-              fontWeight: 600,
-              marginBottom: "1rem",
-            }}
-          >
-            ⚠️ Cette action est irréversible. Confirmer la suppression ?
+          <div className="xc-mpills">
+            <span className={`ms-pill ${recreatePeriods ? "is-ok" : "is-neutral"}`}>
+              {counts.periods} période{plural(counts.periods)}
+            </span>
+            <span className={`ms-pill ${recreateSlots ? "is-ok" : "is-neutral"}`}>
+              {recreateSlots ? counts.recurring : 0} récurrent
+              {plural(recreateSlots ? counts.recurring : 0)}
+            </span>
+            <span className={`ms-pill ${recreateMultiSlots ? "is-ok" : "is-neutral"}`}>
+              {recreateMultiSlots ? counts.multiLots : 0} lot
+              {plural(recreateMultiSlots ? counts.multiLots : 0)} multi-ponctuel
+              {plural(recreateMultiSlots ? counts.multiLots : 0)}
+            </span>
+          </div>
+          <div className="btn-row">
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirm(null)}>
+              Annuler
+            </button>
+            <button type="button" className="btn btn-primary xc-btn" onClick={doCreate}>
+              <ArrowRightGlyph size={13} /> Créer
+            </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {confirm === "undo" && (
+        <ModalOverlay onClose={() => setConfirm(null)} boxStyle={{ maxWidth: 520 }}>
+          <div className="modal-title xc-mtitle">
+            <span className={`rg-ico is-${undoTone}`}>
+              <ArrowBackGlyph size={15} />
+            </span>
+            Supprimer l&apos;exercice {data.currentName}
+          </div>
+          <p className="xc-mtext">
+            {`Toutes ses périodes et ses créneaux seront perdus${
+              bookingsCount > 0
+                ? `, ainsi que ${bookingsCount} réservation${plural(bookingsCount)}`
+                : ""
+            }, et ${data.previousName ?? "l'exercice précédent"} redevient l'exercice courant.`}
           </p>
+          <div className={`xc-band is-${undoTone}`}>
+            <AlertGlyph size={14} />
+            <span>Cette action est irréversible.</span>
+          </div>
           <div className="btn-row">
             <button type="button" className="btn btn-ghost" onClick={() => setConfirm(null)}>
               Annuler
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className={`btn btn-primary xc-btn is-${undoTone}`}
               onClick={doUndo}
-              style={{
-                background: bookingsCount > 0 ? "var(--danger)" : "var(--warn)",
-                border: "none",
-                color: "var(--text)",
-              }}
             >
-              🗑️ Supprimer
+              <TrashGlyph size={13} /> Supprimer
             </button>
           </div>
         </ModalOverlay>
-      ) : null}
+      )}
     </div>
   );
 }

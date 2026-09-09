@@ -5193,3 +5193,227 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   padding-top: 0.15rem;
   border-top: 1px solid var(--border);
 }
+
+/* ── Changement d'exercice (refonte Dom 2026-09-09) ─────────────────────────────────
+   En-tête à médaillon, trois tuiles de chiffres (ce que la bascule reconduirait), deux
+   cartes d'action côte à côte (création / retour arrière), ligne d'historique en pied. */
+.xc {
+  container-type: inline-size;
+}
+.xc-hd {
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+.xc-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+}
+.xc-tile {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius);
+  background: var(--surface1);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.xc-tile .n {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  flex: 0 0 auto;
+}
+.xc-tile .n.xc-exo {
+  font-size: 1rem;
+}
+.xc-tile .cf-tile-txt small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xc-tile .cf-tile-txt small:first-child {
+  color: var(--text);
+  font-weight: 600;
+}
+.xc-ok {
+  color: var(--accent) !important;
+}
+.xc-warn {
+  color: var(--warn) !important;
+}
+.xc-danger {
+  color: var(--danger) !important;
+}
+.xc-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+@container (max-width: 700px) {
+  .xc-tiles {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+}
+@container (max-width: 600px) {
+  .xc-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.xc-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 0.95rem 0.85rem;
+  border-radius: var(--radius);
+  background: var(--surface1);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.xc-grp {
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+  color: var(--text);
+}
+.xc-grp > span {
+  display: inline-flex;
+}
+.xc-desc {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+.xc-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.38rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.xc-opt:last-of-type {
+  border-bottom: 0;
+}
+.xc-opt-l {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.xc-opt .ex-sw {
+  justify-self: auto;
+  flex: 0 0 auto;
+}
+.xc-band {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  margin: 0.5rem 0 0;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+.xc-band > svg {
+  flex: 0 0 auto;
+}
+.xc-band.is-danger {
+  background: var(--danger-dim);
+  border: 1px solid rgba(224, 107, 107, 0.35);
+  color: var(--danger);
+}
+.xc-band.is-warn {
+  background: rgba(232, 164, 90, 0.14);
+  border: 1px solid rgba(232, 164, 90, 0.35);
+  color: var(--warn);
+}
+.xc-band strong {
+  font-weight: 700;
+}
+.xc-ack {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.74rem;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.xc-ack input {
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+.xc-foot {
+  margin-top: 0.7rem;
+}
+.xc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  padding: 0.35rem 0.8rem;
+}
+.xc-btn.is-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.xc-btn.is-danger:hover:not(:disabled) {
+  background: var(--danger-dim);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.xc-btn.is-warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.xc-btn.is-warn:hover:not(:disabled) {
+  background: rgba(232, 164, 90, 0.14);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.btn-primary.xc-btn.is-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn-primary.xc-btn.is-warn {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: #fff;
+}
+.btn-primary.xc-btn.is-danger:hover:not(:disabled),
+.btn-primary.xc-btn.is-warn:hover:not(:disabled) {
+  box-shadow: none;
+  filter: brightness(1.05);
+}
+.xc-hist {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.8rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.xc-mtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.xc-mtext {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 0 0 0.6rem;
+}
+.xc-mpills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
