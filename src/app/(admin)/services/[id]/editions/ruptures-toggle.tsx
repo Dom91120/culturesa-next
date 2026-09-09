@@ -8,7 +8,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 // `ruptures=1|0` devient explicite au premier clic. Toggle en conservant les autres
 // paramètres d'URL. Refonte Dom 2026-09-09 : pastille.
 export function RupturesToggle({
-  label = "Avec ruptures",
+  label = "Ruptures",
   defaultOn = false,
 }: {
   label?: string;
