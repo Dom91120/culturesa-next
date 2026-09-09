@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
+import { CheckGlyph } from "@/app/(admin)/users/account-ui";
 import { AdminDemInfo } from "@/components/admin-dem-info";
-import { CircleCheckGlyph, HourglassGlyph, ListDetailsGlyph } from "@/components/ui-glyphs";
+import { HourglassGlyph, ListDetailsGlyph } from "@/components/ui-glyphs";
 import { formatTel } from "@/lib/format";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
@@ -248,16 +249,18 @@ export default async function EditionsListePage({
                 {/* Statut en pictogramme (Dom 2026-09-09) : coche verte « Validée », sablier
                     orange « En attente » ; libellé en infobulle et pour les lecteurs d'écran. */}
                 <span
-                  className={`rg-ico ${a.statut === "Validée" ? "is-ok" : "is-warn"}`}
                   title={a.statut}
                   aria-label={a.statut}
                   role="img"
-                  style={{ width: 22, height: 22 }}
+                  style={{
+                    display: "inline-flex",
+                    color: a.statut === "Validée" ? "var(--accent)" : "var(--warn)",
+                  }}
                 >
                   {a.statut === "Validée" ? (
-                    <CircleCheckGlyph size={13} />
+                    <CheckGlyph size={17} strokeWidth={2.4} />
                   ) : (
-                    <HourglassGlyph size={13} />
+                    <HourglassGlyph size={15} />
                   )}
                 </span>
               </td>
