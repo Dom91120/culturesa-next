@@ -1,3 +1,4 @@
+import { formatTel } from "@/lib/format";
 import type { DatedSession } from "@/server/services/editions";
 import { formatDateHeading, type SessionBucket } from "../range";
 import { EditionScreenView, type EditionSearchParams, loadEditionScreen } from "../screen";
@@ -36,31 +37,23 @@ export default async function PlanningPage({
             <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem" }}>
               {s.attendees.map((a, i) => (
                 <div key={`${a.nom}-${a.prenom}-${i}`} className="ed-att">
-                  {/* Zone haute réservée à 6 lignes (interligne fixe) : le contenu s'y répartit,
-                      les éléments longs peuvent occuper plusieurs lignes, et le reste est comblé
-                      par du vide. « enfants/adultes » suit donc toujours sur la 7e ligne. */}
-                  <div style={{ minHeight: "calc(1.2rem * 6)", lineHeight: "1.2rem" }}>
-                    <div style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</div>
-                    <div style={{ fontSize: ".76rem" }}>{a.structure || a.demandeur || "—"}</div>
-                    <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                      Tel : {a.tel || "—"}
-                    </div>
-                    <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                      {a.email || "—"}
-                    </div>
-                    <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>
-                      {a.theme || "—"}
-                    </div>
+                  {/* Cinq lignes tronquées (points de suspension, texte complet en infobulle),
+                      sans réserve de hauteur : les cartes se resserrent sur leur contenu
+                      (Dom 2026-09-09). Compte anonymisé : pas d'adresse technique. */}
+                  <div className="ed-att-line" style={{ fontWeight: 600 }}>
+                    {`${a.nom} ${a.prenom}`.trim() || "—"}
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: ".75rem",
-                      fontSize: ".76rem",
-                      lineHeight: "1.2rem",
-                    }}
-                  >
+                  <div className="ed-att-line" title={a.structure || a.demandeur || undefined}>
+                    {a.structure || a.demandeur || "—"}
+                  </div>
+                  <div className="ed-att-line ed-mu">Tel : {formatTel(a.tel)}</div>
+                  <div className="ed-att-line ed-mu" title={a.email || undefined}>
+                    {`${a.nom}${a.prenom}`.trim() !== "" && a.email ? a.email : "—"}
+                  </div>
+                  <div className="ed-att-line ed-mu" title={a.theme || undefined}>
+                    {a.theme || "—"}
+                  </div>
+                  <div className="ed-att-foot">
                     <span>
                       {a.enfants} enfant{a.enfants > 1 ? "s" : ""}
                     </span>

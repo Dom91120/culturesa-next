@@ -5156,3 +5156,20 @@ textarea.theme-pending:focus::placeholder {
   font-size: 0.74rem;
   color: var(--muted);
 }
+.ed-att-line {
+  font-size: 0.76rem;
+  line-height: 1.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ed-att-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.76rem;
+  line-height: 1.2rem;
+  margin-top: 0.15rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--border);
+}
