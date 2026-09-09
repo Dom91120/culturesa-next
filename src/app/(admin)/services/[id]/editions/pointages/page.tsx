@@ -33,34 +33,44 @@ export default async function PointagesPage({
       <table className="ed-table" style={{ tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={{ width: "28%" }}>Identité</th>
+            <th style={{ width: "26%" }}>Identité</th>
             <th>Structure</th>
             <th>Thème</th>
-            <th style={{ width: 150 }}>Participants</th>
-            <th style={{ textAlign: "center", width: 110 }}>Pointage</th>
-            <th style={{ width: 120 }}>Émargement</th>
+            <th style={{ width: 92 }}>Participants</th>
+            <th style={{ width: "22%" }}>Pointage</th>
+            <th style={{ width: 110 }}>Émargement</th>
           </tr>
         </thead>
         <tbody>
           {s.attendees.map((a, i) => (
             <tr key={`${a.nom}-${a.prenom}-${i}`}>
-              <td style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</td>
-              <td>{a.structure || a.demandeur || "—"}</td>
-              <td>{a.theme || "—"}</td>
-              <td>
-                {a.enfants} enfant{a.enfants > 1 ? "s" : ""} + {a.accompagnants} adulte
-                {a.accompagnants > 1 ? "s" : ""}
+              <td className="ed-nowrap">
+                <span style={{ fontWeight: 600 }}>{`${a.nom} ${a.prenom}`.trim() || "—"}</span>
+                {/* Adresse sous le nom (Dom 2026-09-09) : joindre l'inscrit depuis la feuille.
+                    Compte anonymisé (plus de nom) : l'adresse technique n'a rien à dire. */}
+                {a.email && `${a.nom}${a.prenom}`.trim() !== "" && (
+                  <span className="ed-sub">{a.email}</span>
+                )}
               </td>
-              <td style={{ textAlign: "center" }}>
+              <td className="ed-nowrap">{a.structure || a.demandeur || "—"}</td>
+              <td className="ed-nowrap">{a.theme || "—"}</td>
+              {/* Participants sur deux lignes (Dom 2026-09-09) : colonne étroite. */}
+              <td className="ed-nowrap">
+                {a.enfants} enfant{a.enfants > 1 ? "s" : ""}
+                <span className="ed-sub">
+                  {a.accompagnants} adulte{a.accompagnants > 1 ? "s" : ""}
+                </span>
+              </td>
+              <td className="ed-nowrap">
                 {/* État relevé, ou « Absence prévenue » si signalée à l'avance et pas
-                    encore pointée (« Absent (prévenu) » une fois constatée). */}
+                    encore pointée (« Absent (prévenu) » une fois constatée). Deux lignes
+                    au plus : l'état, puis le motif tronqué (complet en infobulle). */}
                 {pointageCell(a.pointage, a.absencePrevenue) || "—"}
-                {/* Motif d'absence (fiche ou signalement) : sous l'état, en discret. */}
                 {(a.pointage === "absent" || (!a.pointage && a.absencePrevenue)) &&
                   a.pointageMotif.trim() !== "" && (
-                    <div style={{ fontSize: ".7rem", color: "var(--muted)" }}>
+                    <span className="ed-sub ed-nowrap" title={a.pointageMotif}>
                       {a.pointageMotif}
-                    </div>
+                    </span>
                   )}
               </td>
               <td className="ed-sign" />
