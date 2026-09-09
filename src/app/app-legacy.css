@@ -5213,7 +5213,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 }
 .xc-tile {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 0.55rem;
   padding: 0.65rem 0.85rem;
   border-radius: var(--radius);
@@ -5221,15 +5221,19 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   border: 1px solid var(--border);
   min-width: 0;
 }
+/* Chiffre (ou libellé d'exercice) aussi haut que les deux premières lignes de texte
+   (libellé + complément), calé en haut sur elles (Dom 2026-09-09). */
 .xc-tile .n {
-  font-size: 1.35rem;
+  --xc-two-lines: calc(2 * 0.68rem * 1.35 + 0.05rem);
+  font-size: 1.5rem;
   font-weight: 700;
-  line-height: 1;
+  line-height: var(--xc-two-lines);
+  height: var(--xc-two-lines);
   letter-spacing: -0.02em;
   flex: 0 0 auto;
 }
 .xc-tile .n.xc-exo {
-  font-size: 1rem;
+  font-size: 1.15rem;
 }
 .xc-tile .cf-tile-txt small {
   white-space: nowrap;
