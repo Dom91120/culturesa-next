@@ -4085,3 +4085,35 @@ textarea.theme-pending:focus::placeholder {
   font-size: 0.68rem;
   color: var(--muted);
 }
+
+/* ── Journal des actions privilégiées (refonte Dom 2026-09-09) ─────────────────────
+   Même frise que le journal RGPD (.rg-tl / .rg-day / .rg-ev / .rg-ico), avec une
+   colonne IP en plus (conservée à l'écran ici : journal d'exploitation). */
+.rg-ico.is-ok {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.rg-ev.jr-ev {
+  grid-template-columns: 44px 28px minmax(0, 1fr) 250px 84px;
+}
+.jr-lbl {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.jr-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+.jr-sub svg {
+  flex: 0 0 auto;
+}

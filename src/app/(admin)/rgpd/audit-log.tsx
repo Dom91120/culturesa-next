@@ -133,9 +133,9 @@ const DAY_FMT = new Intl.DateTimeFormat("fr-FR", {
   day: "numeric",
   month: "long",
 });
-const TIME_FMT = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+export const TIME_FMT = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-function dayLabel(iso: string, todayYmd: string, yesterdayYmd: string): string {
+export function dayLabel(iso: string, todayYmd: string, yesterdayYmd: string): string {
   const d = new Date(iso);
   const ymd = d.toISOString().slice(0, 10);
   const long = DAY_FMT.format(d);

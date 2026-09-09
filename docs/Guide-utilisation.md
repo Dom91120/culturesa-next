@@ -476,6 +476,21 @@ s'exporte en CSV.
 
 *Figure 15 — RGPD : conservation des données et journal d'audit*
 
+### Journal des actions privilégiées
+
+L'onglet **Journal** retrace les actes d'exploitation sensibles : changements de rôle,
+déconnexions forcées, réinitialisations de double authentification, opérations sur les
+sauvegardes (création, restauration, téléchargement, suppression), modification de la
+configuration SMTP, suppression d'un service, changement de catégorie ou de structure par un
+usager depuis « Mon compte ». Il se lit en frise chronologique par jour : heure, pictogramme
+teinté selon la portée de l'acte (rouge pour les destructions et restaurations, orange pour ce qui
+touche aux accès), libellé avec son détail (valeur avant et après pour un changement, nom du fichier
+pour une sauvegarde), acteur avec son rôle, adresse IP vue par le serveur. Les pastilles filtrent
+par famille (Comptes, Accès, Affiliations, Sauvegardes, Configuration, Services) et le champ de
+recherche affine sur l'acteur, la cible, le détail ou l'IP ; **« CSV »** exporte la sélection.
+Les 2 000 entrées les plus récentes sont affichées ; le journal est conservé deux ans puis purgé
+par la tâche de rétention. Les exports et anonymisations RGPD, eux, restent dans l'onglet RGPD.
+
 ---
 
 ## 5. Notions clés
