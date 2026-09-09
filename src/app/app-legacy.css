@@ -4806,10 +4806,26 @@ textarea.theme-pending:focus::placeholder {
   font-size: 0.8rem;
   font-weight: 600;
 }
+/* Trois colonnes égales (1/3 chacune), cases vides quand le groupe a moins de 3 cartes ;
+   deux colonnes sous 720 px de panneau, une seule à l'étroit (Dom 2026-09-09). */
 .ed-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.6rem;
+}
+@container (max-width: 720px) {
+  .ed-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 480px) {
+  .ed-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+#editions-panel,
+#editions-attente-panel {
+  container-type: inline-size;
 }
 .ed-card {
   position: relative;
