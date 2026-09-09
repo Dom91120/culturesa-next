@@ -63,14 +63,16 @@ export function useBufferedRows<
 
   const initialById = new Map(initial.map((d) => [d.id, d]));
   const currentIds = new Set(rows.map((r) => r.id).filter((id): id is Id => id != null));
-  const dirty =
-    !!opts.extraDirty ||
-    rows.some((r) => r.id == null) ||
-    initial.some((d) => !currentIds.has(d.id)) ||
-    rows.some((r) => {
-      const init = r.id != null ? initialById.get(r.id) : undefined;
-      return !!init && isDirty(r, init);
-    });
+  /** État d'une ligne pour l'affichage : créée, modifiée, ou inchangée. */
+  function rowState(row: Row): "new" | "modified" | null {
+    if (row.id == null) return "new";
+    const init = initialById.get(row.id);
+    return init && isDirty(row, init) ? "modified" : null;
+  }
+  const deleted = initial.filter((d) => !currentIds.has(d.id)).length;
+  /** Lignes créées + modifiées + supprimées (compteur du pied de modale). */
+  const changes = deleted + rows.filter((r) => rowState(r) !== null).length;
+  const dirty = !!opts.extraDirty || changes > 0;
 
   // Resync sur les données serveur après un enregistrement (réconcilie les nouveaux id ⇒
   // évite une re-création au prochain save) ou lors d'un rafraîchissement externe sans
@@ -148,6 +150,8 @@ export function useBufferedRows<
     removeRow,
     resetRows,
     dirty,
+    changes,
+    rowState,
     error,
     setError,
     saving,

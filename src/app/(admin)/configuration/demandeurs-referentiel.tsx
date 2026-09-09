@@ -28,6 +28,7 @@ export function DemandeursReferentiel({ demandeurs }: { demandeurs: Demandeur[] 
         </span>
       }
       count={demandeurs.length}
+      subtitle="Établissements et organismes auxquels les usagers se rattachent. « Ouvert vacances » autorise leurs usagers à réserver ces jours-là si le service l'est aussi ; « structure libre » laisse l'usager taper le nom de sa structure à l'inscription."
       detail={parts.length ? parts.join(" · ") : "aucun ouvert pendant les vacances"}
       maxWidth={780}
     >

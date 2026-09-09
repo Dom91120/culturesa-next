@@ -3,25 +3,39 @@
 import { useState } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
 import {
-  DEM_GHOST_HOVER_CSS,
-  DEM_ROW_HOVER_CSS,
   RefColumnHeaders,
   RefDeleteConfirm,
   RefEditorFooter,
   RefEditorHeader,
   RefEmptyState,
+  RefRow,
+  RefStatePill,
+  RF_GHOST,
 } from "@/components/ref-editor-shell";
-import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
 import type { ActionState } from "@/lib/action-state";
+import { MailOffGlyph, PencilGlyph, TrashGlyph } from "../users/account-ui";
 import { deleteServicesAction, saveServiceFromModalAction } from "./actions";
 import { ICON_CATEGORIES } from "./legacy-icons";
 
-type Initial = { id: string; label: string; icon: string | null; contactEmail: string | null };
-type Row = { id: string | null; label: string; icon: string | null; contactEmail: string };
+type Initial = {
+  id: string;
+  label: string;
+  icon: string | null;
+  contactEmail: string | null;
+  /** Comptes gestionnaire rattachés (reçoivent les e-mails du service à défaut de contact). */
+  managers: number;
+};
+type Row = {
+  id: string | null;
+  label: string;
+  icon: string | null;
+  contactEmail: string;
+  managers: number;
+};
 
-// Colonne Action réduite à la largeur de son titre (retour Dom 2026-08-31).
-const GRID = "40px 1.1fr 1fr 48px";
+// Icône · Service · E-mail de contact · Gestionnaires · corbeille.
+const GRID = "44px minmax(0, 1.1fr) minmax(0, 1fr) 128px 30px";
 
 /** `ActionState` est nullable (contrat `useActionState`) ; `useBufferedRows` attend un résultat non-nul. */
 function toRefResult(res: ActionState): RefActionResult {
@@ -29,54 +43,64 @@ function toRefResult(res: ActionState): RefActionResult {
 }
 
 /**
- * Éditeur des services (modale du référentiel, Administration > Configuration).
- * MODE TAMPON (comme Demandeurs) : modifications locales jusqu'au clic sur « Enregistrer ».
- * Édition en ligne du nom + sélecteur d'icône par ligne.
+ * Éditeur des services (modale du référentiel, Administration > Configuration) —
+ * refonte Dom 2026-09-09. MODE TAMPON : modifications locales jusqu'au clic sur
+ * « Enregistrer ». Icône (carré avec crayon → sélecteur), nom et e-mail de contact en
+ * champs fantômes, colonne « Gestionnaires » qui dit qui reçoit les e-mails du service.
  */
 export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClose?: () => void }) {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   // Ligne dont le sélecteur d'icône est ouvert (null = fermé).
   const [pickerKey, setPickerKey] = useState<string | null>(null);
 
-  // Logique « mode tampon » mutualisée avec RefEditor/NiveauxEditor (état, dirty, resync,
-  // saveAll). Icône/sélecteur restent propres à ce composant et sont remis à zéro via
-  // onSyncReset.
-  const { rows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
-    useBufferedRows<string, Initial, Row>({
-      initial,
-      fromInitial: (s) => ({
-        id: s.id,
-        label: s.label,
-        icon: s.icon,
-        contactEmail: s.contactEmail ?? "",
-      }),
-      isValid: (r) => r.label.trim() !== "",
-      isDirty: (r, init) =>
-        init.label !== r.label.trim() ||
-        (init.icon ?? null) !== (r.icon ?? null) ||
-        (init.contactEmail ?? "") !== r.contactEmail.trim(),
-      onCreate: (r) =>
-        saveServiceFromModalAction({
-          label: r.label.trim(),
-          icon: r.icon,
-          contactEmail: r.contactEmail.trim() || null,
-        }).then(toRefResult),
-      onUpdate: (id, r) =>
-        saveServiceFromModalAction({
-          id,
-          label: r.label.trim(),
-          icon: r.icon,
-          contactEmail: r.contactEmail.trim() || null,
-        }).then(toRefResult),
-      onDelete: (id) => deleteServicesAction([id]).then(toRefResult),
-      onSyncReset: () => {
-        setConfirmKey(null);
-        setPickerKey(null);
-      },
-    });
+  const {
+    rows,
+    patch,
+    addRow,
+    removeRow,
+    dirty,
+    changes,
+    rowState,
+    error,
+    saving,
+    saveAll,
+    cancelEdits,
+  } = useBufferedRows<string, Initial, Row>({
+    initial,
+    fromInitial: (s) => ({
+      id: s.id,
+      label: s.label,
+      icon: s.icon,
+      contactEmail: s.contactEmail ?? "",
+      managers: s.managers,
+    }),
+    isValid: (r) => r.label.trim() !== "",
+    isDirty: (r, init) =>
+      init.label !== r.label.trim() ||
+      (init.icon ?? null) !== (r.icon ?? null) ||
+      (init.contactEmail ?? "") !== r.contactEmail.trim(),
+    onCreate: (r) =>
+      saveServiceFromModalAction({
+        label: r.label.trim(),
+        icon: r.icon,
+        contactEmail: r.contactEmail.trim() || null,
+      }).then(toRefResult),
+    onUpdate: (id, r) =>
+      saveServiceFromModalAction({
+        id,
+        label: r.label.trim(),
+        icon: r.icon,
+        contactEmail: r.contactEmail.trim() || null,
+      }).then(toRefResult),
+    onDelete: (id) => deleteServicesAction([id]).then(toRefResult),
+    onSyncReset: () => {
+      setConfirmKey(null);
+      setPickerKey(null);
+    },
+  });
 
   function add() {
-    addRow({ id: null, label: "", icon: null, contactEmail: "" });
+    addRow({ id: null, label: "", icon: null, contactEmail: "", managers: 0 });
     setConfirmKey(null);
   }
   function remove(key: string) {
@@ -84,128 +108,134 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
     removeRow(key);
   }
 
+  const sansContact = rows.filter((r) => r.id !== null && !r.contactEmail.trim()).length;
+
   return (
     <div>
-      <RefEditorHeader error={error} onAdd={add} />
+      <RefEditorHeader
+        error={error}
+        onAdd={add}
+        addLabel="Ajouter un service"
+        summary={
+          sansContact > 0 ? (
+            <span className="ms-pill is-warn">
+              <MailOffGlyph size={11} /> {sansContact} sans e-mail de contact
+            </span>
+          ) : (
+            <span className="ms-pill is-ok">tous ont un e-mail de contact</span>
+          )
+        }
+      />
 
       <RefColumnHeaders gridTemplate={GRID}>
         <span style={{ textAlign: "center" }}>Icône</span>
         <span style={{ paddingLeft: ".5rem" }}>Service</span>
         <span style={{ paddingLeft: ".5rem" }}>E-mail de contact</span>
-        <span style={{ textAlign: "center" }}>Action</span>
+        <span style={{ textAlign: "right" }}>Gestionnaires</span>
+        <span />
       </RefColumnHeaders>
 
       {rows.map((r) => {
         const confirming = confirmKey === r.key;
+        const state = rowState(r);
+        const hasContact = r.contactEmail.trim() !== "";
         return (
-          <div
-            key={r.key}
-            className="dem-row"
-            style={{
-              display: "grid",
-              gridTemplateColumns: GRID,
-              gap: ".75rem",
-              alignItems: "center",
-              padding: ".2rem .75rem",
-              borderRadius: "var(--rad-sm)",
-            }}
-          >
+          <RefRow key={r.key} gridTemplate={GRID} state={state}>
             <button
               type="button"
+              className={`rf-emoji${state === "new" ? " is-new" : ""}`}
               onClick={() => setPickerKey(r.key)}
               title="Choisir une icône"
-              style={{
-                width: 30,
-                height: 30,
-                fontSize: "1.1rem",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                background: "var(--surface2)",
-                cursor: "pointer",
-                justifySelf: "center",
-                lineHeight: 1,
-              }}
+              aria-label={`Choisir l'icône : ${r.label || "nouveau service"}`}
             >
               {r.icon || "🎯"}
+              <span className="badge" aria-hidden="true">
+                <PencilGlyph size={9} />
+              </span>
             </button>
 
             {confirming ? (
               <RefDeleteConfirm
-                gridColumn="2 / 5"
-                message="Supprimer ce service et toutes ses données ?"
+                gridColumn="2 / 6"
+                message={
+                  <>
+                    Supprimer <strong>{r.label || "ce service"}</strong> et toutes ses données :
+                    créneaux, périodes, réservations ? Irréversible.
+                  </>
+                }
                 onConfirm={() => remove(r.key)}
                 onCancel={() => setConfirmKey(null)}
               />
             ) : (
               <>
-                <input
-                  type="text"
-                  className="dem-ghost"
-                  value={r.label}
-                  placeholder="Nom du service"
-                  // Saisie gelée pendant l'enregistrement : le resync post-save
-                  // (router.refresh) écraserait une frappe faite dans l'intervalle.
-                  disabled={saving}
-                  onChange={(e) => patch(r.key, { label: e.target.value })}
-                  style={{
-                    fontSize: ".8rem",
-                    fontWeight: 600,
-                    color: "var(--text)",
-                    border: "none",
-                    background: "transparent",
-                    outline: "none",
-                    borderRadius: "var(--rad-sm)",
-                    padding: ".2rem .5rem",
-                    width: "100%",
-                  }}
-                />
+                <div className="rf-label">
+                  <input
+                    type="text"
+                    className="rf-ghost"
+                    value={r.label}
+                    placeholder="Nom du service"
+                    // Saisie gelée pendant l'enregistrement : le resync post-save
+                    // (router.refresh) écraserait une frappe faite dans l'intervalle.
+                    disabled={saving}
+                    onChange={(e) => patch(r.key, { label: e.target.value })}
+                    style={{ ...RF_GHOST, fontWeight: 600 }}
+                  />
+                </div>
                 {/* E-mail générique de contact (facultatif) : proposé aux usagers pour
-                    joindre les gestionnaires (modale « plus de place disponible »). */}
+                    joindre le service (modale « plus de place disponible ») et destinataire
+                    des e-mails « Le service » à la place des comptes gestionnaire. */}
                 <input
                   type="email"
-                  className="dem-ghost"
+                  className="rf-ghost"
                   value={r.contactEmail}
                   placeholder="E-mail de contact"
                   disabled={saving}
                   onChange={(e) => patch(r.key, { contactEmail: e.target.value })}
-                  style={{
-                    fontSize: ".78rem",
-                    color: "var(--text)",
-                    border: "none",
-                    background: "transparent",
-                    outline: "none",
-                    borderRadius: "var(--rad-sm)",
-                    padding: ".2rem .5rem",
-                    width: "100%",
-                  }}
+                  style={{ ...RF_GHOST, fontSize: ".78rem" }}
                 />
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setConfirmKey(r.key)}
-                  title="Supprimer ce service"
-                  style={{
-                    fontSize: ".75rem",
-                    padding: ".15rem .4rem",
-                    lineHeight: 1,
-                    ...GHOST_DANGER_STYLE,
-                    justifySelf: "center",
-                  }}
-                >
-                  🗑️
-                </button>
+                <div className="rf-muted" style={{ textAlign: "right" }}>
+                  {state ? (
+                    <RefStatePill state={state} />
+                  ) : hasContact ? (
+                    `${r.managers} compte${r.managers > 1 ? "s" : ""}`
+                  ) : r.managers > 0 ? (
+                    <>
+                      {r.managers} compte{r.managers > 1 ? "s" : ""}
+                      <br />
+                      reçoivent les e-mails
+                    </>
+                  ) : (
+                    <span style={{ color: "var(--warn)" }}>
+                      aucun compte
+                      <br />
+                      personne ne reçoit
+                    </span>
+                  )}
+                </div>
+                <div className="rf-act">
+                  <button
+                    type="button"
+                    className="acct-action is-danger"
+                    onClick={() => setConfirmKey(r.key)}
+                    title="Supprimer ce service"
+                    aria-label={`Supprimer le service : ${r.label}`}
+                  >
+                    <TrashGlyph size={14} />
+                  </button>
+                </div>
               </>
             )}
-          </div>
+          </RefRow>
         );
       })}
 
-      {rows.length === 0 && <RefEmptyState>Aucun service. Cliquez sur « Ajouter ».</RefEmptyState>}
+      {rows.length === 0 && (
+        <RefEmptyState>Aucun service. Cliquez sur « Ajouter un service ».</RefEmptyState>
+      )}
 
-      {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
-          ou création est en cours. */}
       <RefEditorFooter
         dirty={dirty}
+        changes={changes}
         saving={saving}
         onCancel={cancelEdits}
         onSave={saveAll}
@@ -290,8 +320,6 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
           ))}
         </ModalOverlay>
       )}
-
-      <style>{DEM_ROW_HOVER_CSS + DEM_GHOST_HOVER_CSS}</style>
     </div>
   );
 }

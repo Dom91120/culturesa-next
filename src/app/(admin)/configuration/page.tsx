@@ -36,22 +36,28 @@ export default async function ConfigurationPage() {
   const appUrl = cfg["app.url"] || "";
 
   // Référentiels affichés en modale (mêmes données que les anciens onglets).
-  const [holidayCount, demandeurs, servicesRaw, structuresRaw, niveauxRaw] = await Promise.all([
-    countSchoolHolidays(zone),
-    prisma.demandeur.findMany({
-      orderBy: { label: "asc" },
-      select: { id: true, label: true, openOnSchoolHolidays: true, structureLibre: true },
-    }),
-    listServicesForCurrentAdmin(),
-    listStructures(),
-    listNiveaux(),
-  ]);
+  const [holidayCount, demandeurs, servicesRaw, structuresRaw, niveauxRaw, managerCounts] =
+    await Promise.all([
+      countSchoolHolidays(zone),
+      prisma.demandeur.findMany({
+        orderBy: { label: "asc" },
+        select: { id: true, label: true, openOnSchoolHolidays: true, structureLibre: true },
+      }),
+      listServicesForCurrentAdmin(),
+      listStructures(),
+      listNiveaux(),
+      // Comptes gestionnaire par service : sans e-mail de contact, ce sont eux qui
+      // reçoivent les e-mails du service (colonne « Gestionnaires » de la modale).
+      prisma.serviceManager.groupBy({ by: ["serviceId"], _count: { _all: true } }),
+    ]);
+  const managersByService = new Map(managerCounts.map((m) => [m.serviceId, m._count._all]));
   const demandeurOptions = demandeurs.map((d) => ({ id: d.id, label: d.label }));
   const services = servicesRaw.map((s) => ({
     id: s.id,
     label: s.label,
     icon: s.icon,
     contactEmail: s.contactEmail,
+    managers: managersByService.get(s.id) ?? 0,
   }));
   const structures = structuresRaw.map((s) => ({
     id: s.id,

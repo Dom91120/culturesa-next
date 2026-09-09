@@ -11,7 +11,7 @@ type Row = { id: number | null; label: string; demandeurId: number; users: numbe
 // minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : la 1re colonne ne se dimensionne pas
 // sur le min-content de son contenu, sinon les colonnes se désalignent entre en-tête et lignes
 // dans une modale étroite (cf. demandeurs-editor).
-const GRID = "minmax(0, 1fr) 180px 64px 80px";
+const GRID = "minmax(0, 1fr) 180px 72px 30px";
 
 const SELECT_STYLE = {
   fontSize: ".8rem",
@@ -54,9 +54,22 @@ export function StructuresEditor({
       labels={{
         placeholder: "Nom de la structure",
         header: "Structure",
-        confirm: "Supprimer ?",
+        add: "Ajouter une structure",
+        confirm: (r) => (
+          <>
+            Supprimer <strong>{r.label || "cette structure"}</strong> ?
+          </>
+        ),
         deleteTitle: "Supprimer cette structure",
-        empty: "Aucune structure. Cliquez sur « Ajouter ».",
+        empty: "Aucune structure. Cliquez sur « Ajouter une structure ».",
+      }}
+      summary={(rows) => {
+        const n = rows.filter((r) => r.id !== null && r.users === 0).length;
+        return n > 0 ? (
+          <span className="ms-pill is-warn">{n} sans aucun usager</span>
+        ) : (
+          <span className="ms-pill is-ok">toutes ont des usagers</span>
+        );
       }}
       extraHeaders={[{ label: "Demandeur" }, { label: "Usagers", style: { textAlign: "center" } }]}
       isValid={(r) => r.label.trim() !== "" && r.demandeurId > 0}
@@ -66,7 +79,11 @@ export function StructuresEditor({
         updateStructureAction(id, { label: r.label.trim(), demandeurId: r.demandeurId })
       }
       onDelete={(id) => deleteStructureAction(id)}
-      confirmExtra={(r) => (r.users > 0 ? ` ${r.users} usager(s) détaché(s).` : null)}
+      confirmExtra={(r) =>
+        r.users > 0
+          ? ` ${r.users} usager${r.users > 1 ? "s" : ""} détaché${r.users > 1 ? "s" : ""}, sans suppression de compte.`
+          : null
+      }
       renderExtraCells={(r, patch) => (
         <>
           <select
@@ -81,7 +98,14 @@ export function StructuresEditor({
               </option>
             ))}
           </select>
-          <span style={{ textAlign: "center", fontSize: ".8rem", color: "var(--muted)" }}>
+          <span
+            style={{
+              textAlign: "center",
+              fontSize: ".78rem",
+              color: r.id != null && r.users === 0 ? "var(--warn)" : "var(--muted)",
+            }}
+            title={r.id == null ? undefined : `${r.users} usager(s) rattaché(s)`}
+          >
             {r.id == null ? "—" : r.users}
           </span>
         </>

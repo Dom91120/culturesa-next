@@ -20,7 +20,7 @@ type Row = {
 // minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : la 1re colonne ne se dimensionne PAS
 // sur le min-content de son contenu (l'input des lignes est plus large que le span de l'en-tête),
 // sinon les colonnes ne s'alignent plus entre en-tête et lignes quand la modale est étroite.
-const GRID = "minmax(0, 1fr) 190px 150px 80px";
+const GRID = "minmax(0, 1fr) 190px 150px 30px";
 
 /**
  * Éditeur des demandeurs (modale du référentiel, Administration > Configuration).
@@ -53,13 +53,27 @@ export function DemandeursEditor({
       labels={{
         placeholder: "Nom du demandeur",
         header: "Demandeur",
-        confirm: "Supprimer ce demandeur ?",
+        add: "Ajouter un demandeur",
+        confirm: (r) => (
+          <>
+            Supprimer <strong>{r.label || "ce demandeur"}</strong> ? Ses structures et ses niveaux
+            disparaissent avec lui, ses usagers restent sans rattachement.
+          </>
+        ),
         deleteTitle: "Supprimer ce demandeur",
-        empty: "Aucun demandeur. Cliquez sur « Ajouter ».",
+        empty: "Aucun demandeur. Cliquez sur « Ajouter un demandeur ».",
+      }}
+      summary={(rows) => {
+        const n = rows.filter((r) => r.openOnSchoolHolidays).length;
+        return (
+          <span className={`ms-pill ${n > 0 ? "is-ok" : "is-neutral"}`}>
+            {n} ouvert{n > 1 ? "s" : ""} pendant les vacances
+          </span>
+        );
       }}
       extraHeaders={[
-        { label: "Ouvert vacances scolaires", style: { textAlign: "center" } },
-        { label: "Structure saisie libre", style: { textAlign: "center" } },
+        { label: "Ouvert vacances", style: { textAlign: "center" } },
+        { label: "Structure libre", style: { textAlign: "center" } },
       ]}
       isDirty={(r, init) =>
         init.label !== r.label.trim() ||

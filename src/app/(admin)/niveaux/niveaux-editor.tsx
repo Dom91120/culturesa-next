@@ -2,15 +2,18 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
-  DEM_ROW_HOVER_CSS,
   RefColumnHeaders,
   RefDeleteConfirm,
   RefEditorFooter,
   RefEditorHeader,
   RefEmptyState,
+  RefRow,
+  RefStatePill,
 } from "@/components/ref-editor-shell";
-import { GHOST_DANGER_STYLE, INPUT_CHROME } from "@/components/ui-styles";
+import { GripGlyph } from "@/components/ui-glyphs";
+import { INPUT_CHROME } from "@/components/ui-styles";
 import { useBufferedRows } from "@/components/use-buffered-rows";
+import { CheckGlyph, PencilGlyph, TrashGlyph } from "../users/account-ui";
 import { createNiveauAction, deleteNiveauAction, updateNiveauAction } from "./actions";
 
 type DemandeurOption = { id: number; label: string };
@@ -21,7 +24,7 @@ type Row = { id: number | null; label: string; demandeurId: number | null; posit
 // Colonne « Niveau » en minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : elle ne se
 // dimensionne pas sur le min-content (span « Niveau » en en-tête vs input dans les lignes),
 // sinon les colonnes se désalignent en modale étroite (cf. demandeurs-editor).
-const GRID = "28px 180px 72px minmax(0, 1fr) 96px";
+const GRID = "28px 180px 64px minmax(0, 1fr) 60px";
 
 const FIELD_STYLE = {
   fontSize: ".78rem",
@@ -29,12 +32,6 @@ const FIELD_STYLE = {
   ...INPUT_CHROME,
   width: "100%",
   boxSizing: "border-box",
-} as const;
-
-const ACTION_BTN = {
-  fontSize: ".75rem",
-  padding: ".15rem .4rem",
-  lineHeight: 1,
 } as const;
 
 // Helpers de tri PURS (hors composant : pas de recréation par rendu).
@@ -75,42 +72,54 @@ export function NiveauxEditor({
   // Logique « mode tampon » mutualisée avec RefEditor (état, dirty, resync, saveAll).
   // L'état UI propre aux niveaux (édition par ligne, confirmation, drag) reste ici et est
   // remis à zéro via onSyncReset ; `extraDirty` signale qu'une ligne est en édition.
-  const { rows, setRows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
-    useBufferedRows<number, Initial, Row>({
-      initial,
-      fromInitial: (n) => ({
-        id: n.id,
-        label: n.label,
-        demandeurId: n.demandeurId,
-        position: n.position,
+  const {
+    rows,
+    setRows,
+    patch,
+    addRow,
+    removeRow,
+    dirty,
+    changes,
+    rowState,
+    error,
+    saving,
+    saveAll,
+    cancelEdits,
+  } = useBufferedRows<number, Initial, Row>({
+    initial,
+    fromInitial: (n) => ({
+      id: n.id,
+      label: n.label,
+      demandeurId: n.demandeurId,
+      position: n.position,
+    }),
+    isValid: (r) => r.label.trim() !== "",
+    isDirty: (r, init) =>
+      init.label !== r.label.trim() ||
+      init.demandeurId !== r.demandeurId ||
+      init.position !== r.position,
+    onCreate: (r) =>
+      createNiveauAction({
+        label: r.label.trim(),
+        demandeurId: r.demandeurId,
+        position: r.position,
       }),
-      isValid: (r) => r.label.trim() !== "",
-      isDirty: (r, init) =>
-        init.label !== r.label.trim() ||
-        init.demandeurId !== r.demandeurId ||
-        init.position !== r.position,
-      onCreate: (r) =>
-        createNiveauAction({
-          label: r.label.trim(),
-          demandeurId: r.demandeurId,
-          position: r.position,
-        }),
-      onUpdate: (id, r) =>
-        updateNiveauAction(id, {
-          label: r.label.trim(),
-          demandeurId: r.demandeurId,
-          position: r.position,
-        }),
-      onDelete: (id) => deleteNiveauAction(id),
-      extraDirty: editKey !== null,
-      onSyncReset: () => {
-        setEditKey(null);
-        setConfirmKey(null);
-        setDragKey(null);
-        setDragOverKey(null);
-        setDragAfter(false);
-      },
-    });
+    onUpdate: (id, r) =>
+      updateNiveauAction(id, {
+        label: r.label.trim(),
+        demandeurId: r.demandeurId,
+        position: r.position,
+      }),
+    onDelete: (id) => deleteNiveauAction(id),
+    extraDirty: editKey !== null,
+    onSyncReset: () => {
+      setEditKey(null);
+      setConfirmKey(null);
+      setDragKey(null);
+      setDragOverKey(null);
+      setDragAfter(false);
+    },
+  });
 
   const demLabel = useMemo(() => new Map(demandeurs.map((d) => [d.id, d.label])), [demandeurs]);
   const demandeurOf = useCallback(
@@ -177,14 +186,24 @@ export function NiveauxEditor({
 
   return (
     <div>
-      <RefEditorHeader error={error} onAdd={add} />
+      <RefEditorHeader
+        error={error}
+        onAdd={add}
+        addLabel="Ajouter un niveau"
+        summary={
+          <span className="ms-pill is-neutral">
+            {new Set(rows.map((r) => r.demandeurId).filter((d) => d !== null)).size} demandeur
+            {new Set(rows.map((r) => r.demandeurId).filter((d) => d !== null)).size > 1 ? "s" : ""}
+          </span>
+        }
+      />
 
       <RefColumnHeaders gridTemplate={GRID}>
         <span />
         <span style={{ paddingLeft: ".5rem" }}>Demandeur</span>
         <span style={{ textAlign: "center" }}>Position</span>
         <span>Niveau</span>
-        <span style={{ textAlign: "center" }}>Action</span>
+        <span />
       </RefColumnHeaders>
 
       {sorted.map((r, i) => {
@@ -194,9 +213,10 @@ export function NiveauxEditor({
         // groupe) ; ailleurs, un seul interstice « avant la ligne » → pas de double zone.
         const isGroupLast = i === sorted.length - 1 || sorted[i + 1].demandeurId !== r.demandeurId;
         return (
-          <div
+          <RefRow
             key={r.key}
-            className="dem-row"
+            gridTemplate={GRID}
+            state={rowState(r)}
             onDragOver={(e) => {
               if (!dragKey || dragKey === r.key) return;
               const src = rows.find((x) => x.key === dragKey);
@@ -220,12 +240,6 @@ export function NiveauxEditor({
               setDragOverKey(null);
             }}
             style={{
-              display: "grid",
-              gridTemplateColumns: GRID,
-              gap: ".75rem",
-              alignItems: "center",
-              padding: ".2rem .75rem",
-              borderRadius: "var(--rad-sm)",
               // Bord haut réservé à l'indicateur de dépôt (drag) ; pas de trait de séparation.
               borderTop:
                 dragOverKey === r.key && !dragAfter ? "2px solid var(--accent)" : undefined,
@@ -251,14 +265,14 @@ export function NiveauxEditor({
               aria-label="Déplacer la ligne"
               style={{
                 cursor: "grab",
-                fontSize: ".95rem",
                 color: "var(--muted)",
                 userSelect: "none",
                 lineHeight: 1,
                 justifySelf: "center",
+                display: "inline-flex",
               }}
             >
-              ⠿
+              <GripGlyph size={14} />
             </span>
             {/* Demandeur : modifiable en mode édition (✏️) ; texte en lecture seule sinon. */}
             {editing ? (
@@ -287,7 +301,11 @@ export function NiveauxEditor({
             {confirming ? (
               <RefDeleteConfirm
                 gridColumn="3 / 6"
-                message="Supprimer ce niveau ?"
+                message={
+                  <>
+                    Supprimer le niveau <strong>{r.label || "sans nom"}</strong> ?
+                  </>
+                }
                 onConfirm={() => remove(r.key)}
                 onCancel={() => setConfirmKey(null)}
               />
@@ -322,53 +340,55 @@ export function NiveauxEditor({
                     style={FIELD_STYLE}
                   />
                 ) : (
-                  <span style={{ fontSize: ".85rem", fontWeight: 600, color: "var(--text)" }}>
-                    {r.label || <span style={{ color: "var(--muted)" }}>(sans nom)</span>}
+                  <span className="rf-label">
+                    <span style={{ fontSize: ".85rem", fontWeight: 600, color: "var(--text)" }}>
+                      {r.label || <span style={{ color: "var(--muted)" }}>(sans nom)</span>}
+                    </span>
+                    <RefStatePill state={rowState(r)} />
                   </span>
                 )}
 
-                {/* Action : éditer/terminer + supprimer */}
-                <div style={{ display: "flex", justifyContent: "center", gap: ".25rem" }}>
+                {/* Action : éditer/terminer + supprimer (révélées au survol) */}
+                <div className={`rf-act${editing ? " is-open" : ""}`}>
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className={`acct-action${editing ? " is-on" : ""}`}
                     onClick={() => setEditKey(editing ? null : r.key)}
                     title={editing ? "Terminer l'édition" : "Modifier ce niveau"}
                     aria-label={editing ? "Terminer l'édition" : "Modifier ce niveau"}
-                    style={ACTION_BTN}
                   >
-                    {editing ? "✓" : "✏️"}
+                    {editing ? <CheckGlyph size={14} /> : <PencilGlyph size={14} />}
                   </button>
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className="acct-action is-danger"
                     onClick={() => setConfirmKey(r.key)}
                     title="Supprimer ce niveau"
                     aria-label="Supprimer ce niveau"
-                    style={{ ...ACTION_BTN, ...GHOST_DANGER_STYLE }}
                   >
-                    🗑️
+                    <TrashGlyph size={14} />
                   </button>
                 </div>
               </>
             )}
-          </div>
+          </RefRow>
         );
       })}
 
-      {rows.length === 0 && <RefEmptyState>Aucun niveau. Cliquez sur « Ajouter ».</RefEmptyState>}
+      {rows.length === 0 && (
+        <RefEmptyState>Aucun niveau. Cliquez sur « Ajouter un niveau ».</RefEmptyState>
+      )}
 
       {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
           ou création est en cours. */}
       <RefEditorFooter
         dirty={dirty}
+        changes={changes}
         saving={saving}
         onCancel={cancelEdits}
         onSave={saveAll}
         onClose={onClose}
       />
-
-      <style>{DEM_ROW_HOVER_CSS}</style>
     </div>
   );
 }

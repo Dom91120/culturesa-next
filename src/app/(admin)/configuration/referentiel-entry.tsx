@@ -23,6 +23,7 @@ export function ReferentielEntry({
   count,
   countSuffix,
   detail,
+  subtitle,
   maxWidth = 720,
   children,
 }: {
@@ -35,6 +36,8 @@ export function ReferentielEntry({
   countSuffix?: string;
   /** Ligne de signalement (ce qui mérite un coup d'œil), ou état neutre. */
   detail: string;
+  /** Phrase sous le titre de la modale : ce que le référentiel règle (et ne règle pas). */
+  subtitle: string;
   maxWidth?: number;
   children: (close: () => void) => ReactNode;
 }) {
@@ -65,9 +68,12 @@ export function ReferentielEntry({
           dismissOnBackdrop={false}
           boxStyle={{ maxWidth, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}
         >
-          <div className="modal-title" style={{ marginBottom: "0.75rem" }}>
+          <div className="rf-title">
+            {icon}
             {title}
+            <span style={{ color: "var(--muted)" }}>· {count}</span>
           </div>
+          <p className="rf-subtitle">{subtitle}</p>
           {children(close)}
           <button type="button" className="modal-close" onClick={close}>
             ×

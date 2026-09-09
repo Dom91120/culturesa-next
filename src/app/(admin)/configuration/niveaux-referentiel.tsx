@@ -27,6 +27,7 @@ export function NiveauxReferentiel({
         </span>
       }
       count={niveaux.length}
+      subtitle="Classification par demandeur, utilisée dans le profil des usagers et les statistiques. L'ordre se règle par glisser-déposer au sein d'un même demandeur."
       detail={
         [
           nbDem > 0 ? `répartis sur ${nbDem} demandeur${nbDem > 1 ? "s" : ""}` : null,

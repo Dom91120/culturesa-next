@@ -1,27 +1,28 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { TrashGlyph } from "@/app/(admin)/users/account-ui";
 import {
-  DEM_GHOST_HOVER_CSS,
-  DEM_ROW_HOVER_CSS,
   RefColumnHeaders,
   RefDeleteConfirm,
   RefEditorFooter,
   RefEditorHeader,
   RefEmptyState,
+  RefRow,
+  RefStatePill,
+  RF_GHOST,
 } from "@/components/ref-editor-shell";
-import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
 import { type RefActionResult, useBufferedRows } from "@/components/use-buffered-rows";
 
 type RowBase = { id: number | null; label: string };
 
 /**
  * Éditeur CRUD générique « en mode tampon » des référentiels à id numérique
- * (demandeurs / structures / niveaux). Mutualise état, diff create/update/delete,
- * en-tête, ligne + confirmation de suppression, pied Annuler/Enregistrer et styles
- * (audit R1). La 1re colonne est toujours le libellé (input texte) ; les colonnes
- * intermédiaires sont fournies par `renderExtraCells`. NB : services-editor reste à
- * part (id texte + icône en 1re colonne + sélecteur d'icône → modèle divergent).
+ * (demandeurs / structures). Mutualise état, diff create/update/delete, barre d'outils,
+ * ligne avec état + confirmation de suppression, pied Annuler/Enregistrer (audit R1,
+ * refonte Dom 2026-09-09). La 1re colonne est toujours le libellé (champ fantôme +
+ * pastille d'état) ; les colonnes intermédiaires sont fournies par `renderExtraCells`.
+ * NB : services-editor et niveaux-editor restent à part (modèles divergents).
  */
 export function RefEditor<Init extends { id: number; label: string }, Row extends RowBase>({
   initial,
@@ -37,6 +38,7 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
   onUpdate,
   onDelete,
   confirmExtra,
+  summary,
   addDisabled = false,
   onClose,
 }: {
@@ -51,11 +53,13 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
     placeholder: string;
     /** En-tête de la colonne libellé, ex. « Demandeur ». */
     header: ReactNode;
-    /** Message de confirmation de suppression, ex. « Supprimer ce demandeur ? ». */
-    confirm: string;
+    /** Libellé du bouton d'ajout, ex. « Ajouter un demandeur ». */
+    add: string;
+    /** Message de confirmation de suppression (reçoit la ligne). */
+    confirm: (row: Row) => ReactNode;
     /** `title` du bouton corbeille, ex. « Supprimer ce demandeur ». */
     deleteTitle: string;
-    /** Texte d'état vide, ex. « Aucun demandeur. Cliquez sur « Ajouter ». ». */
+    /** Texte d'état vide. */
     empty: string;
   };
   /** En-têtes des colonnes intermédiaires (entre libellé et Action). */
@@ -74,22 +78,35 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
   onDelete: (id: number) => Promise<RefActionResult>;
   /** Détail optionnel ajouté au message de confirmation (ex. usagers détachés). */
   confirmExtra?: (row: Row) => ReactNode;
+  /** Signalement à gauche de la barre d'outils (calculé sur les lignes courantes). */
+  summary?: (rows: Row[]) => ReactNode;
   addDisabled?: boolean;
   onClose?: () => void;
 }) {
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   // Logique « mode tampon » mutualisée (état des lignes, dirty, resync, saveAll, cancel).
-  const { rows, patch, addRow, removeRow, dirty, error, saving, saveAll, cancelEdits } =
-    useBufferedRows<number, Init, Row>({
-      initial,
-      fromInitial,
-      isValid,
-      isDirty,
-      onCreate,
-      onUpdate,
-      onDelete,
-      onSyncReset: () => setConfirmKey(null),
-    });
+  const {
+    rows,
+    patch,
+    addRow,
+    removeRow,
+    dirty,
+    changes,
+    rowState,
+    error,
+    saving,
+    saveAll,
+    cancelEdits,
+  } = useBufferedRows<number, Init, Row>({
+    initial,
+    fromInitial,
+    isValid,
+    isDirty,
+    onCreate,
+    onUpdate,
+    onDelete,
+    onSyncReset: () => setConfirmKey(null),
+  });
 
   function add() {
     addRow(blankRow());
@@ -106,10 +123,14 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
 
   return (
     <div>
-      {/* En-tête : erreur éventuelle + bouton d'ajout (le titre est porté par la modale). */}
-      <RefEditorHeader error={error} onAdd={add} addDisabled={addDisabled} />
+      <RefEditorHeader
+        error={error}
+        onAdd={add}
+        addLabel={labels.add}
+        addDisabled={addDisabled}
+        summary={summary?.(rows)}
+      />
 
-      {/* En-têtes de colonnes (discrets) */}
       <RefColumnHeaders gridTemplate={gridTemplate}>
         <span style={{ paddingLeft: ".5rem" }}>{labels.header}</span>
         {extraHeaders.map((h, i) => (
@@ -117,47 +138,31 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
             {h.label}
           </span>
         ))}
-        <span style={{ textAlign: "center" }}>Action</span>
+        <span />
       </RefColumnHeaders>
 
       {rows.map((r) => {
         const confirming = confirmKey === r.key;
+        const state = rowState(r);
         return (
-          <div
-            key={r.key}
-            className="dem-row"
-            style={{
-              display: "grid",
-              gridTemplateColumns: gridTemplate,
-              gap: ".75rem",
-              alignItems: "center",
-              padding: ".2rem .75rem",
-              borderRadius: "var(--rad-sm)",
-            }}
-          >
-            <input
-              type="text"
-              className="dem-ghost"
-              value={r.label}
-              placeholder={labels.placeholder}
-              onChange={(e) => patch(r.key, { label: e.target.value } as Partial<Row>)}
-              style={{
-                fontSize: ".8rem",
-                fontWeight: 600,
-                color: "var(--text)",
-                border: "none",
-                background: "transparent",
-                outline: "none",
-                borderRadius: "var(--rad-sm)",
-                padding: ".2rem .5rem",
-                width: "100%",
-              }}
-            />
+          <RefRow key={r.key} gridTemplate={gridTemplate} state={state}>
+            <div className="rf-label">
+              <input
+                type="text"
+                className="rf-ghost"
+                value={r.label}
+                placeholder={labels.placeholder}
+                disabled={saving}
+                onChange={(e) => patch(r.key, { label: e.target.value } as Partial<Row>)}
+                style={{ ...RF_GHOST, fontWeight: 600 }}
+              />
+              <RefStatePill state={state} />
+            </div>
 
             {confirming ? (
               <RefDeleteConfirm
                 gridColumn={`2 / ${confirmSpanEnd}`}
-                message={labels.confirm}
+                message={labels.confirm(r)}
                 extra={confirmExtra?.(r)}
                 onConfirm={() => remove(r.key)}
                 onCancel={() => setConfirmKey(null)}
@@ -165,40 +170,33 @@ export function RefEditor<Init extends { id: number; label: string }, Row extend
             ) : (
               <>
                 {renderExtraCells(r, patch)}
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setConfirmKey(r.key)}
-                  title={labels.deleteTitle}
-                  style={{
-                    fontSize: ".75rem",
-                    padding: ".15rem .4rem",
-                    lineHeight: 1,
-                    ...GHOST_DANGER_STYLE,
-                    justifySelf: "center",
-                  }}
-                >
-                  🗑️
-                </button>
+                <div className="rf-act">
+                  <button
+                    type="button"
+                    className="acct-action is-danger"
+                    onClick={() => setConfirmKey(r.key)}
+                    title={labels.deleteTitle}
+                    aria-label={labels.deleteTitle}
+                  >
+                    <TrashGlyph size={14} />
+                  </button>
+                </div>
               </>
             )}
-          </div>
+          </RefRow>
         );
       })}
 
       {rows.length === 0 && <RefEmptyState>{labels.empty}</RefEmptyState>}
 
-      {/* Pied : « Fermer » au repos ; « Annuler / Enregistrer » dès qu'une modification
-          ou création est en cours (mode tampon, enregistrement explicite). */}
       <RefEditorFooter
         dirty={dirty}
+        changes={changes}
         saving={saving}
         onCancel={cancelEdits}
         onSave={saveAll}
         onClose={onClose}
       />
-
-      <style>{DEM_ROW_HOVER_CSS + DEM_GHOST_HOVER_CSS}</style>
     </div>
   );
 }
