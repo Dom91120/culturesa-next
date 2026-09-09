@@ -329,16 +329,7 @@ export default async function EditionsListePage({
             {renderGroups(groups)}
 
             {pages > 1 && (
-              <div
-                className="no-print"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: ".75rem",
-                  margin: ".75rem 0",
-                }}
-              >
+              <div className="ed-paging">
                 {page > 1 ? (
                   <a href={pageHref(page - 1)} className="acct-action" aria-label="Page précédente">
                     ‹
@@ -346,7 +337,7 @@ export default async function EditionsListePage({
                 ) : (
                   <span className="acct-action is-off">‹</span>
                 )}
-                <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
+                <span>
                   Feuille {page} / {pages} · {flat.length} ligne{flat.length > 1 ? "s" : ""}
                 </span>
                 {page < pages ? (

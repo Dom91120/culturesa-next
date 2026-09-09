@@ -5116,6 +5116,16 @@ textarea.theme-pending:focus::placeholder {
   border-top: 1px solid var(--border);
   color: var(--text);
 }
+/* Total général juste après un tableau (ou sa pagination) : la dernière ligne du tableau
+   fait déjà filet — pas de second trait, ni d'écart qui ressemble à une ligne vide
+   (Dom 2026-09-09). */
+div:has(> .ed-table-wrap:last-child) + .ed-totals.is-strong,
+div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
+.ed-paging + .ed-totals.is-strong {
+  margin-top: 0.55rem;
+  padding-top: 0;
+  border-top: 0;
+}
 /* Plannings / pointages : titre de jour et carte de participant. */
 .ed-h3 {
   font-size: 0.85rem;
