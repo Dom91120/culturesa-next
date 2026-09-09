@@ -177,7 +177,9 @@ export function ExercicePanel({ serviceId, serviceLabel, data }: Props) {
           <div className="cf-tile-txt">
             <small>{`période${plural(counts.periods)} à reconduire`}</small>
             <small>
-              {counts.periods > 0 ? "décalées d'un an" : "aucune période sur l'exercice"}
+              {counts.periods > 0
+                ? `décalée${plural(counts.periods)} d'un an`
+                : "aucune période sur l'exercice"}
             </small>
           </div>
         </div>
