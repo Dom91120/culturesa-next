@@ -4458,3 +4458,8 @@ textarea.theme-pending:focus::placeholder {
   color: var(--muted);
   line-height: 1.3;
 }
+/* Les pastilles (usage, état du texte) gardent la largeur de leur contenu au lieu de
+   s'étirer sur toute la colonne (Dom 2026-09-09). */
+.ex-krow > .ms-pill {
+  justify-self: start;
+}
