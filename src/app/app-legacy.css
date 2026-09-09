@@ -5304,6 +5304,10 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 .xc-grp > span {
   display: inline-flex;
 }
+/* Pas de filet après l'intertitre, ni sous les lignes d'options (Dom 2026-09-09). */
+.xc-grp::after {
+  content: none;
+}
 .xc-desc {
   font-size: 0.76rem;
   line-height: 1.5;
@@ -5315,12 +5319,8 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  padding: 0.38rem 0;
-  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0;
   font-size: 0.78rem;
-}
-.xc-opt:last-of-type {
-  border-bottom: 0;
 }
 .xc-opt-l {
   display: inline-flex;
