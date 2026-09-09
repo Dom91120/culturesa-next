@@ -26,7 +26,8 @@ const KIND_TITLES: Record<string, string> = {
 };
 
 // Éditions qui tiennent en PORTRAIT (peu de colonnes) ; les autres sont en paysage.
-const PORTRAIT_KINDS = ["inscrits", "creneaux", "attente-demande", "attente-adresses"];
+// Planning en portrait (Dom 2026-09-09) : trois cartes par rangée, plus de séances par page.
+const PORTRAIT_KINDS = ["inscrits", "creneaux", "planning", "attente-demande", "attente-adresses"];
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -42,10 +42,12 @@ export type EditionSearchParams = {
 // lignes : en-tête + une ligne par inscrit (pointages), en-tête + rangées de cartes
 // (planning, 4 cartes de 6 lignes par rangée). Le PDF, lui, reste complet (bloc
 // `.print-block-only`) : Puppeteer pagine lui-même.
-const PAGE_UNITS = 18; // calé sur le PDF : ~5 séances de pointage par feuille A4 paysage
+// Budget d'une feuille, calé sur le PDF : pointages en A4 paysage (~5 séances), planning
+// en A4 portrait (plus haut, trois cartes par rangée).
+const PAGE_UNITS: Record<EditionScreen, number> = { pointages: 18, planning: 30 };
 function sessionWeight(screen: EditionScreen, s: DatedSession): number {
   const n = s.attendees.length;
-  return screen === "pointages" ? 2 + n : 2 + Math.max(1, Math.ceil(n / 4)) * 6;
+  return screen === "pointages" ? 2 + n : 2 + Math.max(1, Math.ceil(n / 3)) * 6;
 }
 function paginateSessions(screen: EditionScreen, sessions: DatedSession[]): DatedSession[][] {
   const pages: DatedSession[][] = [];
@@ -53,7 +55,7 @@ function paginateSessions(screen: EditionScreen, sessions: DatedSession[]): Date
   let load = 0;
   for (const s of sessions) {
     const w = sessionWeight(screen, s);
-    if (cur.length > 0 && load + w > PAGE_UNITS) {
+    if (cur.length > 0 && load + w > PAGE_UNITS[screen]) {
       pages.push(cur);
       cur = [];
       load = 0;
