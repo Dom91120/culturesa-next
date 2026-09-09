@@ -34,8 +34,8 @@ export function ReferentielEntry({
   count: number;
   /** Complément à côté de l'effectif (ex. « · 37 usagers rattachés »). */
   countSuffix?: string;
-  /** Ligne de signalement (ce qui mérite un coup d'œil), ou état neutre. */
-  detail: string;
+  /** Ligne(s) de signalement (ce qui mérite un coup d'œil), ou état neutre — une par ligne. */
+  detail: string | string[];
   /** Phrase sous le titre de la modale : ce que le référentiel règle (et ne règle pas). */
   subtitle: string;
   maxWidth?: number;
@@ -60,7 +60,11 @@ export function ReferentielEntry({
           <span className="n">{count}</span>
           <span className="cf-tile-txt">
             {countSuffix && <small>{countSuffix}</small>}
-            <span className="s">{detail}</span>
+            {(Array.isArray(detail) ? detail : [detail]).map((d) => (
+              <span key={d} className="s">
+                {d}
+              </span>
+            ))}
           </span>
         </span>
       </button>

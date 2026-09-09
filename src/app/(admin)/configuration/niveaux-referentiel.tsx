@@ -28,14 +28,13 @@ export function NiveauxReferentiel({
       }
       count={niveaux.length}
       subtitle="Classification par demandeur, utilisée dans le profil des usagers et les statistiques. L'ordre se règle par glisser-déposer au sein d'un même demandeur."
-      detail={
-        [
+      detail={(() => {
+        const parts = [
           nbDem > 0 ? `répartis sur ${nbDem} demandeur${nbDem > 1 ? "s" : ""}` : null,
           communs > 0 ? `${communs} commun${communs > 1 ? "s" : ""} à tous` : null,
-        ]
-          .filter((p): p is string => p !== null)
-          .join(" · ") || "aucun niveau"
-      }
+        ].filter((p): p is string => p !== null);
+        return parts.length ? parts : "aucun niveau";
+      })()}
     >
       {(close) => <NiveauxEditor initial={niveaux} demandeurs={demandeurs} onClose={close} />}
     </ReferentielEntry>
