@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { INPUT_CHROME } from "@/components/ui-styles";
+import { HourglassGlyph } from "@/components/ui-glyphs";
 import { setValidationNoticeDelayAction } from "./actions";
 
 /**
- * Réglage GLOBAL du délai de regroupement des notifications de validation (sous le
- * tableau « Échanges par mail ») : un gestionnaire qui hésite (validé, dévalidé…) ne
- * déclenche qu'un e-mail au plus, reflétant l'état final, envoyé après ce délai par le
- * cron « Notifications de validation ». 0 = envoi immédiat à chaque clic.
+ * Réglage GLOBAL du délai de regroupement des notifications de validation, sur une ligne
+ * sous le titre de « Échanges par mail » (refonte Dom 2026-09-09) : un gestionnaire qui
+ * hésite (validé, dévalidé…) ne déclenche qu'un e-mail au plus, reflétant l'état final,
+ * envoyé après ce délai par le cron « Notifications de validation ». 0 = envoi immédiat.
  */
 export function ValidationNoticeDelayField({ initial }: { initial: number }) {
   const [value, setValue] = useState(String(initial));
@@ -31,16 +31,15 @@ export function ValidationNoticeDelayField({ initial }: { initial: number }) {
         return;
       }
       setSaved(n);
-      setMsg({ ok: true, text: "Délai enregistré ✓" });
+      setMsg({ ok: true, text: "Délai enregistré" });
     });
   }
 
   return (
-    <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
-      <label htmlFor="validation-notice-delay" style={{ display: "block", marginBottom: ".35rem" }}>
-        Délai de regroupement des notifications de validation
-      </label>
-      <div style={{ display: "flex", alignItems: "center", gap: ".5rem", flexWrap: "wrap" }}>
+    <div className="ex-set">
+      <HourglassGlyph size={14} />
+      <label htmlFor="validation-notice-delay">
+        Notifications de validation regroupées pendant
         <input
           id="validation-notice-delay"
           type="number"
@@ -54,23 +53,19 @@ export function ValidationNoticeDelayField({ initial }: { initial: number }) {
           onKeyDown={(e) => {
             if (e.key === "Enter") save();
           }}
-          style={{ ...INPUT_CHROME, width: 80, padding: ".3rem .5rem", fontSize: ".85rem" }}
         />
-        <span style={{ fontSize: ".85rem" }}>minutes</span>
-        {msg && (
-          <span style={{ fontSize: ".8rem", color: msg.ok ? "var(--accent)" : "var(--danger)" }}>
-            {msg.text}
-          </span>
+        min
+      </label>
+      <span className="note">
+        {msg ? (
+          <span style={{ color: msg.ok ? "var(--accent)" : "var(--danger)" }}>{msg.text}</span>
+        ) : (
+          <>
+            une hésitation (validé, dévalidé…) ne produit qu&apos;un e-mail, celui de l&apos;état
+            final, au passage suivant de la tâche planifiée ; 0 = immédiat
+          </>
         )}
-      </div>
-      <p style={{ fontSize: ".8rem", lineHeight: 1.5, color: "var(--muted)", margin: ".5rem 0 0" }}>
-        Quand un gestionnaire valide ou remet en attente une réservation, l&apos;e-mail part après
-        ce délai et ne reflète que l&apos;<strong>état final</strong> : une hésitation (validé,
-        dévalidé, validé…) ne produit qu&apos;un e-mail au plus, aucun si l&apos;état revient à
-        celui que l&apos;usager connaissait. <strong>0</strong> = envoi immédiat à chaque clic. Le
-        délai effectif s&apos;étend jusqu&apos;au passage suivant de la tâche planifiée (toutes les
-        5 minutes).
-      </p>
+      </span>
     </div>
   );
 }

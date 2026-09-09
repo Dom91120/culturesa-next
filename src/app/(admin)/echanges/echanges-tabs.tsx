@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FileCodeGlyph, InfoGlyph, MailForwardGlyph } from "@/components/ui-glyphs";
 import { EchangesConfig, type KindData } from "./echanges-config";
 import { MailRoutingTable } from "./mail-routing-table";
 import type { RoutingRow } from "./mail-rows";
@@ -12,6 +13,8 @@ import { ValidationNoticeDelayField } from "./validation-notice-delay";
  *    réglages COMMUNS à tous les services ;
  *  - « Modèles d'e-mails » : contenu (objet + corps) de tous les e-mails au niveau global
  *    (surchargeable par service dans les Paramètres de chaque service).
+ * Refonte Dom 2026-09-09 : pictogrammes SVG, en-tête avec pastille de portée, réglage du
+ * délai sur une ligne, explication en pied de panneau (plus de paragraphe d'introduction).
  */
 export function EchangesAdminTabs({
   routingRows,
@@ -36,7 +39,7 @@ export function EchangesAdminTabs({
           aria-current={tab === "routage" ? "page" : undefined}
           onClick={() => setTab("routage")}
         >
-          <span aria-hidden="true">📨</span> Échanges par mail
+          <MailForwardGlyph size={14} /> Échanges par mail
         </button>
         <button
           type="button"
@@ -44,56 +47,56 @@ export function EchangesAdminTabs({
           aria-current={tab === "modeles" ? "page" : undefined}
           onClick={() => setTab("modeles")}
         >
-          <span aria-hidden="true">✏️</span> Modèles d&apos;e-mails
+          <FileCodeGlyph size={14} /> Modèles d&apos;e-mails
         </button>
       </nav>
 
       {tab === "routage" ? (
         <div className="panel">
-          <div className="panel-title">
+          <div
+            className="panel-title"
+            style={{ justifyContent: "space-between", gap: ".75rem", marginBottom: ".5rem" }}
+          >
             <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
-              <span className="dot" style={{ background: "var(--accent)" }} />
+              <span className="rg-ico is-ok">
+                <MailForwardGlyph size={16} />
+              </span>
               Échanges par mail
             </span>
+            <span className="ms-pill is-ok" title="Ces réglages valent pour tous les services">
+              commun à tous les services
+            </span>
           </div>
-          <p
-            style={{
-              fontSize: ".85rem",
-              lineHeight: 1.5,
-              color: "var(--muted)",
-              margin: "0 0 1rem",
-            }}
-          >
-            Pour chaque action, choisissez le type d&apos;e-mail envoyé, son destinataire et
-            activez/désactivez son envoi. Ces réglages sont{" "}
-            <strong>communs à tous les services</strong>. Le destinataire «&nbsp;Le service&nbsp;»
-            désigne l&apos;e-mail de contact du service s&apos;il est renseigné dans le référentiel
-            Services, sinon les comptes de ses gestionnaires. Le contenu de chaque type se règle
-            dans «&nbsp;Modèles d&apos;e-mails&nbsp;».
-          </p>
-          <MailRoutingTable rows={routingRows} kindOptions={kindOptions} />
           <ValidationNoticeDelayField initial={validationNoticeDelay} />
+          <MailRoutingTable rows={routingRows} kindOptions={kindOptions} />
+          <div className="rg-foot">
+            <InfoGlyph size={13} />
+            <span style={{ flex: 1, lineHeight: 1.45 }}>
+              La pastille devant chaque action dit qui la déclenche : l&apos;usager (vert), un
+              gestionnaire (orange) ou un automatisme (gris). Le destinataire « Le service » désigne
+              l&apos;e-mail de contact du service s&apos;il est renseigné dans le référentiel
+              Services, sinon les comptes de ses gestionnaires. Le contenu de chaque type se règle
+              dans « Modèles d&apos;e-mails ».
+            </span>
+          </div>
         </div>
       ) : (
         <EchangesConfig
           // Remonte le composant quand l'ensemble des types change (création/suppression).
           key={modeleRows.map((r) => r.kind).join(",")}
           rows={modeleRows}
-          showSystem
-          showRecipient
-          showSend={false}
           allowCreate
           title="Modèles d'e-mails"
           panelId="admin-modeles-panel"
           intro={
             <>
-              Contenu (objet + corps) de tous les e-mails au niveau <strong>global</strong>. Les
-              e-mails <strong>système</strong> (compte/sécurité, test) sont{" "}
-              <strong>toujours envoyés</strong> ; les e-mails de <strong>réservation</strong>{" "}
-              servent de base à <strong>tous les services</strong> (surchargeable par service) —
-              leur destinataire et leur envoi se règlent dans «&nbsp;Échanges par mail&nbsp;». Vous
-              pouvez aussi créer des types <strong>personnalisés globaux</strong>, routables
-              partout.
+              Contenu (objet et corps) de tous les e-mails au niveau global. « Par défaut » : le
+              texte livré avec l&apos;application ; « modifié » : un texte retouché ici, que «
+              Réinitialiser » dans l&apos;éditeur ramène au défaut. Les e-mails de compte et de
+              sécurité sont toujours envoyés ; ceux de réservation servent de base à tous les
+              services (surchargeable dans chaque service) et la pastille compte les actions qui les
+              utilisent dans « Échanges par mail ». Un type personnalisé, routable partout, peut
+              être supprimé tant qu&apos;aucune action ne l&apos;utilise.
             </>
           }
         />

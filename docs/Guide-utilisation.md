@@ -440,16 +440,23 @@ du même navigateur, et un compte ne garde que ses cinq sessions les plus récen
 L'onglet **Échanges** règle les e-mails **au niveau global** (communs à tous les services), en
 deux volets :
 
-- **Échanges par mail** — pour chaque action, le **type d'e-mail** envoyé, son **destinataire** et
-  l'**activation de l'envoi**. En dessous, le **délai de regroupement des notifications de
-  validation** (5 minutes par défaut) : quand un gestionnaire valide ou remet en attente une
-  réservation, l'e-mail part après ce délai et ne reflète que l'**état final** — une hésitation
-  (validé, dévalidé, validé…) ne produit qu'un e-mail au plus, ou aucun si l'état revient à
-  celui que l'usager connaissait. 0 = envoi immédiat à chaque clic.
-- **Modèles d'e-mails** — l'**objet et le corps** de tous les types. Les e-mails de réservation
-  servent de **base surchargeable par chaque service** (onglet Échanges du service) ; les e-mails
+- **Échanges par mail** — les actions sont regroupées en trois familles (Réservations, Rappels et
+  absences, Liste d'attente) ; une pastille devant chaque libellé dit qui déclenche l'action :
+  l'usager (vert), un gestionnaire (orange) ou un automatisme (gris). Pour chaque action, le
+  **type d'e-mail** envoyé, son **destinataire** et un **interrupteur d'envoi** (la ligne
+  s'estompe quand l'envoi est coupé). Sous le titre, le **délai de regroupement des
+  notifications de validation** (5 minutes par défaut) : quand un gestionnaire valide ou remet
+  en attente une réservation, l'e-mail part après ce délai et ne reflète que l'**état final** —
+  une hésitation (validé, dévalidé, validé…) ne produit qu'un e-mail au plus, ou aucun si l'état
+  revient à celui que l'usager connaissait. 0 = envoi immédiat à chaque clic.
+- **Modèles d'e-mails** — l'**objet et le corps** de tous les types, classés en quatre familles
+  (Compte et sécurité, Gestionnaires, Réservations, Personnalisés), avec des filtres par famille,
+  un filtre **« Modifiés »** qui isole les textes retouchés et une recherche. Chaque ligne porte
+  l'état de son texte (« par défaut » ou « modifié ») et, pour les e-mails de réservation, le
+  nombre d'actions qui l'utilisent dans « Échanges par mail ». Les e-mails de réservation servent
+  de **base surchargeable par chaque service** (onglet Échanges du service) ; les e-mails
   **système** (compte, sécurité, test) sont toujours envoyés. On peut aussi créer des **types
-  personnalisés globaux**.
+  personnalisés globaux**, supprimables tant qu'aucune action ne les utilise.
 
 ### Messagerie
 

@@ -4,9 +4,17 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useMemo, useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
-import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
+import {
+  CalendarTimeGlyph,
+  CircleCheckGlyph,
+  FileCodeGlyph,
+  InfoGlyph,
+  MailForwardGlyph,
+  ShieldLockGlyph,
+} from "@/components/ui-glyphs";
 import { emailButton, wrapEmailHtml } from "@/lib/email-theme";
 import { renderHtmlTemplate } from "@/lib/mail-render";
+import { MailOffGlyph, PencilGlyph, SendGlyph, TrashGlyph, UsersGlyph } from "../users/account-ui";
 import {
   createMailTypeAction,
   deleteMailTypeAction,
@@ -14,6 +22,17 @@ import {
   updateMailTypeAction,
 } from "./actions";
 import { EmailFrame } from "./email-frame";
+import type { KindFamily, KindUsage } from "./mail-rows";
+
+// ════════════════════════════════════════════════════════════════════════════
+//  « Modèles d'e-mails » — refonte Dom 2026-09-09 : familles (Compte et sécurité /
+//  Gestionnaires / Réservations / Personnalisés) avec leur règle en intertitre, filtres
+//  par famille avec effectifs + filtre « Modifiés » + recherche, pastille d'état du
+//  texte (par défaut / modifié), usage par les actions de « Échanges par mail »,
+//  actions au survol. Les modales (éditeur, nom/description, suppression) sont
+//  inchangées. Sert aussi aux Paramètres › Échanges de chaque service (types de
+//  réservation seuls, sans création).
+// ════════════════════════════════════════════════════════════════════════════
 
 // Éditeur TipTap chargé À LA DEMANDE (audit 2026-07-24) : l'import statique
 // embarquait TipTap/ProseMirror (~33 paquets) dans le chunk des pages Échanges,
@@ -29,11 +48,18 @@ export type KindData = {
   kind: string;
   label: string;
   description: string;
-  // Destinataire de l'e-mail (affiché en colonne quand `showRecipient`).
+  // Destinataire intrinsèque (e-mails système) ; pour les e-mails de réservation il se règle
+  // par action dans « Échanges par mail ».
   recipient: string;
-  // Verrouillé : e-mail système, toujours envoyé (case « Envoyer » cochée et non modifiable).
+  // Famille (intertitre, pictogramme, filtre).
+  family: KindFamily;
+  // Actions de « Échanges par mail » routées vers ce type (réservation / perso), sinon null.
+  usage: KindUsage | null;
+  // Texte différent de sa référence (défaut livré, ou base globale en portée service).
+  modified: boolean;
+  // Verrouillé : e-mail système, toujours envoyé.
   locked: boolean;
-  // E-mail système (compte/sécurité) : affiché dans la colonne « Système » (case cochée).
+  // E-mail système (compte/sécurité).
   system: boolean;
   // Type d'e-mail personnalisé (modifiable/supprimable). Absent/false → type intégré.
   deletable?: boolean;
@@ -44,6 +70,20 @@ export type KindData = {
   defaultSubject: string;
   defaultHtml: string;
   variables: { name: string; desc: string }[];
+};
+
+const FAMILY_ORDER: KindFamily[] = ["compte", "gestionnaires", "reservations", "perso"];
+const FAMILY_LABEL: Record<KindFamily, string> = {
+  compte: "Compte et sécurité",
+  gestionnaires: "Gestionnaires",
+  reservations: "Réservations",
+  perso: "Personnalisés",
+};
+const FAMILY_HINT: Record<KindFamily, string> = {
+  compte: "toujours envoyés",
+  gestionnaires: "récapitulatifs, fréquence réglée par service",
+  reservations: "base commune, surchargeable dans chaque service",
+  perso: "créés ici, routables partout",
 };
 
 // Valeurs d'exemple pour l'aperçu (mêmes variables que le rendu serveur).
@@ -71,39 +111,22 @@ const SAMPLE_RAW: Record<string, string> = {
 
 export function EchangesConfig({
   rows,
-  title = "Échanges par mails",
+  title = "Modèles d'e-mails",
   intro,
   panelId = "echanges-panel",
   serviceId,
-  showSystem = false,
-  showRecipient = false,
-  showSend = true,
   allowCreate = false,
-  contentLabel = "Contenu",
 }: {
-  // Une ligne par TYPE d'e-mail (label + destinataire + contenu éditable). Utilisé pour
-  // « Modèles d'e-mails » (par service) et « E-mails automatiques » (système, Messagerie).
+  // Une ligne par TYPE d'e-mail (label + destinataire + contenu éditable).
   rows: KindData[];
-  // Titre du panel + intro + id : permet de réutiliser cette table pour un autre groupe
-  // d'e-mails (ex. panel « E-mails automatiques » de l'onglet Messagerie).
   title?: string;
+  // Explication affichée en pied de panneau.
   intro?: React.ReactNode;
   panelId?: string;
-  // Fourni → gabarits/préférences réglés PAR SERVICE (e-mails de réservation) ; absent →
-  // portée globale (e-mails système).
+  // Fourni → gabarits réglés PAR SERVICE (e-mails de réservation) ; absent → portée globale.
   serviceId?: string;
-  // Affiche une colonne « Système » (case cochée/désactivée si e-mail système).
-  showSystem?: boolean;
-  // Affiche une colonne « Destinataire » (panel « E-mails automatiques »).
-  showRecipient?: boolean;
-  // Affiche la colonne « Envoyer » (masquée dans « Modèles d'e-mails » : l'envoi se règle
-  // via la case « Envoyer » d'« Échanges par mail », par service).
-  showSend?: boolean;
   // Autorise la création/suppression de types d'e-mails personnalisés (admin, « Modèles »).
   allowCreate?: boolean;
-  // Libellé de l'en-tête de la colonne d'édition (« Contenu » par défaut, « Modèle » dans
-  // « Modèles d'e-mails »).
-  contentLabel?: string;
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState<Record<string, { subject: string; html: string }>>(
@@ -157,7 +180,34 @@ export function EchangesConfig({
   } | null>(null);
   const isCreating = metaEdit?.kind === null;
 
-  // Callbacks STABLES passés à <Row> (mémoïsé) : sans eux, toutes les lignes du tableau se
+  // Filtres : famille, « Modifiés », recherche libre.
+  const [family, setFamily] = useState<KindFamily | "all">("all");
+  const [onlyModified, setOnlyModified] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const counts = useMemo(() => {
+    const c: Record<KindFamily, number> = {
+      compte: 0,
+      gestionnaires: 0,
+      reservations: 0,
+      perso: 0,
+    };
+    for (const r of rows) c[r.family]++;
+    return c;
+  }, [rows]);
+  const modifiedCount = useMemo(() => rows.filter((r) => r.modified).length, [rows]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (family !== "all" && r.family !== family) return false;
+      if (onlyModified && !r.modified) return false;
+      if (!q) return true;
+      return [r.label, r.description, r.subject, r.recipient].join(" ").toLowerCase().includes(q);
+    });
+  }, [rows, family, onlyModified, query]);
+
+  // Callbacks STABLES passés à <Row> (mémoïsé) : sans eux, toutes les lignes se
   // re-rendraient à chaque frappe dans la modale d'édition (closures recréées par rendu).
   const onEditKind = useCallback((kind: string) => setEditing(kind), []);
   const onAskDeleteKind = useCallback((kind: string) => setConfirmDelete(kind), []);
@@ -175,7 +225,7 @@ export function EchangesConfig({
   // Ouvre la modale en mode création (champs vierges + destinataire par défaut).
   function openCreate() {
     setMsg(null);
-    // `recipient` conservé dans le type mais non éditable ici (réglé par service,
+    // `recipient` conservé dans le type mais non éditable ici (réglé par action,
     // cf. « Échanges par mail ») — valeur neutre par défaut.
     setMetaEdit({ kind: null, label: "", description: "", recipient: "" });
   }
@@ -196,7 +246,7 @@ export function EchangesConfig({
         setMetaEdit(null);
         setMsg({
           ok: true,
-          text: m.kind === null ? "Type d'e-mail créé ✓" : "Type d'e-mail mis à jour ✓",
+          text: m.kind === null ? "Type d'e-mail créé" : "Type d'e-mail mis à jour",
         });
         router.refresh();
       }
@@ -211,7 +261,7 @@ export function EchangesConfig({
       if (res && !res.ok) {
         setMsg({ ok: false, text: res.error ?? "Échec de la suppression." });
       } else {
-        setMsg({ ok: true, text: "Type d'e-mail supprimé ✓" });
+        setMsg({ ok: true, text: "Type d'e-mail supprimé" });
         router.refresh();
       }
     });
@@ -235,8 +285,10 @@ export function EchangesConfig({
         setMsg({ ok: false, text: res.error ?? "Échec de l'enregistrement." });
       } else {
         setSaved((s) => ({ ...s, [kind]: { ...d } }));
-        setMsg({ ok: true, text: "Modèle enregistré ✓" });
+        setMsg({ ok: true, text: "Modèle enregistré" });
         setEditing(null); // ferme la modale après un enregistrement réussi
+        // La pastille « modifié » et le filtre viennent du serveur : on le resollicite.
+        router.refresh();
       }
     });
   }
@@ -248,77 +300,150 @@ export function EchangesConfig({
   // Modèle en cours d'édition (affiché dans la modale), ou null.
   const editingRow = editing ? (rows.find((r) => r.kind === editing) ?? null) : null;
 
+  const headBtn = {
+    padding: ".25rem .65rem",
+    fontSize: ".68rem",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: ".35rem",
+  } as const;
+
   return (
     <div className="panel" id={panelId}>
-      <div className="panel-title">
+      <div
+        className="panel-title"
+        style={{ justifyContent: "space-between", gap: ".75rem", marginBottom: ".5rem" }}
+      >
         <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
-          <span className="dot" style={{ background: "var(--accent)" }} />
+          <span className="rg-ico is-ok">
+            <FileCodeGlyph size={16} />
+          </span>
           {title}
+          <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {rows.length}</span>
         </span>
-      </div>
-
-      <p style={{ fontSize: ".85rem", lineHeight: 1.5, color: "var(--muted)", margin: "0 0 1rem" }}>
-        {intro ?? "Personnalisez le contenu (objet + corps) de chaque e-mail via l'éditeur."}
-      </p>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem" }}>
-        <thead>
-          <tr>
-            <th style={th("left")}>Type d&apos;e-mail</th>
-            {showSystem && <th style={{ ...th("center"), width: 80 }}>Système</th>}
-            {showRecipient && <th style={{ ...th("left"), width: 200 }}>Destinataire</th>}
-            {showSend && <th style={{ ...th("center"), width: 90 }}>Envoyer</th>}
-            <th style={{ ...th("center"), width: 140 }}>{contentLabel}</th>
-            {allowCreate && <th style={{ ...th("center"), width: 180 }}>Action</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <Row
-              key={r.kind}
-              r={r}
-              showSystem={showSystem}
-              showRecipient={showRecipient}
-              showSend={showSend}
-              showAction={allowCreate}
-              // ✏️ (nom/description) : types perso, OU types intégrés en portée GLOBALE (admin).
-              canEditMeta={allowCreate && (!!r.deletable || !serviceId)}
-              // 🗑️ : types personnalisés uniquement.
-              canDelete={allowCreate && !!r.deletable}
-              onEdit={onEditKind}
-              onEditMeta={onEditMetaRow}
-              onAskDelete={onAskDeleteKind}
-            />
-          ))}
-        </tbody>
-      </table>
-
-      {allowCreate && (
-        <div style={{ marginTop: "1rem" }}>
+        {allowCreate && (
           <button
             type="button"
             className="btn btn-ghost"
             onClick={openCreate}
             disabled={pending}
-            style={{ fontSize: ".78rem", whiteSpace: "nowrap" }}
+            style={headBtn}
           >
-            ＋ Ajouter un type d&apos;e-mail
+            ＋ Ajouter un type
           </button>
+        )}
+      </div>
+
+      <div className="acct-toolbar" style={{ marginBottom: ".2rem" }}>
+        <button
+          type="button"
+          className={`acct-chip${family === "all" ? " is-on" : ""}`}
+          aria-pressed={family === "all"}
+          onClick={() => setFamily("all")}
+        >
+          Tout<span className="n">{rows.length}</span>
+        </button>
+        {FAMILY_ORDER.filter((f) => counts[f] > 0).map((f) => (
+          <button
+            key={f}
+            type="button"
+            className={`acct-chip${family === f ? " is-on" : ""}`}
+            aria-pressed={family === f}
+            onClick={() => setFamily(f)}
+          >
+            {FAMILY_LABEL[f]}
+            <span className="n">{counts[f]}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className={`acct-chip ex-chip-mod${onlyModified ? " is-on" : ""}`}
+          aria-pressed={onlyModified}
+          title="Ne montrer que les textes retouchés"
+          onClick={() => setOnlyModified((v) => !v)}
+        >
+          <PencilGlyph size={11} /> Modifiés<span className="n">{modifiedCount}</span>
+        </button>
+        <div className="acct-toolbar-right">
+          <div className="search-wrap">
+            {/* biome-ignore lint/a11y/noSvgWithoutTitle: icône décorative (même loupe que les autres listes) */}
+            <svg
+              className="search-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+              />
+            </svg>
+            <input
+              type="search"
+              aria-label="Rechercher un modèle"
+              placeholder="Nom, description, objet…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
         </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p style={{ fontSize: ".8rem", color: "var(--muted)", margin: ".8rem 0 0" }}>
+          Aucun modèle ne correspond à ce filtre.
+        </p>
+      ) : (
+        FAMILY_ORDER.map((fam) => {
+          const items = filtered.filter((r) => r.family === fam);
+          if (items.length === 0) return null;
+          return (
+            <div key={fam}>
+              <div className="ms-grp">
+                {FAMILY_LABEL[fam]}
+                <span className="hint">· {FAMILY_HINT[fam]}</span>
+              </div>
+              {items.map((r) => (
+                <Row
+                  key={r.kind}
+                  r={r}
+                  // Nom/description : types perso, OU types intégrés en portée GLOBALE (admin).
+                  canEditMeta={allowCreate && (!!r.deletable || !serviceId)}
+                  // Corbeille : types personnalisés uniquement.
+                  canDelete={allowCreate && !!r.deletable}
+                  onEdit={onEditKind}
+                  onEditMeta={onEditMetaRow}
+                  onAskDelete={onAskDeleteKind}
+                />
+              ))}
+            </div>
+          );
+        })
       )}
 
-      {msg && (
-        <span
-          style={{
-            display: "inline-block",
-            marginTop: ".75rem",
-            fontSize: ".8rem",
-            color: msg.ok ? "var(--accent)" : "var(--danger)",
-          }}
-        >
-          {msg.text}
+      <div className="rg-foot">
+        <InfoGlyph size={13} />
+        <span style={{ flex: 1, lineHeight: 1.45 }}>
+          {intro ?? "Personnalisez le contenu (objet et corps) de chaque e-mail via l'éditeur."}
         </span>
-      )}
+        {msg && (
+          <span
+            role="status"
+            style={{
+              color: msg.ok ? "var(--accent)" : "var(--danger)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: ".3rem",
+            }}
+          >
+            {msg.ok ? <CircleCheckGlyph size={13} /> : <MailOffGlyph size={13} />}
+            {msg.text}
+          </span>
+        )}
+      </div>
 
       {/* Modale d'édition d'un modèle d'e-mail (objet + corps + aperçu). */}
       {editingRow && (
@@ -455,24 +580,79 @@ export function EchangesConfig({
   );
 }
 
-function th(align: "left" | "center"): React.CSSProperties {
-  return {
-    textAlign: align,
-    padding: ".5rem .6rem",
-    borderBottom: "1px solid var(--border)",
-    color: "var(--muted)",
-    fontWeight: 600,
-  };
+/** Pictogramme teinté par famille (bouclier, gestionnaires, calendrier, personnalisé). */
+function FamilyIcon({ r }: { r: KindData }) {
+  if (r.kind === "email_test") {
+    return (
+      <span className="rg-ico is-neutral">
+        <SendGlyph size={14} />
+      </span>
+    );
+  }
+  switch (r.family) {
+    case "compte":
+      return (
+        <span className="rg-ico is-neutral">
+          <ShieldLockGlyph size={14} />
+        </span>
+      );
+    case "gestionnaires":
+      return (
+        <span className="rg-ico is-warn">
+          <UsersGlyph size={14} />
+        </span>
+      );
+    case "reservations":
+      return (
+        <span className="rg-ico is-ok">
+          <CalendarTimeGlyph size={14} />
+        </span>
+      );
+    default:
+      return (
+        <span className="rg-ico is-info">
+          <PencilGlyph size={14} />
+        </span>
+      );
+  }
+}
+
+/** Colonne « destinataire » : intrinsèque (système), ou usage par les actions (réservation). */
+function Recipient({ r }: { r: KindData }) {
+  if (!r.usage) return <span className="ex-rc">{r.recipient}</span>;
+  const { actions, enabled } = r.usage;
+  if (actions === 0) {
+    return (
+      <span
+        className="ms-pill is-neutral"
+        title="Aucune action de « Échanges par mail » n'utilise ce type"
+      >
+        non routé
+      </span>
+    );
+  }
+  const off = actions - enabled;
+  const tone = enabled === 0 ? "is-warn" : "is-ok";
+  const text =
+    off === 0
+      ? `${actions} action${actions > 1 ? "s" : ""}`
+      : enabled === 0
+        ? `${actions} action${actions > 1 ? "s" : ""}, désactivée${actions > 1 ? "s" : ""}`
+        : `${actions} actions, ${off} désactivée${off > 1 ? "s" : ""}`;
+  return (
+    <span
+      className={`ms-pill ${tone}`}
+      title="Actions de « Échanges par mail » routées vers ce type (envoi activé ou non)"
+    >
+      <MailForwardGlyph size={11} /> {text}
+    </span>
+  );
 }
 
 // Mémoïsée : avec des callbacks parent STABLES, une ligne ne se re-rend que si SES données
 // changent (et non à chaque frappe ailleurs dans le panneau).
 const Row = memo(function Row({
   r,
-  showSystem = false,
-  showRecipient,
-  showSend = true,
-  showAction = false,
   canEditMeta = false,
   canDelete = false,
   onEdit,
@@ -480,11 +660,6 @@ const Row = memo(function Row({
   onAskDelete,
 }: {
   r: KindData;
-  showSystem?: boolean;
-  showRecipient: boolean;
-  showSend?: boolean;
-  // Affiche la colonne « Action » (admin, « Modèles d'e-mails »).
-  showAction?: boolean;
   // Métadonnées (nom/description) éditables : types perso, ou types intégrés au niveau global.
   canEditMeta?: boolean;
   // Supprimable : types personnalisés uniquement.
@@ -494,122 +669,99 @@ const Row = memo(function Row({
   // Demande la suppression : ouvre la modale de confirmation (--danger) au niveau du parent.
   onAskDelete?: (kind: string) => void;
 }) {
-  const cell: React.CSSProperties = {
-    padding: ".55rem .6rem",
-    borderBottom: "1px solid var(--border)",
-  };
   return (
-    <tr>
-      <td style={cell}>
-        <div style={{ fontWeight: 600 }}>{r.label}</div>
+    <div className="ex-krow">
+      <FamilyIcon r={r} />
+      <div style={{ minWidth: 0 }}>
+        <div className="ex-knm">{r.label}</div>
         {r.description && (
-          <div style={{ fontSize: ".76rem", color: "var(--muted)", marginTop: ".15rem" }}>
+          <div className="ex-kds" title={r.description}>
             {r.description}
           </div>
         )}
-      </td>
-      {showSystem && (
-        <td style={{ ...cell, textAlign: "center" }}>
-          <input
-            type="checkbox"
-            aria-label={`Système : ${r.label}`}
-            checked={r.system}
-            disabled
-            readOnly
-            title={r.system ? "E-mail système" : "E-mail de réservation (non système)"}
-            style={{ width: 16, height: 16, cursor: "default" }}
-          />
-        </td>
+      </div>
+      <Recipient r={r} />
+      {r.modified ? (
+        <span
+          className="ms-pill is-warn"
+          title="Texte retouché ; « Réinitialiser » dans l'éditeur ramène au défaut"
+        >
+          <PencilGlyph size={11} /> modifié
+        </span>
+      ) : (
+        <span className="ms-pill is-neutral" title="Texte livré avec l'application">
+          par défaut
+        </span>
       )}
-      {showRecipient && (
-        <td style={{ ...cell, fontSize: ".82rem" }}>
-          {/* Destinataire intrinsèque (e-mails système) ; pour les e-mails de réservation il se
-              règle GLOBALEMENT dans « Échanges par mail » (colonne Destinataire). */}
-          {r.locked ? (
-            r.recipient
-          ) : (
-            <span
-              style={{ color: "var(--muted)" }}
-              title="Défini dans « Échanges par mail » (colonne Destinataire), commun à tous les services."
-            >
-              Voir « Échanges par mail »
-            </span>
-          )}
-        </td>
-      )}
-      {showSend && (
-        <td style={{ ...cell, textAlign: "center" }}>
-          {/* E-mails système : toujours envoyés (affichage en lecture seule). */}
-          <input
-            type="checkbox"
-            aria-label={`Envoyer : ${r.label}`}
-            checked
-            disabled
-            readOnly
-            title="Cet e-mail est toujours envoyé (non désactivable)."
-            style={{ width: 18, height: 18, cursor: "default" }}
-          />
-        </td>
-      )}
-      <td style={{ ...cell, textAlign: "center" }}>
+      <div className="ms-acts">
         <button
           type="button"
           className="btn btn-ghost"
           onClick={() => onEdit(r.kind)}
-          style={{ padding: ".25rem .6rem", fontSize: ".76rem" }}
+          style={{
+            padding: ".2rem .55rem",
+            fontSize: ".68rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: ".35rem",
+            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+            color: "var(--accent)",
+          }}
         >
-          ✏️ Modifier
+          <PencilGlyph size={12} /> Modifier
         </button>
-      </td>
-      {showAction && (
-        <td style={{ ...cell, textAlign: "center" }}>
-          {!canEditMeta && !canDelete ? (
-            <span style={{ color: "var(--muted)" }}>—</span>
-          ) : (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: ".35rem" }}>
-              {canEditMeta && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => onEditMeta?.(r)}
-                  title="Modifier le nom et la description"
-                  aria-label={`Modifier le type : ${r.label}`}
-                  style={{ padding: ".25rem .5rem", fontSize: ".76rem" }}
-                >
-                  ✏️
-                </button>
-              )}
-              {canDelete && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => onAskDelete?.(r.kind)}
-                  disabled={r.used}
-                  title={
-                    r.used
-                      ? "Type utilisé par au moins un service : retirez-le des actions avant de le supprimer."
-                      : "Supprimer ce type d'e-mail"
-                  }
-                  aria-label={`Supprimer le type : ${r.label}`}
-                  style={{
-                    padding: ".25rem .45rem",
-                    fontSize: ".76rem",
-                    ...(r.used
-                      ? { color: "var(--muted)", borderColor: "var(--border)" }
-                      : GHOST_DANGER_STYLE),
-                    cursor: r.used ? "not-allowed" : "pointer",
-                  }}
-                >
-                  🗑️
-                </button>
-              )}
-            </span>
-          )}
-        </td>
-      )}
-    </tr>
+        {canEditMeta && (
+          <button
+            type="button"
+            className="acct-action"
+            onClick={() => onEditMeta?.(r)}
+            title="Modifier le nom et la description"
+            aria-label={`Modifier le type : ${r.label}`}
+          >
+            <TagGlyph size={14} />
+          </button>
+        )}
+        {canDelete && (
+          <button
+            type="button"
+            className="acct-action is-danger"
+            onClick={() => onAskDelete?.(r.kind)}
+            disabled={r.used}
+            title={
+              r.used
+                ? "Type utilisé par au moins une action : retirez-le des actions avant de le supprimer."
+                : "Supprimer ce type d'e-mail"
+            }
+            aria-label={`Supprimer le type : ${r.label}`}
+          >
+            <TrashGlyph size={14} />
+          </button>
+        )}
+      </div>
+    </div>
   );
 });
+
+/** Étiquette — nom et description d'un type (trait Tabler). */
+function TagGlyph({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M7.5 7.5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+      <path d="M3 6v5.172a2 2 0 0 0 .586 1.414l7.71 7.71a2.41 2.41 0 0 0 3.408 0l5.592 -5.592a2.41 2.41 0 0 0 0 -3.408l-7.71 -7.71a2 2 0 0 0 -1.414 -.586h-5.172a3 3 0 0 0 -3 3z" />
+    </svg>
+  );
+}
 
 function Editor({
   draft,

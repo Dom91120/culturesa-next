@@ -23,11 +23,10 @@ export default async function ServiceEchangesPage({ params }: { params: Promise<
         key={modeleRows.map((r) => r.kind).join(",")}
         rows={modeleRows}
         serviceId={id}
-        showSend={false}
         allowCreate={false}
         title="Modèles d'e-mails"
         panelId="modeles-panel"
-        intro="Contenu (objet + corps) de chaque e-mail de réservation, propre à ce service. À défaut de personnalisation ici, le contenu global (Administration › Échanges) est utilisé. Le routage, le destinataire et l'envoi des actions sont communs à tous les services (Administration › Échanges › « Échanges par mail »)."
+        intro="Contenu (objet et corps) de chaque e-mail de réservation, propre à ce service. « Par défaut » : le contenu global (Administration › Échanges) est utilisé ; « modifié » : ce service a son propre texte. Le routage, le destinataire et l'envoi des actions sont communs à tous les services (Administration › Échanges › « Échanges par mail »)."
       />
     </div>
   );

@@ -157,6 +157,56 @@ const META: Record<TemplateKind, { label: string; description: string; recipient
 
 export type MailTypeMeta = { label: string; description: string; recipient: string };
 
+// ── Refonte Dom 2026-09-09 : regroupements de l'onglet Échanges ─────────────────────
+/** Famille d'un déclencheur (intertitre de « Échanges par mail »). */
+export type TriggerFamily = "reservations" | "rappels" | "attente";
+/** Qui déclenche l'action : pastille devant le libellé. */
+export type TriggerActor = "usager" | "gestionnaire" | "auto";
+const TRIGGER_GROUP: Record<BookingTrigger, { family: TriggerFamily; actor: TriggerActor }> = {
+  pending_create: { family: "reservations", actor: "usager" },
+  confirm_create: { family: "reservations", actor: "usager" },
+  cancel_user: { family: "reservations", actor: "usager" },
+  confirm_manager_create: { family: "reservations", actor: "gestionnaire" },
+  confirm_validate: { family: "reservations", actor: "gestionnaire" },
+  unvalidate: { family: "reservations", actor: "gestionnaire" },
+  refuse: { family: "reservations", actor: "gestionnaire" },
+  cancel_manager: { family: "reservations", actor: "gestionnaire" },
+  confirm_autovalidate: { family: "reservations", actor: "auto" },
+  reminder: { family: "rappels", actor: "auto" },
+  absence_user: { family: "rappels", actor: "usager" },
+  absence_manager: { family: "rappels", actor: "gestionnaire" },
+  waitlist_join: { family: "attente", actor: "usager" },
+  waitlist_available: { family: "attente", actor: "auto" },
+  waitlist_autobook: { family: "attente", actor: "auto" },
+  waitlist_expire: { family: "attente", actor: "auto" },
+};
+
+/** Famille d'un type d'e-mail (intertitre de « Modèles d'e-mails »). */
+export type KindFamily = "compte" | "gestionnaires" | "reservations" | "perso";
+function kindFamily(kind: string): KindFamily {
+  if (kind.startsWith("manager_")) return "gestionnaires";
+  if ((SYSTEM_MAIL_KINDS as readonly string[]).includes(kind)) return "compte";
+  if ((MAIL_KINDS as readonly string[]).includes(kind)) return "reservations";
+  return "perso";
+}
+
+/**
+ * Usage d'un type par les actions de « Échanges par mail » : nombre d'actions routées vers
+ * lui, dont combien ont l'envoi activé. Routage GLOBAL → même réponse dans toute portée.
+ */
+export type KindUsage = { actions: number; enabled: number };
+async function routingUsage(): Promise<Record<string, KindUsage>> {
+  const [kinds, prefs] = await Promise.all([getTriggerKinds(), getTriggerPrefs()]);
+  const out: Record<string, KindUsage> = {};
+  for (const t of Object.keys(kinds) as BookingTrigger[]) {
+    const k = kinds[t];
+    out[k] ??= { actions: 0, enabled: 0 };
+    out[k].actions++;
+    if (prefs[t]) out[k].enabled++;
+  }
+  return out;
+}
+
 /** Référentiel de repli des métadonnées des types intégrés (sert au seed et si table vide). */
 export function defaultMailTypes(): { key: TemplateKind; meta: MailTypeMeta }[] {
   return TEMPLATE_KINDS.map((k) => ({ key: k, meta: META[k] }));
@@ -190,9 +240,13 @@ export async function getMailRows(
   kinds: readonly TemplateKind[],
   serviceId?: string,
 ): Promise<KindData[]> {
-  const [templates, meta] = await Promise.all([
+  const [templates, meta, usage, bases] = await Promise.all([
     Promise.all(kinds.map((k) => getMailTemplate(k, serviceId))),
     getMailTypeMeta(),
+    routingUsage(),
+    // Portée service : la référence « non modifié » est le contenu GLOBAL (hérité), pas le
+    // défaut livré — un texte retouché en administration n'est pas une surcharge du service.
+    serviceId ? Promise.all(kinds.map((k) => getMailTemplate(k))) : null,
   ]);
   // « Verrouillé » = e-mail système (toujours envoyé). Les types de réservation ne le sont
   // pas (leur envoi est piloté par action, cf. « Échanges par mail »).
@@ -201,11 +255,16 @@ export async function getMailRows(
 
   return kinds.map((kind, i) => {
     const m = meta[kind] ?? META[kind];
+    const base = bases ? bases[i] : DEFAULT_TEMPLATES[kind];
+    const family = kindFamily(kind);
     return {
       kind,
       label: m.label,
       description: m.description,
       recipient: m.recipient,
+      family,
+      usage: family === "reservations" ? (usage[kind] ?? { actions: 0, enabled: 0 }) : null,
+      modified: templates[i].subject !== base.subject || templates[i].html !== base.html,
       locked: !toggleable.has(kind),
       // « Système » = e-mail compte/sécurité TOUJOURS envoyé. Les récapitulatifs aux
       // gestionnaires (`manager_digest`, `manager_new_bookings`) sont listés ici mais
@@ -229,6 +288,8 @@ export type RoutingRow = {
   // Destinataire de l'action (défaut « usager ») + adresse(s) si « fixe ».
   recipientKind: MailRecipientKind;
   recipientAddr: string;
+  family: TriggerFamily;
+  actor: TriggerActor;
 };
 
 /**
@@ -249,12 +310,14 @@ export async function getRoutingRows(): Promise<RoutingRow[]> {
     enabled: prefs[t.key],
     recipientKind: recipients[t.key].kind,
     recipientAddr: recipients[t.key].addr,
+    family: TRIGGER_GROUP[t.key]?.family ?? "reservations",
+    actor: TRIGGER_GROUP[t.key]?.actor ?? "auto",
   }));
 }
 
 /** Lignes « Modèles » des types PERSONNALISÉS d'une portée (service ou, si omis, globale). */
 async function customRows(serviceId?: string): Promise<KindData[]> {
-  const customTypes = await listCustomMailTypes(serviceId);
+  const [customTypes, usage] = await Promise.all([listCustomMailTypes(serviceId), routingUsage()]);
   return Promise.all(
     customTypes.map(async (t): Promise<KindData> => {
       const [content, used] = await Promise.all([
@@ -268,6 +331,9 @@ async function customRows(serviceId?: string): Promise<KindData[]> {
         label: t.label,
         description: t.description, // brut (éditable) ; peut être vide
         recipient: t.recipient,
+        family: "perso",
+        usage: usage[t.key] ?? { actions: 0, enabled: 0 },
+        modified: content.subject !== starter.subject || content.html !== starter.html,
         locked: false,
         system: false,
         deletable: true,
