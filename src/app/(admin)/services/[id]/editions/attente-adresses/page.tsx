@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
+import { MailGlyph } from "@/components/ui-glyphs";
 import { formatTel } from "@/lib/format";
 import { prisma } from "@/server/db";
 import { listWaitingContacts } from "@/server/services/waiting-list-editions";
 import { tdNoWrap, WaitlistEditionHeader, ymdLabel } from "../attente/header";
+import { dash, EditionSummary, Who } from "../edition-header";
 
 export const metadata = { title: "CultuRésa — Adresses des inscrits en liste d'attente" };
 
@@ -21,22 +23,27 @@ export default async function EditionsAttenteAdressesPage({
   const emails = [...new Set(rows.map((r) => r.email).filter(Boolean))];
 
   return (
-    <div>
+    <div className="panel ed-screen">
       <WaitlistEditionHeader
         serviceId={id}
         serviceLabel={service.label}
         title="Adresses des inscrits en liste d'attente"
+        icon={<MailGlyph size={16} />}
         csvHref={`/services/${id}/editions/export?kind=attente-adresses`}
         pdfHref={`/services/${id}/editions/pdf?kind=attente-adresses`}
       />
       {rows.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucun inscrit sur la liste d'attente.
-        </p>
+        <p className="ed-empty">Aucun inscrit sur la liste d'attente.</p>
       ) : (
         <>
-          <div className="admin-table-wrap">
-            <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 760 }}>
+          <EditionSummary
+            pills={[
+              { text: `${rows.length} inscrit${rows.length > 1 ? "s" : ""}`, tone: "warn" },
+              { text: `${emails.length} adresse${emails.length > 1 ? "s" : ""} e-mail` },
+            ]}
+          />
+          <div className="ed-table-wrap">
+            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 760 }}>
               <thead>
                 <tr>
                   <th style={{ width: "22%" }}>Identité</th>
@@ -50,12 +57,14 @@ export default async function EditionsAttenteAdressesPage({
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id}>
-                    <td style={{ ...tdNoWrap, fontWeight: 600 }}>
-                      {`${r.nom} ${r.prenom}`.trim() || "—"}
+                    <td style={tdNoWrap}>
+                      <Who nom={r.nom} prenom={r.prenom} email={r.email} />
                     </td>
-                    <td style={tdNoWrap}>{r.structure || "—"}</td>
-                    <td style={tdNoWrap}>{r.email || "—"}</td>
-                    <td style={tdNoWrap}>{formatTel(r.tel)}</td>
+                    <td style={tdNoWrap}>{r.structure || dash}</td>
+                    <td style={tdNoWrap}>{r.email || dash}</td>
+                    <td style={tdNoWrap} className="ed-mono">
+                      {formatTel(r.tel)}
+                    </td>
                     <td style={tdNoWrap}>{r.inscritLe}</td>
                     <td style={tdNoWrap}>{ymdLabel(r.echeance)}</td>
                   </tr>
@@ -63,15 +72,9 @@ export default async function EditionsAttenteAdressesPage({
               </tbody>
             </table>
           </div>
-          <p style={{ fontSize: ".8rem", fontWeight: 600, margin: ".6rem 0 .8rem" }}>
-            {rows.length} inscrit{rows.length > 1 ? "s" : ""}
-          </p>
           {emails.length > 0 && (
             <div className="no-print">
-              <div className="panel-title" style={{ marginBottom: ".4rem" }}>
-                <span className="dot" />
-                Adresses e-mail à copier
-              </div>
+              <div className="ms-grp">Adresses e-mail à copier</div>
               <textarea
                 readOnly
                 rows={Math.min(6, Math.ceil(emails.length / 3) + 1)}

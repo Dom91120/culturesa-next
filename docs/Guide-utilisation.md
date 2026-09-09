@@ -245,7 +245,10 @@ pour les listes complètes, « Par semaine ou par période » pour ce qui s'impr
 séances — avec, sur chaque carte, un chiffre du jour (inscrits, créneaux, réservations, séances
 de la semaine, séances restant à pointer sur trente jours), les formats disponibles et, au
 survol, le téléchargement direct du CSV et **« Ouvrir »**. Le sélecteur d'exercice en tête de
-page pré-règle les écrans ouverts depuis les cartes. On y trouve la **liste des inscrits** (les usagers ayant réservé sur
+page pré-règle les écrans ouverts depuis les cartes. Chaque écran partage la même barre — retour
+aux Éditions, titre avec pictogramme et service, exercice, navigation de plage s'il y a lieu,
+filtres en pastilles, CSV et PDF — puis une ligne de résumé (effectifs et signalements en
+pastilles) et un tableau clair dont la colonne triée est en vert. On y trouve la **liste des inscrits** (les usagers ayant réservé sur
 l'exercice — identité, structure, niveau, contact et date d'inscription ; tableau **triable par
 clic sur les en-têtes de colonnes** ; les comptes anonymisés sont masqués par défaut), la
 **liste des créneaux ouverts** (l'offre de réservation du service : jour, horaires, type,

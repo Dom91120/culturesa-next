@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
+import { ClockGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
 import { listOpenSlots, type OpenSlot } from "@/server/services/editions";
-import { ExerciceNav } from "../exercice-nav";
-import { ExportButton } from "../export-button";
-import { PrintButton } from "../print-button";
+import { EditionHeader, EditionSummary } from "../edition-header";
 import { resolveEditionExercice } from "../range";
 import { RupturesToggle } from "../ruptures-toggle";
 import { RuptureHeading, TotalsBar } from "../totals";
@@ -83,17 +82,6 @@ export default async function EditionsCreneauxPage({
     selected ? `&exercice=${selected.id}` : ""
   }`;
 
-  const linkBtn: React.CSSProperties = {
-    fontSize: ".7rem",
-    padding: "3px 8px",
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--surface1)",
-    color: "var(--text)",
-    textDecoration: "none",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-  };
   const tdNoWrap: React.CSSProperties = {
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -101,59 +89,37 @@ export default async function EditionsCreneauxPage({
   };
 
   return (
-    <div>
-      {/* En-tête façon « Liste des inscrits » : retour, titre centré (navigation
-          d'exercice intégrée), rupture par demandeur et impression PDF à droite. */}
-      <div
-        style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          minHeight: "2rem",
-          marginBottom: "1rem",
-        }}
-      >
-        <a href={`/services/${id}/editions`} className="no-print" style={linkBtn}>
-          ← Éditions
-        </a>
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: ".5rem",
-            fontWeight: 700,
-            whiteSpace: "nowrap",
-          }}
-        >
-          Liste des créneaux ouverts
-          <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
-          <span className="print-only">- {service.label}</span>
-        </div>
-        <div
-          className="no-print"
-          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
-        >
-          <RupturesToggle label="rupture par demandeur" defaultOn />
-          <ExportButton href={csvHref} />
-          <PrintButton iconOnly href={pdfHref} title="Imprimer (PDF)" />
-        </div>
-      </div>
+    <div className="panel ed-screen">
+      <EditionHeader
+        serviceId={id}
+        serviceLabel={service.label}
+        title="Créneaux ouverts"
+        icon={<ClockGlyph size={16} />}
+        tone="info"
+        exercices={exercices}
+        selectedId={selected?.id ?? null}
+        right={<RupturesToggle label="Rupture par demandeur" defaultOn />}
+        csvHref={csvHref}
+        pdfHref={pdfHref}
+      />
+      <EditionSummary
+        pills={[
+          { text: `${rows.length} créneau${rows.length > 1 ? "x" : ""}`, tone: "info" },
+          ...(withRuptures && buckets.length > 1
+            ? [{ text: `${buckets.length} groupes de demandeurs` }]
+            : []),
+        ]}
+      />
 
       {rows.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucun créneau ouvert sur cet exercice.
-        </p>
+        <p className="ed-empty">Aucun créneau ouvert sur cet exercice.</p>
       ) : (
         <>
           {buckets.map((b) => (
             <div key={b.key}>
               {b.label && <RuptureHeading>{b.label}</RuptureHeading>}
-              <div className="admin-table-wrap">
-                <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 820 }}>
+              <div className="ed-table-wrap">
+                <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 820 }}>
                   <thead>
                     <tr>
                       <th style={{ width: "20%" }}>Jour / Date</th>

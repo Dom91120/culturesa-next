@@ -1,27 +1,16 @@
-import { ExerciceNav } from "../exercice-nav";
-import { ExportButton } from "../export-button";
-import { PrintButton } from "../print-button";
+import type { ReactNode } from "react";
+import { HourglassGlyph } from "@/components/ui-glyphs";
+import { EditionHeader, type EditionTone } from "../edition-header";
 
-// En-tête commun des éditions de la LISTE D'ATTENTE (Dom 2026-09-07) : même squelette
-// que la liste des inscrits — retour « ← Éditions », titre centré (navigation d'exercice
-// pour les éditions d'historique), export CSV et impression PDF à droite.
-
-const linkBtn: React.CSSProperties = {
-  fontSize: ".7rem",
-  padding: "3px 8px",
-  borderRadius: 6,
-  border: "1px solid var(--border)",
-  background: "var(--surface1)",
-  color: "var(--text)",
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
-};
-
+// En-tête commun des éditions de la LISTE D'ATTENTE (Dom 2026-09-07, refonte 2026-09-09) :
+// même barre que les autres éditions (EditionHeader), pictogramme sablier par défaut,
+// navigation d'exercice pour les éditions d'historique seulement.
 export function WaitlistEditionHeader({
   serviceId,
   serviceLabel,
   title,
+  icon,
+  tone = "warn",
   exercices,
   selectedId,
   csvHref,
@@ -30,49 +19,25 @@ export function WaitlistEditionHeader({
   serviceId: string;
   serviceLabel: string;
   title: string;
+  icon?: ReactNode;
+  tone?: EditionTone;
   exercices?: { id: number; label: string }[];
   selectedId?: number | null;
   csvHref?: string;
   pdfHref: string;
 }) {
   return (
-    <div
-      style={{
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        minHeight: "2rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <a href={`/services/${serviceId}/editions`} className="no-print" style={linkBtn}>
-        ← Éditions
-      </a>
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: ".5rem",
-          fontWeight: 700,
-          whiteSpace: "nowrap",
-        }}
-      >
-        {title}
-        {exercices && <ExerciceNav exercices={exercices} selectedId={selectedId ?? null} />}
-        <span className="print-only">- {serviceLabel}</span>
-      </div>
-      <div
-        className="no-print"
-        style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
-      >
-        {csvHref && <ExportButton href={csvHref} />}
-        <PrintButton iconOnly href={pdfHref} title="Imprimer (PDF)" />
-      </div>
-    </div>
+    <EditionHeader
+      serviceId={serviceId}
+      serviceLabel={serviceLabel}
+      title={title}
+      icon={icon ?? <HourglassGlyph size={16} />}
+      tone={tone}
+      exercices={exercices}
+      selectedId={selectedId}
+      csvHref={csvHref}
+      pdfHref={pdfHref}
+    />
   );
 }
 

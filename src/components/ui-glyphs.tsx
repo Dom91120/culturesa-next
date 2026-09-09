@@ -374,3 +374,36 @@ export const TargetGlyph = (p: GlyphProps) => (
     <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
   </Svg>
 );
+
+/** Flèche gauche — retour, période précédente. */
+export const ArrowLeftGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M5 12l14 0" />
+    <path d="M5 12l6 6" />
+    <path d="M5 12l6 -6" />
+  </Svg>
+);
+
+/** Flèche haut / bas — sens du tri. */
+export const ArrowUpGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M12 5l0 14" />
+    <path d="M18 11l-6 -6" />
+    <path d="M6 11l6 -6" />
+  </Svg>
+);
+export const ArrowDownGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M12 5l0 14" />
+    <path d="M18 13l-6 6" />
+    <path d="M6 13l6 6" />
+  </Svg>
+);
+
+/** Double flèche — colonne triable, inactive. */
+export const ArrowsSortGlyph = (p: GlyphProps) => (
+  <Svg {...p}>
+    <path d="M3 9l4 -4l4 4m-4 -4v14" />
+    <path d="M21 15l-4 4l-4 -4m4 4v-14" />
+  </Svg>
+);

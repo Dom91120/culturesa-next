@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { TargetGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
 import { listWaitingPlacements } from "@/server/services/waiting-list-editions";
 import { muted, tdNoWrap, WaitlistEditionHeader } from "../attente/header";
+import { dash, EditionSummary, WhoLabel } from "../edition-header";
 import { resolveEditionExercice } from "../range";
 
 export const metadata = { title: "CultuRésa — Placements depuis la liste d'attente" };
@@ -35,24 +37,31 @@ export default async function EditionsAttentePlacementsPage({
   const auto = rows.filter((r) => r.issue === "AUTO_BOOKED").length;
 
   return (
-    <div>
+    <div className="panel ed-screen">
       <WaitlistEditionHeader
         serviceId={id}
         serviceLabel={service.label}
         title="Placements depuis la liste d'attente"
+        icon={<TargetGlyph size={16} />}
+        tone="ok"
         exercices={exercices}
         selectedId={selected?.id ?? null}
         csvHref={`/services/${id}/editions/export?kind=attente-placements${q}`}
         pdfHref={`/services/${id}/editions/pdf?kind=attente-placements${q}`}
       />
       {rows.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucun placement depuis la liste d'attente sur cet exercice.
-        </p>
+        <p className="ed-empty">Aucun placement depuis la liste d'attente sur cet exercice.</p>
       ) : (
         <>
-          <div className="admin-table-wrap">
-            <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 900 }}>
+          <EditionSummary
+            pills={[
+              { text: `${rows.length} placement${rows.length > 1 ? "s" : ""}`, tone: "ok" },
+              ...(auto > 0 ? [{ text: `${auto} automatique${auto > 1 ? "s" : ""}` }] : []),
+              ...(avg != null ? [{ text: `délai moyen ${avg} j` }] : []),
+            ]}
+          />
+          <div className="ed-table-wrap">
+            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 900 }}>
               <thead>
                 <tr>
                   <th style={{ width: "20%" }}>Usager</th>
@@ -68,14 +77,17 @@ export default async function EditionsAttentePlacementsPage({
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td style={tdNoWrap}>
-                      <div style={{ fontWeight: 600 }}>{r.usager || "—"}</div>
-                      {r.email && <div style={muted}>{r.email}</div>}
+                      <WhoLabel label={r.usager} email={r.email} sub={r.email || undefined} />
                     </td>
-                    <td style={tdNoWrap}>{r.structure || "—"}</td>
+                    <td style={tdNoWrap}>{r.structure || dash}</td>
                     <td style={tdNoWrap}>{r.inscritLe}</td>
                     <td style={tdNoWrap}>{r.clotureLe}</td>
                     <td style={{ textAlign: "right" }}>{r.delaiJours} j</td>
-                    <td style={tdNoWrap}>{r.mode}</td>
+                    <td style={tdNoWrap}>
+                      <span className={`ms-pill ${r.mode === "Automatique" ? "is-ok" : "is-info"}`}>
+                        {r.mode}
+                      </span>
+                    </td>
                     <td>
                       {r.reservation || "—"}
                       {r.suppression && (
@@ -87,11 +99,6 @@ export default async function EditionsAttentePlacementsPage({
               </tbody>
             </table>
           </div>
-          <p style={{ fontSize: ".8rem", fontWeight: 600, margin: ".6rem 0 0" }}>
-            {rows.length} placement{rows.length > 1 ? "s" : ""}
-            {auto > 0 ? ` — dont ${auto} automatique${auto > 1 ? "s" : ""}` : ""}
-            {avg != null ? ` — délai moyen ${avg} j` : ""}
-          </p>
         </>
       )}
     </div>

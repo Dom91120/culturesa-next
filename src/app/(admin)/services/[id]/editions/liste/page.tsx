@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
+import { ListDetailsGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import {
@@ -8,7 +9,6 @@ import {
   pointageCell,
   type SessionAttendee,
 } from "@/server/services/editions";
-import { ExerciceNav } from "../exercice-nav";
 import {
   bucketSessions,
   computeTotals,
@@ -184,15 +184,6 @@ export default async function EditionsListePage({
   pdfParams.set("kind", "liste");
   const pdfHref = `/services/${id}/editions/pdf?${pdfParams.toString()}`;
 
-  const navBtn: React.CSSProperties = {
-    fontSize: ".8rem",
-    padding: "3px 9px",
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--surface1)",
-    color: "var(--text)",
-    textDecoration: "none",
-  };
   const thBase: React.CSSProperties = { whiteSpace: "nowrap" };
   const tdNoWrap: React.CSSProperties = {
     whiteSpace: "nowrap",
@@ -202,18 +193,17 @@ export default async function EditionsListePage({
   const tdCenter: React.CSSProperties = { textAlign: "center", whiteSpace: "nowrap" };
 
   const renderRows = (rows: FlatRow[]) => (
-    <div className="admin-table-wrap">
-      <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1080 }}>
+    <div className="ed-table-wrap">
+      <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 1080 }}>
         <thead>
           <tr>
             {COLS.map((col) => (
-              <th key={col.key} style={{ ...thBase, width: col.width, textAlign: "center" }}>
-                <a
-                  href={sortHref(col.key)}
-                  className="no-print"
-                  style={{ color: "inherit", textDecoration: "none", cursor: "pointer" }}
-                  title="Trier par cette colonne"
-                >
+              <th
+                key={col.key}
+                className={sortKey === col.key ? "is-on" : undefined}
+                style={{ ...thBase, width: col.width, textAlign: col.center ? "center" : "left" }}
+              >
+                <a href={sortHref(col.key)} className="ed-sort" title="Trier par cette colonne">
                   {col.label}
                   {sortKey === col.key ? (dir === "asc" ? " ▲" : " ▼") : ""}
                 </a>
@@ -291,30 +281,24 @@ export default async function EditionsListePage({
     });
 
   return (
-    <div>
+    <div className="panel ed-screen">
       <RangeBar
         serviceId={id}
+        serviceLabel={service.label}
         screen="liste"
         range={range}
         ruptures={withRuptures}
         exportHref={`/services/${id}/editions/export${selected ? `?exercice=${selected.id}` : ""}`}
         pdfHref={pdfHref}
         selectedExerciceId={selected?.id ?? null}
-        title={
-          <span
-            style={{ display: "inline-flex", alignItems: "center", gap: ".5rem", fontWeight: 700 }}
-          >
-            Liste des réservations
-            <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
-            <span className="print-only">- {service.label}</span>
-          </span>
-        }
+        exercices={exercices}
+        title="Liste des réservations"
+        icon={<ListDetailsGlyph size={16} />}
+        tone="info"
       />
 
       {flat.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucune réservation sur cette période.
-        </p>
+        <p className="ed-empty">Aucune réservation sur cette période.</p>
       ) : (
         <>
           {/* Écran : page courante (paginée) — masquée à l'impression. */}
@@ -333,21 +317,21 @@ export default async function EditionsListePage({
                 }}
               >
                 {page > 1 ? (
-                  <a href={pageHref(page - 1)} style={navBtn} aria-label="Page précédente">
-                    ◀
+                  <a href={pageHref(page - 1)} className="acct-action" aria-label="Page précédente">
+                    ‹
                   </a>
                 ) : (
-                  <span style={{ ...navBtn, opacity: 0.4 }}>◀</span>
+                  <span className="acct-action is-off">‹</span>
                 )}
-                <span style={{ fontSize: ".8rem", color: "var(--muted)" }}>
+                <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
                   Page {page} / {pages} · {flat.length} ligne{flat.length > 1 ? "s" : ""}
                 </span>
                 {page < pages ? (
-                  <a href={pageHref(page + 1)} style={navBtn} aria-label="Page suivante">
-                    ▶
+                  <a href={pageHref(page + 1)} className="acct-action" aria-label="Page suivante">
+                    ›
                   </a>
                 ) : (
-                  <span style={{ ...navBtn, opacity: 0.4 }}>▶</span>
+                  <span className="acct-action is-off">›</span>
                 )}
               </div>
             )}

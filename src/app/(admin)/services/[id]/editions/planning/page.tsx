@@ -20,17 +20,7 @@ export default async function PlanningPage({
     const first = daySessions[0];
     return (
       <section key={first.date} style={{ marginBottom: "1.25rem", breakInside: "avoid" }}>
-        <h3
-          style={{
-            fontSize: ".9rem",
-            fontWeight: 700,
-            borderBottom: "1px solid var(--border)",
-            paddingBottom: ".2rem",
-            marginBottom: ".5rem",
-          }}
-        >
-          {formatDateHeading(first.date)}
-        </h3>
+        <h3 className="ed-h3">{formatDateHeading(first.date)}</h3>
         {daySessions.map((s) => (
           <div key={`${s.startTime}-${s.endTime}`} style={{ marginBottom: ".6rem" }}>
             <div style={{ fontWeight: 600, fontSize: ".85rem", marginBottom: ".15rem" }}>
@@ -45,16 +35,7 @@ export default async function PlanningPage({
                 seulement quand la largeur ne suffit plus. */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem" }}>
               {s.attendees.map((a, i) => (
-                <div
-                  key={`${a.nom}-${a.prenom}-${i}`}
-                  style={{
-                    width: 220,
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--rad-sm)",
-                    padding: ".35rem .6rem",
-                    fontSize: ".82rem",
-                  }}
-                >
+                <div key={`${a.nom}-${a.prenom}-${i}`} className="ed-att">
                   {/* Zone haute réservée à 6 lignes (interligne fixe) : le contenu s'y répartit,
                       les éléments longs peuvent occuper plusieurs lignes, et le reste est comblé
                       par du vide. « enfants/adultes » suit donc toujours sur la 7e ligne. */}

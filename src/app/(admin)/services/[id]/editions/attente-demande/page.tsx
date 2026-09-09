@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { ChartBarGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
 import { waitingDemand } from "@/server/services/waiting-list-editions";
 import { WaitlistEditionHeader } from "../attente/header";
+import { EditionSummary } from "../edition-header";
 
 export const metadata = { title: "CultuRésa — Demande par demi-journée" };
 
@@ -43,28 +45,42 @@ export default async function EditionsAttenteDemandePage({
   );
 
   return (
-    <div>
+    <div className="panel ed-screen">
       <WaitlistEditionHeader
         serviceId={id}
         serviceLabel={service.label}
         title="Demande par demi-journée"
+        icon={<ChartBarGlyph size={16} />}
         csvHref={`/services/${id}/editions/export?kind=attente-demande`}
         pdfHref={`/services/${id}/editions/pdf?kind=attente-demande`}
       />
       {d.inscrits === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucun inscrit sur la liste d'attente.
-        </p>
+        <p className="ed-empty">Aucun inscrit sur la liste d'attente.</p>
       ) : (
         <>
-          <p style={{ fontSize: ".85rem", color: "var(--muted)", margin: "0 0 .8rem" }}>
+          <EditionSummary
+            pills={[
+              { text: `${d.inscrits} inscrit${d.inscrits > 1 ? "s" : ""}`, tone: "warn" },
+              ...(d.auto > 0
+                ? [{ text: `${d.auto} en réservation automatique`, tone: "ok" as const }]
+                : []),
+            ]}
+          />
+          <p
+            style={{
+              fontSize: ".78rem",
+              color: "var(--muted)",
+              margin: "0 0 .8rem",
+              lineHeight: 1.45,
+            }}
+          >
             Nombre d'inscrits disponibles par demi-journée (un inscrit compte sur chacune des
             demi-journées qu'il a déclarées) ; entre parenthèses, ceux qui ont demandé la
             réservation automatique. Plus la case est foncée, plus l'ouverture d'un créneau
             satisferait d'inscrits.
           </p>
-          <div className="admin-table-wrap">
-            <table className="admin-table" style={{ tableLayout: "fixed", maxWidth: 520 }}>
+          <div className="ed-table-wrap">
+            <table className="ed-table" style={{ tableLayout: "fixed", maxWidth: 520 }}>
               <thead>
                 <tr>
                   <th style={{ width: "40%" }}>Jour</th>
@@ -86,12 +102,9 @@ export default async function EditionsAttenteDemandePage({
 
           {d.byPeriod.length > 1 && (
             <>
-              <div className="panel-title" style={{ margin: "1.2rem 0 .5rem" }}>
-                <span className="dot" />
-                Par période souhaitée
-              </div>
-              <div className="admin-table-wrap">
-                <table className="admin-table" style={{ tableLayout: "fixed", maxWidth: 520 }}>
+              <div className="ms-grp">Par période souhaitée</div>
+              <div className="ed-table-wrap">
+                <table className="ed-table" style={{ tableLayout: "fixed", maxWidth: 520 }}>
                   <thead>
                     <tr>
                       <th style={{ width: "40%" }}>Période</th>
@@ -112,11 +125,6 @@ export default async function EditionsAttenteDemandePage({
               </div>
             </>
           )}
-
-          <p style={{ fontSize: ".8rem", fontWeight: 600, margin: ".8rem 0 0" }}>
-            {d.inscrits} inscrit{d.inscrits > 1 ? "s" : ""} sur la liste d'attente
-            {d.auto > 0 ? ` — dont ${d.auto} en réservation automatique` : ""}
-          </p>
         </>
       )}
     </div>

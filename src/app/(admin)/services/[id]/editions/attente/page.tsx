@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { listWaitingEntries } from "@/server/services/waiting-list";
-import { isoDateLabel, muted, tdNoWrap, WaitlistEditionHeader, ymdLabel } from "./header";
+import { EditionSummary, Who } from "../edition-header";
+import { isoDateLabel, tdNoWrap, WaitlistEditionHeader, ymdLabel } from "./header";
 
 export const metadata = { title: "CultuRésa — Liste d'attente" };
 
@@ -16,7 +17,7 @@ export default async function EditionsAttentePage({ params }: { params: Promise<
   const auto = rows.filter((r) => r.autoInscription).length;
 
   return (
-    <div>
+    <div className="panel ed-screen">
       <WaitlistEditionHeader
         serviceId={id}
         serviceLabel={service.label}
@@ -25,13 +26,19 @@ export default async function EditionsAttentePage({ params }: { params: Promise<
         pdfHref={`/services/${id}/editions/pdf?kind=attente`}
       />
       {rows.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucun inscrit sur la liste d'attente.
-        </p>
+        <p className="ed-empty">Aucun inscrit sur la liste d'attente.</p>
       ) : (
         <>
-          <div className="admin-table-wrap">
-            <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 980 }}>
+          <EditionSummary
+            pills={[
+              { text: `${rows.length} inscrit${rows.length > 1 ? "s" : ""}`, tone: "warn" },
+              ...(auto > 0
+                ? [{ text: `${auto} en réservation automatique`, tone: "ok" as const }]
+                : []),
+            ]}
+          />
+          <div className="ed-table-wrap">
+            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 980 }}>
               <thead>
                 <tr>
                   <th style={{ width: 34 }}>#</th>
@@ -50,13 +57,14 @@ export default async function EditionsAttentePage({ params }: { params: Promise<
                   <tr key={r.id}>
                     <td style={{ color: "var(--muted)" }}>{i + 1}</td>
                     <td style={tdNoWrap}>
-                      <div style={{ fontWeight: 600 }}>{`${r.nom} ${r.prenom}`.trim() || "—"}</div>
-                      <div style={muted}>{r.email}</div>
+                      <Who nom={r.nom} prenom={r.prenom} email={r.email} sub={r.email} />
                     </td>
                     <td style={tdNoWrap}>{r.structure || r.demandeur || "—"}</td>
                     <td>{r.dispos.join(", ") || "—"}</td>
                     <td>{r.periodes.join(", ") || "Toutes"}</td>
-                    <td style={{ textAlign: "center" }}>{r.autoInscription ? "Oui" : "—"}</td>
+                    <td style={{ textAlign: "center" }}>
+                      {r.autoInscription ? <span className="ms-pill is-ok">auto</span> : "—"}
+                    </td>
                     <td style={tdNoWrap}>{isoDateLabel(r.createdAt)}</td>
                     <td style={tdNoWrap}>{isoDateLabel(r.lastNotifiedAt)}</td>
                     <td style={tdNoWrap}>{ymdLabel(r.echeance)}</td>
@@ -65,10 +73,6 @@ export default async function EditionsAttentePage({ params }: { params: Promise<
               </tbody>
             </table>
           </div>
-          <p style={{ fontSize: ".8rem", fontWeight: 600, margin: ".6rem 0 0" }}>
-            {rows.length} inscrit{rows.length > 1 ? "s" : ""}
-            {auto > 0 ? ` — dont ${auto} en réservation automatique` : ""}
-          </p>
         </>
       )}
     </div>

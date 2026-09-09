@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
+import { CalendarTimeGlyph, CircleCheckGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
-import { ExerciceNav } from "./exercice-nav";
 import {
   bucketSessions,
   computeTotals,
@@ -126,29 +126,24 @@ export function EditionScreenView({
   const { exercices, selected, range, titleLabel, sessions, withRuptures, buckets, withSubtotals } =
     data;
   return (
-    <div>
+    <div className="panel ed-screen">
       <RangeBar
         serviceId={serviceId}
+        serviceLabel={data.serviceLabel}
         screen={screen}
         range={range}
         ruptures={withRuptures}
         pdfHref={data.pdfHref}
         selectedExerciceId={selected?.id ?? null}
-        title={
-          <span
-            style={{ display: "inline-flex", alignItems: "center", gap: ".5rem", fontWeight: 700 }}
-          >
-            {titleLabel}
-            <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
-            <span className="print-only">- {data.serviceLabel}</span>
-          </span>
+        exercices={exercices}
+        title={titleLabel}
+        icon={
+          screen === "planning" ? <CalendarTimeGlyph size={16} /> : <CircleCheckGlyph size={16} />
         }
       />
 
       {sessions.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucune séance sur cette période.
-        </p>
+        <p className="ed-empty">Aucune séance sur cette période.</p>
       ) : (
         <>
           {buckets.map((b) => (

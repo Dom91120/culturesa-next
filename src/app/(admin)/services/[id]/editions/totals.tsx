@@ -2,27 +2,13 @@ import type { Totals } from "./range";
 
 const plural = (n: number) => (n > 1 ? "s" : "");
 
-// En-tête de rupture (semaine / mois / période) dans une édition.
+// En-tête de rupture (semaine / mois / période / demandeur) dans une édition — refonte
+// Dom 2026-09-09 : intertitre à filet (même dessin que les groupes des autres écrans).
 export function RuptureHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h3
-      style={{
-        fontSize: ".95rem",
-        fontWeight: 700,
-        margin: "1.25rem 0 .6rem",
-        padding: ".35rem .6rem",
-        borderRadius: "var(--rad-sm)",
-        background: "var(--accent-dim)",
-        color: "var(--accent)",
-        breakInside: "avoid",
-      }}
-    >
-      {children}
-    </h3>
-  );
+  return <h3 className="ed-rupture">{children}</h3>;
 }
 
-// Boîte de total / sous-total (présentation commune). `strong` = total général (accent).
+// Ligne de total / sous-total : libellé puis compteurs en pastilles. `strong` = total général.
 export function TotalsBar({
   label,
   parts,
@@ -33,20 +19,13 @@ export function TotalsBar({
   strong?: boolean;
 }) {
   return (
-    <div
-      style={{
-        breakInside: "avoid",
-        margin: strong ? "1rem 0 .5rem" : ".4rem 0 1rem",
-        padding: ".4rem .6rem",
-        fontSize: ".8rem",
-        fontWeight: 600,
-        color: strong ? "var(--accent)" : "var(--text)",
-        background: strong ? "var(--accent-dim)" : "var(--surface2)",
-        border: `1px solid ${strong ? "var(--accent)" : "var(--border)"}`,
-        borderRadius: "var(--rad-sm)",
-      }}
-    >
-      {label} : {parts.join(" · ")}
+    <div className={`ed-totals${strong ? " is-strong" : ""}`}>
+      <span className="l">{label}</span>
+      {parts.map((p) => (
+        <span key={p} className={`ms-pill ${strong ? "is-ok" : "is-neutral"}`}>
+          {p}
+        </span>
+      ))}
     </div>
   );
 }

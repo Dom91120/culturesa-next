@@ -1,14 +1,16 @@
-import { ExportButton } from "./export-button";
-import { PrintButton } from "./print-button";
+import type { ReactNode } from "react";
+import { ArrowLeftGlyph, ArrowRightGlyph } from "@/components/ui-glyphs";
+import { EditionHeader, type EditionTone } from "./edition-header";
 import type { RangeResult } from "./range";
 import { RangeSelect } from "./range-select";
 import { RupturesToggle } from "./ruptures-toggle";
 
-// Barre de contrôle partagée (Plannings / Pointages) : « ← Éditions » à gauche, le bloc
-// « ◀ <plage> ▶ » centré en absolu sur toute la largeur (.app-main) — flèches sans texte,
-// plage imprimée — et le segmented control + impression à droite (façon agenda).
+// Barre de contrôle partagée des écrans DATÉS (Plannings / Pointages / Liste) — refonte
+// Dom 2026-09-09 : EditionHeader (retour, titre, exercice) + navigation de plage
+// « ◀ plage ▶ » imprimée, puis à droite les filtres, le sélecteur de vue, CSV et PDF.
 export function RangeBar({
   serviceId,
+  serviceLabel,
   screen,
   range,
   extra,
@@ -18,127 +20,72 @@ export function RangeBar({
   selectedExerciceId = null,
   showRuptures = true,
   title,
+  icon,
+  tone = "purple",
+  exercices,
 }: {
   serviceId: string;
+  serviceLabel: string;
   screen: string;
   range: RangeResult;
-  // Titre centré de la ligne 1 (ex. « Liste des réservations <nav exercice> Service »).
-  // La navigation d'exercice ◀ ▶ est intégrée au titre (ExerciceNav) ; la navigation de
-  // plage ◀…▶ passe alors au centre de la ligne 2.
-  title?: React.ReactNode;
-  // Contrôle additionnel placé à gauche du segmented control (ex. tri de la Liste).
-  extra?: React.ReactNode;
-  // État de la case « avec ruptures » — propagé aux navigations pour le conserver.
+  title: string;
+  icon: ReactNode;
+  tone?: EditionTone;
+  exercices: { id: number; label: string }[];
+  // Contrôle additionnel placé à gauche du sélecteur de vue (ex. tri de la Liste).
+  extra?: ReactNode;
+  // État de la pastille « avec ruptures » — propagé aux navigations pour le conserver.
   ruptures?: boolean;
-  // Lien d'export CSV (Liste) → bouton export à gauche de l'impression. Absent ailleurs.
+  // Lien d'export CSV (Liste). Absent ailleurs.
   exportHref?: string;
   // Si fourni, le bouton d'impression ouvre ce PDF serveur (Puppeteer) au lieu de window.print().
   pdfHref?: string;
-  // Exercice courant : propagé aux liens de changement de vue pour le conserver.
   selectedExerciceId?: number | null;
-  // Case « avec ruptures » : masquée quand la table est triable par colonne (Liste).
+  // Pastille « avec ruptures » : masquée quand la table est triable par colonne (Liste).
   showRuptures?: boolean;
 }) {
   const { mode, dateParam, subtitle, prevHref, nextHref } = range;
   const rq = ruptures ? "&ruptures=1" : "";
-  const linkBtn: React.CSSProperties = {
-    fontSize: ".78rem",
-    padding: "4px 10px",
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--surface1)",
-    color: "var(--text)",
-    textDecoration: "none",
-  };
-  // Flèches de navigation : plus petites que les autres boutons.
-  const arrowBtn: React.CSSProperties = { ...linkBtn, fontSize: ".62rem", padding: "2px 6px" };
-  // Flèche grisée (bord d'exercice atteint) : même gabarit, non cliquable.
-  const arrowDisabled: React.CSSProperties = {
-    ...arrowBtn,
-    opacity: 0.35,
-    cursor: "not-allowed",
-    pointerEvents: "none",
-  };
-  // Rend une flèche ◀/▶ : lien actif si `href`, sinon variante grisée (au lieu de disparaître).
-  const arrow = (href: string | null, glyph: string, label: string) =>
-    href ? (
-      <a
-        href={`${href}${rq}`}
-        className="no-print"
-        style={arrowBtn}
-        title={label}
-        aria-label={label}
-      >
-        {glyph}
-      </a>
-    ) : (
-      <span className="no-print" style={arrowDisabled} aria-disabled="true" aria-label={label}>
-        {glyph}
-      </span>
-    );
   const unit = mode === "month" ? "Mois" : mode === "trimester" ? "Trimestre" : "Semaine";
   const prevLabel = `${unit} précédent${unit === "Semaine" ? "e" : ""}`;
   const nextLabel = `${unit} suivant${unit === "Semaine" ? "e" : ""}`;
 
-  // Centrage absolu (au milieu de .app-main), utilisé pour le titre et/ou la plage ◀…▶.
-  const centerAbs: React.CSSProperties = {
-    position: "absolute",
-    left: "50%",
-    top: "50%",
-    transform: "translate(-50%, -50%)",
-    display: "flex",
-    alignItems: "center",
-    gap: ".6rem",
-    whiteSpace: "nowrap",
-  };
+  // Flèche ◀/▶ : lien actif si `href`, sinon variante grisée (au lieu de disparaître).
+  const arrow = (href: string | null, glyph: ReactNode, label: string) =>
+    href ? (
+      <a href={`${href}${rq}`} className="acct-action no-print" title={label} aria-label={label}>
+        {glyph}
+      </a>
+    ) : (
+      <span className="acct-action no-print is-off" aria-disabled="true" aria-label={label}>
+        {glyph}
+      </span>
+    );
 
   // En mode annuel, la plage couvre tout l'exercice : la navigation ◀…▶ n'a pas de sens.
-  const showPlage = mode !== "year";
-
-  // Plage ◀ <plage> ▶ (reste imprimée). Centrée : ligne 1 par défaut, ligne 2 si un titre
-  // occupe déjà le centre de la ligne 1.
-  const plageNav = (
-    <div style={centerAbs}>
-      {arrow(prevHref, "◀", prevLabel)}
-      <span
-        style={{
-          fontSize: ".8rem",
-          fontWeight: 600,
-          letterSpacing: "-.02em",
-          color: "var(--muted)",
-        }}
-      >
-        {subtitle}
+  const plage =
+    mode !== "year" ? (
+      <span className="edh-range">
+        {arrow(prevHref, <ArrowLeftGlyph size={13} />, prevLabel)}
+        <span className="edh-range-label">{subtitle}</span>
+        {arrow(nextHref, <ArrowRightGlyph size={13} />, nextLabel)}
       </span>
-      {arrow(nextHref, "▶", nextLabel)}
-    </div>
-  );
+    ) : null;
 
   return (
-    <div style={{ marginBottom: "1rem" }}>
-      {/* Ligne 1 : ← Éditions (gauche) · titre OU plage centré(e) · sélecteur de vue (droite). */}
-      <div
-        style={{ position: "relative", display: "flex", alignItems: "center", minHeight: "2rem" }}
-      >
-        <a
-          href={`/services/${serviceId}/editions`}
-          className="no-print"
-          style={{
-            ...linkBtn,
-            fontSize: ".7rem",
-            padding: "3px 8px",
-            whiteSpace: "nowrap",
-            flexShrink: 0,
-          }}
-        >
-          ← Éditions
-        </a>
-
-        <div
-          className="no-print"
-          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: ".6rem" }}
-        >
+    <EditionHeader
+      serviceId={serviceId}
+      serviceLabel={serviceLabel}
+      title={title}
+      icon={icon}
+      tone={tone}
+      exercices={exercices}
+      selectedId={selectedExerciceId}
+      center={plage}
+      right={
+        <>
           {extra}
+          {showRuptures && <RupturesToggle />}
           <RangeSelect
             serviceId={serviceId}
             screen={screen}
@@ -147,30 +94,10 @@ export function RangeBar({
             ruptures={ruptures}
             exerciceId={selectedExerciceId}
           />
-        </div>
-
-        {title ? <div style={centerAbs}>{title}</div> : showPlage ? plageNav : null}
-      </div>
-
-      {/* Ligne 2 : plage ◀…▶ au centre ; « avec ruptures » + export/impression à droite. */}
-      <div
-        className="no-print"
-        style={{
-          position: "relative",
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: ".6rem",
-          minHeight: title ? "2rem" : undefined,
-        }}
-      >
-        {title && showPlage && plageNav}
-        <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginLeft: "auto" }}>
-          {showRuptures && <RupturesToggle />}
-          {exportHref && <ExportButton href={exportHref} />}
-          <PrintButton iconOnly href={pdfHref} title={pdfHref ? "Imprimer (PDF)" : "Imprimer"} />
-        </div>
-      </div>
-    </div>
+        </>
+      }
+      csvHref={exportHref}
+      pdfHref={pdfHref}
+    />
   );
 }

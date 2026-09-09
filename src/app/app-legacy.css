@@ -4904,3 +4904,240 @@ textarea.theme-pending:focus::placeholder {
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--accent);
 }
+
+/* ── Écrans d'édition (refonte Dom 2026-09-09) : barre, résumé, tableau clair ─────────
+   Le PDF (Puppeteer) rend la même page : `.no-print` masque les actions, le reste s'imprime. */
+.ed-screen {
+  padding: 1rem 1.25rem 0.9rem;
+}
+.edh {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.edh-back {
+  font-size: 0.68rem;
+  padding: 0.25rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  text-decoration: none;
+}
+.edh-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.edh-svc {
+  color: var(--muted);
+}
+.edh-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.edh-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.edh-range-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+  padding: 0 0.2rem;
+  white-space: nowrap;
+}
+.acct-action.is-off {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.edh-sum {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin: 0 0.1rem 0.6rem;
+}
+.edh-sum-right {
+  margin-left: auto;
+}
+.ed-empty {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0.5rem 0;
+}
+/* Tableau clair : en-têtes gris discrets, colonne triée en vert, lignes filetées. */
+.ed-table-wrap {
+  overflow-x: auto;
+}
+.ed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.ed-table th {
+  text-align: left;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border-hover);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.ed-table th.is-on {
+  color: var(--accent);
+}
+.ed-sort {
+  color: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.ed-table th:not(.is-on) .ed-sort svg {
+  opacity: 0.4;
+}
+.ed-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text);
+}
+.ed-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.ed-nowrap {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ed-mu {
+  color: var(--muted);
+}
+.ed-mono {
+  font-family: monospace;
+  font-size: 0.72rem;
+}
+.ed-sub {
+  display: block;
+  font-size: 0.66rem;
+  color: var(--muted);
+  line-height: 1.25;
+  margin-top: 1px;
+}
+.ed-sub.is-warn {
+  color: var(--warn);
+}
+.ed-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.ed-av {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.ed-av.is-anon {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+}
+.ed-nm {
+  display: block;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Ruptures et totaux. */
+.ed-rupture {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  break-inside: avoid;
+}
+.ed-rupture::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+.ed-totals {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0 0.9rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  break-inside: avoid;
+}
+.ed-totals .l {
+  font-weight: 600;
+  margin-right: 0.2rem;
+}
+.ed-totals.is-strong {
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+}
+/* Plannings / pointages : titre de jour et carte de participant. */
+.ed-h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0.9rem 0 0.4rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.ed-att {
+  width: 220px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface1);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+}
+.ed-sign {
+  border-bottom: 1px solid var(--border);
+}
+@media print {
+  .ed-screen {
+    border: none;
+    padding: 0;
+    background: transparent;
+  }
+  .ed-table tbody tr:hover td {
+    background: transparent;
+  }
+}

@@ -2,13 +2,13 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-// Case à cocher « avec ruptures » (sous-totaux par semaine/mois/période — libellé
+// Pastille à bascule « avec ruptures » (sous-totaux par semaine/mois/période — libellé
 // surchargeable, ex. « rupture par demandeur » des créneaux ouverts). Défaut = OFF
 // (`defaultOn` pour les écrans cochés d'office, ex. créneaux ouverts) ; le param
 // `ruptures=1|0` devient explicite au premier clic. Toggle en conservant les autres
-// paramètres d'URL.
+// paramètres d'URL. Refonte Dom 2026-09-09 : pastille.
 export function RupturesToggle({
-  label = "avec ruptures",
+  label = "Avec ruptures",
   defaultOn = false,
 }: {
   label?: string;
@@ -19,28 +19,19 @@ export function RupturesToggle({
   const params = useSearchParams();
   const raw = params.get("ruptures");
   const on = raw == null ? defaultOn : raw === "1";
-
   const toggle = () => {
     const p = new URLSearchParams(params.toString());
     p.set("ruptures", on ? "0" : "1");
     router.push(`${pathname}?${p.toString()}`);
   };
-
   return (
-    <label
-      className="no-print"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: ".3rem",
-        fontSize: ".6rem",
-        color: "var(--muted)",
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-      }}
+    <button
+      type="button"
+      className={`acct-chip no-print${on ? " is-on" : ""}`}
+      aria-pressed={on}
+      onClick={toggle}
     >
-      <input type="checkbox" checked={on} onChange={toggle} style={{ cursor: "pointer" }} />
       {label}
-    </label>
+    </button>
   );
 }

@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { HistoryGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
 import { listWaitingHistory } from "@/server/services/waiting-list-editions";
 import { muted, tdNoWrap, WaitlistEditionHeader } from "../attente/header";
+import { dash, EditionSummary, WhoLabel } from "../edition-header";
 import { resolveEditionExercice } from "../range";
 
 export const metadata = { title: "CultuRésa — Historique de la liste d'attente" };
@@ -36,24 +38,33 @@ export default async function EditionsAttenteHistoriquePage({
   const places = rows.filter((r) => r.issue === "AUTO_BOOKED" || r.issue === "BOOKED").length;
 
   return (
-    <div>
+    <div className="panel ed-screen">
       <WaitlistEditionHeader
         serviceId={id}
         serviceLabel={service.label}
         title="Historique de la liste d'attente"
+        icon={<HistoryGlyph size={16} />}
+        tone="neutral"
         exercices={exercices}
         selectedId={selected?.id ?? null}
         csvHref={`/services/${id}/editions/export?kind=attente-historique${q}`}
         pdfHref={`/services/${id}/editions/pdf?kind=attente-historique${q}`}
       />
       {rows.length === 0 ? (
-        <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>
-          Aucune inscription close sur cet exercice.
-        </p>
+        <p className="ed-empty">Aucune inscription close sur cet exercice.</p>
       ) : (
         <>
-          <div className="admin-table-wrap">
-            <table className="admin-table" style={{ tableLayout: "fixed", minWidth: 1180 }}>
+          <EditionSummary
+            pills={[
+              {
+                text: `${rows.length} inscription${rows.length > 1 ? "s" : ""} close${rows.length > 1 ? "s" : ""}`,
+              },
+              { text: `${places} placée${places > 1 ? "s" : ""}`, tone: "ok" },
+              { text: `${sansPlace} sans place`, tone: sansPlace > 0 ? "warn" : "neutral" },
+            ]}
+          />
+          <div className="ed-table-wrap">
+            <table className="ed-table" style={{ tableLayout: "fixed", minWidth: 1180 }}>
               <thead>
                 <tr>
                   <th style={{ width: "15%" }}>Usager</th>
@@ -72,17 +83,26 @@ export default async function EditionsAttenteHistoriquePage({
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td style={tdNoWrap}>
-                      <div style={{ fontWeight: 600 }}>{r.usager || "—"}</div>
-                      {r.email && <div style={muted}>{r.email}</div>}
+                      <WhoLabel label={r.usager} email={r.email} sub={r.email || undefined} />
                     </td>
-                    <td style={tdNoWrap}>{r.structure || "—"}</td>
+                    <td style={tdNoWrap}>{r.structure || dash}</td>
                     <td>{r.dispos.join(", ") || "—"}</td>
                     <td>{r.periodes.join(", ") || "Toutes"}</td>
-                    <td style={{ textAlign: "center" }}>{r.autoInscription ? "Oui" : "—"}</td>
+                    <td style={{ textAlign: "center" }}>
+                      {r.autoInscription ? <span className="ms-pill is-ok">auto</span> : "—"}
+                    </td>
                     <td style={tdNoWrap}>{r.inscritLe}</td>
                     <td style={tdNoWrap}>{r.clotureLe}</td>
                     <td style={{ textAlign: "right" }}>{r.delaiJours} j</td>
-                    <td>{r.issueLabel}</td>
+                    <td>
+                      <span
+                        className={`ms-pill ${
+                          r.issue === "AUTO_BOOKED" || r.issue === "BOOKED" ? "is-ok" : "is-neutral"
+                        }`}
+                      >
+                        {r.issueLabel}
+                      </span>
+                    </td>
                     <td>
                       {r.reservation || "—"}
                       {r.suppression && (
@@ -94,11 +114,6 @@ export default async function EditionsAttenteHistoriquePage({
               </tbody>
             </table>
           </div>
-          <p style={{ fontSize: ".8rem", fontWeight: 600, margin: ".6rem 0 0" }}>
-            {rows.length} inscription{rows.length > 1 ? "s" : ""} close
-            {rows.length > 1 ? "s" : ""} — {places} placée{places > 1 ? "s" : ""}, {sansPlace} sans
-            place
-          </p>
         </>
       )}
     </div>
