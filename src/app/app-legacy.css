@@ -5224,7 +5224,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 /* Chiffre (ou libellé d'exercice) aussi haut que les deux premières lignes de texte
    (libellé + complément), calé en haut sur elles (Dom 2026-09-09). */
 .xc-tile .n {
-  --xc-two-lines: calc(2 * 0.68rem * 1.35 + 0.05rem);
+  --xc-two-lines: calc(2 * 0.68rem * 1.35 - 1px);
   font-size: 1.5rem;
   font-weight: 700;
   line-height: var(--xc-two-lines);
@@ -5252,6 +5252,13 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   flex: 0 0 auto;
   font-size: 0.58rem;
   padding: 0 0.4rem;
+}
+/* Interligne resserré d'un pixel (Dom 2026-09-09). */
+.xc-tile .cf-tile-txt {
+  gap: 0;
+}
+.xc-tile .cf-tile-txt small:first-child {
+  margin-bottom: -1px;
 }
 .xc-tile .cf-tile-txt small {
   white-space: nowrap;
