@@ -232,7 +232,7 @@ export default async function EditionsPage({
             "Où ouvrir un créneau ferait le plus d'heureux : disponibilités déclarées par demi-journée et par période.",
           figure: waitlist.top
             ? { value: waitlist.top.label, unit: `la plus demandée (${waitlist.top.n})` }
-            : { value: "—", unit: "aucune disponibilité déclarée" },
+            : { value: "0", unit: "disponibilité déclarée" },
           href: `${base}/attente-demande${q}`,
           csv: csv("attente-demande"),
           pdf: true,
