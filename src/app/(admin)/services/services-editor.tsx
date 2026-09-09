@@ -197,12 +197,12 @@ export function ServicesEditor({ initial, onClose }: { initial: Initial[]; onClo
                   {state ? (
                     <RefStatePill state={state} />
                   ) : hasContact ? (
-                    `${r.managers} compte${r.managers > 1 ? "s" : ""}`
+                    `${r.managers} compte${r.managers > 1 ? "s" : ""}`
                   ) : r.managers > 0 ? (
                     <>
-                      {r.managers} compte{r.managers > 1 ? "s" : ""}
+                      {`${r.managers} compte${r.managers > 1 ? "s" : ""}`}
                       <br />
-                      reçoivent les e-mails
+                      {r.managers > 1 ? "reçoivent les e-mails" : "reçoit les e-mails"}
                     </>
                   ) : (
                     <span style={{ color: "var(--warn)" }}>
