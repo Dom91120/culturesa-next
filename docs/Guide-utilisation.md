@@ -307,34 +307,40 @@ place »** ne prend son sens qu'**en fin de période ou d'exercice**, une fois l
 
 ### Paramètres — Périodes et réservations
 
-Cet onglet regroupe les **périodes** (libellé, dates, couleur), les **jours d'ouverture**, les
-**plages horaires** matin / après-midi, ainsi que les **règles de réservation** : maximums par
-période et par an, délai de réservation, verrouillage de validation, validation automatique et
-notifications aux gestionnaires.
+Cet onglet regroupe, dans un seul panneau, tout ce qui dépend de l'**exercice** affiché (navigué
+avec les flèches ◀ ▶ du titre) : la visibilité de l'exercice, ses **périodes** (libellé, dates,
+couleur, date d'ouverture des réservations), ses **jours d'ouverture**, ses **plages horaires**
+matin / après-midi et ses **règles de réservation** (maximums par période et par an, délai limite
+avant une séance). Les réglages s'enregistrent **automatiquement** quelques instants après chaque
+modification, avec une pastille **« Enregistré »** en haut à droite ; seuls l'exercice (crayon du
+titre) et les périodes (**« Ajouter une période »**, puis **« Modifier »** ou **« Supprimer »**
+après avoir coché une ligne) passent par une fenêtre dédiée. Le verrouillage des réservations
+validées, l'auto-validation et la notification des gestionnaires se règlent dans l'onglet
+**Configuration**.
 
 ![Paramètres : périodes et réservations](img/09-parametres-periodes.png)
 
 *Figure 9 — Paramètres : périodes et réservations*
 
-#### Exercices et bascule « Affiché aux utilisateurs »
+#### Exercices et bascule « Afficher aux utilisateurs »
 
 Un **exercice** représente une saison / année scolaire ; il regroupe ses propres périodes, jours
 d'ouverture, plages horaires et règles de réservation. Un service peut détenir **plusieurs
-exercices en parallèle**, mais **un seul est montré aux utilisateurs à la fois** : celui dont la
-case **« Affiché aux utilisateurs »** est cochée (en haut du panneau, à côté de la navigation entre
-exercices). Cocher un exercice **décoche automatiquement** le précédent ; si aucun n'est coché, le
+exercices en parallèle**, mais **un seul est montré aux utilisateurs à la fois** : celui dont
+l'interrupteur **« Afficher aux utilisateurs »** est activé (premier réglage du panneau, sous le
+titre). Activer un exercice **désactive automatiquement** le précédent ; si aucun n'est activé, le
 service n'affiche **aucune réservation** côté usager.
 
 Cela permet de **préparer le prochain exercice longtemps à l'avance** :
 
 1. Le gestionnaire **crée le nouvel exercice** (via « Changement d'exercice », ou en l'ajoutant
    manuellement) et le **paramètre tranquillement** — périodes, créneaux, ouvertures, maximums.
-   Tant que sa case n'est pas cochée, ce nouvel exercice reste **invisible** pour les usagers.
+   Tant que son interrupteur n'est pas activé, ce nouvel exercice reste **invisible** pour les usagers.
 2. **Pendant toute cette préparation**, les utilisateurs continuent de **consulter et réserver sur
-   l'exercice précédent**, qui garde sa case cochée. Les deux exercices peuvent coexister, même si
+   l'exercice précédent**, qui reste affiché. Les deux exercices peuvent coexister, même si
    leurs dates se chevauchent.
 3. **Quand le gestionnaire est prêt** — le plus souvent une fois l'exercice précédent achevé et le
-   nouveau entièrement paramétré — il **bascule** en cochant « Affiché aux utilisateurs » sur le
+   nouveau entièrement paramétré — il **bascule** en activant « Afficher aux utilisateurs » sur le
    nouvel exercice, dans **Paramètres → Périodes et réservations**. À cet instant, et à cet instant
    seulement, les usagers voient le nouvel exercice.
 

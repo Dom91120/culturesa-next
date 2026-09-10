@@ -5446,3 +5446,37 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   flex-wrap: wrap;
   gap: 0.35rem;
 }
+
+/* ── Paramètres de service : onglets Configuration et Périodes (vocabulaire Échanges/RGPD :
+   lignes .ex-krow, pictos .rg-ico, pastilles, puces .acct-chip) ─────────────────────── */
+.cfg-row{grid-template-columns:28px minmax(0,1fr) auto;padding:.45rem .5rem}
+.cfg-kds{font-size:.68rem;color:var(--muted);line-height:1.35;margin-top:1px;max-width:640px;text-wrap:pretty}
+.cfg-below{grid-column:2 / -1;min-width:0}
+.cfg-ctl{display:flex;align-items:center;gap:.5rem;justify-self:end}
+.cfg-chips{display:flex;flex-wrap:wrap;gap:.3rem;justify-content:flex-end}
+.cfg-hint{display:flex;align-items:baseline;gap:.35rem;font-size:.7rem;color:var(--muted);flex-wrap:wrap;justify-content:flex-end;min-height:18px;line-height:1.3}
+.cfg-select{height:22px;box-sizing:border-box;font-size:.74rem;font-weight:400;padding:0 .35rem;border-radius:var(--rad-sm);border:1px solid var(--border);background:var(--surface1);color:var(--text)}
+.cfg-textarea{width:100%;max-width:640px;min-height:70px;resize:vertical;font-size:.76rem;line-height:1.4;padding:.4rem .5rem;border-radius:var(--rad-sm);border:1px solid var(--border);background:var(--surface1);color:var(--text)}
+.cfg-dhead,.cfg-drow{display:grid;grid-template-columns:28px minmax(0,1fr) 90px 90px 120px 28px;gap:.6rem;align-items:center}
+.cfg-grp{margin:1.6rem 0 .9rem;color:var(--text)}
+.cfg-grp .hint{color:var(--muted)}
+.cfg-grp-right{margin-left:.6rem;order:1;display:inline-flex;align-items:center;gap:.3rem}
+.cfg-dhead{padding:.3rem 0;margin:0 .5rem;border-bottom:1px solid var(--border);font-size:.66rem;font-weight:600;color:var(--muted)}
+.cfg-dhead span:nth-child(3),.cfg-dhead span:nth-child(4),.cfg-dhead span:nth-child(5){text-align:center}
+.cfg-drow{padding:.35rem .5rem;border-radius:8px;font-size:.78rem}
+.cfg-drow:hover,.cfg-trow:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
+.cfg-drow:hover .ms-acts,.cfg-trow:hover .ms-acts{opacity:1}
+.cfg-c{display:flex;justify-content:center}
+.cfg-trow{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:.6rem;align-items:center;padding:.35rem .5rem;border-radius:8px;font-size:.78rem}
+.cfg-trow input{width:100%;box-sizing:border-box;font:inherit;font-size:.78rem;font-weight:600;padding:.1rem .4rem;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--text);outline:none;box-shadow:none}
+.cfg-trow input:hover{border-color:var(--border)}
+.cfg-trow input:focus{border-color:var(--accent);background:var(--surface1);box-shadow:none}
+.cfg-num{width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:700;background:color-mix(in srgb,var(--slot-uniq-color) 18%,transparent);color:var(--slot-uniq-color)}
+.cfg-phead,.cfg-prow{display:grid;grid-template-columns:24px 44px 60px minmax(0,1fr) 96px 96px 120px;gap:.6rem;align-items:center}
+.cfg-phead{padding:.3rem 0;margin:0 .5rem;border-bottom:1px solid var(--border);font-size:.66rem;font-weight:600;color:var(--muted)}
+.cfg-phead span:nth-child(2),.cfg-phead span:nth-child(3),.cfg-phead span:nth-child(n+5){text-align:center}
+.cfg-prow{min-height:35px;padding:.35rem .5rem;border-radius:8px;font-size:.78rem;color:var(--text)}
+.cfg-prow:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
+.cfg-prow.is-selected{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.cfg-prow > span:nth-child(2),.cfg-prow > span:nth-child(3),.cfg-prow > span:nth-child(n+5){text-align:center}
+.cfg-chip-locked{opacity:.55;cursor:default;pointer-events:none}

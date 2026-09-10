@@ -3,8 +3,21 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
+import { Switch } from "@/components/switch";
 import { TimeStepper } from "@/components/time-stepper";
+import {
+  AlertGlyph,
+  CalendarTimeGlyph,
+  CircleCheckGlyph,
+  ClockGlyph,
+  HistoryGlyph,
+  HourglassGlyph,
+  InfoGlyph,
+  TargetGlyph,
+} from "@/components/ui-glyphs";
 import { GHOST_DANGER_STYLE } from "@/components/ui-styles";
+import { PencilGlyph, TrashGlyph, UsersGlyph } from "../../../users/account-ui";
+import { GlobalRow } from "../config/global-row";
 import { setShowPreviousExercicesAction } from "../exercice/actions";
 import {
   createExerciceAction,
@@ -111,41 +124,13 @@ const BOOKING_DELAY_OPTIONS: { value: number; label: string }[] = [
   { value: 1030, label: "1 mois" },
 ];
 
-// Champ select « Délai de réservation » (calé sur le style des inputs horaires compacts).
-const delaySelectStyle: React.CSSProperties = {
-  height: 21,
-  boxSizing: "border-box",
-  fontSize: ".78rem",
-  fontWeight: 400,
-  padding: "0 .35rem",
-  borderRadius: "var(--rad-sm)",
-  border: "1px solid var(--border)",
-  background: "var(--surface2)",
-  color: "var(--text)",
-};
-
-/** Style des sous-panels (fond --surface2, bordure, coins arrondis), calqué sur l'onglet
- *  Configuration. Le panel conteneur (--surface1) les empile. */
-const SUB_PANEL: React.CSSProperties = {
-  background: "var(--surface2)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--rad-sm)",
-  padding: "1.25rem",
-};
-
-// Libellé « Matin » / « Après-midi » de la grille des plages horaires.
-const timeLabelStyle: React.CSSProperties = {
-  // Même hauteur de boîte que les champs horaires (TimeStepper compact = 17px), texte
-  // centré : le libellé Matin / Après-midi est ainsi parfaitement aligné sur ses 2 champs.
+// Bouton d'action (même style que « ＋ Ajouter un type » d'Échanges).
+const actBtn: React.CSSProperties = {
+  padding: ".18rem .55rem",
+  fontSize: ".66rem",
   display: "inline-flex",
   alignItems: "center",
-  height: 17,
-  lineHeight: 1,
-  fontSize: ".62rem",
-  fontWeight: 700,
-  letterSpacing: ".09em",
-  textTransform: "uppercase",
-  color: "var(--muted)",
+  gap: ".35rem",
   whiteSpace: "nowrap",
 };
 
@@ -701,598 +686,520 @@ export function PeriodesPanel({
     return () => clearTimeout(t);
   }, [morningStart, morningEnd, afternoonStart, afternoonEnd]);
 
+  // Pastille d'état du titre : autosaves (ouverture, maximums, délai) + erreurs de liste.
+  const statusError = openingError ?? listError;
+  const statusSaved = openingSaved || bookingSaved;
+  const suffix = exerciceLabel !== "—" ? ` ${exerciceLabel}` : "";
+
   return (
-    <section className="panel">
-      {/* En-tête (dans le panel parent, AU-DESSUS des sous-panels) : navigation d'exercice,
-          visibilité usagers et gestion des exercices précédents. */}
+    <div className="panel">
+      {/* Titre : pictogramme, navigation d'exercice ◀ ▶, dates, actions ; à droite,
+          la pastille d'état des enregistrements automatiques. */}
+      <div
+        className="panel-title"
+        style={{
+          justifyContent: "space-between",
+          gap: ".75rem",
+          marginBottom: ".5rem",
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
+          <span className="rg-ico is-ok">
+            <CalendarTimeGlyph size={16} />
+          </span>
+          Exercice
+          {hasExercices ? (
+            <div className="periode-nav">
+              <button
+                type="button"
+                className="ex-arrow"
+                onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
+                disabled={!canPrev}
+                aria-label="Exercice précédent"
+              >
+                ◀
+              </button>
+              <span className="ex-nav-label">{exerciceLabel}</span>
+              <button
+                type="button"
+                className="ex-arrow"
+                onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
+                disabled={!canNext}
+                aria-label="Exercice suivant"
+              >
+                ▶
+              </button>
+            </div>
+          ) : (
+            <span style={{ color: "var(--muted)", fontWeight: 400 }}>· aucun exercice</span>
+          )}
+          {currentExercice && (currentExercice.dateStart || currentExercice.dateEnd) && (
+            <span style={{ color: "var(--muted)", fontWeight: 400, whiteSpace: "nowrap" }}>
+              · {currentExercice.type === "civile" ? "année civile" : "année scolaire"} ·{" "}
+              {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
+            </span>
+          )}
+          {currentExercice && (
+            <span className="ms-acts" style={{ opacity: 1 }}>
+              <button
+                type="button"
+                className="acct-action"
+                onClick={openEditExercice}
+                title="Modifier l'exercice"
+                aria-label="Modifier l'exercice"
+              >
+                <PencilGlyph size={14} />
+              </button>
+              {!currentExerciceHasPeriods && (
+                <button
+                  type="button"
+                  className="acct-action is-danger"
+                  onClick={deleteExercice}
+                  disabled={pending}
+                  title="Supprimer l'exercice"
+                  aria-label="Supprimer l'exercice"
+                >
+                  <TrashGlyph size={14} />
+                </button>
+              )}
+            </span>
+          )}
+          {!hasExercices && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={openCreateExercice}
+              style={{
+                ...actBtn,
+                borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
+                color: "var(--warn)",
+              }}
+            >
+              ＋ Nouvel exercice
+            </button>
+          )}
+        </span>
+        <span className="acct-toolbar-right">
+          <span
+            className={`acct-pill ${statusError ? "role-administrateur" : pending ? "is-warn" : "is-ok"}`}
+            style={{
+              opacity: statusError || pending || statusSaved ? 1 : 0,
+              transition: "opacity .25s",
+            }}
+            aria-live="polite"
+          >
+            {statusError ? (
+              <AlertGlyph size={12} strokeWidth={2.2} />
+            ) : (
+              <CircleCheckGlyph size={12} strokeWidth={2.2} />
+            )}{" "}
+            {statusError ? statusError : pending ? "Enregistrement…" : "Enregistré"}
+          </span>
+        </span>
+      </div>
+
+      {/* ── Exercice : visibilité usagers, navigation dans les exercices passés. ── */}
+      {hasExercices && (
+        <>
+          <div className="ms-grp cfg-grp">
+            Exercice{suffix}
+            <span className="hint">· visibilité et navigation</span>
+          </div>
+          {currentExercice && (
+            <GlobalRow
+              icon={
+                <span className="rg-ico is-ok">
+                  <UsersGlyph size={14} />
+                </span>
+              }
+              label="Afficher aux utilisateurs"
+              desc="Un seul exercice par service peut être affiché : c'est celui que voient les utilisateurs dans Réservations. L'activer ici désactive l'exercice précédemment affiché."
+            >
+              <Switch
+                on={visibleExerciceId === currentExercice.id}
+                onChange={toggleVisibleToUsers}
+              />
+            </GlobalRow>
+          )}
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-neutral">
+                <HistoryGlyph size={14} />
+              </span>
+            }
+            label="Gérer les exercices précédents"
+            desc="Garde les exercices passés accessibles par les flèches ◀ ▶ du titre, pour consulter ou corriger leurs réglages."
+          >
+            <Switch
+              on={showPrevious}
+              onChange={(next) => {
+                setShowPrevious(next);
+                setListError(null);
+                startTransition(async () => {
+                  const res = await setShowPreviousExercicesAction(serviceId, next);
+                  if (res && !res.ok) {
+                    setShowPrevious(!next);
+                    setListError(res.error ?? "Échec de l'enregistrement.");
+                    return;
+                  }
+                  router.refresh();
+                });
+              }}
+            />
+          </GlobalRow>
+        </>
+      )}
+
+      {/* ── Périodes : tableau + sélection / ajout. ── */}
+      <div className="ms-grp cfg-grp">
+        Périodes{suffix}
+        <span className="hint">· découpage de l'exercice, dates et ouverture des réservations</span>
+      </div>
+      {visiblePeriods.length > 0 ? (
+        <>
+          <div className="cfg-phead">
+            <span>
+              <input
+                type="checkbox"
+                className="admin-cb"
+                checked={allChecked}
+                ref={(el) => {
+                  if (el) el.indeterminate = someChecked;
+                }}
+                onChange={(e) => toggleSelectAll(e.target.checked)}
+                title="Tout sélectionner"
+                style={{ width: 13, height: 13, accentColor: "var(--accent)" }}
+              />
+            </span>
+            <span>Coul</span>
+            <span>Étiq</span>
+            <span>Libellé</span>
+            <span>Début</span>
+            <span>Fin</span>
+            <span title="Date d'ouverture des réservations côté usager — vide : réservable sans restriction">
+              Disponibilité
+            </span>
+          </div>
+          {visiblePeriods.map((p) => (
+            <div key={p.id} className={`cfg-prow${selected.has(p.id) ? " is-selected" : ""}`}>
+              <span>
+                <input
+                  type="checkbox"
+                  className="admin-cb"
+                  checked={selected.has(p.id)}
+                  onChange={() => toggleSelect(p.id)}
+                  style={{ width: 13, height: 13, accentColor: "var(--accent)" }}
+                />
+              </span>
+              <span>
+                <span className="period-swatch" style={{ background: p.color || "#6dceaa" }} />
+              </span>
+              <span>{p.etiquette || "—"}</span>
+              <span className="ex-knm" style={{ minWidth: 0 }}>
+                {p.label || "—"}
+              </span>
+              <span>{fmtDate(p.dateStart)}</span>
+              <span>{fmtDate(p.dateEnd)}</span>
+              {/* Lecture seule : la valeur se modifie via la modale (Modifier). */}
+              <span title="Date d'ouverture des réservations côté usager — vide : réservable sans restriction. Modifiable via « Modifier ».">
+                {fmtDate(p.disponibilite)}
+              </span>
+            </div>
+          ))}
+        </>
+      ) : (
+        <div
+          style={{
+            padding: ".6rem .5rem",
+            fontSize: ".78rem",
+            color: "var(--muted)",
+            fontStyle: "italic",
+          }}
+        >
+          Aucune période définie.
+        </div>
+      )}
+      {/* Actions de sélection à gauche, ajout à droite, sous le tableau. */}
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
-          gap: ".3rem",
-          margin: ".75rem 0 1.75rem",
+          alignItems: "center",
+          gap: ".5rem",
+          padding: ".5rem .5rem 0",
+          flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "2.5rem", flexWrap: "wrap" }}>
-          <div className="pr-head" style={{ minHeight: "calc(.85rem * 1.5)" }}>
-            {/* « Exercice » comme titre du panneau (style panel-title : pastille + .95rem). */}
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: ".5rem",
-                fontSize: ".95rem",
-                fontWeight: 300,
-                letterSpacing: "-.01em",
-              }}
-            >
-              <span className="dot" style={{ background: "var(--warn)" }} />
-              Exercice
+        {selectedCount > 0 && (
+          <>
+            <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>
+              {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
             </span>
-            {hasExercices ? (
-              <div className="periode-nav">
-                <button
-                  type="button"
-                  className="ex-arrow"
-                  onClick={() => canPrev && changeExercice(sortedExercices[exerciceIndex - 1].id)}
-                  disabled={!canPrev}
-                  aria-label="Exercice précédent"
-                >
-                  ◀
-                </button>
-                <span className="ex-nav-label">{exerciceLabel}</span>
-                <button
-                  type="button"
-                  className="ex-arrow"
-                  onClick={() => canNext && changeExercice(sortedExercices[exerciceIndex + 1].id)}
-                  disabled={!canNext}
-                  aria-label="Exercice suivant"
-                >
-                  ▶
-                </button>
-              </div>
-            ) : (
-              <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>Aucun exercice</span>
-            )}
-            {!hasExercices && (
+            {selectedCount === 1 && (
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={openCreateExercice}
+                onClick={openEdit}
                 style={{
-                  borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)",
-                  color: "var(--warn)",
-                  padding: ".18rem .5rem",
-                  fontSize: ".62rem",
-                  whiteSpace: "nowrap",
+                  ...actBtn,
+                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                  color: "var(--accent)",
                 }}
               >
-                ＋ Nouvel exercice
+                <PencilGlyph size={12} /> Modifier
               </button>
             )}
-            {currentExercice && (
-              <>
-                {(currentExercice.dateStart || currentExercice.dateEnd) && (
-                  <span style={{ fontSize: ".72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                    {currentExercice.type === "civile" ? "Année civile" : "Année scolaire"} ·{" "}
-                    {fmtDate(currentExercice.dateStart)} → {fmtDate(currentExercice.dateEnd)}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={openEditExercice}
-                  title="Modifier l'exercice"
-                  style={{
-                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                    color: "var(--accent)",
-                    padding: "0 .3rem",
-                    fontSize: ".62rem",
-                    height: 17,
-                    display: "inline-flex",
-                    alignItems: "center",
-                  }}
-                >
-                  ✏️
-                </button>
-                {!currentExerciceHasPeriods && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={deleteExercice}
-                    disabled={pending}
-                    title="Supprimer l'exercice"
-                    style={{
-                      ...GHOST_DANGER_STYLE,
-                      padding: "0 .5rem",
-                      fontSize: ".62rem",
-                      height: 17,
-                      display: "inline-flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    🗑️
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-          {hasExercices && (
-            <label
-              className="check"
-              style={{
-                fontSize: ".62rem",
-                whiteSpace: "nowrap",
-                color: "var(--muted)",
-                fontWeight: 400,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={showPrevious}
-                disabled={pending}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  setShowPrevious(next);
-                  setListError(null);
-                  startTransition(async () => {
-                    const res = await setShowPreviousExercicesAction(serviceId, next);
-                    if (res && !res.ok) {
-                      setShowPrevious(!next);
-                      setListError(res.error ?? "Échec de l'enregistrement.");
-                      return;
-                    }
-                    router.refresh();
-                  });
-                }}
-              />{" "}
-              Gérer les exercices précédents
-            </label>
-          )}
-        </div>
-        {currentExercice && (
-          <label
-            title="Un seul exercice par service peut être affiché : c'est celui que voient les utilisateurs dans Réservations."
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: ".3rem",
-              cursor: "pointer",
-              fontSize: ".62rem",
-              fontWeight: 500,
-              width: "fit-content",
-              height: 17,
-              // Aligné sur le texte « Exercice » : décalage = pastille (8px) + gap (.5rem).
-              marginLeft: "calc(8px + .5rem)",
-            }}
-          >
-            <input
-              type="checkbox"
-              className="admin-cb"
-              checked={visibleExerciceId === currentExercice.id}
-              onChange={(e) => toggleVisibleToUsers(e.target.checked)}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={deleteSelected}
               disabled={pending}
-              style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-            />
-            Afficher aux utilisateurs
-          </label>
+              style={{ ...actBtn, ...GHOST_DANGER_STYLE }}
+            >
+              <TrashGlyph size={12} /> Supprimer
+            </button>
+          </>
         )}
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={openCreate}
+          disabled={!hasExercices}
+          title={hasExercices ? undefined : "Créez d'abord un exercice."}
+          style={{
+            ...actBtn,
+            marginLeft: "auto",
+            opacity: hasExercices ? 1 : 0.5,
+            cursor: hasExercices ? "pointer" : "not-allowed",
+          }}
+        >
+          ＋ Ajouter une période
+        </button>
       </div>
+      {listError && (
+        <div className="field-error" style={{ display: "block", margin: ".5rem .5rem 0" }}>
+          {listError}
+        </div>
+      )}
 
-      {/* Deux sous-panels (--surface2), à la manière de l'onglet Configuration. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: ".85rem" }}>
-        <section style={SUB_PANEL}>
-          {/* ── Colonne du sous-panel « Périodes ». L'ordre d'AFFICHAGE est piloté par la
-          propriété `order` de chaque section (l'ordre du DOM diffère) :
-          2 Périodes · 3 Jours d'ouverture · 4 Plages horaires. ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.6rem" }}>
-            {/* ── Plages horaires (exercice affiché). ── */}
-            {currentExercice && (
-              <div style={{ order: 4 }}>
-                <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-                  Plages horaires{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
-                </div>
-                {/* Matin, Après-midi et le statut d'auto-save sur une seule ligne. Le statut
-                n'est rendu que s'il a quelque chose à dire → aucune ligne réservée quand
-                inactif (espaces homogènes entre les sections). */}
-                <div
-                  className="defaults-row"
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    columnGap: "1.5rem",
-                    rowGap: ".3rem",
-                    margin: 0,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-                    <span style={timeLabelStyle}>Matin</span>
-                    <TimeStepper
-                      compact
-                      value={morningStart}
-                      onChange={(v) => {
-                        hoursTouchedRef.current = true;
-                        setOpeningSaved(false);
-                        setMorningStart(v);
-                      }}
-                    />
-                    <TimeStepper
-                      compact
-                      value={morningEnd}
-                      onChange={(v) => {
-                        hoursTouchedRef.current = true;
-                        setOpeningSaved(false);
-                        setMorningEnd(v);
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-                    <span style={timeLabelStyle}>Après-midi</span>
-                    <TimeStepper
-                      compact
-                      value={afternoonStart}
-                      onChange={(v) => {
-                        hoursTouchedRef.current = true;
-                        setOpeningSaved(false);
-                        setAfternoonStart(v);
-                      }}
-                    />
-                    <TimeStepper
-                      compact
-                      value={afternoonEnd}
-                      onChange={(v) => {
-                        hoursTouchedRef.current = true;
-                        setOpeningSaved(false);
-                        setAfternoonEnd(v);
-                      }}
-                    />
-                  </div>
-                  {(openingError || pending || openingSaved) && (
-                    <span
-                      style={{
-                        fontSize: ".78rem",
-                        whiteSpace: "nowrap",
-                        color: openingError
-                          ? "var(--danger)"
-                          : pending
-                            ? "var(--muted)"
-                            : "var(--accent)",
-                      }}
-                    >
-                      {openingError ? openingError : pending ? "Enregistrement…" : "✓ Enregistré"}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ── Jours d'ouverture (exercice affiché). ── */}
-            {currentExercice && (
-              <div style={{ order: 3 }}>
-                <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-                  Jours d&apos;ouverture{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
-                </div>
-                {/* Tous les jours + fériés + vacances scolaires sur une seule ligne (repli
-                automatique si la largeur manque). */}
-                <div
-                  style={{ display: "flex", gap: ".55rem", flexWrap: "wrap", alignItems: "center" }}
-                >
-                  {DAYS.map((d) => {
-                    // Jours de semaine : toujours cochés et verrouillés (non décochables).
-                    const locked = LOCKED_DAYS.includes(d.key);
-                    return (
-                      <label
-                        key={d.key}
-                        title={locked ? `${d.full} (toujours ouvert)` : d.full}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: ".3rem",
-                          cursor: locked ? "default" : "pointer",
-                          fontSize: ".62rem",
-                          fontWeight: 500,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          className="admin-cb"
-                          checked={locked || activeDays.includes(d.key)}
-                          disabled={locked}
-                          onChange={() => {
-                            if (!locked) toggleDay(d.key);
-                          }}
-                          style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-                        />
-                        {d.full}
-                      </label>
-                    );
-                  })}
-                  {/* Séparateur : jours de semaine ↔ fériés / vacances. */}
-                  <span
-                    style={{
-                      width: 1,
-                      height: "1rem",
-                      background: "var(--border)",
-                      flexShrink: 0,
-                      margin: "0 .2rem",
-                      alignSelf: "center",
-                    }}
-                  />
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: ".3rem",
-                      cursor: "pointer",
-                      fontSize: ".62rem",
-                      fontWeight: 500,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      className="admin-cb"
-                      checked={openOnHolidays}
-                      onChange={(e) => {
-                        setOpenOnHolidays(e.target.checked);
-                        persistOpening({ openOnHolidays: e.target.checked });
-                      }}
-                      style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-                    />
-                    Jours fériés
-                  </label>
-                  <label
-                    title="Décoché : les jours de vacances scolaires sont hachurés et non réservables (agenda + réservations)."
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: ".3rem",
-                      cursor: "pointer",
-                      fontSize: ".62rem",
-                      fontWeight: 500,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      className="admin-cb"
-                      checked={openOnSchoolHolidays}
-                      onChange={(e) => {
-                        setOpenOnSchoolHolidays(e.target.checked);
-                        persistOpening({ openOnSchoolHolidays: e.target.checked });
-                      }}
-                      style={{ accentColor: "var(--accent)", width: 13, height: 13 }}
-                    />
-                    Vacances scolaires
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* ── Périodes : tableau + barre d'ajout / actions. ── */}
-            <div style={{ order: 2 }}>
-              <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-                Périodes{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
-              </div>
-              {/* Largeur calée sur le tableau (fit-content) → la barre « Ajouter » s'aligne à
-              droite DU TABLEAU, pas du panneau. */}
-              <div style={{ width: "fit-content", maxWidth: "100%" }}>
-                <div style={{ overflowX: "auto", maxWidth: "100%" }}>
-                  {visiblePeriods.length > 0 ? (
-                    <table className="periods-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: 18 }}>
-                            <input
-                              type="checkbox"
-                              className="admin-cb"
-                              checked={allChecked}
-                              ref={(el) => {
-                                if (el) el.indeterminate = someChecked;
-                              }}
-                              onChange={(e) => toggleSelectAll(e.target.checked)}
-                              title="Tout sélectionner"
-                            />
-                          </th>
-                          <th>Coul</th>
-                          <th>Étiq</th>
-                          <th className="td-left">Libellé</th>
-                          <th>Début</th>
-                          <th>Fin</th>
-                          <th title="Date d'ouverture des réservations côté usager — vide : réservable sans restriction">
-                            Disponibilité
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visiblePeriods.map((p) => (
-                          <tr key={p.id}>
-                            <td>
-                              <input
-                                type="checkbox"
-                                className="admin-cb"
-                                checked={selected.has(p.id)}
-                                onChange={() => toggleSelect(p.id)}
-                              />
-                            </td>
-                            <td>
-                              <span
-                                className="period-swatch"
-                                style={{ background: p.color || "#6dceaa" }}
-                              />
-                            </td>
-                            <td>{p.etiquette || "—"}</td>
-                            <td className="td-left">{p.label || "—"}</td>
-                            <td>{fmtDate(p.dateStart)}</td>
-                            <td>{fmtDate(p.dateEnd)}</td>
-                            {/* Lecture seule : la valeur se modifie via la modale (✏️ Modifier). */}
-                            <td title="Date d'ouverture des réservations côté usager — vide : réservable sans restriction. Modifiable via ✏️ Modifier.">
-                              {fmtDate(p.disponibilite)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <p style={{ color: "var(--muted)", fontSize: ".85rem", margin: ".4rem 0" }}>
-                      Aucune période définie.
-                    </p>
-                  )}
-                </div>
-
-                {/* Bouton « Ajouter » + actions de sélection, sous le tableau. */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: ".5rem",
-                    marginTop: ".5rem",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {selectedCount > 0 && (
-                    <>
-                      <span style={{ fontSize: ".82rem", color: "var(--muted)" }}>
-                        {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
-                      </span>
-                      {selectedCount === 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={openEdit}
-                          style={{
-                            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                            color: "var(--accent)",
-                            padding: ".25rem .65rem",
-                            fontSize: ".68rem",
-                          }}
-                        >
-                          ✏️ Modifier
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={deleteSelected}
-                        disabled={pending}
-                        style={{
-                          ...GHOST_DANGER_STYLE,
-                          padding: ".25rem .65rem",
-                          fontSize: ".68rem",
-                        }}
-                      >
-                        🗑️ Supprimer
-                      </button>
-                    </>
-                  )}
+      {currentExercice && (
+        <>
+          {/* ── Jours d'ouverture (exercice affiché). ── */}
+          <div className="ms-grp cfg-grp">
+            Jours d'ouverture{suffix}
+            <span className="hint">· jours réservables de la semaine</span>
+          </div>
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-ok">
+                <CalendarTimeGlyph size={14} />
+              </span>
+            }
+            label="Jours de la semaine"
+            desc="Du lundi au vendredi, le service est toujours ouvert ; le samedi et le dimanche sont au choix."
+          >
+            <div className="cfg-chips">
+              {DAYS.map((d) => {
+                // Jours de semaine : toujours ouverts et verrouillés (non décochables).
+                const locked = LOCKED_DAYS.includes(d.key);
+                const on = locked || activeDays.includes(d.key);
+                return (
                   <button
+                    key={d.key}
                     type="button"
-                    className="btn btn-ghost"
-                    onClick={openCreate}
-                    disabled={!hasExercices}
-                    title={hasExercices ? undefined : "Créez d'abord un exercice."}
-                    style={{
-                      marginLeft: "auto",
-                      borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-                      color: "var(--accent)",
-                      padding: ".18rem .5rem",
-                      fontSize: ".62rem",
-                      whiteSpace: "nowrap",
-                      opacity: hasExercices ? 1 : 0.5,
-                      cursor: hasExercices ? "pointer" : "not-allowed",
+                    aria-pressed={on}
+                    disabled={locked}
+                    title={locked ? `${d.full} (toujours ouvert)` : d.full}
+                    className={`acct-chip${on ? " is-on" : ""}${locked ? " cfg-chip-locked" : ""}`}
+                    onClick={() => {
+                      if (!locked) toggleDay(d.key);
                     }}
                   >
-                    ＋ Ajouter une période
+                    {d.full}
                   </button>
-                </div>
-              </div>
+                );
+              })}
             </div>
-          </div>
+          </GlobalRow>
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-warn">
+                <CalendarTimeGlyph size={14} />
+              </span>
+            }
+            label="Jours fériés"
+            desc="Les jours fériés sont réservables ; désactivé, ils sont fermés dans l'agenda et les réservations."
+          >
+            <Switch
+              on={openOnHolidays}
+              onChange={(v) => {
+                setOpenOnHolidays(v);
+                persistOpening({ openOnHolidays: v });
+              }}
+            />
+          </GlobalRow>
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-warn">
+                <CalendarTimeGlyph size={14} />
+              </span>
+            }
+            label="Vacances scolaires"
+            desc="Les jours de vacances scolaires sont réservables ; désactivé, ils sont hachurés et non réservables (agenda et réservations)."
+          >
+            <Switch
+              on={openOnSchoolHolidays}
+              onChange={(v) => {
+                setOpenOnSchoolHolidays(v);
+                persistOpening({ openOnSchoolHolidays: v });
+              }}
+            />
+          </GlobalRow>
 
-          {listError && (
-            <div className="field-error" style={{ display: "block", marginBottom: ".75rem" }}>
-              {listError}
+          {/* ── Plages horaires (exercice affiché). ── */}
+          <div className="ms-grp cfg-grp">
+            Plages horaires{suffix}
+            <span className="hint">· demi-journées proposées à la réservation</span>
+          </div>
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-ok">
+                <ClockGlyph size={14} />
+              </span>
+            }
+            label="Matin"
+            desc="Début et fin de la demi-journée du matin."
+          >
+            <div className="cfg-ctl">
+              <TimeStepper
+                compact
+                value={morningStart}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setMorningStart(v);
+                }}
+              />
+              <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>→</span>
+              <TimeStepper
+                compact
+                value={morningEnd}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setMorningEnd(v);
+                }}
+              />
             </div>
-          )}
-        </section>
+          </GlobalRow>
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-ok">
+                <ClockGlyph size={14} />
+              </span>
+            }
+            label="Après-midi"
+            desc="Début et fin de la demi-journée de l'après-midi."
+          >
+            <div className="cfg-ctl">
+              <TimeStepper
+                compact
+                value={afternoonStart}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setAfternoonStart(v);
+                }}
+              />
+              <span style={{ fontSize: ".74rem", color: "var(--muted)" }}>→</span>
+              <TimeStepper
+                compact
+                value={afternoonEnd}
+                onChange={(v) => {
+                  hoursTouchedRef.current = true;
+                  setOpeningSaved(false);
+                  setAfternoonEnd(v);
+                }}
+              />
+            </div>
+          </GlobalRow>
 
-        {/* ── Sous-panel « Réservations » : maximums (par exercice) + délai limite (service). ── */}
-        <section style={SUB_PANEL}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.6rem" }}>
-            {/* ── Réservations maxi (exercice affiché). Par usager, portés par l'EXERCICE. ── */}
-            {currentExercice && (
-              <div style={{ order: 5 }}>
-                <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-                  Réservations maxi{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
-                </div>
-                {/* Une ligne par compteur (− n + libellé). */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    columnGap: "1rem",
-                    rowGap: ".45rem",
-                  }}
-                >
-                  <MaxStepper
-                    label="par période"
-                    value={maxReservationsPeriod}
-                    onMinus={() => stepMaxima("maxReservationsPeriod", -1)}
-                    onPlus={() => stepMaxima("maxReservationsPeriod", 1)}
-                  />
-                  {/* Plafond « par an » = « par période » × nb périodes de l'exercice. */}
-                  <MaxStepper
-                    label="par an"
-                    value={maxReservations}
-                    onMinus={() => stepMaxima("maxReservations", -1)}
-                    onPlus={() => stepMaxima("maxReservations", 1)}
-                    max={
-                      visiblePeriods.length > 0
-                        ? maxReservationsPeriod * visiblePeriods.length
-                        : undefined
-                    }
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* ── Délai limite de réservation (exercice affiché). ── */}
-            {currentExercice && (
-              <div style={{ order: 6 }}>
-                <div className="panel-subtitle" style={{ fontSize: ".85rem", fontWeight: 500 }}>
-                  Délai limite de réservation{exerciceLabel !== "—" ? ` ${exerciceLabel}` : ""}
-                </div>
-                <label
-                  title="Délai minimum avant une séance"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: ".6rem",
-                    fontSize: ".62rem",
-                    flexWrap: "wrap",
-                    minHeight: 21,
-                  }}
-                >
-                  Délai
-                  <select
-                    value={bookingDelay}
-                    onChange={(e) => saveBookingDelay(Number(e.target.value))}
-                    style={delaySelectStyle}
-                  >
-                    {BOOKING_DELAY_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  {bookingSaved && (
-                    <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
-                  )}
-                </label>
-              </div>
-            )}
+          {/* ── Réservations : maximums (par exercice) + délai limite. ── */}
+          <div className="ms-grp cfg-grp">
+            Réservations{suffix}
+            <span className="hint">· plafonds par usager et délai avant une séance</span>
           </div>
-        </section>
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-info">
+                <TargetGlyph size={14} />
+              </span>
+            }
+            label="Réservations maxi par période"
+            desc="Nombre maximal de réservations d'un même usager sur une période."
+          >
+            <MaxStepper
+              label="par période"
+              value={maxReservationsPeriod}
+              onMinus={() => stepMaxima("maxReservationsPeriod", -1)}
+              onPlus={() => stepMaxima("maxReservationsPeriod", 1)}
+            />
+          </GlobalRow>
+          {/* Plafond « par an » = « par période » × nb périodes de l'exercice. */}
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-info">
+                <TargetGlyph size={14} />
+              </span>
+            }
+            label="Réservations maxi par an"
+            desc="Plafond sur tout l'exercice, au plus « par période » multiplié par le nombre de périodes."
+          >
+            <MaxStepper
+              label="par an"
+              value={maxReservations}
+              onMinus={() => stepMaxima("maxReservations", -1)}
+              onPlus={() => stepMaxima("maxReservations", 1)}
+              max={
+                visiblePeriods.length > 0
+                  ? maxReservationsPeriod * visiblePeriods.length
+                  : undefined
+              }
+            />
+          </GlobalRow>
+          <GlobalRow
+            icon={
+              <span className="rg-ico is-neutral">
+                <HourglassGlyph size={14} />
+              </span>
+            }
+            label="Délai limite de réservation"
+            desc="Délai minimum avant une séance pour pouvoir la réserver."
+          >
+            <select
+              className="cfg-select"
+              value={bookingDelay}
+              onChange={(e) => saveBookingDelay(Number(e.target.value))}
+              aria-label="Délai limite de réservation"
+            >
+              {BOOKING_DELAY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </GlobalRow>
+        </>
+      )}
+
+      {/* Pied : rappel du mode d'enregistrement. */}
+      <div className="rg-foot" style={{ borderTop: "none", marginTop: "2.05rem", paddingTop: 0 }}>
+        <InfoGlyph size={13} />
+        <span style={{ flex: 1, lineHeight: 1.45 }}>
+          Les réglages de cette page sont enregistrés automatiquement, quelques instants après
+          chaque modification ; l'exercice et les périodes se créent et se modifient dans une
+          fenêtre dédiée.
+        </span>
       </div>
 
       {/* ── Modale exercice (création / édition) ───────────────────────────── */}
@@ -1618,7 +1525,7 @@ export function PeriodesPanel({
           </div>
         </ModalOverlay>
       )}
-    </section>
+    </div>
   );
 }
 
