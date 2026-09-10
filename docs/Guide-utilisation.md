@@ -345,20 +345,31 @@ Cela permet de **préparer le prochain exercice longtemps à l'avance** :
 
 ### Paramètres — Configuration (accès et thèmes)
 
-La configuration définit les **paramètres globaux** du service — **créneaux récurrents** (autorise
-les créneaux qui se répètent chaque semaine), **alternance Semaine A/B** (sans effet si les créneaux
-récurrents sont désactivés), **prise en compte des accompagnants** dans la jauge, **absences
-prévenues** (l'usager peut signaler depuis son agenda qu'il sera absent à une séance, le
-gestionnaire l'enregistrer dans la fiche de réservation ; activé par défaut), **liste
-d'attente** (l'usager dépose ses disponibilités par demi-journée et est prévenu par e-mail, ou
-inscrit automatiquement, dès qu'un créneau se libère ; activé par défaut) et **alerte
-« plus de place »** (à l'arrivée sur l'agenda ou sur une période, si plus aucun créneau de la
-période affichée n'est réservable, une fenêtre informe l'usager et l'invite à contacter le
-service via l'e-mail de contact du référentiel Services ; le texte du message est
-personnalisable) — puis, **pour chaque demandeur**, la
-**validation** et les **thèmes**. Le
-mode des thèmes peut être **« libre »** (texte saisi par l'usager) ou **« liste »** (choix
-imposé).
+L'onglet regroupe dans un seul panneau trois blocs, tous enregistrés **automatiquement** quelques
+instants après chaque modification : une pastille **« Enregistré »** s'affiche en haut à droite du
+panneau (en cas d'échec, le message d'erreur y apparaît en rouge).
+
+- **Paramètres globaux** : **verrouillage des réservations validées** (une fois validée, une
+  réservation ne peut plus être annulée ni déplacée par l'usager), **auto-validation des demandes**
+  (délai après lequel une demande en attente est validée d'office, **« Jamais »** pour s'en passer),
+  **notification des gestionnaires** (fréquence de regroupement des e-mails : aucune,
+  **« Unitaire »** — chaque notification part sans attendre —, toutes les n heures, quotidienne ou
+  hebdomadaire, avec l'intervalle, l'heure et le jour choisis), **prise en compte des accompagnants**
+  dans la jauge, **absences prévenues** (l'usager peut signaler depuis son agenda qu'il sera absent
+  à une séance, le gestionnaire l'enregistrer dans la fiche de réservation ; activé par défaut),
+  **liste d'attente** (l'usager dépose ses disponibilités par demi-journée et est prévenu par
+  e-mail, ou inscrit automatiquement, dès qu'un créneau se libère ; activé par défaut) et **alerte
+  « plus de place »** (à l'arrivée sur l'agenda ou sur une période, si plus aucun créneau de la
+  période affichée n'est réservable, une fenêtre informe l'usager et l'invite à contacter le
+  service via l'e-mail de contact du référentiel Services ; le texte du message se personnalise
+  dans la zone sous le réglage, vide il reprend le message par défaut).
+- **Demandeurs** : pour chaque structure autorisée à réserver, la **validation** des demandes, les
+  **thèmes** (l'usager renseigne un thème à la réservation) et le **thème obligatoire**.
+  **« Ajouter un demandeur »** ajoute une ligne, la corbeille en bout de ligne retire la structure.
+- **Thèmes** : le mode **« Thème libre »** (texte saisi par l'usager) ou **« Liste de thèmes »**
+  (choix imposé parmi la liste). En mode liste, **« Ajouter un thème »** ouvre une ligne à saisir ;
+  la corbeille demande confirmation avant de retirer un thème (les réservations déjà faites
+  conservent le leur).
 
 ![Paramètres : configuration des accès par demandeur](img/10-parametres-configuration.png)
 

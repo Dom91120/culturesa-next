@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Switch } from "@/components/switch";
 import { TimeStepper } from "@/components/time-stepper";
+import { BellGlyph, ClockGlyph, LockGlyph } from "@/components/ui-glyphs";
 import { updateServiceValidationSettingsAction } from "./actions";
 import { GlobalRow } from "./global-row";
 
@@ -20,8 +21,13 @@ const hourOf = (s: string, lo: number, hi: number) =>
 
 type NoticeMode = "none" | "each" | "hours" | "daily" | "weekly";
 
+/** État d'enregistrement remonté au panneau (affiché dans la pastille du titre). */
+export type SaveStatus = { pending: boolean; saved: boolean; error: string | null };
+
 type Props = {
   serviceId: string;
+  /** Remonte l'état d'auto-save au parent (pastille « Enregistré » du titre du panneau). */
+  onStatus?: (s: SaveStatus) => void;
   validationBloquante: boolean;
   autoValidationDelay: number;
   mgrNoticeMode: string;
@@ -41,13 +47,13 @@ type Settings = {
 };
 
 const WEEKDAY_LABELS: { value: string; label: string }[] = [
-  { value: "lun", label: "Lundi" },
-  { value: "mar", label: "Mardi" },
-  { value: "mer", label: "Mercredi" },
-  { value: "jeu", label: "Jeudi" },
-  { value: "ven", label: "Vendredi" },
-  { value: "sam", label: "Samedi" },
-  { value: "dim", label: "Dimanche" },
+  { value: "lun", label: "lundi" },
+  { value: "mar", label: "mardi" },
+  { value: "mer", label: "mercredi" },
+  { value: "jeu", label: "jeudi" },
+  { value: "ven", label: "vendredi" },
+  { value: "sam", label: "samedi" },
+  { value: "dim", label: "dimanche" },
 ];
 
 const AUTO_VALIDATION_OPTIONS: { value: number; label: string }[] = [
@@ -59,28 +65,14 @@ const AUTO_VALIDATION_OPTIONS: { value: number; label: string }[] = [
   { value: 20160, label: "2 semaines" },
 ];
 
-// Champs (select + input heures) calés sur le style des inputs horaires du panneau Périodes.
-const selectStyle: React.CSSProperties = {
-  height: 21,
-  boxSizing: "border-box",
-  fontSize: ".78rem",
-  fontWeight: 400,
-  padding: "0 .35rem",
-  borderRadius: "var(--rad-sm)",
-  border: "1px solid var(--border)",
-  background: "var(--surface2)",
-  color: "var(--text)",
-};
-
-const radioRow: React.CSSProperties = {
-  display: "flex",
-  // Aligne le texte (« Toutes les », « Quotidienne à », « heures »…) et la valeur des
-  // champs sur une même ligne de base, d'une ligne à l'autre.
-  alignItems: "baseline",
-  gap: ".4rem",
-  fontSize: ".72rem",
-  flexWrap: "wrap",
-};
+// Modes de notification, dans l'ordre des puces (mêmes puces que les filtres d'Échanges).
+const NOTICE_MODES: { value: NoticeMode; label: string }[] = [
+  { value: "none", label: "Aucune" },
+  { value: "each", label: "Unitaire" },
+  { value: "hours", label: "Toutes les n heures" },
+  { value: "daily", label: "Quotidienne" },
+  { value: "weekly", label: "Hebdomadaire" },
+];
 
 export function ServiceValidationSettings(props: Props) {
   const { serviceId } = props;
@@ -99,7 +91,13 @@ export function ServiceValidationSettings(props: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Autosave NON BLOQUANT : ne pas geler les contrôles pendant l'aller-retour serveur.
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
+  // L'état d'enregistrement n'est pas affiché ici (un texte entre deux lignes ferait sauter
+  // la mise en page) : il remonte au panneau, qui l'affiche dans la pastille du titre.
+  const { onStatus } = props;
+  useEffect(() => {
+    onStatus?.({ pending, saved, error });
+  }, [onStatus, pending, saved, error]);
 
   // Auto-save DÉBOUNCÉ : chaque changement met à jour `settingsRef` (derniers réglages) et
   // (ré)arme un timer ; l'appel serveur n'a lieu qu'après une courte inactivité → un seul
@@ -170,30 +168,45 @@ export function ServiceValidationSettings(props: Props) {
   return (
     <>
       <GlobalRow
+        icon={
+          <span className="rg-ico is-ok">
+            <LockGlyph size={14} />
+          </span>
+        }
         label="Verrouillage des réservations validées"
         desc="Une fois validée, une réservation ne peut plus être annulée ni déplacée par l'usager."
       >
-        <Switch
-          on={validationBloquante}
-          onChange={(v) => {
-            setValidationBloquante(v);
-            save({ validationBloquante: v });
-          }}
-        />
+        <div className="cfg-ctl">
+          <span className={`ms-pill ${validationBloquante ? "is-ok" : "is-neutral"}`}>
+            {validationBloquante ? "activé" : "désactivé"}
+          </span>
+          <Switch
+            on={validationBloquante}
+            onChange={(v) => {
+              setValidationBloquante(v);
+              save({ validationBloquante: v });
+            }}
+          />
+        </div>
       </GlobalRow>
 
       <GlobalRow
+        icon={
+          <span className="rg-ico is-ok">
+            <ClockGlyph size={14} />
+          </span>
+        }
         label="Auto-validation des demandes"
         desc="Valide automatiquement les demandes en attente après ce délai, sauf si la séance est déjà passée."
       >
         <select
+          className="cfg-select"
           value={autoValidationDelay}
           onChange={(e) => {
             const v = Number(e.target.value);
             setAutoValidationDelay(v);
             save({ autoValidationDelay: v });
           }}
-          style={selectStyle}
         >
           {AUTO_VALIDATION_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -203,174 +216,113 @@ export function ServiceValidationSettings(props: Props) {
         </select>
       </GlobalRow>
 
-      {/* Notification des gestionnaires — radios à droite, comme les contrôles au-dessus.
-          Le libellé reste en haut (align start), mais la 1re option est descendue sur la
-          « ligne de contrôle » — là où les Switch se centrent (≈ moitié de la ligne desc) —
-          pour que « Aucune » soit à la même hauteur que les interrupteurs des rangées
-          précédentes. */}
+      {/* Notification des gestionnaires — puces (un mode = une puce, comme les filtres de
+          l'onglet Échanges), puis une ligne de précision : phrase pour « Aucune » et
+          « Unitaire », champs (intervalle, heure, jour) pour les modes planifiés. */}
       <GlobalRow
+        icon={
+          <span className="rg-ico is-warn">
+            <BellGlyph size={14} />
+          </span>
+        }
         label="Notification des gestionnaires"
-        desc="Fréquence de notification des gestionnaires."
-        align="start"
+        desc="Fréquence de regroupement des e-mails envoyés aux gestionnaires."
       >
         <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: ".45rem",
-            paddingTop: ".5rem",
-          }}
+          className="cfg-ctl"
+          style={{ flexDirection: "column", alignItems: "flex-end", gap: ".2rem" }}
         >
-          <label style={radioRow}>
-            <input
-              type="radio"
-              name="mgr-notice"
-              checked={mgrMode === "none"}
-              onChange={() => {
-                setMgrMode("none");
-                save({ mgrNoticeMode: "none" });
-              }}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Aucune
-          </label>
-
-          {/* Unitaires : rien ne s'accumule — chaque réservation part dans son propre
-              e-mail, sans attendre d'échéance de regroupement. Seul mode sans champ
-              associé, d'où le repère en gris à la place. */}
-          <label style={radioRow}>
-            <input
-              type="radio"
-              name="mgr-notice"
-              checked={mgrMode === "each"}
-              onChange={() => {
-                setMgrMode("each");
-                save({ mgrNoticeMode: "each" });
-              }}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Unitaires
-            <span style={{ color: "var(--muted)" }}>
-              — chaque notification est envoyée sans attendre
-            </span>
-          </label>
-
-          <label style={radioRow}>
-            <input
-              type="radio"
-              name="mgr-notice"
-              checked={mgrMode === "hours"}
-              onChange={() => {
-                setMgrMode("hours");
-                save({ mgrNoticeMode: "hours" });
-              }}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Toutes les
-            <TimeStepper
-              compact
-              value={hhmm(mgrInterval)}
-              step={60}
-              min={60}
-              max={168 * 60}
-              maxLength={6}
-              disabled={mgrMode !== "hours"}
-              onChange={(v) => {
-                const h = hourOf(v, 1, 168);
-                setMgrInterval(h);
-                setMgrMode("hours");
-                save({ mgrNoticeMode: "hours", mgrNoticeIntervalHours: h });
-              }}
-            />
-            heures
-          </label>
-
-          <label style={radioRow}>
-            <input
-              type="radio"
-              name="mgr-notice"
-              checked={mgrMode === "daily"}
-              onChange={() => {
-                setMgrMode("daily");
-                save({ mgrNoticeMode: "daily" });
-              }}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Quotidienne à
-            <TimeStepper
-              compact
-              value={hhmm(mgrHour)}
-              step={60}
-              min={0}
-              max={23 * 60}
-              disabled={mgrMode !== "daily"}
-              onChange={(v) => {
-                const h = hourOf(v, 0, 23);
-                setMgrHour(h);
-                setMgrMode("daily");
-                save({ mgrNoticeMode: "daily", mgrNoticeHour: h });
-              }}
-            />
-          </label>
-
-          <label style={radioRow}>
-            <input
-              type="radio"
-              name="mgr-notice"
-              checked={mgrMode === "weekly"}
-              onChange={() => {
-                setMgrMode("weekly");
-                save({ mgrNoticeMode: "weekly" });
-              }}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Hebdomadaire le
-            <select
-              value={mgrWeekday}
-              disabled={mgrMode !== "weekly"}
-              onChange={(e) => {
-                setMgrWeekday(e.target.value);
-                setMgrMode("weekly");
-                save({ mgrNoticeMode: "weekly", mgrNoticeWeekday: e.target.value });
-              }}
-              style={{ ...selectStyle, height: 17, fontSize: ".75rem" }}
-            >
-              {WEEKDAY_LABELS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-            à
-            <TimeStepper
-              compact
-              value={hhmm(mgrHour)}
-              step={60}
-              min={0}
-              max={23 * 60}
-              disabled={mgrMode !== "weekly"}
-              onChange={(v) => {
-                const h = hourOf(v, 0, 23);
-                setMgrHour(h);
-                setMgrMode("weekly");
-                save({ mgrNoticeMode: "weekly", mgrNoticeHour: h });
-              }}
-            />
-          </label>
+          <div className="cfg-chips">
+            {NOTICE_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                aria-pressed={mgrMode === m.value}
+                className={`acct-chip${mgrMode === m.value ? " is-on" : ""}`}
+                onClick={() => {
+                  setMgrMode(m.value);
+                  save({ mgrNoticeMode: m.value });
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div className="cfg-hint">
+            {mgrMode === "none" && <span>Les gestionnaires ne reçoivent aucun e-mail.</span>}
+            {mgrMode === "each" && <span>Chaque notification est envoyée sans attendre.</span>}
+            {mgrMode === "hours" && (
+              <>
+                <span>Un récapitulatif toutes les</span>
+                <TimeStepper
+                  compact
+                  value={hhmm(mgrInterval)}
+                  step={60}
+                  min={60}
+                  max={168 * 60}
+                  maxLength={6}
+                  onChange={(v) => {
+                    const h = hourOf(v, 1, 168);
+                    setMgrInterval(h);
+                    save({ mgrNoticeMode: "hours", mgrNoticeIntervalHours: h });
+                  }}
+                />
+                <span>heures</span>
+              </>
+            )}
+            {mgrMode === "daily" && (
+              <>
+                <span>Un récapitulatif chaque jour à</span>
+                <TimeStepper
+                  compact
+                  value={hhmm(mgrHour)}
+                  step={60}
+                  min={0}
+                  max={23 * 60}
+                  onChange={(v) => {
+                    const h = hourOf(v, 0, 23);
+                    setMgrHour(h);
+                    save({ mgrNoticeMode: "daily", mgrNoticeHour: h });
+                  }}
+                />
+              </>
+            )}
+            {mgrMode === "weekly" && (
+              <>
+                <span>Un récapitulatif chaque</span>
+                <select
+                  className="cfg-select"
+                  style={{ height: 18, fontSize: ".7rem" }}
+                  value={mgrWeekday}
+                  onChange={(e) => {
+                    setMgrWeekday(e.target.value);
+                    save({ mgrNoticeMode: "weekly", mgrNoticeWeekday: e.target.value });
+                  }}
+                >
+                  {WEEKDAY_LABELS.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+                <span>à</span>
+                <TimeStepper
+                  compact
+                  value={hhmm(mgrHour)}
+                  step={60}
+                  min={0}
+                  max={23 * 60}
+                  onChange={(v) => {
+                    const h = hourOf(v, 0, 23);
+                    setMgrHour(h);
+                    save({ mgrNoticeMode: "weekly", mgrNoticeHour: h });
+                  }}
+                />
+              </>
+            )}
+          </div>
         </div>
       </GlobalRow>
-
-      {(error || saved) && (
-        <div style={{ marginTop: ".6rem" }}>
-          {error ? (
-            <span className="field-error" style={{ display: "block" }}>
-              {error}
-            </span>
-          ) : (
-            <span style={{ fontSize: ".78rem", color: "var(--accent)" }}>✓ Enregistré</span>
-          )}
-        </div>
-      )}
     </>
   );
 }
