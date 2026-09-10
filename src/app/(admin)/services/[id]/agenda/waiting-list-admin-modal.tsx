@@ -54,7 +54,13 @@ export function WaitingListAdminModal({
   const fmt = (iso: string) => new Date(iso).toLocaleDateString("fr-FR");
 
   return (
-    <ModalOverlay onClose={onClose} labelledBy="waitlist-admin-title" boxStyle={{ maxWidth: 760 }}>
+    <ModalOverlay
+      onClose={onClose}
+      labelledBy="waitlist-admin-title"
+      // Ascenseur vertical quand la liste dépasse l'écran : la boîte se limite à la hauteur
+      // visible et défile à l'intérieur (barre fine de .modal-box).
+      boxStyle={{ maxWidth: 760, maxHeight: "calc(100vh - 2rem)", overflowY: "auto" }}
+    >
       <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">
         ×
       </button>
