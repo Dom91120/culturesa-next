@@ -176,18 +176,13 @@ export function ServiceValidationSettings(props: Props) {
         label="Verrouillage des réservations validées"
         desc="Une fois validée, une réservation ne peut plus être annulée ni déplacée par l'usager."
       >
-        <div className="cfg-ctl">
-          <span className={`ms-pill ${validationBloquante ? "is-ok" : "is-neutral"}`}>
-            {validationBloquante ? "activé" : "désactivé"}
-          </span>
-          <Switch
-            on={validationBloquante}
-            onChange={(v) => {
-              setValidationBloquante(v);
-              save({ validationBloquante: v });
-            }}
-          />
-        </div>
+        <Switch
+          on={validationBloquante}
+          onChange={(v) => {
+            setValidationBloquante(v);
+            save({ validationBloquante: v });
+          }}
+        />
       </GlobalRow>
 
       <GlobalRow

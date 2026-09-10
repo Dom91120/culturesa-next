@@ -113,18 +113,6 @@ function labelInitials(label: string): string {
 
 // ── Panneau ──────────────────────────────────────────────────────────────────
 
-/** Pastille d'état + interrupteur, pour les lignes des Paramètres globaux. */
-function StateSwitch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <div className="cfg-ctl">
-      <span className={`ms-pill ${on ? "is-ok" : "is-neutral"}`}>
-        {on ? "activé" : "désactivé"}
-      </span>
-      <Switch on={on} onChange={onChange} />
-    </div>
-  );
-}
-
 // Bouton de barre d'outils de groupe (même style que « ＋ Ajouter un type » d'Échanges).
 const headBtn: React.CSSProperties = {
   padding: ".18rem .55rem",
@@ -447,7 +435,7 @@ export function ConfigPanel({
         label="Jauge : prise en compte des accompagnants"
         desc="Prendre en compte les accompagnants dans le calcul de la jauge des créneaux qui en ont une."
       >
-        <StateSwitch on={gaugeAccompagnants} onChange={toggleGaugeAccompagnants} />
+        <Switch on={gaugeAccompagnants} onChange={toggleGaugeAccompagnants} />
       </GlobalRow>
 
       {/* Absences prévenues (cf. services/booking-absence) : l'usager signale depuis son
@@ -462,7 +450,7 @@ export function ConfigPanel({
         label="Absences prévenues"
         desc="Permet à l'usager de prévenir depuis son agenda qu'il sera absent à une séance (la réservation est conservée, le service est informé par e-mail) et au gestionnaire d'enregistrer une absence prévenue dans la fiche de réservation. Désactivé, les signalements déjà enregistrés restent visibles."
       >
-        <StateSwitch on={absencePrevenue} onChange={toggleAbsencePrevenue} />
+        <Switch on={absencePrevenue} onChange={toggleAbsencePrevenue} />
       </GlobalRow>
 
       {/* Liste d'attente (cf. services/waiting-list) : l'usager dépose ses disponibilités
@@ -477,7 +465,7 @@ export function ConfigPanel({
         label="Liste d'attente"
         desc="Quand tout est complet, l'usager peut s'inscrire sur la liste d'attente avec ses disponibilités par demi-journée. Il est prévenu par e-mail dès qu'un créneau correspondant se libère, ou inscrit automatiquement s'il l'a demandé. Les inscrits sont visibles depuis l'agenda."
       >
-        <StateSwitch on={listeAttente} onChange={toggleListeAttente} />
+        <Switch on={listeAttente} onChange={toggleListeAttente} />
       </GlobalRow>
 
       {/* Alerte « plus de place » : modale --warn côté usager quand plus aucune
@@ -508,7 +496,7 @@ export function ConfigPanel({
           ) : undefined
         }
       >
-        <StateSwitch on={fullPeriodNotice} onChange={toggleFullPeriodNotice} />
+        <Switch on={fullPeriodNotice} onChange={toggleFullPeriodNotice} />
       </GlobalRow>
 
       {/* ─ Demandeurs (autosave) ─ */}
