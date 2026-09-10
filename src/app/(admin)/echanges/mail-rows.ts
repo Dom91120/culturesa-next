@@ -182,10 +182,21 @@ const TRIGGER_GROUP: Record<BookingTrigger, { family: TriggerFamily; actor: Trig
 };
 
 /** Famille d'un type d'e-mail (intertitre de « Modèles d'e-mails »). */
-export type KindFamily = "compte" | "gestionnaires" | "reservations" | "perso";
+export type KindFamily =
+  | "compte"
+  | "gestionnaires"
+  | "reservations"
+  | "absences"
+  | "attente"
+  | "perso";
+/** Familles d'e-mails de réservation (routables par action) : absences et liste d'attente
+ *  ont leur propre intertitre (Dom 2026-09-10), le reste est « Réservations ». */
+const BOOKING_FAMILIES: readonly KindFamily[] = ["reservations", "absences", "attente"];
 function kindFamily(kind: string): KindFamily {
   if (kind.startsWith("manager_")) return "gestionnaires";
   if ((SYSTEM_MAIL_KINDS as readonly string[]).includes(kind)) return "compte";
+  if (kind.startsWith("waitlist_")) return "attente";
+  if (kind === "booking_absence") return "absences";
   if ((MAIL_KINDS as readonly string[]).includes(kind)) return "reservations";
   return "perso";
 }
@@ -263,7 +274,7 @@ export async function getMailRows(
       description: m.description,
       recipient: m.recipient,
       family,
-      usage: family === "reservations" ? (usage[kind] ?? { actions: 0, enabled: 0 }) : null,
+      usage: BOOKING_FAMILIES.includes(family) ? (usage[kind] ?? { actions: 0, enabled: 0 }) : null,
       modified: templates[i].subject !== base.subject || templates[i].html !== base.html,
       locked: !toggleable.has(kind),
       // « Système » = e-mail compte/sécurité TOUJOURS envoyé. Les récapitulatifs aux

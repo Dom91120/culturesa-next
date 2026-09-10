@@ -501,8 +501,9 @@ deux volets :
   en attente une réservation, l'e-mail part après ce délai et ne reflète que l'**état final** —
   une hésitation (validé, dévalidé, validé…) ne produit qu'un e-mail au plus, ou aucun si l'état
   revient à celui que l'usager connaissait. 0 = envoi immédiat à chaque clic.
-- **Modèles d'e-mails** — l'**objet et le corps** de tous les types, classés en quatre familles
-  (Compte et sécurité, Gestionnaires, Réservations, Personnalisés), avec des filtres par famille,
+- **Modèles d'e-mails** — l'**objet et le corps** de tous les types, classés par famille
+  (Compte et sécurité, Gestionnaires, Réservations, Absences prévenues, Liste d'attente,
+  Personnalisés), avec des filtres par famille,
   un filtre **« Modifiés »** qui isole les textes retouchés et une recherche. Chaque ligne porte
   l'état de son texte (« par défaut » ou « modifié ») et, pour les e-mails de réservation, le
   nombre d'actions qui l'utilisent dans « Échanges par mail ». Les e-mails de réservation servent

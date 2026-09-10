@@ -9,6 +9,7 @@ import {
   CircleCheckGlyph,
   FileCodeGlyph,
   InfoGlyph,
+  ListDetailsGlyph,
   MailForwardGlyph,
   ShieldLockGlyph,
 } from "@/components/ui-glyphs";
@@ -72,17 +73,28 @@ export type KindData = {
   variables: { name: string; desc: string }[];
 };
 
-const FAMILY_ORDER: KindFamily[] = ["compte", "gestionnaires", "reservations", "perso"];
+const FAMILY_ORDER: KindFamily[] = [
+  "compte",
+  "gestionnaires",
+  "reservations",
+  "absences",
+  "attente",
+  "perso",
+];
 const FAMILY_LABEL: Record<KindFamily, string> = {
   compte: "Compte et sécurité",
   gestionnaires: "Gestionnaires",
   reservations: "Réservations",
+  absences: "Absences prévenues",
+  attente: "Liste d'attente",
   perso: "Personnalisés",
 };
 const FAMILY_HINT: Record<KindFamily, string> = {
   compte: "toujours envoyés",
   gestionnaires: "récapitulatifs, fréquence réglée par service",
   reservations: "base commune, surchargeable dans chaque service",
+  absences: "signalement à l'avance, surchargeable dans chaque service",
+  attente: "inscription, créneaux libérés, inscription automatique, échéance",
   perso: "créés ici, routables partout",
 };
 
@@ -190,6 +202,8 @@ export function EchangesConfig({
       compte: 0,
       gestionnaires: 0,
       reservations: 0,
+      absences: 0,
+      attente: 0,
       perso: 0,
     };
     for (const r of rows) c[r.family]++;
@@ -606,6 +620,19 @@ function FamilyIcon({ r }: { r: KindData }) {
       return (
         <span className="rg-ico is-ok">
           <CalendarTimeGlyph size={14} />
+        </span>
+      );
+    // Absence prévenue : orange, comme le macaron « A » des badges de l'agenda.
+    case "absences":
+      return (
+        <span className="rg-ico is-warn">
+          <CalendarTimeGlyph size={14} />
+        </span>
+      );
+    case "attente":
+      return (
+        <span className="rg-ico is-purple">
+          <ListDetailsGlyph size={14} />
         </span>
       );
     default:
