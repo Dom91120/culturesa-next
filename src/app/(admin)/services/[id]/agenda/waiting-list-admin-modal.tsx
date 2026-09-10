@@ -36,14 +36,21 @@ export function WaitingListAdminModal({
     });
   }
 
+  // En-têtes collants (le tableau défile sous eux) : le filet passe en ombre interne,
+  // `border-collapse` ne conservant pas la bordure d'une cellule sticky.
   const th: React.CSSProperties = {
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+    background: "var(--surface)",
+    boxShadow: "inset 0 -1px 0 var(--border)",
     textAlign: "left",
-    borderBottom: "1px solid var(--border)",
     padding: "3px 6px",
     fontSize: ".68rem",
     textTransform: "uppercase",
     letterSpacing: ".04em",
     color: "var(--muted)",
+    whiteSpace: "nowrap",
   };
   const td: React.CSSProperties = {
     borderBottom: "1px solid var(--border)",
@@ -57,9 +64,15 @@ export function WaitingListAdminModal({
     <ModalOverlay
       onClose={onClose}
       labelledBy="waitlist-admin-title"
-      // Ascenseur vertical quand la liste dépasse l'écran : la boîte se limite à la hauteur
-      // visible et défile à l'intérieur (barre fine de .modal-box).
-      boxStyle={{ maxWidth: 760, maxHeight: "calc(100vh - 2rem)", overflowY: "auto" }}
+      // Boîte en colonne bornée à la hauteur visible : titre, description et en-têtes restent
+      // fixes, seul le tableau défile (Dom 2026-09-10). Largeur élargie pour les disponibilités.
+      boxStyle={{
+        maxWidth: 980,
+        maxHeight: "calc(100vh - 2rem)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
     >
       <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer">
         ×
@@ -91,14 +104,14 @@ export function WaitingListAdminModal({
       {rows.length === 0 ? (
         <p style={{ fontSize: ".85rem", color: "var(--muted)" }}>Aucun inscrit.</p>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div className="wl-scroll" style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={th}>#</th>
                 <th style={th}>Usager</th>
                 <th style={th}>Structure</th>
-                <th style={th}>Disponibilités</th>
+                <th style={{ ...th, minWidth: 240 }}>Disponibilités</th>
                 <th style={{ ...th, textAlign: "center" }}>Auto</th>
                 <th style={th}>Inscrit le</th>
                 <th style={th}>Prévenu le</th>

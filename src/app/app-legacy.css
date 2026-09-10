@@ -2832,6 +2832,19 @@ textarea.theme-pending:focus::placeholder {
 }
 /* Dans la modale d'édition des e-mails : la textbox (zone d'édition WYSIWYG) a une hauteur
    bornée avec ascenseur vertical, au lieu de grandir et de pousser toute la modale. */
+/* Zone défilante interne d'une modale (liste d'attente gestionnaire) : même barre fine. */
+.modal-box .wl-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.modal-box .wl-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.modal-box .wl-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
 .modal-box .rte-content {
   max-height: 360px;
   overflow-y: auto;
