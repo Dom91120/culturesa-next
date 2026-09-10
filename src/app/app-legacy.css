@@ -5480,3 +5480,11 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 .cfg-prow.is-selected{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .cfg-prow > span:nth-child(2),.cfg-prow > span:nth-child(3),.cfg-prow > span:nth-child(n+5){text-align:center}
 .cfg-chip-locked{opacity:.55;cursor:default;pointer-events:none}
+/* Statistiques : bandeau de cartes (rg-step avec repli) et titres de panneaux. */
+.cfg-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.6rem;padding-bottom:.85rem}
+.cfg-kpis .rg-step{min-width:0}
+.cfg-kpis .rg-step .v{font-size:1.45rem}
+.cfg-stat-title{font-size:.82rem;font-weight:600;align-items:flex-start;gap:.6rem}
+.cfg-stat-title .rg-ico{width:24px;height:24px;border-radius:6px;margin-top:-2px}
+.cfg-stat-hint{display:block;font-size:.68rem;font-weight:400;color:var(--muted);margin-top:2px;letter-spacing:0}
+.cfg-date{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;color:var(--muted);letter-spacing:0;text-transform:none;font-weight:400}

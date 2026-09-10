@@ -49,32 +49,16 @@ export function StatsFilters({
     setParams({ from: p?.dateStart ?? null, to: p?.dateEnd ?? null });
   }
 
-  const inputStyle: React.CSSProperties = {
-    fontSize: ".8rem",
-    padding: "3px 6px",
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--surface1)",
-    color: "var(--text)",
-  };
-
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: ".75rem",
-        flexWrap: "wrap",
-        alignItems: "center",
-        marginBottom: "1rem",
-      }}
-    >
+    <div className="acct-toolbar" style={{ margin: ".6rem 0 .85rem" }}>
       {/* Exercice : filtre principal — définit la plage de dates des stats. Le changer
           réinitialise les affinages manuels (from/to). */}
       {exercices.length > 0 && (
         <select
           value={selectedExerciceId ?? ""}
           onChange={(e) => setParams({ exercice: e.target.value || null, from: null, to: null })}
-          style={{ ...inputStyle, fontWeight: 600 }}
+          className="cfg-select"
+          style={{ fontWeight: 600 }}
           aria-label="Exercice"
         >
           {exercices.map((ex) => (
@@ -85,31 +69,15 @@ export function StatsFilters({
         </select>
       )}
 
-      {/* Type */}
-      <div
-        style={{
-          display: "inline-flex",
-          gap: 2,
-          background: "var(--surface2)",
-          borderRadius: 8,
-          padding: 2,
-        }}
-      >
+      {/* Type : puces, comme les filtres d'Échanges. */}
+      <div style={{ display: "inline-flex", gap: ".3rem" }}>
         {TYPES.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setParams({ type: t.key === "all" ? null : t.key })}
-            className="btn"
-            style={{
-              fontSize: ".76rem",
-              padding: "3px 10px",
-              borderRadius: 6,
-              border: "none",
-              background: (type || "all") === t.key ? "var(--accent)" : "transparent",
-              color: (type || "all") === t.key ? "#fff" : "var(--text)",
-              cursor: "pointer",
-            }}
+            aria-pressed={(type || "all") === t.key}
+            className={`acct-chip${(type || "all") === t.key ? " is-on" : ""}`}
           >
             {t.label}
           </button>
@@ -121,7 +89,7 @@ export function StatsFilters({
         <select
           value=""
           onChange={(e) => onPeriod(e.target.value)}
-          style={inputStyle}
+          className="cfg-select"
           aria-label="Période"
         >
           <option value="">Période…</option>
@@ -134,47 +102,31 @@ export function StatsFilters({
       )}
 
       {/* Plage de dates */}
-      <label
-        style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          display: "inline-flex",
-          gap: 4,
-          alignItems: "center",
-        }}
-      >
+      <label className="cfg-date">
         Du
         <input
           type="date"
+          className="cfg-select"
           value={dateFrom}
           onChange={(e) => setParams({ from: e.target.value || null })}
-          style={inputStyle}
         />
       </label>
-      <label
-        style={{
-          fontSize: ".78rem",
-          color: "var(--muted)",
-          display: "inline-flex",
-          gap: 4,
-          alignItems: "center",
-        }}
-      >
+      <label className="cfg-date">
         Au
         <input
           type="date"
+          className="cfg-select"
           value={dateTo}
           onChange={(e) => setParams({ to: e.target.value || null })}
-          style={inputStyle}
         />
       </label>
 
       {(type || dateFrom || dateTo) && (
         <button
           type="button"
-          className="btn"
+          className="btn btn-ghost"
           onClick={() => router.push(pathname)}
-          style={{ ...inputStyle, cursor: "pointer", color: "var(--muted)" }}
+          style={{ padding: ".18rem .55rem", fontSize: ".66rem", color: "var(--muted)" }}
         >
           Réinitialiser
         </button>

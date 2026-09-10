@@ -1,8 +1,8 @@
 "use client";
 
 const ICON: React.SVGProps<SVGSVGElement> = {
-  width: 16,
-  height: 16,
+  width: 15,
+  height: 15,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
@@ -13,22 +13,16 @@ const ICON: React.SVGProps<SVGSVGElement> = {
 };
 
 export function StatsToolbar({ exportHref }: { exportHref: string }) {
-  // Boutons icône seule (sans libellé) ; le nom accessible vient d'aria-label / title.
-  const btn: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "6px 8px",
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--surface1)",
-    color: "var(--text)",
-    cursor: "pointer",
-    textDecoration: "none",
-  };
+  // Boutons icône seule (sans libellé), en pictogrammes d'action comme les listes RGPD /
+  // Échanges ; le nom accessible vient d'aria-label / title.
   return (
-    <div className="no-print" style={{ display: "flex", gap: ".5rem" }}>
-      <a href={exportHref} style={btn} title="Exporter en CSV" aria-label="Exporter en CSV">
+    <div className="no-print ms-acts" style={{ opacity: 1 }}>
+      <a
+        href={exportHref}
+        className="acct-action"
+        title="Exporter en CSV"
+        aria-label="Exporter en CSV"
+      >
         <svg {...ICON}>
           <title>Exporter en CSV</title>
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -39,7 +33,7 @@ export function StatsToolbar({ exportHref }: { exportHref: string }) {
       <button
         type="button"
         onClick={() => window.print()}
-        style={btn}
+        className="acct-action"
         title="Imprimer"
         aria-label="Imprimer"
       >

@@ -1,4 +1,13 @@
 import { notFound } from "next/navigation";
+import {
+  AlertGlyph,
+  CalendarTimeGlyph,
+  ChartBarGlyph,
+  HistoryGlyph,
+  HourglassGlyph,
+  ListDetailsGlyph,
+  TargetGlyph,
+} from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
 import {
   currentExerciceIdForService,
@@ -6,6 +15,7 @@ import {
   pickEligibleExercices,
 } from "@/server/services/exercice";
 import { getServiceStats, type LabeledCount } from "@/server/services/stats";
+import { UsersGlyph } from "../../../users/account-ui";
 import { parseStatsDate, parseStatsType } from "./params";
 import { StatsFilters } from "./stats-filters";
 import { StatsToolbar } from "./stats-toolbar";
@@ -35,62 +45,31 @@ function MetricCard({
   color,
   sub,
   hint,
+  icon,
 }: {
   value: number | string;
   label: string;
   color?: string;
   sub?: string;
   hint?: string;
+  icon?: React.ReactNode;
 }) {
+  const tint = color ?? "var(--accent)";
   return (
-    <div
-      title={hint}
-      style={{
-        flex: 1,
-        minWidth: 120,
-        position: "relative",
-        background: "var(--surface1)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius)",
-        padding: "1rem 1.1rem",
-        overflow: "hidden",
-        cursor: hint ? "help" : undefined,
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 3,
-          background: color ?? "var(--accent)",
-        }}
-      />
-      <div
-        style={{
-          fontSize: "1.7rem",
-          fontWeight: 700,
-          color: color ?? "var(--text)",
-          lineHeight: 1.1,
-        }}
+    <div className="rg-step" title={hint} style={{ cursor: hint ? "help" : undefined }}>
+      <span
+        className="n"
+        style={{ background: `color-mix(in srgb, ${tint} 18%, transparent)`, color: tint }}
       >
-        {value}
+        {icon ?? <ChartBarGlyph size={13} />}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div className="l">{label}</div>
+        <div className="v" style={{ color: tint }}>
+          {value}
+        </div>
+        {sub && <div className="s">{sub}</div>}
       </div>
-      <div
-        style={{
-          fontSize: ".62rem",
-          color: "var(--muted)",
-          textTransform: "uppercase",
-          letterSpacing: ".08em",
-          marginTop: ".25rem",
-        }}
-      >
-        {label}
-      </div>
-      {sub && (
-        <div style={{ fontSize: ".7rem", color: "var(--muted)", marginTop: ".3rem" }}>{sub}</div>
-      )}
     </div>
   );
 }
@@ -277,6 +256,37 @@ function Legend({
   );
 }
 
+type Tone = "ok" | "warn" | "danger" | "info" | "purple" | "neutral";
+
+/** Titre de panneau : pictogramme teinté (comme les lignes d'Échanges), titre, aide en gris. */
+function PanelTitle({
+  title,
+  hint,
+  tone = "ok",
+  icon,
+}: {
+  title: string;
+  hint?: string;
+  tone?: Tone;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="panel-title cfg-stat-title">
+      <span className={`rg-ico is-${tone}`}>{icon ?? <ChartBarGlyph size={14} />}</span>
+      <span style={{ minWidth: 0 }}>
+        {title}
+        {hint && <span className="cfg-stat-hint">{hint}</span>}
+      </span>
+    </div>
+  );
+}
+
+const EMPTY = (
+  <p style={{ fontSize: ".78rem", color: "var(--muted)", fontStyle: "italic", margin: 0 }}>
+    Aucune donnée.
+  </p>
+);
+
 function DonutPanel({
   title,
   data,
@@ -285,6 +295,8 @@ function DonutPanel({
   centerColor,
   centerValueSize,
   palette = PALETTE,
+  tone,
+  icon,
 }: {
   title: string;
   data: LabeledCount[];
@@ -293,17 +305,16 @@ function DonutPanel({
   centerColor?: string;
   centerValueSize?: string;
   palette?: string[];
+  tone?: Tone;
+  icon?: React.ReactNode;
 }) {
   const colored = data.map((d, i) => ({ ...d, color: d.color ?? palette[i % palette.length] }));
   const empty = colored.every((d) => d.value === 0);
   return (
     <div className="panel">
-      <div className="panel-title" style={{ fontSize: ".82rem" }}>
-        <span className="dot" />
-        {title}
-      </div>
+      <PanelTitle title={title} tone={tone} icon={icon} />
       {empty ? (
-        <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune donnée.</p>
+        EMPTY
       ) : (
         <div
           style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: ".85rem" }}
@@ -419,29 +430,21 @@ function Panel({
   title,
   hint,
   empty,
+  tone,
+  icon,
   children,
 }: {
   title: string;
   hint?: string;
   empty: boolean;
+  tone?: Tone;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="panel">
-      <div className="panel-title" style={{ fontSize: ".82rem" }}>
-        <span className="dot" />
-        {title}
-      </div>
-      {hint && (
-        <div style={{ fontSize: ".68rem", color: "var(--muted)", margin: "-.35rem 0 .6rem" }}>
-          {hint}
-        </div>
-      )}
-      {empty ? (
-        <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Aucune donnée.</p>
-      ) : (
-        children
-      )}
+      <PanelTitle title={title} hint={hint} tone={tone} icon={icon} />
+      {empty ? EMPTY : children}
     </div>
   );
 }
@@ -666,9 +669,12 @@ export default async function StatsPage({
           flexWrap: "wrap",
         }}
       >
-        <div className="panel-title" style={{ marginBottom: 0 }}>
-          <span className="dot" />
-          Statistiques — {service.label}
+        <div className="panel-title" style={{ marginBottom: 0, gap: ".6rem" }}>
+          <span className="rg-ico is-ok">
+            <ChartBarGlyph size={16} />
+          </span>
+          Statistiques
+          <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {service.label}</span>
         </div>
         <StatsToolbar exportHref={exportHref} />
       </div>
@@ -682,14 +688,25 @@ export default async function StatsPage({
         selectedExerciceId={selectedExercice?.id ?? null}
       />
 
-      {/* Bandeau KPIs */}
-      <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-        <MetricCard value={stats.total} label="Séances" sub={`${moyParInscrit} / inscrit`} />
-        <MetricCard value={stats.distinctUsers} label="Inscrits distincts" color="#5ab4e8" />
+      {/* Bandeau KPIs : cartes de la famille RGPD (pictogramme rond, libellé, valeur, précision). */}
+      <div className="rg-steps cfg-kpis">
+        <MetricCard
+          value={stats.total}
+          label="Séances"
+          sub={`${moyParInscrit} / inscrit`}
+          icon={<CalendarTimeGlyph size={13} />}
+        />
+        <MetricCard
+          value={stats.distinctUsers}
+          label="Inscrits distincts"
+          color="#5ab4e8"
+          icon={<UsersGlyph size={13} />}
+        />
         <MetricCard
           value={stats.enfants}
           label="Enfants distincts"
           color="#e8a45a"
+          icon={<UsersGlyph size={13} />}
           hint="Effectif estimé : chaque inscrit compte une seule fois, avec l'effectif de sa réservation la plus nombreuse (récurrent ou re-réservations ne comptent qu'une fois)"
         />
         <MetricCard
@@ -704,6 +721,7 @@ export default async function StatsPage({
             value={stats.accompagnants}
             label="Accompagnants"
             color="#a07dd4"
+            icon={<UsersGlyph size={13} />}
             hint="Effectif estimé, même règle que les enfants : une seule fois par inscrit (sa réservation la plus accompagnée)"
           />
         )}
@@ -711,6 +729,7 @@ export default async function StatsPage({
           value={stats.avgFill != null ? `${stats.avgFill}%` : "—"}
           label="Remplissage moyen"
           color="#6dceaa"
+          icon={<TargetGlyph size={13} />}
           hint="Occupation moyenne (jauge) des créneaux réservés"
         />
         {stats.tauxAbsence != null && (
@@ -718,6 +737,7 @@ export default async function StatsPage({
             value={`${stats.tauxAbsence}%`}
             label="Taux d'absence"
             color={C_ABSENT}
+            icon={<AlertGlyph size={13} />}
             hint="Absents / (présents + absents), séances pointées"
           />
         )}
@@ -726,11 +746,17 @@ export default async function StatsPage({
             value={stats.absencesPrevenues}
             label="Absences prévenues"
             color={C_ABSENT_PREVENU}
+            icon={<CalendarTimeGlyph size={13} />}
             hint="Séances pour lesquelles une absence a été signalée à l'avance (par l'usager ou par un gestionnaire), séances à venir comprises"
           />
         )}
         {stats.pending > 0 && (
-          <MetricCard value={stats.pending} label="Demandes en attente" color="var(--warn)" />
+          <MetricCard
+            value={stats.pending}
+            label="Demandes en attente"
+            color="var(--warn)"
+            icon={<HourglassGlyph size={13} />}
+          />
         )}
         {/* Liste d'attente (Dom 2026-09-06 / 07) : en attente (état du jour), placés, puis
             sans place — ce dernier compteur se lit en FIN de période ou d'exercice, une fois
@@ -740,6 +766,7 @@ export default async function StatsPage({
             value={wl.waitingNow}
             label="En attente aujourd'hui"
             color="var(--warn)"
+            icon={<ListDetailsGlyph size={13} />}
             sub={wl.waitingAvgDays != null ? `depuis ${wl.waitingAvgDays} j en moyenne` : undefined}
             hint="Usagers actuellement inscrits sur la liste d'attente (état du jour, quel que soit le filtre)"
           />
@@ -749,6 +776,7 @@ export default async function StatsPage({
             value={wl.placed}
             label="Placés depuis la liste"
             color={C_PRESENT}
+            icon={<ListDetailsGlyph size={13} />}
             sub={wl.placedAvgDays != null ? `${wl.placedAvgDays} j en moyenne` : undefined}
             hint="Inscriptions ayant abouti à une réservation (inscription automatique, ou réservation obtenue après l'inscription) et délai moyen inscription → réservation"
           />
@@ -758,6 +786,7 @@ export default async function StatsPage({
             value={wl.noPlace}
             label="Sans place (périodes échues)"
             color={C_ABSENT}
+            icon={<ListDetailsGlyph size={13} />}
             sub={
               wl.noPlaceDetail.length > 0
                 ? wl.noPlaceDetail.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(" · ")
@@ -824,6 +853,8 @@ export default async function StatsPage({
         {wl && wl.outcomes.length > 0 && (
           <DonutPanel
             title="Liste d'attente — issue des inscriptions"
+            tone="danger"
+            icon={<ListDetailsGlyph size={14} />}
             data={wl.outcomes.map((o) => ({
               ...o,
               color:
@@ -845,6 +876,7 @@ export default async function StatsPage({
 
         <DonutPanel
           title="Répartition par jour"
+          icon={<CalendarTimeGlyph size={14} />}
           data={forDonut(stats.byDay, 6)}
           centerValue={peakDay ? peakDay.label : "—"}
           centerLabel="jour fort"
@@ -853,6 +885,7 @@ export default async function StatsPage({
 
         <DonutPanel
           title="Top structures"
+          icon={<UsersGlyph size={14} />}
           data={forDonut(stats.topStructures, 5)}
           centerValue={String(stats.distinctUsers)}
           centerLabel="inscrits"
@@ -870,17 +903,26 @@ export default async function StatsPage({
         <Panel
           title="Évolution mensuelle"
           hint="Nombre de séances par mois"
+          tone="warn"
+          icon={<HistoryGlyph size={14} />}
           empty={stats.byMonth.length === 0}
         >
           <AreaChart data={stats.byMonth} color="#e8a45a" />
         </Panel>
 
-        <Panel title="Remplissage moyen par mois (séances)" empty={stats.fillByMonth.length === 0}>
+        <Panel
+          title="Remplissage moyen par mois (séances)"
+          tone="warn"
+          icon={<TargetGlyph size={14} />}
+          empty={stats.fillByMonth.length === 0}
+        >
           <FillCurve data={stats.fillByMonth} color="#e8a45a" />
         </Panel>
 
         <Panel
           title="Remplissage moyen par structure (jauge)"
+          tone="purple"
+          icon={<TargetGlyph size={14} />}
           empty={stats.fillByStructure.length === 0}
         >
           {stats.fillByStructure.map((r) => (
@@ -900,6 +942,8 @@ export default async function StatsPage({
           <Panel
             title="Liste d'attente — sans place par catégorie"
             hint="Inscriptions closes sans réservation (périodes échues, retraits), catégorie figée à la clôture"
+            tone="danger"
+            icon={<ListDetailsGlyph size={14} />}
             empty={wl.noPlaceByDemandeur.length === 0}
           >
             {wl.noPlaceByDemandeur.map((r) => (
@@ -918,6 +962,8 @@ export default async function StatsPage({
           <Panel
             title="Liste d'attente — sans place par structure"
             hint="Inscriptions closes sans réservation (périodes échues, retraits), structure figée à la clôture"
+            tone="purple"
+            icon={<ListDetailsGlyph size={14} />}
             empty={wl.noPlaceByStructure.length === 0}
           >
             {wl.noPlaceByStructure.map((r) => (
@@ -937,13 +983,15 @@ export default async function StatsPage({
           <Panel
             title="Inscriptions en liste d'attente par mois"
             hint="Toutes issues confondues, à la date d'inscription"
+            tone="danger"
+            icon={<ListDetailsGlyph size={14} />}
             empty={wl.byMonth.length === 0}
           >
             <AreaChart data={wl.byMonth} color="#e06b6b" />
           </Panel>
         )}
 
-        <Panel title="Top niveaux" empty={stats.topNiveaux.length === 0}>
+        <Panel title="Top niveaux" tone="info" empty={stats.topNiveaux.length === 0}>
           {stats.topNiveaux.map((r) => (
             <BarRow key={r.label} label={r.label} value={r.value} max={niveauMax} color="#5ab4e8" />
           ))}
@@ -951,6 +999,8 @@ export default async function StatsPage({
 
         <Panel
           title="Effectifs (enfants) par exercice"
+          tone="purple"
+          icon={<UsersGlyph size={14} />}
           empty={stats.effectifsByExercice.length === 0}
         >
           {/* Total = cumul des séances (comme « Fréquentation enfants ») ;
