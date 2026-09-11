@@ -79,7 +79,8 @@ export default async function EditionsAttenteHistoriquePage({
                     Clos le
                   </th>
                   <th style={{ width: 42, textAlign: "right" }}>Délai</th>
-                  <th style={{ width: "14%" }}>Issue</th>
+                  {/* 160 px : « Retiré de la liste d'attente par le gestionnaire » tient sur deux lignes. */}
+                  <th style={{ width: 160 }}>Issue</th>
                   <th style={{ width: "14%" }}>Réservation</th>
                 </tr>
               </thead>
