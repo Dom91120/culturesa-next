@@ -72,8 +72,12 @@ export default async function EditionsAttenteHistoriquePage({
                   <th style={{ width: "13%" }}>Disponibilités</th>
                   <th style={{ width: "12%" }}>Périodes</th>
                   <th style={{ width: 46, textAlign: "center" }}>Auto</th>
-                  <th style={{ width: 88 }}>Inscrit le</th>
-                  <th style={{ width: 88 }}>Clos le</th>
+                  {/* Deux dates empilées dans une seule colonne (gain de place, Dom 2026-09-11). */}
+                  <th style={{ width: 88, lineHeight: 1.2 }}>
+                    Inscrit le
+                    <br />
+                    Clos le
+                  </th>
                   <th style={{ width: 42, textAlign: "right" }}>Délai</th>
                   <th style={{ width: "14%" }}>Issue</th>
                   <th style={{ width: "14%" }}>Réservation</th>
@@ -97,8 +101,11 @@ export default async function EditionsAttenteHistoriquePage({
                     <td style={{ textAlign: "center" }}>
                       {r.autoInscription ? <span className="ms-pill is-ok">auto</span> : "—"}
                     </td>
-                    <td style={tdNoWrap}>{r.inscritLe}</td>
-                    <td style={tdNoWrap}>{r.clotureLe}</td>
+                    <td style={{ ...tdNoWrap, lineHeight: 1.2 }}>
+                      {r.inscritLe}
+                      <br />
+                      <span style={muted}>{r.clotureLe}</span>
+                    </td>
                     <td style={{ textAlign: "right" }}>{r.delaiJours} j</td>
                     <td>
                       {/* Libellé long dans une colonne étroite : la pastille passe à la ligne
