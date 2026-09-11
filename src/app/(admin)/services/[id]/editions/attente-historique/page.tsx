@@ -71,10 +71,10 @@ export default async function EditionsAttenteHistoriquePage({
                   <th style={{ width: "12%" }}>Structure</th>
                   <th style={{ width: "13%" }}>Disponibilités</th>
                   <th style={{ width: "12%" }}>Périodes</th>
-                  <th style={{ width: 44, textAlign: "center" }}>Auto</th>
-                  <th style={{ width: 96 }}>Inscrit le</th>
-                  <th style={{ width: 96 }}>Clos le</th>
-                  <th style={{ width: 54, textAlign: "right" }}>Délai</th>
+                  <th style={{ width: 46, textAlign: "center" }}>Auto</th>
+                  <th style={{ width: 88 }}>Inscrit le</th>
+                  <th style={{ width: 88 }}>Clos le</th>
+                  <th style={{ width: 42, textAlign: "right" }}>Délai</th>
                   <th style={{ width: "14%" }}>Issue</th>
                   <th style={{ width: "14%" }}>Réservation</th>
                 </tr>
