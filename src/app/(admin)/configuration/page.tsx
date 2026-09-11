@@ -101,8 +101,8 @@ export default async function ConfigurationPage() {
         </div>
         <div className="rg-foot">
           <span style={{ lineHeight: 1.45 }}>
-            Une tuile ouvre l&apos;éditeur du référentiel. La ligne sous l&apos;effectif signale ce
-            qui mérite un coup d&apos;œil : un service sans e-mail de contact reçoit les e-mails du
+            Une tuile ouvre l&apos;éditeur du référentiel. La ligne sous le titre signale ce qui
+            mérite un coup d&apos;œil : un service sans e-mail de contact reçoit les e-mails du
             service sur les comptes de ses gestionnaires ; un demandeur ouvert pendant les vacances
             autorise ses usagers à réserver ces jours-là si le service l&apos;est aussi.
           </span>

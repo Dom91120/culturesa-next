@@ -4562,19 +4562,6 @@ textarea.theme-pending:focus::placeholder {
   font-weight: 600;
   font-size: 0.8rem;
 }
-.cf-tile .n {
-  font-size: 1.35rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-.cf-tile .n small {
-  font-size: 0.68rem;
-  font-weight: 400;
-  color: var(--muted);
-  margin-left: 0.3rem;
-  letter-spacing: 0;
-}
 .cf-tile .s {
   font-size: 0.68rem;
   color: var(--muted);
@@ -4774,7 +4761,6 @@ textarea.theme-pending:focus::placeholder {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 /* Effectif et signalement calés sur le titre (à droite du pictogramme), pas sur le bord. */
-.cf-tile .n,
 .cf-tile .s {
   padding-left: calc(26px + 0.5rem);
 }
@@ -4788,12 +4774,8 @@ textarea.theme-pending:focus::placeholder {
   min-width: 0;
   width: 100%;
 }
-.cf-tile-body .n,
 .cf-tile-body .s {
   padding-left: 0;
-}
-.cf-tile-body .n {
-  flex: 0 0 auto;
 }
 /* Colonne de texte à droite du chiffre : complément (ex. usagers rattachés) puis signalement,
    tous deux calés sur le même bord. */

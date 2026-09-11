@@ -51,13 +51,14 @@ export function ReferentielEntry({
         <span className="cf-tile-open" aria-hidden="true">
           <ArrowUpRightGlyph size={14} />
         </span>
+        {/* Effectif à côté du titre, en gris (Dom 2026-09-11), comme les titres de panneau
+            « Modèles d'e-mails · 11 » ; le corps ne garde que le signalement. */}
         <span className="h">
           {icon}
           {title}
+          <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {count}</span>
         </span>
-        {/* Chiffre en grand à gauche, signalement à sa droite sur la ligne de base (Dom). */}
         <span className="cf-tile-body">
-          <span className="n">{count}</span>
           <span className="cf-tile-txt">
             {countSuffix && <small>{countSuffix}</small>}
             {(Array.isArray(detail) ? detail : [detail]).map((d) => (
