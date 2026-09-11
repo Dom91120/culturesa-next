@@ -5488,7 +5488,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 .cfg-phead,.cfg-prow{display:grid;grid-template-columns:24px 44px 60px minmax(0,1fr) 96px 96px 120px;gap:.6rem;align-items:center}
 .cfg-phead{padding:.3rem 0;margin:0 .5rem;border-bottom:1px solid var(--border);font-size:.66rem;font-weight:600;color:var(--muted)}
 .cfg-phead span:nth-child(2),.cfg-phead span:nth-child(3),.cfg-phead span:nth-child(n+5){text-align:center}
-.cfg-prow{min-height:28px;padding:.15rem .5rem;border-radius:8px;font-size:.78rem;color:var(--text)}
+.cfg-prow{padding:.15rem .5rem;border-radius:8px;font-size:.78rem;color:var(--text)}
 .cfg-prow:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
 .cfg-prow.is-selected{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .cfg-prow > span:nth-child(2),.cfg-prow > span:nth-child(3),.cfg-prow > span:nth-child(n+5){text-align:center}
