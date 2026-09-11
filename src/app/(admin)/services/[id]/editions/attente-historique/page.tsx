@@ -85,7 +85,7 @@ export default async function EditionsAttenteHistoriquePage({
                     <td style={tdNoWrap}>
                       <WhoLabel label={r.usager} email={r.email} sub={r.email || undefined} />
                     </td>
-                    <td>{r.structure || dash}</td>
+                    <td style={{ lineHeight: 1 }}>{r.structure || dash}</td>
                     {/* Listes longues (demi-journées, périodes) : corps réduit pour tenir en
                         moins de lignes dans leurs colonnes étroites. */}
                     <td style={{ fontSize: ".66rem", lineHeight: 1 }}>
