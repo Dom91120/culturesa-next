@@ -4560,9 +4560,16 @@ textarea.theme-pending:focus::placeholder {
   align-items: center;
   gap: 0.5rem;
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.86rem;
 }
-/* Effectif en grand entre le pictogramme et le titre. */
+/* Effectif en grand entre le pictogramme et le titre ; le titre s'aligne sur la ligne de
+   base du chiffre, le pictogramme reste centré. */
+.cf-tile .h {
+  align-items: baseline;
+}
+.cf-tile .h .rg-ico {
+  align-self: center;
+}
 .cf-tile .h .n {
   font-size: 1.35rem;
   font-weight: 700;
