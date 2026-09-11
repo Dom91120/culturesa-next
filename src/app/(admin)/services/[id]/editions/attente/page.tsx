@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import { EditionSummary, Who } from "../edition-header";
-import { isoDateLabel, tdNoWrap, WaitlistEditionHeader, ymdLabel } from "./header";
+import { isoDateLabel, muted, tdNoWrap, WaitlistEditionHeader, ymdLabel } from "./header";
 
 export const metadata = { title: "CultuRésa — Liste d'attente" };
 
@@ -46,10 +46,14 @@ export default async function EditionsAttentePage({ params }: { params: Promise<
                   <th style={{ width: "15%" }}>Structure</th>
                   <th style={{ width: "18%" }}>Disponibilités</th>
                   <th style={{ width: "16%" }}>Périodes souhaitées</th>
-                  <th style={{ width: 50, textAlign: "center" }}>Auto</th>
-                  <th style={{ width: 96 }}>Inscrit le</th>
-                  <th style={{ width: 96 }}>Prévenu le</th>
-                  <th style={{ width: 96 }}>Échéance</th>
+                  <th style={{ width: 46, textAlign: "center" }}>Auto</th>
+                  {/* Deux dates empilées dans une seule colonne, comme l'historique. */}
+                  <th style={{ width: 88, lineHeight: 1.2 }}>
+                    Inscrit le
+                    <br />
+                    Prévenu le
+                  </th>
+                  <th style={{ width: 88 }}>Échéance</th>
                 </tr>
               </thead>
               <tbody>
@@ -59,14 +63,22 @@ export default async function EditionsAttentePage({ params }: { params: Promise<
                     <td style={tdNoWrap}>
                       <Who nom={r.nom} prenom={r.prenom} email={r.email} sub={r.email} />
                     </td>
-                    <td style={tdNoWrap}>{r.structure || r.demandeur || "—"}</td>
-                    <td>{r.dispos.join(", ") || "—"}</td>
-                    <td>{r.periodes.join(", ") || "Toutes"}</td>
+                    <td style={{ lineHeight: 1 }}>{r.structure || r.demandeur || "—"}</td>
+                    {/* Listes longues : corps réduit et interligne simple (comme l'historique). */}
+                    <td style={{ fontSize: ".66rem", lineHeight: 1 }}>
+                      {r.dispos.join(", ") || "—"}
+                    </td>
+                    <td style={{ fontSize: ".66rem", lineHeight: 1 }}>
+                      {r.periodes.join(", ") || "Toutes"}
+                    </td>
                     <td style={{ textAlign: "center" }}>
                       {r.autoInscription ? <span className="ms-pill is-ok">auto</span> : "—"}
                     </td>
-                    <td style={tdNoWrap}>{isoDateLabel(r.createdAt)}</td>
-                    <td style={tdNoWrap}>{isoDateLabel(r.lastNotifiedAt)}</td>
+                    <td style={{ ...tdNoWrap, lineHeight: 1.2 }}>
+                      {isoDateLabel(r.createdAt)}
+                      <br />
+                      <span style={muted}>{isoDateLabel(r.lastNotifiedAt)}</span>
+                    </td>
                     <td style={tdNoWrap}>{ymdLabel(r.echeance)}</td>
                   </tr>
                 ))}
