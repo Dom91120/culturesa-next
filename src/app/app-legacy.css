@@ -4562,6 +4562,13 @@ textarea.theme-pending:focus::placeholder {
   font-weight: 600;
   font-size: 0.8rem;
 }
+/* Effectif en grand entre le pictogramme et le titre. */
+.cf-tile .h .n {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
 .cf-tile .s {
   font-size: 0.68rem;
   color: var(--muted);

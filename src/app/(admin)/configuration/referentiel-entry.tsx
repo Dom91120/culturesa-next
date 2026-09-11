@@ -51,12 +51,12 @@ export function ReferentielEntry({
         <span className="cf-tile-open" aria-hidden="true">
           <ArrowUpRightGlyph size={14} />
         </span>
-        {/* Effectif à côté du titre, en gris (Dom 2026-09-11), comme les titres de panneau
-            « Modèles d'e-mails · 11 » ; le corps ne garde que le signalement. */}
+        {/* Pictogramme, effectif en grand, titre (Dom 2026-09-11) ; le corps de la tuile ne
+            garde que le signalement. */}
         <span className="h">
           {icon}
+          <span className="n">{count}</span>
           {title}
-          <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {count}</span>
         </span>
         <span className="cf-tile-body">
           <span className="cf-tile-txt">
