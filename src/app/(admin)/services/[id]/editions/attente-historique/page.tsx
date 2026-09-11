@@ -86,8 +86,14 @@ export default async function EditionsAttenteHistoriquePage({
                       <WhoLabel label={r.usager} email={r.email} sub={r.email || undefined} />
                     </td>
                     <td style={tdNoWrap}>{r.structure || dash}</td>
-                    <td>{r.dispos.join(", ") || "—"}</td>
-                    <td>{r.periodes.join(", ") || "Toutes"}</td>
+                    {/* Listes longues (demi-journées, périodes) : corps réduit pour tenir en
+                        moins de lignes dans leurs colonnes étroites. */}
+                    <td style={{ fontSize: ".66rem", lineHeight: 1 }}>
+                      {r.dispos.join(", ") || "—"}
+                    </td>
+                    <td style={{ fontSize: ".66rem", lineHeight: 1 }}>
+                      {r.periodes.join(", ") || "Toutes"}
+                    </td>
                     <td style={{ textAlign: "center" }}>
                       {r.autoInscription ? <span className="ms-pill is-ok">auto</span> : "—"}
                     </td>
