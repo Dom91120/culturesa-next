@@ -274,7 +274,7 @@ supprimée depuis, le créneau reste affiché avec la mention de la suppression 
 annulée par l'usager, supprimée par le service ou refusée (avec le nom du gestionnaire), ou
 retirée avec son créneau ou sa période) et les **adresses des
 inscrits** (coordonnées du jour, avec les e-mails prêts à coller dans le champ « Cci » d'une
-messagerie). Les trois premières décrivent l'état du jour ; l'historique et les placements se
+messagerie : le bouton **« Copier »** les met dans le presse-papiers). Les trois premières décrivent l'état du jour ; l'historique et les placements se
 lisent par exercice, à la date d'inscription.
 
 ![Onglet Éditions d'un service : éditions et liste d'attente](img/07-editions-liste.png)

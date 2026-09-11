@@ -5,6 +5,7 @@ import { prisma } from "@/server/db";
 import { listWaitingContacts } from "@/server/services/waiting-list-editions";
 import { tdNoWrap, WaitlistEditionHeader, ymdLabel } from "../attente/header";
 import { dash, EditionSummary, Who } from "../edition-header";
+import { CopyEmails } from "./copy-emails";
 
 export const metadata = { title: "CultuRésa — Adresses des inscrits en liste d'attente" };
 
@@ -72,30 +73,7 @@ export default async function EditionsAttenteAdressesPage({
               </tbody>
             </table>
           </div>
-          {emails.length > 0 && (
-            <div className="no-print">
-              <div className="ms-grp">Adresses e-mail à copier</div>
-              <textarea
-                readOnly
-                rows={Math.min(6, Math.ceil(emails.length / 3) + 1)}
-                value={emails.join("; ")}
-                style={{
-                  width: "100%",
-                  fontSize: ".78rem",
-                  fontFamily: "inherit",
-                  padding: ".5rem .6rem",
-                  borderRadius: 6,
-                  border: "1px solid var(--border)",
-                  background: "var(--surface1)",
-                  color: "var(--text)",
-                  resize: "vertical",
-                }}
-              />
-              <p style={{ fontSize: ".72rem", color: "var(--muted)", margin: ".3rem 0 0" }}>
-                Séparées par « ; » : à coller dans le champ « Cci » de votre messagerie.
-              </p>
-            </div>
-          )}
+          {emails.length > 0 && <CopyEmails emails={emails} />}
         </>
       )}
     </div>
