@@ -95,10 +95,19 @@ export default async function EditionsAttenteHistoriquePage({
                     <td style={tdNoWrap}>{r.clotureLe}</td>
                     <td style={{ textAlign: "right" }}>{r.delaiJours} j</td>
                     <td>
+                      {/* Libellé long dans une colonne étroite : la pastille passe à la ligne
+                          à l'intérieur d'elle-même au lieu de déborder sur la colonne suivante. */}
                       <span
                         className={`ms-pill ${
                           r.issue === "AUTO_BOOKED" || r.issue === "BOOKED" ? "is-ok" : "is-neutral"
                         }`}
+                        style={{
+                          whiteSpace: "normal",
+                          display: "inline-block",
+                          lineHeight: 1.3,
+                          padding: ".15rem .5rem",
+                          textAlign: "left",
+                        }}
                       >
                         {r.issueLabel}
                       </span>
