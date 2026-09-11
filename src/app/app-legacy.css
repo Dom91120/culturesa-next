@@ -5046,6 +5046,11 @@ textarea.theme-pending:focus::placeholder {
 .ed-table tbody tr:hover td {
   background: color-mix(in srgb, var(--text) 3%, transparent);
 }
+/* Pas de filet sous la dernière ligne : le tableau se termine sur le contenu, comme les
+   autres listes (cfg-grid-r, cfg-li). */
+.ed-table tbody tr:last-child td {
+  border-bottom: 0;
+}
 .ed-nowrap {
   white-space: nowrap;
   overflow: hidden;
