@@ -110,7 +110,7 @@ export default async function EditionsAttenteHistoriquePage({
                         style={{
                           whiteSpace: "normal",
                           display: "inline-block",
-                          lineHeight: 1.3,
+                          lineHeight: 1,
                           padding: ".15rem .5rem",
                           textAlign: "left",
                         }}
