@@ -302,6 +302,15 @@ passées (prévu / réalisé, taux de présence et de réalisation, absents pré
 <strong>graphiques</strong> de répartition (par jour, par mois, par structure, par niveau, taux de
 remplissage). Les données sont <strong>filtrables et
 exportables en CSV</strong>.</p>
+<p>Les statistiques comptent des <strong>séances</strong> (une réservation à une date donnée, chaque occurrence
+d&#39;une réservation récurrente comptant une fois). Dès que le nombre de <strong>créneaux</strong> proposés
+diffère du nombre de séances — créneaux restés libres, ou créneaux à jauge accueillant plusieurs
+réservations — un volet <strong>créneaux</strong> s&#39;ajoute : compteurs « Créneaux proposés » (avec les
+libres, dont ceux déjà passés) et « Créneaux réservés » (part des créneaux portant au moins une
+séance), un anneau <strong>« Créneaux — réservés / libres »</strong> et un tableau <strong>« Créneaux par mois »</strong>
+(proposés, réservés, libres, séances). Le taux de créneaux réservés mesure l&#39;usage de l&#39;offre ;
+il ne se confond pas avec le remplissage, qui mesure la jauge des seuls créneaux réservés.
+L&#39;export CSV contient toujours ce volet.</p>
 <p>Si le service utilise la <strong>liste d&#39;attente</strong>, le tableau de bord montre aussi qui n&#39;a <strong>pas
 trouvé de place</strong> : compteurs « En attente aujourd&#39;hui », « Placés depuis la liste »
 (inscription automatique ou réservation obtenue ensuite, avec le délai moyen) et

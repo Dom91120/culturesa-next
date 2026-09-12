@@ -63,6 +63,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     section("Top structures", "Réservations", stats.topStructures);
     section("Top niveaux", "Réservations", stats.topNiveaux);
     section("Par thème", "Réservations", stats.topThemes);
+    // Créneaux (offre) : toujours exporté — l'écran ne l'affiche que si créneaux ≠ séances.
+    const sl = stats.slots;
+    lines.push([]);
+    lines.push(["Créneaux (offre)", "Valeur"]);
+    lines.push(["Créneaux proposés", String(sl.creneaux)]);
+    lines.push(["Créneaux réservés (au moins une séance)", String(sl.creneauxReserves)]);
+    lines.push(["Créneaux libres", String(sl.creneauxLibres)]);
+    lines.push(["Créneaux libres déjà passés", String(sl.creneauxLibresPasses)]);
+    lines.push([
+      "Taux de créneaux réservés (%)",
+      sl.tauxOccupation != null ? String(sl.tauxOccupation) : "",
+    ]);
+    lines.push([]);
+    lines.push(["Créneaux par mois", "Proposés", "Réservés", "Libres", "Séances"]);
+    for (const r of sl.byMonth) {
+      lines.push([
+        r.label,
+        String(r.creneaux),
+        String(r.reserves),
+        String(r.creneaux - r.reserves),
+        String(r.seances),
+      ]);
+    }
     section("Remplissage moyen par mois (%)", "%", stats.fillByMonth);
     section("Remplissage moyen par structure (%)", "%", stats.fillByStructure);
     // Deux lectures par exercice : Total = cumul des séances, Distincts = 1 fois par inscrit.

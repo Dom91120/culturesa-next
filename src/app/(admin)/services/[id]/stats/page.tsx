@@ -648,6 +648,14 @@ export default async function StatsPage({
   const moyParInscrit =
     stats.distinctUsers > 0 ? (stats.total / stats.distinctUsers).toFixed(1) : "0";
   const peakDay = [...stats.byDay].sort((a, b) => b.value - a.value)[0];
+  // Créneaux (offre) : volet affiché seulement quand le nombre de créneaux proposés
+  // diffère du nombre de séances — des créneaux restés libres, ou une jauge accueillant
+  // plusieurs réservations par créneau (Dom 2026-09-12). Égaux = chaque créneau porte
+  // exactement une séance, le volet n'apprendrait rien.
+  const sl = stats.slots;
+  const showSlots = sl.creneaux !== stats.total;
+  const seancesParCreneau =
+    sl.creneauxReserves > 0 ? (stats.total / sl.creneauxReserves).toFixed(1) : null;
   // Liste d'attente : null tant que le service n'a jamais eu d'inscription.
   const wl = stats.waitlist;
   const wlDemMax = wl ? Math.max(1, ...wl.noPlaceByDemandeur.map((r) => r.value)) : 1;
@@ -696,6 +704,36 @@ export default async function StatsPage({
           sub={`${moyParInscrit} / inscrit`}
           icon={<CalendarTimeGlyph size={13} />}
         />
+        {showSlots && (
+          <MetricCard
+            value={sl.creneaux}
+            label="Créneaux proposés"
+            color="#8a93a8"
+            icon={<CalendarTimeGlyph size={13} />}
+            sub={
+              sl.creneauxLibres > 0
+                ? `${sl.creneauxLibres} libre${sl.creneauxLibres > 1 ? "s" : ""}${
+                    sl.creneauxLibresPasses > 0
+                      ? ` · ${sl.creneauxLibresPasses} passé${sl.creneauxLibresPasses > 1 ? "s" : ""}`
+                      : ""
+                  }`
+                : seancesParCreneau
+                  ? `${seancesParCreneau} séance${Number(seancesParCreneau) >= 2 ? "s" : ""} / créneau`
+                  : undefined
+            }
+            hint="Créneaux datés ouverts à la réservation sur la plage (chaque occurrence d'un créneau récurrent compte une fois). Libres = sans aucune séance ; passés = libres et déjà échus"
+          />
+        )}
+        {showSlots && sl.tauxOccupation != null && (
+          <MetricCard
+            value={`${sl.tauxOccupation}%`}
+            label="Créneaux réservés"
+            color="#6dceaa"
+            icon={<TargetGlyph size={13} />}
+            sub={`${sl.creneauxReserves} sur ${sl.creneaux}`}
+            hint="Part des créneaux proposés portant au moins une séance (à ne pas confondre avec le remplissage, qui mesure la jauge des créneaux réservés)"
+          />
+        )}
         <MetricCard
           value={stats.distinctUsers}
           label="Inscrits distincts"
@@ -850,6 +888,34 @@ export default async function StatsPage({
           />
         )}
 
+        {showSlots && sl.creneaux > 0 && (
+          <DonutPanel
+            title="Créneaux — réservés / libres"
+            tone="neutral"
+            icon={<CalendarTimeGlyph size={14} />}
+            data={[
+              { label: "Réservés", value: sl.creneauxReserves, color: "#6dceaa" },
+              ...(sl.creneauxLibresPasses > 0
+                ? [
+                    {
+                      label: "Libres passés",
+                      value: sl.creneauxLibresPasses,
+                      color: C_ABSENT,
+                    },
+                    {
+                      label: "Libres à venir",
+                      value: sl.creneauxLibres - sl.creneauxLibresPasses,
+                      color: C_NONE,
+                    },
+                  ]
+                : [{ label: "Libres", value: sl.creneauxLibres, color: C_NONE }]),
+            ]}
+            centerValue={sl.tauxOccupation != null ? `${sl.tauxOccupation}%` : "—"}
+            centerLabel="réservés"
+            centerColor="#6dceaa"
+          />
+        )}
+
         {wl && wl.outcomes.length > 0 && (
           <DonutPanel
             title="Liste d'attente — issue des inscriptions"
@@ -909,6 +975,68 @@ export default async function StatsPage({
         >
           <AreaChart data={stats.byMonth} color="#e8a45a" />
         </Panel>
+
+        {showSlots && (
+          <Panel
+            title="Créneaux par mois"
+            hint="Créneaux proposés, réservés (au moins une séance), libres, et séances portées par ces créneaux"
+            tone="neutral"
+            icon={<CalendarTimeGlyph size={14} />}
+            empty={sl.byMonth.length === 0}
+          >
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".78rem" }}>
+              <thead>
+                <tr
+                  style={{
+                    color: "var(--muted)",
+                    fontSize: ".62rem",
+                    textTransform: "uppercase",
+                    letterSpacing: ".08em",
+                  }}
+                >
+                  <th style={{ textAlign: "left", fontWeight: 600, padding: ".2rem 0" }}>Mois</th>
+                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                    Proposés
+                  </th>
+                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                    Réservés
+                  </th>
+                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                    Libres
+                  </th>
+                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                    Séances
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sl.byMonth.map((r, i) => (
+                  <tr key={`${r.label}-${i}`} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ color: "var(--muted)", padding: ".35rem 0" }}>{r.label}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: "#8a93a8" }}>
+                      {r.creneaux}
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: "#6dceaa" }}>
+                      {r.reserves}
+                    </td>
+                    <td
+                      style={{
+                        textAlign: "right",
+                        fontWeight: 600,
+                        color: r.creneaux - r.reserves > 0 ? C_ABSENT : "var(--muted)",
+                      }}
+                    >
+                      {r.creneaux - r.reserves}
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: "#e8a45a" }}>
+                      {r.seances}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        )}
 
         <Panel
           title="Remplissage moyen par mois (séances)"

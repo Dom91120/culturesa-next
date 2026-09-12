@@ -2,6 +2,7 @@ import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
 import { gaugeUnits } from "@/lib/gauge";
 import { schoolYearLabel } from "@/lib/school-year";
+import { computeSlotStats, type SlotStats } from "@/lib/slot-stats";
 import { computeWaitlistStats, type WaitlistStats } from "@/lib/waiting-list-stats";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
@@ -87,6 +88,11 @@ type ServiceStats = {
   // inscriptions ouvertes), filtre de dates sur la date d'INSCRIPTION, indépendant du
   // type — cf. lib/waiting-list-stats. null si le service n'a jamais eu d'inscription.
   waitlist: WaitlistStats | null;
+  // Créneaux (l'OFFRE, par opposition aux séances réservées) : créneaux datés proposés
+  // sur la plage, réservés / libres, taux d'occupation, par mois — cf. lib/slot-stats.
+  // L'écran ne montre ce volet que si créneaux ≠ séances (créneaux restés libres, ou
+  // jauge accueillant plusieurs réservations par créneau).
+  slots: SlotStats;
 };
 
 /** Date UTC → 'YYYY-MM-DD'. */
@@ -370,6 +376,36 @@ export async function getServiceStats(
   // d'anneau exact, comme distinctUsers pour le ring « Top structures ».
   const themedCount = [...themeMap.values()].reduce((s, v) => s + v, 0);
 
+  // ── Créneaux (offre) ─────────────────────────────────────────────────────────
+  // Créneaux DATÉS du service sur la plage (miroirs des récurrents + ponctuels) : ils
+  // existent en base indépendamment des réservations (matérialisés à la création du
+  // récurrent / de la période). « Réservé » = porte au moins une séance, quel que soit
+  // le type de la réservation (une ponctuelle posée sur un miroir occupe bien le
+  // créneau) ; le filtre de type s'applique au CRÉNEAU (miroir = récurrent).
+  const slotRows = await prisma.slot.findMany({
+    where: {
+      serviceId,
+      slotDate: {
+        not: null,
+        ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+        ...(dateTo ? { lte: new Date(`${dateTo}T00:00:00.000Z`) } : {}),
+      },
+    },
+    select: { id: true, slotDate: true, parentSlotId: true },
+  });
+  const seancesBySlot = new Map<string, number>();
+  for (const b of occAll) {
+    if (b.slot.slotDate == null || !inRange(ymd(b.slot.slotDate), dateFrom, dateTo)) continue;
+    seancesBySlot.set(b.slot.id, (seancesBySlot.get(b.slot.id) ?? 0) + 1);
+  }
+  const slots = computeSlotStats(
+    slotRows.flatMap((s) =>
+      s.slotDate ? [{ id: s.id, date: ymd(s.slotDate), parentSlotId: s.parentSlotId }] : [],
+    ),
+    seancesBySlot,
+    { type, dateFrom, dateTo, today },
+  );
+
   // ── Liste d'attente ───────────────────────────────────────────────────────────
   const [wlLogs, wlLive] = await Promise.all([
     prisma.waitingListLog.findMany({
@@ -443,5 +479,6 @@ export async function getServiceStats(
     fillByStructure,
     effectifsByExercice,
     waitlist,
+    slots,
   };
 }
