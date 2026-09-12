@@ -295,13 +295,15 @@ exportables en CSV**.
 
 Les statistiques comptent des **séances** (une réservation à une date donnée, chaque occurrence
 d'une réservation récurrente comptant une fois). Dès que le nombre de **créneaux** proposés
-diffère du nombre de séances — créneaux restés libres, ou créneaux à jauge accueillant plusieurs
-réservations — un volet **créneaux** s'ajoute : compteurs « Créneaux proposés » (avec les
-libres, dont ceux déjà passés) et « Créneaux réservés » (part des créneaux portant au moins une
-séance), un anneau **« Créneaux — réservés / libres »** et un tableau **« Créneaux par mois »**
-(proposés, réservés, libres, séances). Le taux de créneaux réservés mesure l'usage de l'offre ;
-il ne se confond pas avec le remplissage, qui mesure la jauge des seuls créneaux réservés.
-L'export CSV contient toujours ce volet.
+diffère du nombre de séances, un volet **créneaux** s'ajoute. Un créneau **récurrent compte
+pour un seul créneau**, comme dans la liste des créneaux ouverts des Éditions, et un ponctuel
+pour un ; un récurrent est « réservé » dès qu'une de ses occurrences l'est. Le volet comprend
+les compteurs « Créneaux proposés » (avec les libres, dont ceux entièrement passés) et
+« Créneaux réservés » (part des créneaux portant au moins une séance), un anneau **« Créneaux —
+réservés / libres »** et un tableau **« Créneaux par mois »** (créneaux ayant une occurrence
+dans le mois, réservés dans le mois, libres, séances). Le taux de créneaux réservés mesure
+l'usage de l'offre ; il ne se confond pas avec le remplissage, qui mesure la jauge des seuls
+créneaux réservés. L'export CSV contient toujours ce volet.
 
 Si le service utilise la **liste d'attente**, le tableau de bord montre aussi qui n'a **pas
 trouvé de place** : compteurs « En attente aujourd'hui », « Placés depuis la liste »

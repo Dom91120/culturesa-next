@@ -88,10 +88,10 @@ type ServiceStats = {
   // inscriptions ouvertes), filtre de dates sur la date d'INSCRIPTION, indépendant du
   // type — cf. lib/waiting-list-stats. null si le service n'a jamais eu d'inscription.
   waitlist: WaitlistStats | null;
-  // Créneaux (l'OFFRE, par opposition aux séances réservées) : créneaux datés proposés
-  // sur la plage, réservés / libres, taux d'occupation, par mois — cf. lib/slot-stats.
-  // L'écran ne montre ce volet que si créneaux ≠ séances (créneaux restés libres, ou
-  // jauge accueillant plusieurs réservations par créneau).
+  // Créneaux (l'OFFRE, par opposition aux séances réservées) : créneaux proposés sur la
+  // plage — un RÉCURRENT compte UNE fois (comme la carte « Créneaux ouverts » des
+  // Éditions), un ponctuel une fois —, réservés / libres, taux, par mois — cf.
+  // lib/slot-stats. L'écran ne montre ce volet que si créneaux ≠ séances.
   slots: SlotStats;
 };
 

@@ -23,33 +23,47 @@ describe("computeSlotStats", () => {
     });
   });
 
-  it("compte l'offre, les réservés, les libres passés et le taux d'occupation", () => {
+  it("un récurrent compte UN créneau quel que soit son nombre d'occurrences", () => {
     const slots = [
-      slot("m1", "2026-09-01"), // réservé, passé
-      slot("m2", "2026-09-08"), // libre, passé
-      slot("m3", "2026-09-15"), // libre, à venir
+      slot("m1", "2026-09-01"), // R1, réservé
+      slot("m2", "2026-09-08"), // R1
+      slot("m3", "2026-10-06"), // R1
+      slot("n1", "2026-09-03", "R2"), // R2, jamais réservé, dernière occurrence passée
+      slot("n2", "2026-09-10", "R2"),
       slot("p1", "2026-10-06", null), // ponctuel réservé
+      slot("p2", "2026-10-20", null), // ponctuel libre à venir
     ];
     const s = computeSlotStats(slots, booked("m1", "p1"), all);
-    expect(s.creneaux).toBe(4);
-    expect(s.creneauxReserves).toBe(2);
-    expect(s.creneauxLibres).toBe(2);
-    expect(s.creneauxLibresPasses).toBe(1);
+    expect(s.creneaux).toBe(4); // R1, R2, p1, p2
+    expect(s.creneauxReserves).toBe(2); // R1, p1
+    expect(s.creneauxLibres).toBe(2); // R2, p2
+    expect(s.creneauxLibresPasses).toBe(1); // R2 (p2 est à venir)
     expect(s.tauxOccupation).toBe(50);
     expect(s.byMonth).toEqual([
-      { label: "9", creneaux: 3, reserves: 1, seances: 1 },
-      { label: "10", creneaux: 1, reserves: 1, seances: 1 },
+      { label: "9", creneaux: 2, reserves: 1, seances: 1 }, // R1, R2
+      { label: "10", creneaux: 3, reserves: 1, seances: 1 }, // R1, p1, p2 — seul p1 réservé
     ]);
   });
 
-  it("un créneau libre le jour même n'est pas encore « passé »", () => {
-    const s = computeSlotStats([slot("m1", TODAY)], new Map(), all);
+  it("un récurrent réservé sur UNE seule occurrence est réservé (jamais « libre passé »)", () => {
+    const slots = [slot("m1", "2026-09-01"), slot("m2", "2026-09-08")];
+    const s = computeSlotStats(slots, booked("m2"), all);
+    expect(s).toMatchObject({ creneauxReserves: 1, creneauxLibres: 0, creneauxLibresPasses: 0 });
+  });
+
+  it("un récurrent libre dont la dernière occurrence est aujourd'hui n'est pas « passé »", () => {
+    const slots = [slot("m1", "2026-09-05"), slot("m2", TODAY)];
+    const s = computeSlotStats(slots, new Map(), all);
     expect(s.creneauxLibres).toBe(1);
     expect(s.creneauxLibresPasses).toBe(0);
   });
 
   it("filtre de type sur le créneau (miroir = récurrent, autonome = ponctuel)", () => {
-    const slots = [slot("m1", "2026-09-01"), slot("p1", "2026-09-02", null)];
+    const slots = [
+      slot("m1", "2026-09-01"),
+      slot("m2", "2026-09-08"),
+      slot("p1", "2026-09-02", null),
+    ];
     const b = booked("m1");
     expect(computeSlotStats(slots, b, { ...all, type: "rec" })).toMatchObject({
       creneaux: 1,
@@ -63,23 +77,23 @@ describe("computeSlotStats", () => {
     });
   });
 
-  it("plage de dates inclusive sur la date du créneau", () => {
+  it("plage de dates : un récurrent compte s'il a au moins une occurrence dedans", () => {
     const slots = [
-      slot("a", "2026-08-31"),
-      slot("b", "2026-09-01"),
-      slot("c", "2026-09-30"),
-      slot("d", "2026-10-01"),
+      slot("a", "2026-08-31"), // R1 hors plage
+      slot("b", "2026-09-01"), // R1 dans la plage
+      slot("c", "2026-10-15", "R2"), // R2 hors plage → R2 absent
+      slot("p", "2026-09-30", null),
     ];
     const s = computeSlotStats(slots, new Map(), {
       ...all,
       dateFrom: "2026-09-01",
       dateTo: "2026-09-30",
     });
-    expect(s.creneaux).toBe(2);
+    expect(s.creneaux).toBe(2); // R1, p
     expect(s.byMonth).toEqual([{ label: "9", creneaux: 2, reserves: 0, seances: 0 }]);
   });
 
-  it("un créneau à jauge portant 3 séances = 1 créneau réservé, 3 séances dans le mois", () => {
+  it("jauge : 3 séances sur une occurrence = 1 créneau réservé, 3 séances dans le mois", () => {
     const s = computeSlotStats([slot("m1", "2026-09-01")], new Map([["m1", 3]]), all);
     expect(s.creneauxReserves).toBe(1);
     expect(s.tauxOccupation).toBe(100);

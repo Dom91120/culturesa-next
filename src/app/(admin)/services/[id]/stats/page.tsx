@@ -721,7 +721,7 @@ export default async function StatsPage({
                   ? `${seancesParCreneau} séance${Number(seancesParCreneau) >= 2 ? "s" : ""} / créneau`
                   : undefined
             }
-            hint="Créneaux datés ouverts à la réservation sur la plage (chaque occurrence d'un créneau récurrent compte une fois). Libres = sans aucune séance ; passés = libres et déjà échus"
+            hint="Créneaux ouverts à la réservation sur la plage : un créneau récurrent compte une seule fois (comme dans les Éditions), un ponctuel une fois. Libres = sans aucune séance ; passés = libres et entièrement échus"
           />
         )}
         {showSlots && sl.tauxOccupation != null && (
@@ -731,7 +731,7 @@ export default async function StatsPage({
             color="#6dceaa"
             icon={<TargetGlyph size={13} />}
             sub={`${sl.creneauxReserves} sur ${sl.creneaux}`}
-            hint="Part des créneaux proposés portant au moins une séance (à ne pas confondre avec le remplissage, qui mesure la jauge des créneaux réservés)"
+            hint="Part des créneaux proposés portant au moins une séance (un récurrent est réservé dès qu'une de ses occurrences l'est) — à ne pas confondre avec le remplissage, qui mesure la jauge des créneaux réservés"
           />
         )}
         <MetricCard
@@ -979,7 +979,7 @@ export default async function StatsPage({
         {showSlots && (
           <Panel
             title="Créneaux par mois"
-            hint="Créneaux proposés, réservés (au moins une séance), libres, et séances portées par ces créneaux"
+            hint="Créneaux ayant une occurrence dans le mois (un récurrent compte une fois par mois), réservés (au moins une séance dans le mois), libres, et séances"
             tone="neutral"
             icon={<CalendarTimeGlyph size={14} />}
             empty={sl.byMonth.length === 0}

@@ -1,32 +1,34 @@
 // =====================================================================================
 // Statistiques des CRÉNEAUX d'un service (fonctions pures, testées). Les Statistiques
 // comptent des SÉANCES (occurrences datées réservées) ; ici on regarde l'OFFRE : les
-// créneaux datés proposés (miroirs des récurrents + ponctuels), réservés ou non.
-// Les deux nombres divergent dès qu'un créneau reste libre (offre > séances) ou qu'un
-// créneau à jauge accueille plusieurs réservations (séances > créneaux) — c'est dans ce
-// cas que l'écran affiche ce volet (demande Dom 2026-09-12).
+// créneaux proposés, réservés ou non. Un créneau RÉCURRENT compte pour UN SEUL créneau
+// (comme la carte « Créneaux ouverts » des Éditions), pas une fois par occurrence
+// (précision Dom 2026-09-12) ; un ponctuel compte un. Les deux nombres divergent donc
+// dès qu'il y a un récurrent, un créneau libre ou une jauge multi-réservations — c'est
+// dans ce cas que l'écran affiche ce volet.
 // =====================================================================================
 
 export type SlotStatRow = {
+  // Créneau DATÉ : miroir d'un récurrent (parentSlotId non null) ou ponctuel (null).
   id: string;
   date: string; // YYYY-MM-DD
-  // Miroir d'un récurrent (non null) ou ponctuel autonome (null) — filtre de type.
   parentSlotId: string | null;
 };
 
 export type SlotStats = {
-  // Créneaux datés proposés sur la plage (filtre de type appliqué au créneau).
+  // Créneaux proposés sur la plage : récurrents ayant au moins une occurrence dans la
+  // plage (comptés UNE fois) + ponctuels datés dans la plage. Filtre de type appliqué.
   creneaux: number;
-  // Créneaux portant au moins une séance (quel que soit le type de la réservation).
+  // Créneaux portant au moins une séance (sur l'une quelconque de leurs occurrences).
   creneauxReserves: number;
   creneauxLibres: number;
-  // Créneaux libres déjà passés (date < aujourd'hui) : de l'offre perdue, plus réservable.
+  // Créneaux libres entièrement passés (dernière occurrence < aujourd'hui) : de l'offre
+  // perdue, plus réservable.
   creneauxLibresPasses: number;
   // creneauxReserves / creneaux (%), null sans créneau.
   tauxOccupation: number | null;
-  // Par mois (libellé = numéro du mois, comme les autres courbes) : offre, réservés et
-  // séances portées par ces créneaux (> réservés dès qu'une jauge accueille plusieurs
-  // réservations sur un même créneau).
+  // Par mois (libellé = numéro du mois) : créneaux ayant une occurrence dans le mois
+  // (un récurrent compte une fois par mois), ceux réservés dans le mois, et séances.
   byMonth: { label: string; creneaux: number; reserves: number; seances: number }[];
 };
 
@@ -38,7 +40,7 @@ function inRange(d: string, from: string | null, to: string | null): boolean {
 
 /**
  * @param slots créneaux datés du service (toute plage : filtrés ici)
- * @param seancesBySlot nombre de séances par identifiant de créneau (absent = libre)
+ * @param seancesBySlot nombre de séances par identifiant de créneau DATÉ (absent = libre)
  */
 export function computeSlotStats(
   slots: SlotStatRow[],
@@ -51,22 +53,33 @@ export function computeSlotStats(
       inRange(s.date, dateFrom, dateTo) &&
       (type === "rec" ? s.parentSlotId != null : type === "uniq" ? s.parentSlotId == null : true),
   );
-  const monthAgg = new Map<string, { creneaux: number; reserves: number; seances: number }>();
+  // Regroupement par CRÉNEAU : le récurrent parent pour un miroir, le ponctuel lui-même.
+  const groups = new Map<string, { seances: number; lastDate: string }>();
+  const monthAgg = new Map<
+    string,
+    { creneaux: Set<string>; reserves: Set<string>; seances: number }
+  >();
+  for (const s of pop) {
+    const key = s.parentSlotId ?? s.id;
+    const seances = seancesBySlot.get(s.id) ?? 0;
+    const g = groups.get(key) ?? { seances: 0, lastDate: s.date };
+    g.seances += seances;
+    if (s.date > g.lastDate) g.lastDate = s.date;
+    groups.set(key, g);
+    const bucket = s.date.slice(0, 7);
+    const m = monthAgg.get(bucket) ?? { creneaux: new Set(), reserves: new Set(), seances: 0 };
+    m.creneaux.add(key);
+    if (seances > 0) m.reserves.add(key);
+    m.seances += seances;
+    monthAgg.set(bucket, m);
+  }
   let reserves = 0;
   let libresPasses = 0;
-  for (const s of pop) {
-    const seances = seancesBySlot.get(s.id) ?? 0;
-    const booked = seances > 0;
-    if (booked) reserves += 1;
-    else if (s.date < today) libresPasses += 1;
-    const bucket = s.date.slice(0, 7);
-    const cur = monthAgg.get(bucket) ?? { creneaux: 0, reserves: 0, seances: 0 };
-    cur.creneaux += 1;
-    if (booked) cur.reserves += 1;
-    cur.seances += seances;
-    monthAgg.set(bucket, cur);
+  for (const g of groups.values()) {
+    if (g.seances > 0) reserves += 1;
+    else if (g.lastDate < today) libresPasses += 1;
   }
-  const creneaux = pop.length;
+  const creneaux = groups.size;
   return {
     creneaux,
     creneauxReserves: reserves,
@@ -75,6 +88,11 @@ export function computeSlotStats(
     tauxOccupation: creneaux > 0 ? Math.round((100 * reserves) / creneaux) : null,
     byMonth: [...monthAgg.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([bucket, v]) => ({ label: String(Number(bucket.slice(5, 7))), ...v })),
+      .map(([bucket, m]) => ({
+        label: String(Number(bucket.slice(5, 7))),
+        creneaux: m.creneaux.size,
+        reserves: m.reserves.size,
+        seances: m.seances,
+      })),
   };
 }
