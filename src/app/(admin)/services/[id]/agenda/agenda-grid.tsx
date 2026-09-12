@@ -4092,15 +4092,20 @@ export function AgendaGrid({
             : (DAY_NAMES[bk.dayKey] ?? bk.dayKey);
           const dayHour = dayLabel + (slot ? ` · ${slot.startTime}–${slot.endTime}` : "");
           // Occurrences (récurrent uniquement) = dates des réservations-ENFANTS réelles
-          // de cette réservation (et non tous les miroirs du slot) → reflète exactement
+          // de la récurrente (et non tous les miroirs du slot) → reflète exactement
           // les séances effectivement créées (cutoff, semaine A/B, vacances scolaires).
-          const occurrenceDates = recurSlot
-            ? bookings
-                .filter((c) => c.parentBookingId === bk.id)
-                .map((c) => uniqueSlots.find((u) => u.id === c.slotId)?.slotDate)
-                .filter((d): d is string => !!d)
-                .sort()
-            : [];
+          // Fiche ouverte sur la PARENTE (vue Modèle) ou sur l'une de ses OCCURRENCES
+          // (vue Semaine réelle) : même liste, celle de la fratrie — la séance ouverte
+          // y est mise en évidence (Dom 2026-09-12, « comme la modale créneaux »).
+          const occurrenceParentId = recurSlot ? bk.id : bk.parentBookingId;
+          const occurrenceDates =
+            occurrenceParentId != null
+              ? bookings
+                  .filter((c) => c.parentBookingId === occurrenceParentId)
+                  .map((c) => uniqueSlots.find((u) => u.id === c.slotId)?.slotDate)
+                  .filter((d): d is string => !!d)
+                  .sort()
+              : [];
           // Lecture seule si la fiche pointe une réservation récurrente PARENTE (les actions
           // de gestion passent par les occurrences), ou si elle est verrouillée par un
           // pointage (pointée / parent à miroir pointé) → ni suppression, ni validation.

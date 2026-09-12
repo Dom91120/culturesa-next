@@ -233,6 +233,9 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
 
 L'agenda affiche une **semaine datée** : créneaux récurrents et ponctuels, réservations et
 pointages s'y gèrent au même endroit, semaine après semaine (flèches ◀ ▶ et onglets de période).
+Un clic sur une réservation ouvre sa **fiche** : demandeur, participants, thème, absence
+prévenue et, pour une réservation récurrente, la liste des **« Créneaux concernés »** (toutes
+ses séances avec leurs horaires, la séance ouverte en gras).
 
 ![Agenda d'administration d'un service](img/06-agenda-admin.png)
 

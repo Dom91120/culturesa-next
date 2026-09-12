@@ -10,10 +10,14 @@ export function OccurrencesField({
   dates,
   startTime,
   endTime,
+  highlight,
 }: {
   dates: string[];
   startTime?: string;
   endTime?: string;
+  // Date (YYYY-MM-DD) à mettre en évidence : la séance ouverte, quand la fiche porte une
+  // occurrence d'une récurrente et liste toute la fratrie.
+  highlight?: string;
 }) {
   if (!dates.length) return null;
   const times = fmtSlotHoursFr(startTime, endTime);
@@ -43,7 +47,10 @@ export function OccurrencesField({
         }}
       >
         {dates.map((d) => (
-          <div key={d}>
+          <div
+            key={d}
+            style={d === highlight ? { fontWeight: 700, color: "var(--text)" } : undefined}
+          >
             • {fmtDateLongFr(d)} {times}
           </div>
         ))}

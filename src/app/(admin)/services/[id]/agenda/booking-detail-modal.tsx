@@ -552,7 +552,14 @@ export function BookingDetailModal({
             )}
           </div>
         )}
-        <OccurrencesField dates={occurrenceDates} startTime={slotStart} endTime={slotEnd} />
+        {/* Toutes les séances de la récurrente (parente OU occurrence ouverte) : la séance
+            de la fiche est mise en évidence dans la liste. */}
+        <OccurrencesField
+          dates={occurrenceDates}
+          startTime={slotStart}
+          endTime={slotEnd}
+          highlight={occurrenceYmd ?? undefined}
+        />
       </div>
 
       {error && (
