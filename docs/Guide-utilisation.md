@@ -301,7 +301,8 @@ pour un ; un récurrent est « réservé » dès qu'une de ses occurrences l'est
 les compteurs « Créneaux proposés » (avec les libres, dont ceux entièrement passés) et
 « Créneaux réservés » (part des créneaux portant au moins une séance), un anneau **« Créneaux —
 réservés / libres »** et un tableau **« Créneaux par mois »** (créneaux ayant une occurrence
-dans le mois, réservés dans le mois, libres, séances). L'export CSV contient toujours ce volet.
+dans le mois, réservés dans le mois, séances ; les créneaux libres du mois figurent dans
+l'export CSV). L'export CSV contient toujours ce volet.
 
 Le **remplissage moyen** (compteur et courbe par mois) porte sur **toutes les séances proposées**
 de la plage : une séance restée sans réservation compte 0 %. Le compteur rappelle en dessous le

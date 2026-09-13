@@ -986,7 +986,7 @@ export default async function StatsPage({
         {showSlots && (
           <Panel
             title="Créneaux par mois"
-            hint="Créneaux ayant une occurrence dans le mois (un récurrent compte une fois par mois), réservés (au moins une séance dans le mois), libres, et séances"
+            hint="Créneaux ayant une occurrence dans le mois (un récurrent compte une fois par mois), réservés (au moins une séance dans le mois), et séances"
             tone="neutral"
             icon={<CalendarTimeGlyph size={14} />}
             empty={sl.byMonth.length === 0}
@@ -996,22 +996,25 @@ export default async function StatsPage({
                 <tr
                   style={{
                     color: "var(--muted)",
-                    fontSize: ".62rem",
+                    fontSize: ".58rem",
                     textTransform: "uppercase",
-                    letterSpacing: ".08em",
+                    letterSpacing: ".04em",
                   }}
                 >
                   <th style={{ textAlign: "left", fontWeight: 600, padding: ".2rem 0" }}>Mois</th>
-                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                  <th
+                    style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0 .2rem .45rem" }}
+                  >
                     Proposés
                   </th>
-                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                  <th
+                    style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0 .2rem .45rem" }}
+                  >
                     Réservés
                   </th>
-                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
-                    Libres
-                  </th>
-                  <th style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0" }}>
+                  <th
+                    style={{ textAlign: "right", fontWeight: 600, padding: ".2rem 0 .2rem .45rem" }}
+                  >
                     Séances
                   </th>
                 </tr>
@@ -1025,15 +1028,6 @@ export default async function StatsPage({
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: "#6dceaa" }}>
                       {r.reserves}
-                    </td>
-                    <td
-                      style={{
-                        textAlign: "right",
-                        fontWeight: 600,
-                        color: r.creneaux - r.reserves > 0 ? C_ABSENT : "var(--muted)",
-                      }}
-                    >
-                      {r.creneaux - r.reserves}
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: "#e8a45a" }}>
                       {r.seances}
