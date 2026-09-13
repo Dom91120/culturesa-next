@@ -35,6 +35,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       "Accompagnants (effectif estimé, 1 fois par inscrit)",
       String(stats.accompagnants),
     ]);
+    lines.push([
+      "Remplissage moyen, toutes séances proposées (%)",
+      stats.avgFill != null ? String(stats.avgFill) : "",
+    ]);
+    lines.push([
+      "Remplissage moyen, séances réservées (%)",
+      stats.avgFillReserves != null ? String(stats.avgFillReserves) : "",
+    ]);
     lines.push([]);
     lines.push(["Prévu / Réalisé (séances passées)", "Valeur"]);
     lines.push(["Prévu", String(stats.prevu)]);

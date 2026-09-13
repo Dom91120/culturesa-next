@@ -48,8 +48,13 @@ type ServiceStats = {
   // récurrente, ponctuel autonome = ponctuelle).
   recurringCount: number;
   uniqueCount: number;
-  // Remplissage moyen GLOBAL des créneaux réservés (%, unités de jauge) ; null si aucun.
+  // Remplissage moyen GLOBAL (%, unités de jauge) sur TOUTE L'OFFRE : chaque séance
+  // datée proposée sur la plage compte, une séance sans réservation vaut 0 % (décision
+  // Dom 2026-09-13 — « l'offre est-elle utilisée ? »). null sans séance proposée.
   avgFill: number | null;
+  // Même moyenne restreinte aux séances RÉSERVÉES (« quand une séance a lieu, est-elle
+  // pleine ? ») — ancienne sémantique, affichée en sous-texte. null si aucune.
+  avgFillReserves: number | null;
   // Prévu / réalisé (séances datées passées, validées)
   prevu: number;
   presents: number;
@@ -66,8 +71,8 @@ type ServiceStats = {
   // Graphes
   byDay: LabeledCount[];
   byMonth: LabeledCount[];
-  // Remplissage moyen (%, unités de jauge) des SÉANCES datées, par mois — évolution du
-  // taux d'occupation au fil de l'exercice.
+  // Remplissage moyen (%, unités de jauge) par mois — même règle que avgFill (toute
+  // l'offre, séances vides à 0 %) : évolution de l'usage au fil de l'exercice.
   fillByMonth: LabeledCount[];
   topStructures: LabeledCount[];
   topNiveaux: LabeledCount[];
@@ -211,6 +216,36 @@ export async function getServiceStats(
   const sessionKeyOf = (b: (typeof occAll)[number], dateStr: string): string =>
     `${b.slot.parentSlotId ?? b.slot.id}|${dateStr}`;
 
+  // ── Offre : créneaux DATÉS du service sur la plage ───────────────────────────
+  // Miroirs des récurrents + ponctuels : ils existent en base indépendamment des
+  // réservations (matérialisés à la création du récurrent / de la période). Sert au
+  // volet créneaux ET au remplissage moyen (séances vides à 0 %). Filtre de type
+  // appliqué au CRÉNEAU (miroir = récurrent).
+  const slotRows = await prisma.slot.findMany({
+    where: {
+      serviceId,
+      slotDate: {
+        not: null,
+        ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+        ...(dateTo ? { lte: new Date(`${dateTo}T00:00:00.000Z`) } : {}),
+      },
+    },
+    select: { id: true, slotDate: true, parentSlotId: true, capacity: true },
+  });
+  const slotTypePass = (s: { parentSlotId: string | null }): boolean =>
+    type === "rec" ? s.parentSlotId != null : type === "uniq" ? s.parentSlotId == null : true;
+  // Séances PROPOSÉES (même clé que sessionAgg : créneau récurrent parent ?? créneau,
+  // + date) → capacité et mois, pour compter les séances vides à 0 %.
+  const offerSessions = new Map<string, { cap: number; month: string }>();
+  for (const s of slotRows) {
+    if (!s.slotDate || !slotTypePass(s)) continue;
+    const d = ymd(s.slotDate);
+    offerSessions.set(`${s.parentSlotId ?? s.id}|${d}`, {
+      cap: s.capacity ?? serviceCapacity,
+      month: d.slice(0, 7),
+    });
+  }
+
   const total = occ.length;
   const distinctUsers = new Set(occ.map((b) => b.userId)).size;
   const pending = occ.filter((b) => !b.validated).length;
@@ -273,22 +308,36 @@ export async function getServiceStats(
     if (s.cap > 0) sessionFill.set(k, Math.min(100, (100 * s.occ) / s.cap));
   }
 
-  // Remplissage moyen GLOBAL : moyenne des séances réservées.
-  let fillTotG = 0;
-  let fillNG = 0;
+  // Remplissage moyen sur les séances RÉSERVÉES (ancienne sémantique, sous-texte).
+  let fillTotR = 0;
+  let fillNR = 0;
   for (const f of sessionFill.values()) {
-    fillTotG += f;
-    fillNG += 1;
+    fillTotR += f;
+    fillNR += 1;
   }
-  const avgFill = fillNG > 0 ? Math.round(fillTotG / fillNG) : null;
+  const avgFillReserves = fillNR > 0 ? Math.round(fillTotR / fillNR) : null;
 
-  // Remplissage moyen par mois : moyenne des séances de chaque mois.
-  const monthFillSum = new Map<string, number>();
-  const monthFillCnt = new Map<string, number>();
+  // Remplissage moyen sur TOUTE L'OFFRE : union des séances proposées (vides → 0 %) et
+  // des séances réservées (une réservation posée hors de l'offre filtrée — ponctuelle
+  // sur un miroir en filtre « ponctuelles » — reste comptée). Capacité nulle ignorée,
+  // comme pour les séances réservées.
+  const allSessions = new Map<string, { fill: number; month: string }>();
+  for (const [k, o] of offerSessions) {
+    if (o.cap > 0) allSessions.set(k, { fill: sessionFill.get(k) ?? 0, month: o.month });
+  }
   for (const [k, s] of sessionAgg) {
     const f = sessionFill.get(k);
-    if (f == null) continue;
-    monthFillSum.set(s.month, (monthFillSum.get(s.month) ?? 0) + f);
+    if (f != null && !allSessions.has(k)) allSessions.set(k, { fill: f, month: s.month });
+  }
+  let fillTotG = 0;
+  for (const s of allSessions.values()) fillTotG += s.fill;
+  const avgFill = allSessions.size > 0 ? Math.round(fillTotG / allSessions.size) : null;
+
+  // Remplissage moyen par mois : même règle (toute l'offre du mois, vides à 0 %).
+  const monthFillSum = new Map<string, number>();
+  const monthFillCnt = new Map<string, number>();
+  for (const s of allSessions.values()) {
+    monthFillSum.set(s.month, (monthFillSum.get(s.month) ?? 0) + s.fill);
     monthFillCnt.set(s.month, (monthFillCnt.get(s.month) ?? 0) + 1);
   }
   const fillByMonth = [...monthFillSum.entries()]
@@ -377,22 +426,9 @@ export async function getServiceStats(
   const themedCount = [...themeMap.values()].reduce((s, v) => s + v, 0);
 
   // ── Créneaux (offre) ─────────────────────────────────────────────────────────
-  // Créneaux DATÉS du service sur la plage (miroirs des récurrents + ponctuels) : ils
-  // existent en base indépendamment des réservations (matérialisés à la création du
-  // récurrent / de la période). « Réservé » = porte au moins une séance, quel que soit
-  // le type de la réservation (une ponctuelle posée sur un miroir occupe bien le
-  // créneau) ; le filtre de type s'applique au CRÉNEAU (miroir = récurrent).
-  const slotRows = await prisma.slot.findMany({
-    where: {
-      serviceId,
-      slotDate: {
-        not: null,
-        ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
-        ...(dateTo ? { lte: new Date(`${dateTo}T00:00:00.000Z`) } : {}),
-      },
-    },
-    select: { id: true, slotDate: true, parentSlotId: true },
-  });
+  // Sur `slotRows` (cf. plus haut). « Réservé » = porte au moins une séance, quel que
+  // soit le type de la réservation (une ponctuelle posée sur un miroir occupe bien le
+  // créneau) ; le filtre de type s'applique au CRÉNEAU dans computeSlotStats.
   const seancesBySlot = new Map<string, number>();
   for (const b of occAll) {
     if (b.slot.slotDate == null || !inRange(ymd(b.slot.slotDate), dateFrom, dateTo)) continue;
@@ -460,6 +496,7 @@ export async function getServiceStats(
     recurringCount,
     uniqueCount,
     avgFill,
+    avgFillReserves,
     prevu,
     presents,
     absents,

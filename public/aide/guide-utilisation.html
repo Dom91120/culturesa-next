@@ -313,9 +313,13 @@ pour un ; un récurrent est « réservé » dès qu&#39;une de ses occurrences l
 les compteurs « Créneaux proposés » (avec les libres, dont ceux entièrement passés) et
 « Créneaux réservés » (part des créneaux portant au moins une séance), un anneau <strong>« Créneaux —
 réservés / libres »</strong> et un tableau <strong>« Créneaux par mois »</strong> (créneaux ayant une occurrence
-dans le mois, réservés dans le mois, libres, séances). Le taux de créneaux réservés mesure
-l&#39;usage de l&#39;offre ; il ne se confond pas avec le remplissage, qui mesure la jauge des seuls
-créneaux réservés. L&#39;export CSV contient toujours ce volet.</p>
+dans le mois, réservés dans le mois, libres, séances). L&#39;export CSV contient toujours ce volet.</p>
+<p>Le <strong>remplissage moyen</strong> (compteur et courbe par mois) porte sur <strong>toutes les séances proposées</strong>
+de la plage : une séance restée sans réservation compte 0 %. Le compteur rappelle en dessous le
+remplissage des seules séances réservées quand il diffère. L&#39;occupation d&#39;une séance se mesure
+en enfants (et accompagnants, selon le réglage du service) sur la capacité du créneau s&#39;il a une
+jauge, sinon en nombre de réservations sur la capacité. Le remplissage <strong>par structure</strong> reste
+calculé sur les séances réservées, une séance vide n&#39;appartenant à aucune structure.</p>
 <p>Si le service utilise la <strong>liste d&#39;attente</strong>, le tableau de bord montre aussi qui n&#39;a <strong>pas
 trouvé de place</strong> : compteurs « En attente aujourd&#39;hui », « Placés depuis la liste »
 (inscription automatique ou réservation obtenue ensuite, avec le délai moyen) et

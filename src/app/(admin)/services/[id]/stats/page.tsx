@@ -769,7 +769,13 @@ export default async function StatsPage({
           label="Remplissage moyen"
           color="#6dceaa"
           icon={<TargetGlyph size={13} />}
-          hint="Occupation moyenne (jauge) des créneaux réservés"
+          // Sous-texte = ancienne lecture (séances réservées seules), quand elle diffère.
+          sub={
+            stats.avgFillReserves != null && stats.avgFillReserves !== stats.avgFill
+              ? `${stats.avgFillReserves}% sur les séances réservées`
+              : undefined
+          }
+          hint="Occupation moyenne de toutes les séances proposées sur la plage : une séance sans réservation compte 0 %. Occupation = enfants (+ accompagnants selon le service) / capacité si le créneau a une jauge, sinon réservations / capacité"
         />
         {stats.tauxAbsence != null && (
           <MetricCard
@@ -1040,7 +1046,8 @@ export default async function StatsPage({
         )}
 
         <Panel
-          title="Remplissage moyen par mois (séances)"
+          title="Remplissage moyen par mois"
+          hint="Toutes les séances proposées du mois, séances vides à 0 %"
           tone="warn"
           icon={<TargetGlyph size={14} />}
           empty={stats.fillByMonth.length === 0}
