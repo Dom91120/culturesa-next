@@ -698,12 +698,6 @@ export default async function StatsPage({
 
       {/* Bandeau KPIs : cartes de la famille RGPD (pictogramme rond, libellé, valeur, précision). */}
       <div className="rg-steps cfg-kpis">
-        <MetricCard
-          value={stats.total}
-          label="Séances"
-          sub={`${moyParInscrit} / inscrit`}
-          icon={<CalendarTimeGlyph size={13} />}
-        />
         {showSlots && (
           <MetricCard
             value={sl.creneaux}
@@ -734,6 +728,13 @@ export default async function StatsPage({
             hint="Part des créneaux proposés portant au moins une séance (un récurrent est réservé dès qu'une de ses occurrences l'est) — à ne pas confondre avec le remplissage, qui mesure la jauge des créneaux réservés"
           />
         )}
+        {/* Séances APRÈS les deux tuiles créneaux (Dom 2026-09-13) : offre, puis usage. */}
+        <MetricCard
+          value={stats.total}
+          label="Séances"
+          sub={`${moyParInscrit} / inscrit`}
+          icon={<CalendarTimeGlyph size={13} />}
+        />
         <MetricCard
           value={stats.distinctUsers}
           label="Inscrits distincts"
