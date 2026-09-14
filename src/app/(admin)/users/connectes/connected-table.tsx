@@ -87,9 +87,22 @@ export function ConnectedTable({
           <span className="dot" />
           Utilisateurs connectés
         </span>
-        <span style={{ fontSize: ".7rem", color: "var(--muted)", fontWeight: 400 }}>
-          Relevé à {absolute(generatedAt)} — déconnexion automatique après 2 h sans action (usagers)
-          ou 15 min (gestionnaires, administrateurs)
+        <span style={{ display: "flex", alignItems: "center", gap: ".6rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: ".7rem", color: "var(--muted)", fontWeight: 400 }}>
+            Relevé à {absolute(generatedAt)} — déconnexion automatique après 2 h sans action
+            (usagers) ou 15 min (gestionnaires, administrateurs)
+          </span>
+          {/* Actualisation à la demande (Dom 2026-09-14), en plus du rafraîchissement
+              automatique toutes les 30 s : relit le relevé côté serveur. */}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ padding: ".22rem .6rem", fontSize: ".68rem" }}
+            disabled={pending}
+            onClick={() => startTransition(() => router.refresh())}
+          >
+            {pending ? "Actualisation…" : "Actualiser"}
+          </button>
         </span>
       </div>
 
