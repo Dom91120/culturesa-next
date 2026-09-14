@@ -6222,11 +6222,29 @@ html.light .agenda-page .agenda-block-cadence.is-multi {
   border: 0;
   border-radius: 8px;
   padding: 0.3rem 0.55rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   transform: none;
 }
 .agenda-page .planning-name-tag:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+}
+/* Pile de réservations : mêmes angles que le badge seul ; ombre légère sur la feuille de
+   devant, à peine plus présente sur celles de derrière pour lire l'empilement (Dom
+   2026-09-14, plus d'ombre portée décalée). */
+.agenda-page .planning-stack-wrap .stack-front,
+.agenda-page .planning-stack-wrap .stack-back,
+.agenda-page .planning-stack-wrap .stack-back2 {
+  border-radius: 8px;
+}
+.agenda-page .planning-stack-wrap .stack-front {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.agenda-page .planning-stack-wrap .stack-back,
+.agenda-page .planning-stack-wrap .stack-back2 {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.26);
+}
+.agenda-page .planning-stack-wrap:hover .stack-front {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
 }
 /* Pied (gestionnaire) : conseil discret, légende alignée sur les créneaux, indicateurs
    P / A en pastilles rondes. */
