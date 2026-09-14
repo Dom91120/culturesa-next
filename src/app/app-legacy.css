@@ -5915,32 +5915,87 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   }
 }
 
-/* ── Agenda usager (page Réservations) — refonte Dom 2026-09-14 ─────────────────
-   Portée : `.user-agenda` (racine #tab-content-agenda de user-agenda-grid.tsx) ; l'agenda
-   gestionnaire, qui partage la grille (agenda-shared.tsx) et ses classes, n'est PAS touché.
-   Vocabulaire : capsules et pastilles, carte à angles doux, moins de fonds gris. */
+/* ── Boutons à pictogramme des lignes de titre (liste d'attente, imprimer, absence,
+   aujourd'hui, mode création) : cadre fin, pictogramme gris. Classe partagée par les
+   composants d'agenda-shared.tsx et les deux agendas (styles inline remplacés, 2026-09-14). */
+.toolbar-icon-btn {
+  position: relative;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--rad-sm);
+  padding: 0.28rem 0.38rem;
+  cursor: pointer;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+/* « Mode création » : pictogramme rouge ; enfoncé = fond rouge, pictogramme blanc. */
+.toolbar-icon-btn.is-danger {
+  color: var(--danger);
+}
+.toolbar-icon-btn.is-danger.is-active {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ── Agendas (page Réservations de l'usager ET agenda gestionnaire) — refonte Dom
+   2026-09-14 ────────────────────────────────────────────────────────────────────────
+   Portée : `.agenda-page` (racine #tab-content-agenda de user-agenda-grid.tsx et de
+   agenda-grid.tsx). Vocabulaire commun : capsules et pastilles de 25 px sur la ligne de
+   titre, périodes en contrôle segmenté, grille en carte à angles doux, moins de fonds gris,
+   étiquettes de cadence lisibles. */
 
 /* Titre : l'exercice sort du titre en pastille grise. */
-.user-agenda .res-title .exercice-nav-inline {
-  margin-left: 0.15rem;
-}
-.user-agenda .res-title .exercice-nav-inline .ex-nav-label {
-  /* Même hauteur (25 px) que les capsules de la ligne de titre. */
+.agenda-page .panel-title .exercice-nav-inline {
+  /* Même hauteur (25 px) que les capsules de la ligne de titre ; côté gestionnaire la
+     pastille contient aussi les deux flèches d'exercice (rondes). */
   box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
   height: 25px;
+  margin-left: 0.15rem;
   padding: 0 0.6rem;
+  gap: 0;
   border: 1px solid var(--border);
   border-radius: 99px;
   background: var(--surface2);
+}
+.agenda-page .panel-title .exercice-nav-inline:has(.ex-nav-arrows) {
+  padding-right: 2px;
+}
+.agenda-page .panel-title .exercice-nav-inline .ex-nav-label {
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--muted);
+  letter-spacing: 0;
+}
+.agenda-page .panel-title .exercice-nav-inline .ex-nav-arrows {
+  display: inline-flex;
+  margin-left: 0.3rem;
+}
+.agenda-page .panel-title .exercice-nav-inline .ex-arrow {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.6rem;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.agenda-page .panel-title .exercice-nav-inline .ex-arrow:hover:not(:disabled) {
+  background: var(--surface3);
+  color: var(--text);
 }
 
 /* Nav de semaine : capsule, dates au centre, flèches rondes colorées au survol. */
-.user-agenda .pn-main {
+.agenda-page .pn-main {
   /* 25 px de haut : 1 px de marge + flèches de 21 px + bordure (Dom 2026-09-14). */
   box-sizing: border-box;
   height: 25px;
@@ -5950,7 +6005,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   background: var(--surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
-.user-agenda .periode-nav .ex-arrow {
+.agenda-page .periode-nav .ex-arrow {
   width: 21px;
   height: 21px;
   display: inline-flex;
@@ -5966,15 +6021,14 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
     background 0.15s,
     color 0.15s;
 }
-.user-agenda .periode-nav .ex-arrow:hover:not(:disabled) {
+.agenda-page .periode-nav .ex-arrow:hover:not(:disabled) {
   background: var(--surface2);
   color: var(--text);
 }
 
-/* Outils de la ligne de titre (liste d'attente, imprimer, absence) : UNE capsule
-   segmentée. Les boutons (composants partagés agenda-shared.tsx) portent leur cadre en
-   style inline — d'où les `!important`, limités à ce conteneur. */
-.user-agenda .agenda-tools {
+/* Outils de la ligne de titre (liste d'attente, imprimer, absence ou mode création) :
+   UNE capsule segmentée de boutons .toolbar-icon-btn. */
+.agenda-page .agenda-tools {
   display: flex;
   align-items: center;
   /* Même hauteur que la capsule de navigation (25 px). */
@@ -5986,34 +6040,40 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
-.user-agenda .agenda-tools > button {
-  border: 0 !important;
-  border-radius: 0 !important;
+.agenda-page .agenda-tools > button {
+  border: 0;
+  border-radius: 0;
   height: 23px;
-  padding: 0 0.6rem !important;
+  padding: 0 0.6rem;
   transition:
     background 0.15s,
     color 0.15s;
 }
-.user-agenda .agenda-tools > button + button {
-  border-left: 1px solid var(--border) !important;
+.agenda-page .agenda-tools > button + button {
+  border-left: 1px solid var(--border);
 }
-/* Bouton « Aujourd'hui » (à droite de la nav, cadre inline) : même hauteur et même
-   arrondi que les capsules. */
-.user-agenda .periode-nav .pn-today {
+/* « Mode création » enfoncé : fond rouge dans la capsule (l'état prime sur le survol). */
+.agenda-page .agenda-tools > .toolbar-icon-btn.is-danger.is-active,
+.agenda-page .agenda-tools > .toolbar-icon-btn.is-danger.is-active:hover {
+  background: var(--danger);
+  color: #fff;
+}
+/* Bouton « Aujourd'hui » (à droite de la nav) : même hauteur et même arrondi que les
+   capsules. */
+.agenda-page .periode-nav .pn-today {
   box-sizing: border-box;
-  height: 25px !important;
-  padding: 0 0.5rem !important;
-  border-radius: 99px !important;
+  height: 25px;
+  padding: 0 0.5rem;
+  border-radius: 99px;
 }
-.user-agenda .agenda-tools > button:hover {
+.agenda-page .agenda-tools > button:hover {
   background: var(--surface2);
-  color: var(--text) !important;
+  color: var(--text);
 }
 
 /* Périodes : contrôle segmenté sur fond en creux ; l'onglet actif ressort en clair, avec
    un point de la couleur de la période (--period-color, posée inline par l'onglet). */
-.user-agenda .period-tabs {
+.agenda-page .period-tabs {
   /* 28 px de haut (Dom 2026-09-14) : 2 px de marge + onglets de 22 px + bordure. Quand la
      place manque (mobile), les onglets passent à la ligne : hauteur libre, rayon de 14 px
      (= capsule sur une ligne, rectangle arrondi sur deux). */
@@ -6029,7 +6089,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   background: var(--surface2);
   margin: 0.55rem 0 0;
 }
-.user-agenda .period-btn {
+.agenda-page .period-btn {
   box-sizing: border-box;
   height: 22px;
   border: 0;
@@ -6039,22 +6099,22 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 }
 /* Sélecteur à id : prime sur la règle compacte `#agenda-period-tabs .period-btn` (taille
    0.66rem et retraits, centrage optique +1 px en haut conservé) ; texte resserré (Dom). */
-.user-agenda #agenda-period-tabs .period-btn {
+.agenda-page #agenda-period-tabs .period-btn {
   padding: 1px 0.44rem 0;
   font-size: 0.66rem;
   letter-spacing: -0.2px;
 }
-.user-agenda .period-btn:hover {
+.agenda-page .period-btn:hover {
   color: var(--text);
 }
-.user-agenda .period-btn.active {
+.agenda-page .period-btn.active {
   background: var(--surface);
   color: var(--text);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.1),
     0 0 0 1px var(--border);
 }
-.user-agenda .period-btn.active .period-badge {
+.agenda-page .period-btn.active .period-badge {
   display: inline-block;
   width: 7px;
   height: 7px;
@@ -6063,20 +6123,20 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 
 /* Grille : carte à angles de 12 px et ombre légère ; en-têtes et colonne des heures sur le
    fond de la page (plus de gris), séparateurs verticaux conservés ; nom du jour plus lisible. */
-.user-agenda .agenda-grid {
+.agenda-page .agenda-grid {
   border-radius: 12px;
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.05),
     0 8px 24px -16px rgba(0, 0, 0, 0.18);
 }
-.user-agenda .agenda-header-cell,
-.user-agenda .agenda-corner,
-.user-agenda .agenda-time-col {
+.agenda-page .agenda-header-cell,
+.agenda-page .agenda-corner,
+.agenda-page .agenda-time-col {
   background: var(--surface);
 }
 /* Rangée d'en-tête plafonnée à 35 px (Dom 2026-09-14) : nom du jour + date sur deux
    lignes serrées, centrées verticalement ; le coin « A » suit la même hauteur. */
-.user-agenda .agenda-header-cell:not(.agenda-allday-corner) {
+.agenda-page .agenda-header-cell:not(.agenda-allday-corner) {
   box-sizing: border-box;
   height: 35px;
   justify-content: center;
@@ -6086,14 +6146,14 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 }
 /* Coin « Journée entière » : garde la hauteur de la rangée journée entière (56 px, règle
    générale) ; police un cran sous celle des en-têtes de jour (Dom 2026-09-14). */
-.user-agenda .agenda-allday-corner {
+.agenda-page .agenda-allday-corner {
   background: var(--surface);
   font-size: 0.7rem;
 }
-.user-agenda .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
+.agenda-page .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
   padding: 2px 0.4rem;
 }
-.user-agenda .agenda-day-sub {
+.agenda-page .agenda-day-sub {
   font-size: 0.66rem;
   line-height: 1.15;
   margin-top: 1px;
@@ -6101,7 +6161,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 
 /* Créneaux : étiquette de cadence (« Toutes », « Semaine A ») en capitales, lisible sur le
    jaune ; nombre de places en pastille claire. */
-.user-agenda .agenda-block-cadence {
+.agenda-page .agenda-block-cadence {
   position: absolute;
   top: 3px;
   left: 4px;
@@ -6118,11 +6178,63 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   white-space: nowrap;
   pointer-events: none;
 }
-html.light .user-agenda .agenda-block-cadence {
+html.light .agenda-page .agenda-block-cadence {
   background: color-mix(in srgb, var(--block-color) 28%, var(--surface));
   color: color-mix(in srgb, var(--block-color) 45%, #3a3200);
 }
-.user-agenda .slot-spots-free {
+/* Repère « Multi » (mode création multi, gestionnaire) : gris-bleu du ponctuel, pas
+   jaune — le fond du lot est posé en inline, sans la classe is-uniq (Dom 2026-09-14). */
+.agenda-page .agenda-block-cadence.is-multi {
+  --block-color: var(--slot-uniq-color);
+}
+html.light .agenda-page .agenda-block-cadence.is-multi {
+  color: color-mix(in srgb, var(--slot-uniq-color) 60%, #1a1f2e);
+}
+/* Compteur réservations / places (gestionnaire) : pastille grise ; la couleur du texte
+   (inline, selon le remplissage) est conservée. */
+.agenda-page .agenda-block-meta {
+  bottom: 3px;
+  left: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface3);
+  font-size: 0.58rem;
+}
+/* Badge de réservation (gestionnaire) : aplati — angles de 8 px, sans liseré, ombre
+   légère au lieu de l'ombre portée décalée (Dom 2026-09-14). */
+.agenda-page .planning-name-tag {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.3rem 0.55rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transform: none;
+}
+.agenda-page .planning-name-tag:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+}
+/* Pied (gestionnaire) : conseil discret, légende alignée sur les créneaux, indicateurs
+   P / A en pastilles rondes. */
+.agenda-page .agenda-hint {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.agenda-page .agenda-legend {
+  font-size: 0.72rem;
+  gap: 0.8rem;
+}
+.agenda-page .agenda-legend .agenda-legend-swatch {
+  width: 26px;
+  height: 16px;
+  border-radius: 6px;
+}
+.agenda-page .agenda-legend .indic_p,
+.agenda-page .agenda-legend .indic_a,
+.agenda-page .agenda-legend .indic_ap {
+  border-radius: 99px;
+  padding: 2px 5px;
+}
+.agenda-page .slot-spots-free {
   padding: 1px 7px;
   border: 1px solid var(--border);
   border-radius: 99px;
@@ -6136,29 +6248,29 @@ html.light .user-agenda .agenda-block-cadence {
 
 /* Pied : boutons « Annuler » / « Enregistrer → » à la taille du reste sur bureau ;
    version réduite sur smartphone (media query plus bas) pour tenir dans la largeur. */
-.user-agenda .agenda-actions .btn {
+.agenda-page .agenda-actions .btn {
   padding: 0.38rem 0.9rem;
   font-size: 0.74rem;
   border-radius: 8px;
 }
-.user-agenda .agenda-actions .btn-ghost {
+.agenda-page .agenda-actions .btn-ghost {
   border-color: var(--border);
 }
 
 @media (max-width: 640px) {
   /* Coins hauts droits : la barre mobile-day-nav se pose dessus (cf. règle générale). */
-  .user-agenda .agenda-grid {
+  .agenda-page .agenda-grid {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
   /* Vue un seul jour : les en-têtes de jour restent repliés (hauteur nulle, cf. règle
      générale) malgré le plafond de 35 px posé ci-dessus. */
-  .user-agenda .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
+  .agenda-page .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
     height: 0;
     padding: 0;
   }
   /* Boutons du pied réduits (Dom 2026-09-14) : hauteur commune de 25 px. */
-  .user-agenda .agenda-actions .btn {
+  .agenda-page .agenda-actions .btn {
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;

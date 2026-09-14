@@ -514,18 +514,7 @@ export function WaitingListButton({
       type="button"
       data-tip={tip}
       aria-label={ariaLabel ?? tip}
-      style={{
-        position: "relative",
-        background: "none",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--rad-sm)",
-        padding: ".28rem .38rem",
-        cursor: "pointer",
-        color: "var(--muted)",
-        display: "flex",
-        alignItems: "center",
-        lineHeight: 1,
-      }}
+      className="toolbar-icon-btn"
       onClick={onClick}
     >
       <WaitingListGlyph size={15} />
@@ -562,17 +551,7 @@ export function PrintIconButton({ onClick, tip }: { onClick: () => void; tip: st
       onClick={onClick}
       data-tip={tip}
       aria-label={tip}
-      style={{
-        background: "none",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--rad-sm)",
-        padding: ".28rem .38rem",
-        cursor: "pointer",
-        color: "var(--muted)",
-        display: "flex",
-        alignItems: "center",
-        lineHeight: 1,
-      }}
+      className="toolbar-icon-btn"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -633,7 +612,8 @@ export function ToolbarIconButton({
   icon: string | React.ReactNode;
   withLabel?: boolean;
   // Icône seule : même chrome que les boutons Imprimer / Liste d'attente (cadre fin,
-  // pictogramme gris) — pour un pictogramme en trait à `currentColor`.
+  // pictogramme gris, classe .toolbar-icon-btn) — pour un pictogramme en trait à
+  // `currentColor`.
   framed?: boolean;
   onClick?: () => void;
 }) {
@@ -649,19 +629,10 @@ export function ToolbarIconButton({
         type="button"
         data-tip={label}
         aria-label={label}
+        className={framed ? "toolbar-icon-btn" : undefined}
         style={
           framed
-            ? {
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--muted)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-              }
+            ? undefined
             : {
                 background: "none",
                 border: "none",

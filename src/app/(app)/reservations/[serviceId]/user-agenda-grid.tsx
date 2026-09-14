@@ -3181,11 +3181,11 @@ export function UserAgendaGrid({
 
   return (
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
-    // `user-agenda` : portée des styles propres à cette page (app-legacy.css, bloc
-    // « Agenda usager — refonte 2026-09-14 ») ; l'agenda gestionnaire n'en hérite pas.
+    // `agenda-page` : styles communs aux deux agendas (app-legacy.css, bloc « Agendas —
+    // refonte 2026-09-14 »), partagés avec l'agenda gestionnaire.
     <div
       id="tab-content-agenda"
-      className="user-agenda"
+      className="agenda-page"
       onMouseMove={onAgendaTip}
       onMouseLeave={clearTip}
     >
@@ -3363,27 +3363,18 @@ export function UserAgendaGrid({
             {todayInVisiblePeriods && (
               <button
                 type="button"
-                className="pn-today"
+                className="pn-today toolbar-icon-btn"
                 data-tip="Aujourd'hui"
                 aria-label="Aujourd'hui"
                 // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
-                // chrome que les boutons de la ligne de titre (cadre fin, pictogramme gris).
+                // chrome que les boutons de la ligne de titre (.toolbar-icon-btn).
                 // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
                 // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
                 // Desktop : ancré en absolu juste après ▶ (hors du centrage de la nav).
                 // Mobile : DANS LE FLUX, à droite de ▶ (Dom 2026-09-05) — la nav étant en
                 // flux calée à droite, le groupe nav + bouton se replie sans déborder.
-                style={{
-                  background: "none",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--rad-sm)",
-                  padding: ".28rem .38rem",
-                  cursor: "pointer",
-                  color: "var(--muted)",
-                  display: "flex",
-                  alignItems: "center",
-                  lineHeight: 1,
-                  ...(isMobile
+                style={
+                  isMobile
                     ? { position: "static", marginLeft: ".4rem" }
                     : {
                         position: "absolute",
@@ -3391,8 +3382,8 @@ export function UserAgendaGrid({
                         transform: "translateY(-50%)",
                         left: "100%",
                         marginLeft: ".4rem",
-                      }),
-                }}
+                      }
+                }
                 onClick={() => {
                   // Retour à la semaine courante : on verrouille sur la période
                   // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,

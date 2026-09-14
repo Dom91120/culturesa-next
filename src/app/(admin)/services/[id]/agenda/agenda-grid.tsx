@@ -2438,13 +2438,16 @@ export function AgendaGrid({
         creationMode && createKind === "multi" && batchSlotIds.has(b.slotId)
           ? (uniqueWeeksById.get(b.slotId) ?? "")
           : "";
-      // Créneau de 15 min : bloc trop court pour la lettre A/B à 1.2rem → on la réduit.
-      const abFontSize = !allday && b.endMin - b.startMin <= 15 ? "0.8rem" : "1.2rem";
-      // Libellé de cadence au centre d'un créneau RÉCURRENT : sa parité (A/B) si le service
-      // alterne et que le créneau est mono-parité ; sinon « Toutes » (toutes semaines).
+      // Libellé de cadence d'un créneau RÉCURRENT : « Semaine A » / « Semaine B » si le
+      // service alterne et que le créneau est mono-parité (comme côté usager, Dom
+      // 2026-09-14) ; sinon « Toutes » (toutes semaines).
       const blockCadence = isPonctuelCell
         ? undefined
-        : (blockParity ?? (modes.abMode ? "Toutes" : undefined));
+        : blockParity
+          ? `Semaine ${blockParity}`
+          : modes.abMode
+            ? "Toutes"
+            : undefined;
       // b.used est déjà compté selon la jauge DU créneau (cf. construction des blocs).
       const gaugeForCell = b.jauge;
       const cellFull = b.used >= b.capacity;
@@ -2580,69 +2583,24 @@ export function AgendaGrid({
           {/* Créneau récurrent : cadence au centre — parité A/B (mono-parité) ou « Toutes »
               (toutes semaines) — dans la couleur du contour pointillé (jaune récurrent).
               Décorative (derrière les badges), n'intercepte pas les clics. */}
-          {blockCadence && (
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#ffdc00",
-                fontWeight: 800,
-                // « Toutes » (multi-lettres) plus petit que la lettre A/B pour tenir.
-                fontSize: blockCadence.length > 1 ? "1rem" : abFontSize,
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-                pointerEvents: "none",
-                zIndex: 0,
-              }}
-            >
+          {/* Cadence (« Toutes » ou lettre A/B) : petite étiquette en capitales en haut à
+              gauche (CSS .agenda-block-cadence, Dom 2026-09-14 — l'ancien filigrane jaune
+              sur jaune était illisible), rangée « journée entière » comprise. Omise sur les
+              créneaux ≤ 30 min, où elle chevaucherait le contenu. */}
+          {blockCadence && (allday || b.endMin - b.startMin > 30) && (
+            <span aria-hidden="true" className="agenda-block-cadence">
               {blockCadence}
             </span>
           )}
           {/* Repère « Multi » (coin haut-gauche) : créneau appartenant à un lot (batchId),
-              affiché en mode création multi. Couleur du contour pointillé gris-bleu du
-              ponctuel (--slot-uniq-color), sans fond. Décoratif (pointerEvents none). */}
+              affiché en mode création multi, avec la PORTÉE du lot (Slot.weeks) : « Multi A »,
+              « Multi B », ou « Multi » seul pour toutes les semaines (Dom 2026-09-14 : plus de
+              lettre au centre). Même étiquette que la cadence (.agenda-block-cadence), mais
+              dans le gris-bleu du ponctuel (is-multi : le fond du lot est posé en inline, la
+              couleur de bloc par défaut resterait jaune). Décoratif (pointer-events none). */}
           {creationMode && createKind === "multi" && batchSlotIds.has(b.slotId) && (
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                top: 1,
-                left: 3,
-                fontSize: "0.7rem",
-                fontWeight: 700,
-                lineHeight: 1,
-                color: "var(--slot-uniq-color)",
-                pointerEvents: "none",
-                zIndex: 1,
-              }}
-            >
-              Multi
-            </span>
-          )}
-          {/* Multi ponctuel : lettre A/B au centre = PORTÉE du lot (Slot.weeks) → Multi A ou
-              Multi B ; rien pour « Multi (toutes) » (weeks ""). Gris-bleu du ponctuel.
-              Décorative (derrière les badges), n'intercepte pas les clics. */}
-          {(multiWeeks === "A" || multiWeeks === "B") && (
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--slot-uniq-color)",
-                fontWeight: 800,
-                fontSize: abFontSize,
-                pointerEvents: "none",
-                zIndex: 0,
-              }}
-            >
-              {multiWeeks}
+            <span aria-hidden="true" className="agenda-block-cadence is-multi">
+              {multiWeeks ? `Multi ${multiWeeks}` : "Multi"}
             </span>
           )}
           {/* Mode création : poignées de bord (haut/bas) pour redimensionner un créneau
@@ -2923,29 +2881,16 @@ export function AgendaGrid({
           + used/cap ; OFF → simple compteur réservations/total (format 1/15). */}
           {b.bookings.length > 0 &&
             (gaugeForCell ? (
-              <div
-                className="agenda-block-meta is-gauge"
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 4,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 3,
-                  // Barre + texte X/Y colorés selon le remplissage (rouge si complet).
-                  color: fillColor,
-                }}
-              >
+              <div className="agenda-block-meta is-gauge" style={{ color: fillColor }}>
+                {/* Barre + texte X/Y colorés selon le remplissage (rouge si complet) ;
+                    pastille et position en CSS (.agenda-page .agenda-block-meta). */}
                 <span className="agenda-block-gauge-bar">
                   <span style={{ width: `${pct}%`, background: fillColor }} />
                 </span>
                 {b.used}/{b.capacity}
               </div>
             ) : (
-              <div
-                className="agenda-block-meta"
-                style={{ position: "absolute", bottom: 0, left: 4, color: countColor }}
-              >
+              <div className="agenda-block-meta" style={{ color: countColor }}>
                 {count}/{b.capacity}
               </div>
             ))}
@@ -3030,8 +2975,11 @@ export function AgendaGrid({
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
     // Pendant un glisser (créer / déplacer / redimensionner), on la supprime : elle n'a
     // pas de sens en plein geste et masquerait le compteur de portée du lot.
+    // `agenda-page` : styles communs aux deux agendas (app-legacy.css, bloc « Agendas —
+    // refonte 2026-09-14 »), partagés avec la page Réservations de l'usager.
     <div
       id="tab-content-agenda"
+      className="agenda-page"
       onMouseMove={(e) => {
         if (createDrag || moveDrag || resizeDrag) {
           clearTip();
@@ -3086,86 +3034,81 @@ export function AgendaGrid({
             gap resserré : flèches au plus près du libellé (largeur figée).
             Petits triangles ◂ ▸ (et non ◀ ▶) : même dessin, moins large — cette barre
             partage sa ligne avec le titre et le sélecteur de période. */}
-        <div className="periode-nav" style={{ margin: "0 auto", gap: ".1rem" }}>
-          {/* Pendant un glisser de réservation, survoler une flèche fait défiler la
-              semaine (dragWeekProps) ; un bouton désactivé ne reçoit pas les événements
-              de glisser, ce qui borne le défilement comme le clic. */}
-          <button
-            type="button"
-            className="ex-arrow"
-            disabled={!canWeekPrev}
-            onClick={() => canWeekPrev && shiftWeek(-1)}
-            {...dragWeekProps(-1)}
-          >
-            ◂
-          </button>
+        <div className="periode-nav" style={{ margin: "0 auto", gap: ".4rem" }}>
+          {/* Groupe ◂ label ▸ en capsule (.pn-main, CSS .agenda-page) ; « Aujourd'hui »
+              reste à côté, hors capsule. Pendant un glisser de réservation, survoler une
+              flèche fait défiler la semaine (dragWeekProps) ; un bouton désactivé ne reçoit
+              pas les événements de glisser, ce qui borne le défilement comme le clic. */}
           <span
-            className="ex-nav-label"
-            // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
-            // les flèches ne bougent plus d'une semaine à l'autre. L'interlettrage
-            // resserré permet de tenir en 6rem sans changer la police.
-            // 6.25rem = 100 px : la semaine la plus large de l'année (« 23 mars ‣ 27
-            // mars », 98,5 px mesurés — mars ne s'abrège pas, contrairement à « sept. »
-            // ou « janv. ») tient sans déborder, avec 1,5 px de réserve.
-            style={{ width: "6.25rem", letterSpacing: "-.05em", textAlign: "center" }}
+            className="pn-main"
+            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 0 }}
           >
-            {/* Séparateur « ‣ » et non « → » : 4,6 px contre 13,5 px dans la police du
+            <button
+              type="button"
+              className="ex-arrow"
+              disabled={!canWeekPrev}
+              onClick={() => canWeekPrev && shiftWeek(-1)}
+              {...dragWeekProps(-1)}
+            >
+              ◂
+            </button>
+            <span
+              className="ex-nav-label"
+              // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
+              // les flèches ne bougent plus d'une semaine à l'autre. L'interlettrage
+              // resserré permet de tenir en 6rem sans changer la police.
+              // 6.25rem = 100 px : la semaine la plus large de l'année (« 23 mars ‣ 27
+              // mars », 98,5 px mesurés — mars ne s'abrège pas, contrairement à « sept. »
+              // ou « janv. ») tient sans déborder, avec 1,5 px de réserve.
+              style={{ width: "6.25rem", letterSpacing: "-.05em", textAlign: "center" }}
+            >
+              {/* Séparateur « ‣ » et non « → » : 4,6 px contre 13,5 px dans la police du
                 libellé. C'est ce qui fait tenir la semaine la plus longue de l'année
                 dans la boîte figée de 96 px — avec la flèche, elle débordait de 5 px.
                 Grossi (1.35em) car le glyphe est dessiné bien plus petit que la
                 hauteur d'x ; `lineHeight: 0` empêche ce grossissement de pousser la
                 hauteur de la ligne. */}
-            {mondayStr ? (
-              <>
-                {shortDateFmt.format(addDays(mondayStr, firstDayOffset))}
-                <span
-                  style={{
-                    fontSize: "1.35em",
-                    lineHeight: 0,
-                    // Descendu de ~1,5 px : le glyphe est dessiné haut dans sa boîte,
-                    // et grossi il tirait l'œil au-dessus de la ligne des dates.
-                    // Décalage PUREMENT visuel (position relative) : la hauteur de la
-                    // ligne ne bouge pas.
-                    position: "relative",
-                    top: ".12em",
-                  }}
-                >
-                  {" ‣ "}
-                </span>
-                {shortDateFmt.format(addDays(mondayStr, lastDayOffset))}
-              </>
-            ) : (
-              "…"
-            )}
+              {mondayStr ? (
+                <>
+                  {shortDateFmt.format(addDays(mondayStr, firstDayOffset))}
+                  <span
+                    style={{
+                      fontSize: "1.35em",
+                      lineHeight: 0,
+                      // Descendu de ~1,5 px : le glyphe est dessiné haut dans sa boîte,
+                      // et grossi il tirait l'œil au-dessus de la ligne des dates.
+                      // Décalage PUREMENT visuel (position relative) : la hauteur de la
+                      // ligne ne bouge pas.
+                      position: "relative",
+                      top: ".12em",
+                    }}
+                  >
+                    {" ‣ "}
+                  </span>
+                  {shortDateFmt.format(addDays(mondayStr, lastDayOffset))}
+                </>
+              ) : (
+                "…"
+              )}
+            </span>
+            <button
+              type="button"
+              className="ex-arrow"
+              disabled={!canWeekNext}
+              onClick={() => canWeekNext && shiftWeek(1)}
+              {...dragWeekProps(1)}
+            >
+              ▸
+            </button>
           </span>
-          <button
-            type="button"
-            className="ex-arrow"
-            disabled={!canWeekNext}
-            onClick={() => canWeekNext && shiftWeek(1)}
-            {...dragWeekProps(1)}
-          >
-            ▸
-          </button>
           {todayInVisiblePeriods && (
             <button
               type="button"
+              className="pn-today toolbar-icon-btn"
               data-tip="Aujourd'hui"
               aria-label="Aujourd'hui"
               // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
               // chrome que les boutons de la barre d'options ; identique à l'agenda usager.
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--rad-sm)",
-                padding: ".28rem .38rem",
-                cursor: "pointer",
-                color: "var(--muted)",
-                display: "flex",
-                alignItems: "center",
-                lineHeight: 1,
-                marginLeft: ".4rem",
-              }}
               onClick={() => {
                 // Retour à la semaine courante : on verrouille sur la période
                 // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
@@ -3210,22 +3153,8 @@ export function AgendaGrid({
               </label>
             </div>
           )}
-          {/* Hors création : liste d'attente (réglage service) puis bouton Imprimer, à
-              gauche du bouton « Mode création ». */}
-          {!creationMode && service.listeAttente && (
-            // Bouton partagé avec l'agenda usager (chrome du bouton Imprimer) + pastille
-            // orange du nombre d'inscrits ; rien si 0 (Dom 2026-09-05).
-            <WaitingListButton
-              tip="Liste d'attente"
-              ariaLabel={`Liste d'attente (${waitingEntries.length})`}
-              badge={waitingEntries.length}
-              onClick={() => setWaitlistOpen(true)}
-            />
-          )}
-          {!creationMode && (
-            <PrintIconButton onClick={printSessionsList} tip="Imprimer la liste des réservations" />
-          )}
-          {/* Capacité / jauge / demandeurs par défaut des créneaux créés (mode création). */}
+          {/* Capacité / jauge / demandeurs par défaut des créneaux créés (mode création) —
+              avant la capsule d'outils, qui ne contient alors que « Mode création ». */}
           {creationMode && (
             <>
               {/* Plage des créneaux créés : par défaut toute la période, d'où deux
@@ -3410,41 +3339,52 @@ export function AgendaGrid({
               </button>
             </>
           )}
-          {/* Bouton « Mode création » (bascule), à droite du sélecteur de type. */}
-          <button
-            type="button"
-            onClick={() => toggleCreationMode(!creationMode)}
-            data-tip="Mode création"
-            aria-label="Mode création"
-            aria-pressed={creationMode}
-            style={{
-              background: creationMode ? "var(--danger)" : "none",
-              border: `1px solid ${creationMode ? "var(--danger)" : "var(--border)"}`,
-              borderRadius: "var(--rad-sm)",
-              padding: ".28rem .38rem",
-              cursor: "pointer",
-              color: creationMode ? "var(--accent-contrast, #fff)" : "var(--danger)",
-              display: "flex",
-              alignItems: "center",
-              lineHeight: 1,
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          {/* Capsule d'outils (CSS .agenda-page .agenda-tools, Dom 2026-09-14) : hors
+              création, liste d'attente (réglage service) puis Imprimer, puis la bascule
+              « Mode création » ; en création, la bascule seule. */}
+          <div className="agenda-tools">
+            {!creationMode && service.listeAttente && (
+              // Bouton partagé avec l'agenda usager + pastille orange du nombre
+              // d'inscrits ; rien si 0 (Dom 2026-09-05).
+              <WaitingListButton
+                tip="Liste d'attente"
+                ariaLabel={`Liste d'attente (${waitingEntries.length})`}
+                badge={waitingEntries.length}
+                onClick={() => setWaitlistOpen(true)}
+              />
+            )}
+            {!creationMode && (
+              <PrintIconButton
+                onClick={printSessionsList}
+                tip="Imprimer la liste des réservations"
+              />
+            )}
+            {/* Bouton « Mode création » (bascule) : pictogramme rouge, fond rouge enfoncé. */}
+            <button
+              type="button"
+              onClick={() => toggleCreationMode(!creationMode)}
+              data-tip="Mode création"
+              aria-label="Mode création"
+              aria-pressed={creationMode}
+              className={`toolbar-icon-btn is-danger${creationMode ? " is-active" : ""}`}
             >
-              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-              <path d="m15 5 4 4" />
-            </svg>
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                <path d="m15 5 4 4" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -3965,7 +3905,7 @@ export function AgendaGrid({
         >
           {/* Conseil précédé de l'ampoule seule (plus de mot « Astuce », Dom 2026-09-05) ;
               le conseil dépend du mode création. */}
-          <p style={{ margin: 0 }}>
+          <p className="agenda-hint" style={{ margin: 0 }}>
             <span aria-hidden="true">💡</span>{" "}
             {creationMode
               ? "Saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
