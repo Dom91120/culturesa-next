@@ -70,9 +70,15 @@ try {
           const t = badge?.textContent ?? "";
           return !!badge && /Enfant/.test(t) && /Adulte/.test(t);
         });
-        // Raté : on décoche le brouillon (verrou « une seule action ») avant le suivant.
+        // Raté : on vide le brouillon (verrou « une seule action ») avant le suivant, via
+        // le bouton « Annuler » du pied — recliquer le créneau ne décoche plus le badge.
         if (!ok) {
-          await page.mouse.click(found.x, found.y);
+          await page.evaluate(() => {
+            const btn = [...document.querySelectorAll(".agenda-actions .btn")].find(
+              (b) => b.textContent.trim() === "Annuler",
+            );
+            if (btn) btn.click();
+          });
           await sleep(300);
         }
       }
