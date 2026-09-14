@@ -172,7 +172,9 @@ const BATCH_DISMISS_MS = 10000;
 // Flèches de la navigation SEMAINE : 1rem, contre les .7rem de `.periode-nav
 // .ex-arrow`. Réglé ici et non sur la classe — celle-ci sert aussi aux flèches
 // d'exercice, juste à côté, qui gardent leur taille.
-const ARROW_STYLE: React.CSSProperties = { fontSize: "1rem", padding: "0 .2rem" };
+// Flèches de semaine : dessinées par le CSS (.agenda-page .periode-nav .ex-arrow, rondes) ;
+// seul l'état « armé » pendant un glisser pose un style inline (fond accent).
+const ARROW_STYLE: React.CSSProperties = {};
 // Largeur (px) des bandes de bord de la grille qui font défiler la semaine pendant un
 // glisser de réservation (cf. onWrapDragOver).
 const DRAG_EDGE_PX = 28;
@@ -881,7 +883,7 @@ export function AgendaGrid({
     },
     style:
       dragWeekArmed === delta
-        ? { ...ARROW_STYLE, background: "var(--accent)", color: "#fff", borderRadius: 4 }
+        ? { ...ARROW_STYLE, background: "var(--accent)", color: "#fff" }
         : ARROW_STYLE,
   });
 
@@ -2991,6 +2993,9 @@ export function AgendaGrid({
     >
       <div
         style={{
+          // position:relative → la nav semaine se centre en absolu sur toute la largeur
+          // (= largeur du tableau), indépendamment du titre et des outils latéraux.
+          position: "relative",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -3034,11 +3039,24 @@ export function AgendaGrid({
             gap resserré : flèches au plus près du libellé (largeur figée).
             Petits triangles ◂ ▸ (et non ◀ ▶) : même dessin, moins large — cette barre
             partage sa ligne avec le titre et le sélecteur de période. */}
-        <div className="periode-nav" style={{ margin: "0 auto", gap: ".4rem" }}>
-          {/* Groupe ◂ label ▸ en capsule (.pn-main, CSS .agenda-page) ; « Aujourd'hui »
-              reste à côté, hors capsule. Pendant un glisser de réservation, survoler une
-              flèche fait défiler la semaine (dragWeekProps) ; un bouton désactivé ne reçoit
-              pas les événements de glisser, ce qui borne le défilement comme le clic. */}
+        {/* Navigation semaine centrée en absolu par rapport au tableau (Dom 2026-09-14), comme
+            sur la page Réservations de l'usager : `margin: 0 auto` la centrait dans l'espace
+            restant entre le titre et les outils, donc décalée. */}
+        <div
+          className="periode-nav"
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            margin: 0,
+          }}
+        >
+          {/* Groupe ◂ label ▸ en capsule (.pn-main, CSS .agenda-page) ; « Aujourd'hui » est
+              ancré en absolu juste après ▸, hors du centrage. Pendant un glisser de
+              réservation, survoler une flèche fait défiler la semaine (dragWeekProps) ; un
+              bouton désactivé ne reçoit pas les événements de glisser, ce qui borne le
+              défilement comme le clic. */}
           <span
             className="pn-main"
             style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 0 }}
@@ -3100,27 +3118,35 @@ export function AgendaGrid({
             >
               ▸
             </button>
+            {todayInVisiblePeriods && (
+              <button
+                type="button"
+                className="pn-today toolbar-icon-btn"
+                data-tip="Aujourd'hui"
+                aria-label="Aujourd'hui"
+                // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
+                // chrome que les boutons de la barre d'options ; identique à l'agenda usager.
+                // Hors flux, à droite de ▸ : ne compte pas dans le centrage de la nav.
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  left: "100%",
+                  marginLeft: ".4rem",
+                }}
+                onClick={() => {
+                  // Retour à la semaine courante : on verrouille sur la période
+                  // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
+                  // qui diffère quand la semaine chevauche deux périodes — sinon
+                  // on afficherait la période du mois précédent).
+                  setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
+                  setAnchorMonday(ymd(mondayOf(new Date())));
+                }}
+              >
+                <TodayGlyph size={15} />
+              </button>
+            )}
           </span>
-          {todayInVisiblePeriods && (
-            <button
-              type="button"
-              className="pn-today toolbar-icon-btn"
-              data-tip="Aujourd'hui"
-              aria-label="Aujourd'hui"
-              // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
-              // chrome que les boutons de la barre d'options ; identique à l'agenda usager.
-              onClick={() => {
-                // Retour à la semaine courante : on verrouille sur la période
-                // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
-                // qui diffère quand la semaine chevauche deux périodes — sinon
-                // on afficherait la période du mois précédent).
-                setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
-                setAnchorMonday(ymd(mondayOf(new Date())));
-              }}
-            >
-              <TodayGlyph size={15} />
-            </button>
-          )}
         </div>
         {/* Groupe de droite de l'en-tête (cases à cocher, ou réglages de création).
             `marginLeft: auto` : quand la ligne devient trop étroite et que ce groupe
