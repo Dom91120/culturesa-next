@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import iconPng from "@/app/icon.png";
 import { signIn, twoFactor } from "@/lib/auth-client";
 import { useFormSubmit } from "@/lib/use-form-submit";
 
@@ -64,88 +65,78 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
   // passe est vérifié et n'a plus à être affiché ni renvoyé.
   if (etape === "code") {
     return (
-      <form onSubmit={handleCode} className="panel auth-card">
-        <div className="panel-title">
-          <span className="dot" />
-          Vérification en deux étapes
-        </div>
-        <div className="panel-subtitle">
-          {codeSecours
-            ? "Saisissez l'un de vos codes de secours."
-            : "Saisissez le code affiché par votre application d'authentification."}
-        </div>
-        <div className="form-grid">
-          <div className="field full">
-            <label htmlFor="l-code">
-              {codeSecours ? "Code de secours" : "Code à 6 chiffres"}{" "}
-              <span className="required-star">*</span>
-            </label>
-            <input
-              id="l-code"
-              type="text"
-              required
-              inputMode={codeSecours ? "text" : "numeric"}
-              autoComplete="one-time-code"
-              // Cas où la règle d'accessibilité s'inverse : cet écran apparaît APRÈS
-              // une action délibérée (envoi du formulaire), le bouton qui portait le
-              // focus a disparu, et ce champ est le seul de la page. Sans autoFocus,
-              // un lecteur d'écran resterait sur un focus orphelin.
-              // biome-ignore lint/a11y/noAutofocus: focus légitime après action utilisateur
-              autoFocus
-              placeholder={codeSecours ? "xxxxx-xxxxx" : "000000"}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-            {error && <span className="field-error">{error}</span>}
-            <div style={{ marginTop: ".3rem" }}>
-              <button
-                type="button"
-                className="auth-link-btn"
-                onClick={() => {
-                  setCodeSecours(!codeSecours);
-                  setCode("");
-                }}
-              >
-                {codeSecours
-                  ? "Utiliser l'application d'authentification"
-                  : "Téléphone perdu ? Utiliser un code de secours"}
-              </button>
+      <div className="auth-si">
+        <SiHead />
+        <form onSubmit={handleCode} className="auth-si-card">
+          <h1>Vérification en deux étapes</h1>
+          <div className="form-grid">
+            <div className="field full">
+              <label htmlFor="l-code">
+                {codeSecours ? "Code de secours" : "Code à 6 chiffres"}{" "}
+                <span className="required-star">*</span>
+              </label>
+              <input
+                id="l-code"
+                type="text"
+                required
+                inputMode={codeSecours ? "text" : "numeric"}
+                autoComplete="one-time-code"
+                // Cas où la règle d'accessibilité s'inverse : cet écran apparaît APRÈS
+                // une action délibérée (envoi du formulaire), le bouton qui portait le
+                // focus a disparu, et ce champ est le seul de la page. Sans autoFocus,
+                // un lecteur d'écran resterait sur un focus orphelin.
+                // biome-ignore lint/a11y/noAutofocus: focus légitime après action utilisateur
+                autoFocus
+                placeholder={codeSecours ? "xxxxx-xxxxx" : "000000"}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
             </div>
           </div>
-        </div>
-        <div className="btn-row">
+          {error && <p className="field-error">{error}</p>}
           <button
             type="submit"
             className="btn btn-primary"
             disabled={pending || code.trim().length < 6}
           >
-            {pending ? "Vérification…" : "Valider →"}
+            {pending ? "Vérification…" : "Valider"}
           </button>
-        </div>
-      </form>
+          <p className="auth-si-foot">
+            <button
+              type="button"
+              className="auth-link-btn"
+              onClick={() => {
+                setCodeSecours(!codeSecours);
+                setCode("");
+              }}
+            >
+              {codeSecours
+                ? "Utiliser l'application d'authentification"
+                : "Téléphone perdu ? Utiliser un code de secours"}
+            </button>
+          </p>
+        </form>
+      </div>
     );
   }
 
   return (
-    <>
-      <form onSubmit={handleSubmit} className="panel auth-card">
-        <div className="panel-title">
-          <span className="dot" />
-          Se connecter
-        </div>
-        <div className="panel-subtitle">Accédez à vos réservations.</div>
+    <div className="auth-si">
+      <SiHead />
+      <form onSubmit={handleSubmit} className="auth-si-card">
+        <h1>Connexion</h1>
         {/* Déconnexion automatique (délai d'inactivité ou durée maximale de session,
             cf. server/session-policy.ts) : sans ce message, l'usager se retrouve
             devant le formulaire sans comprendre pourquoi. */}
         {expired && (
-          <div role="status" className="auth-notice">
-            Votre session a expiré après une période d&apos;inactivité. Merci de vous reconnecter.
-          </div>
+          <p role="status" className="auth-notice">
+            Votre session a expiré, reconnectez-vous.
+          </p>
         )}
         <div className="form-grid">
           <div className="field full">
             <label htmlFor="l-email">
-              E-mail <span className="required-star">*</span>
+              Adresse e-mail <span className="required-star">*</span>
             </label>
             <input
               id="l-email"
@@ -158,33 +149,45 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
             />
           </div>
           <div className="field full">
-            <div className="field-aside">
-              <label htmlFor="l-pwd">
-                Mot de passe <span className="required-star">*</span>
-              </label>
-              <Link href="/auth/forgot-password">Mot de passe oublié ?</Link>
-            </div>
+            <label htmlFor="l-pwd">
+              Mot de passe <span className="required-star">*</span>
+            </label>
             <input
               id="l-pwd"
               type="password"
               required
-              placeholder="••••••••"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            {error && <span className="field-error">{error}</span>}
           </div>
         </div>
-        <div className="btn-row">
-          <button type="submit" className="btn btn-primary" disabled={pending || !canSubmit}>
-            {pending ? "Connexion…" : "Connexion →"}
-          </button>
-        </div>
+        {error && <p className="field-error">{error}</p>}
+        <button type="submit" className="btn btn-primary" disabled={pending || !canSubmit}>
+          {pending ? "Connexion…" : "Se connecter"}
+        </button>
+        <p className="auth-si-foot">
+          <Link href="/auth/forgot-password">Mot de passe oublié ?</Link>
+        </p>
       </form>
       <div className="auth-alt">
         Pas encore de compte ? <Link href="/auth/register">Créer un compte</Link>
       </div>
-    </>
+    </div>
+  );
+}
+
+/** Pictogramme carré + nom + sous-titre au-dessus de la carte (essai SoftInventory). */
+function SiHead() {
+  return (
+    <div className="auth-si-head">
+      <img className="auth-si-mark" src={iconPng.src} width={48} height={48} alt="" />
+      <div>
+        <div className="logo">
+          Cultu<em>Résa</em>
+        </div>
+        <div className="auth-si-sub">Réservation d&apos;activités culturelles</div>
+      </div>
+    </div>
   );
 }

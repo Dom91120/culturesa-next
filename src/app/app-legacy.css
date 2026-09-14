@@ -5485,7 +5485,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   background: var(--surface);
 }
 .auth-brand {
-  flex: 0 0 clamp(300px, 30vw, 400px);
+  flex: 0 0 clamp(300px, 26vw, 400px);
   background: var(--sidebar-bg);
   background-image: radial-gradient(
     ellipse 80% 55% at 15% 0%,
@@ -5734,5 +5734,183 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   }
   .auth-card {
     padding: 1.5rem 1.25rem 1.4rem;
+  }
+}
+
+/* ── ESSAI « style SoftInventory » sur la partie droite de l'écran de connexion
+   (Dom 2026-09-14) : fond en dégradé sombre, pictogramme carré + nom au-dessus d'une
+   carte claire centrée (angles 16 px, ombre portée), champs à liseré avec anneau de
+   focus, bouton pleine largeur. La colonne `.auth-main` est partagée par le layout :
+   `:has()` la restyle uniquement quand elle contient le bloc `.auth-si`. ─────────── */
+.auth-main:has(> .auth-si) {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #0f1117 0%, #1a1f2e 55%, #163d2c 100%);
+}
+.auth-si {
+  width: 100%;
+  max-width: 24rem;
+}
+.auth-si-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  margin-bottom: 0.9rem;
+}
+/* Icône de l'application (src/app/icon.png, disque « CR ») à la place du carré. */
+.auth-si-mark {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.auth-si-head .logo {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #fff;
+}
+.auth-si-sub {
+  margin-top: 0.15rem;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.auth-si-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+.auth-si-card h1 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+.auth-si .form-grid {
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.auth-si .field {
+  gap: 0.125rem;
+}
+.auth-si .field label {
+  font-size: 0.78rem;
+  letter-spacing: 0.025em;
+  line-height: 1rem;
+}
+.auth-si input:not([type="checkbox"]):not([type="radio"]) {
+  width: 100%;
+  height: 30px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border-hover);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.auth-si input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.auth-si .auth-notice {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-radius: 8px;
+  background: var(--warn-dim);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+.auth-si .field-error {
+  display: block;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: var(--danger-dim);
+  color: var(--danger);
+  font-size: 0.8rem;
+}
+.auth-si .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 30px;
+  padding: 0.25rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.auth-si .btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, #000);
+  transform: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.auth-si .btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.auth-si .btn-primary:disabled {
+  opacity: 0.5;
+}
+.auth-si-foot {
+  margin-top: 0.75rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.auth-si-foot a,
+.auth-si-foot .auth-link-btn {
+  color: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-si-foot a:hover,
+.auth-si-foot .auth-link-btn:hover {
+  color: var(--accent);
+}
+.auth-si .auth-alt {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+/* Essai (suite) : sur l'écran de connexion SEUL, le volet de gauche passe en fond blanc
+   et texte noir, quel que soit le thème — ciblé par `:has()` sur le bloc `.auth-si`. */
+.auth-shell:has(.auth-si) .auth-brand {
+  background: #fff;
+  background-image: radial-gradient(
+    ellipse 80% 55% at 15% 0%,
+    color-mix(in srgb, var(--accent) 14%, transparent) 0%,
+    transparent 70%
+  );
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  color: #3a4152;
+}
+.auth-shell:has(.auth-si) .auth-brand .logo,
+.auth-shell:has(.auth-si) .auth-brand-title {
+  color: #1a1f2e;
+}
+.auth-shell:has(.auth-si) .auth-brand .tagline {
+  color: #8a909f;
+}
+.auth-shell:has(.auth-si) .auth-brand-foot {
+  border-top-color: rgba(0, 0, 0, 0.08);
+  color: #8a909f;
+}
+.auth-shell:has(.auth-si) .auth-brand-foot .btn-theme {
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #1a1f2e;
+}
+@media (max-width: 760px) {
+  .auth-shell:has(.auth-si) .auth-brand {
+    border-right: 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   }
 }
