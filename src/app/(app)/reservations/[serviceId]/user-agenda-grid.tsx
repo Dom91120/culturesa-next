@@ -127,7 +127,6 @@ const bu = (n: number) => `calc(var(--bu) * ${n})`;
 // .ex-arrow`), sans padding vertical pour ne pas épaissir la ligne. Réglé ici et non
 // sur la classe, que partagent la barre d'exercice et le panneau Périodes. Même
 // gabarit que la nav de l'agenda admin.
-const WEEK_ARROW_STYLE: React.CSSProperties = { fontSize: "1rem", padding: "0 .2rem" };
 
 // Bouton − / + d'un compteur de jauge (sans cercle, remplace les anciennes flèches ▲▼).
 // Clic-maintenu : 1er pas immédiat, puis répétition (90 ms) après un délai de 400 ms
@@ -2718,37 +2717,19 @@ export function UserAgendaGrid({
             togglePendingAdd(b.slotId, b.dayKey, ponctuel);
           }}
         >
-          {/* Repère de cadence des créneaux RÉCURRENTS : « Semaine A / Semaine B / Toutes »
-              (abrégé). Filigrane en ARRIÈRE-PLAN (centré, sous le contenu), couleur = bordure
-              jaune du créneau (--block-color). Décoratif (aria-hidden, pointerEvents none). */}
+          {/* Repère de cadence des créneaux RÉCURRENTS : « Semaine A / Semaine B / Toutes ».
+              Petite étiquette en capitales en haut à gauche (Dom 2026-09-14 : l'ancien
+              filigrane jaune sur fond jaune était illisible), CSS .agenda-block-cadence.
+              Omise sur les créneaux courts (≤ 30 min), où elle chevaucherait le nombre de
+              places. Décorative (aria-hidden, pointer-events none). */}
           {(() => {
             const s = recurSlotById.get(b.slotId);
             if (!s) return null;
+            if (!b.isAllDay && b.endMin - b.startMin <= 30) return null;
             const w = parseWeeks(s.weeks);
             const label = abMode && w.length === 1 ? `Semaine ${w[0]}` : "Toutes";
             return (
-              <span
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  top: 1,
-                  left: 3,
-                  // Une seule ligne, bornée à droite + overflow hidden : le libellé ne
-                  // déborde pas et ne passe pas à la ligne — la partie qui dépasse est
-                  // simplement rognée (pas d'ellipse).
-                  right: 3,
-                  overflow: "hidden",
-                  whiteSpace: "nowrap",
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  color: "var(--block-color)",
-                  pointerEvents: "none",
-                  // Derrière les autres éléments du créneau (contenu en zIndex 1) mais
-                  // devant le bloc lui-même (fond/bordure).
-                  zIndex: 0,
-                }}
-              >
+              <span aria-hidden="true" className="agenda-block-cadence">
                 {label}
               </span>
             );
@@ -3111,15 +3092,8 @@ export function UserAgendaGrid({
                       <CalendarGlyph size={slotIconPx} />
                     </span>
                   )}
-                  <span
-                    className="slot-spots"
-                    style={{
-                      fontSize: ".62rem",
-                      letterSpacing: ".04em",
-                      lineHeight: 1.3,
-                      background: "none",
-                    }}
-                  >
+                  {/* Pastille blanche (Dom 2026-09-14), CSS .user-agenda .slot-spots-free. */}
+                  <span className="slot-spots slot-spots-free">
                     {remaining} place{remaining > 1 ? "s" : ""}
                   </span>
                 </div>
@@ -3207,7 +3181,14 @@ export function UserAgendaGrid({
 
   return (
     // Info-bulle déléguée : un seul handler lit data-tip / data-slot-tip au survol.
-    <div id="tab-content-agenda" onMouseMove={onAgendaTip} onMouseLeave={clearTip}>
+    // `user-agenda` : portée des styles propres à cette page (app-legacy.css, bloc
+    // « Agenda usager — refonte 2026-09-14 ») ; l'agenda gestionnaire n'en hérite pas.
+    <div
+      id="tab-content-agenda"
+      className="user-agenda"
+      onMouseMove={onAgendaTip}
+      onMouseLeave={clearTip}
+    >
       {/* Info-bulle flottante unique (texte data-tip / « Journées concernées »). */}
       <AgendaTooltip tip={tip} tipRef={tipRef} />
 
@@ -3328,15 +3309,13 @@ export function UserAgendaGrid({
               position: "relative",
               display: "inline-flex",
               alignItems: "center",
-              // Flèches rapprochées du libellé (largeur du libellé figée juste
-              // au-dessus de la semaine la plus longue).
-              gap: ".1rem",
+              // Capsule (bordure, arrondi, flèches rondes) : CSS .user-agenda .pn-main.
+              gap: 0,
             }}
           >
             <button
               type="button"
               className="ex-arrow"
-              style={WEEK_ARROW_STYLE}
               disabled={!canWeekPrev}
               onClick={() => canWeekPrev && shiftWeek(-1)}
             >
@@ -3376,7 +3355,6 @@ export function UserAgendaGrid({
             <button
               type="button"
               className="ex-arrow"
-              style={WEEK_ARROW_STYLE}
               disabled={!canWeekNext}
               onClick={() => canWeekNext && shiftWeek(1)}
             >
@@ -3445,9 +3423,10 @@ export function UserAgendaGrid({
             maxWidth: isMobile ? undefined : "calc(50% - 80px)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+          <div className="agenda-tools">
             {/* Liste d'attente, Imprimer (bureau seulement), absence — icônes seules
-                (Dom 2026-09-05 / ordre 2026-09-06). */}
+                (Dom 2026-09-05 / ordre 2026-09-06), regroupées dans une capsule segmentée
+                (Dom 2026-09-14, CSS .user-agenda .agenda-tools). */}
             {waitlistIcon}
             {!isMobile && (
               <PrintIconButton
@@ -3856,8 +3835,10 @@ export function UserAgendaGrid({
               maxWidth: "100%",
             }}
           >
-            {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »). */}
+            {/* Barre d'actions du brouillon (« Annuler » / « Enregistrer → »), taille des
+                boutons en CSS (.user-agenda .agenda-actions .btn). */}
             <div
+              className="agenda-actions"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -3869,7 +3850,6 @@ export function UserAgendaGrid({
               <button
                 type="button"
                 className="btn btn-ghost"
-                style={{ padding: ".22rem .6rem", fontSize: ".66rem" }}
                 onClick={clearPending}
                 disabled={pendingCount === 0}
               >
@@ -3879,13 +3859,11 @@ export function UserAgendaGrid({
                 type="button"
                 className="btn btn-primary"
                 // Une suppression en attente → « Supprimer → » en rouge danger.
-                style={{
-                  padding: ".22rem .6rem",
-                  fontSize: ".66rem",
-                  ...(isDeletion
+                style={
+                  isDeletion
                     ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }
-                    : {}),
-                }}
+                    : undefined
+                }
                 // Enregistrement DIRECT → toast vert (création/modif/déplacement) ou rouge.
                 onClick={commitPending}
                 disabled={pendingCount === 0 || committing}

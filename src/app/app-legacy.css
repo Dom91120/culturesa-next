@@ -434,7 +434,7 @@ body {
 .app-main {
   flex: 1;
   min-width: 0;
-  padding: 1rem 2.3rem 2rem 2.3rem;
+  padding: 0.95rem 2.3rem 2rem;
   height: 100%;
   overflow-y: auto;
   background: var(--surface);
@@ -5912,5 +5912,240 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   .auth-shell:has(.auth-si) .auth-brand {
     border-right: 0;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* ── Agenda usager (page Réservations) — refonte Dom 2026-09-14 ─────────────────
+   Portée : `.user-agenda` (racine #tab-content-agenda de user-agenda-grid.tsx) ; l'agenda
+   gestionnaire, qui partage la grille (agenda-shared.tsx) et ses classes, n'est PAS touché.
+   Vocabulaire : capsules et pastilles, carte à angles doux, moins de fonds gris. */
+
+/* Titre : l'exercice sort du titre en pastille grise. */
+.user-agenda .res-title .exercice-nav-inline {
+  margin-left: 0.15rem;
+}
+.user-agenda .res-title .exercice-nav-inline .ex-nav-label {
+  /* Même hauteur (25 px) que les capsules de la ligne de titre. */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 25px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Nav de semaine : capsule, dates au centre, flèches rondes colorées au survol. */
+.user-agenda .pn-main {
+  /* 25 px de haut : 1 px de marge + flèches de 21 px + bordure (Dom 2026-09-14). */
+  box-sizing: border-box;
+  height: 25px;
+  padding: 1px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.user-agenda .periode-nav .ex-arrow {
+  width: 21px;
+  height: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 0.8rem;
+  color: var(--muted);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.user-agenda .periode-nav .ex-arrow:hover:not(:disabled) {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* Outils de la ligne de titre (liste d'attente, imprimer, absence) : UNE capsule
+   segmentée. Les boutons (composants partagés agenda-shared.tsx) portent leur cadre en
+   style inline — d'où les `!important`, limités à ce conteneur. */
+.user-agenda .agenda-tools {
+  display: flex;
+  align-items: center;
+  /* Même hauteur que la capsule de navigation (25 px). */
+  box-sizing: border-box;
+  height: 25px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+.user-agenda .agenda-tools > button {
+  border: 0 !important;
+  border-radius: 0 !important;
+  height: 23px;
+  padding: 0 0.6rem !important;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.user-agenda .agenda-tools > button + button {
+  border-left: 1px solid var(--border) !important;
+}
+/* Bouton « Aujourd'hui » (à droite de la nav, cadre inline) : même hauteur et même
+   arrondi que les capsules. */
+.user-agenda .periode-nav .pn-today {
+  box-sizing: border-box;
+  height: 25px !important;
+  padding: 0 0.5rem !important;
+  border-radius: 99px !important;
+}
+.user-agenda .agenda-tools > button:hover {
+  background: var(--surface2);
+  color: var(--text) !important;
+}
+
+/* Périodes : contrôle segmenté sur fond en creux ; l'onglet actif ressort en clair, avec
+   un point de la couleur de la période (--period-color, posée inline par l'onglet). */
+.user-agenda .period-tabs {
+  /* 28 px de haut (Dom 2026-09-14) : 2 px de marge + onglets de 22 px + bordure. */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface2);
+  margin: 0.55rem 0 0;
+}
+.user-agenda .period-btn {
+  box-sizing: border-box;
+  height: 22px;
+  border: 0;
+  padding: 0 0.85rem;
+  line-height: 1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.user-agenda .period-btn:hover {
+  color: var(--text);
+}
+.user-agenda .period-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 0 0 1px var(--border);
+}
+.user-agenda .period-btn.active .period-badge {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: var(--period-color, var(--accent));
+}
+
+/* Grille : carte à angles de 12 px et ombre légère ; en-têtes et colonne des heures sur le
+   fond de la page (plus de gris), séparateurs verticaux conservés ; nom du jour plus lisible. */
+.user-agenda .agenda-grid {
+  border-radius: 12px;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 8px 24px -16px rgba(0, 0, 0, 0.18);
+}
+.user-agenda .agenda-header-cell,
+.user-agenda .agenda-corner,
+.user-agenda .agenda-time-col {
+  background: var(--surface);
+}
+/* Rangée d'en-tête plafonnée à 35 px (Dom 2026-09-14) : nom du jour + date sur deux
+   lignes serrées, centrées verticalement ; le coin « A » suit la même hauteur. */
+.user-agenda .agenda-header-cell:not(.agenda-allday-corner) {
+  box-sizing: border-box;
+  height: 35px;
+  justify-content: center;
+  gap: 0;
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
+/* Coin « Journée entière » : garde la hauteur de la rangée journée entière (56 px, règle
+   générale) ; police un cran sous celle des en-têtes de jour (Dom 2026-09-14). */
+.user-agenda .agenda-allday-corner {
+  background: var(--surface);
+  font-size: 0.7rem;
+}
+.user-agenda .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
+  padding: 2px 0.4rem;
+}
+.user-agenda .agenda-day-sub {
+  font-size: 0.66rem;
+  line-height: 1.15;
+  margin-top: 1px;
+}
+
+/* Créneaux : étiquette de cadence (« Toutes », « Semaine A ») en capitales, lisible sur le
+   jaune ; nombre de places en pastille claire. */
+.user-agenda .agenda-block-cadence {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  z-index: 0;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--block-color) 22%, var(--surface));
+  color: color-mix(in srgb, var(--block-color) 75%, #fff);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+html.light .user-agenda .agenda-block-cadence {
+  background: color-mix(in srgb, var(--block-color) 28%, var(--surface));
+  color: color-mix(in srgb, var(--block-color) 45%, #3a3200);
+}
+.user-agenda .slot-spots-free {
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface3);
+  color: var(--text);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+/* Pied : boutons « Annuler » / « Enregistrer → » à la taille du reste. */
+.user-agenda .agenda-actions .btn {
+  padding: 0.38rem 0.9rem;
+  font-size: 0.74rem;
+  border-radius: 8px;
+}
+.user-agenda .agenda-actions .btn-ghost {
+  border-color: var(--border);
+}
+
+@media (max-width: 640px) {
+  /* Coins hauts droits : la barre mobile-day-nav se pose dessus (cf. règle générale). */
+  .user-agenda .agenda-grid {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  /* Vue un seul jour : les en-têtes de jour restent repliés (hauteur nulle, cf. règle
+     générale) malgré le plafond de 35 px posé ci-dessus. */
+  .user-agenda .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
+    height: 0;
+    padding: 0;
   }
 }
