@@ -119,15 +119,7 @@ body {
   );
 }
 
-/* ── Header ─────────────────────────────────────────────── */
-header {
-  padding: 0.6rem 2rem;
-  text-align: center;
-  position: relative;
-  max-width: 1200px;
-  margin: 0 auto;
-  background: var(--surface);
-}
+/* ── Logo (volet des écrans d'authentification) ─────────── */
 .logo {
   font-size: 1.4rem;
   font-weight: 500;
@@ -980,7 +972,7 @@ textarea {
 
 /* ── RGPD ───────────────────────────────────────────────── */
 .rgpd-box {
-  background: var(--surface2);
+  background: var(--surface1); /* même fond que les panneaux (Dom 2026-09-14) */
   border: 1px solid rgba(232, 164, 90, 0.25);
   border-radius: var(--radius);
   padding: 1.5rem;
@@ -1701,27 +1693,6 @@ textarea.theme-pending:focus::placeholder {
   overflow-x: auto;
   border-radius: 6px;
 }
-/* ── Mode toggle ─────────────────────────────────────────── */
-.mode-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  font-size: 0.84rem;
-  color: var(--muted);
-}
-.mode-toggle button {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-family: inherit;
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
 /* ── Role pills ──────────────────────────────────────────── */
 .role-pill {
   display: inline-block;
@@ -5502,3 +5473,266 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 .cfg-stat-title .rg-ico{width:24px;height:24px;border-radius:6px;margin-top:-2px}
 .cfg-stat-hint{display:block;font-size:.68rem;font-weight:400;color:var(--muted);margin-top:2px;letter-spacing:0}
 .cfg-date{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;color:var(--muted);letter-spacing:0;text-transform:none;font-weight:400}
+
+/* ── Écrans d'authentification (connexion, inscription, mot de passe, vérification,
+   suppression de compte) — refonte Dom 2026-09-14. Reprend la grammaire du shell
+   connecté : volet sombre à gauche (mêmes couleurs que la sidebar, quel que soit le
+   thème), contenu clair à droite. Le volet est `sticky` pleine hauteur ; seule la
+   colonne de droite scrolle (utile à l'inscription, plus longue). ─────────────── */
+.auth-shell {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--surface);
+}
+.auth-brand {
+  flex: 0 0 clamp(300px, 30vw, 400px);
+  background: var(--sidebar-bg);
+  background-image: radial-gradient(
+    ellipse 80% 55% at 15% 0%,
+    color-mix(in srgb, var(--accent) 22%, transparent) 0%,
+    transparent 70%
+  );
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  color: #c8cdd8;
+  display: flex;
+  flex-direction: column;
+  padding: 2.2rem 2rem 1.5rem;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+.auth-brand .logo {
+  font-size: 1.9rem;
+  color: #fff;
+}
+.auth-brand .tagline {
+  font-weight: 700;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  color: #8a91a8;
+}
+.auth-brand-body {
+  margin: auto 0;
+  padding: 2.5rem 0;
+}
+.auth-brand-title {
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: #fff;
+  margin-bottom: 1.4rem;
+}
+.auth-brand-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+.auth-brand-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.auth-brand-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+.auth-brand-list .dot {
+  margin-top: 0.42em;
+}
+.auth-brand-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.66rem;
+  color: #6b7280;
+}
+.auth-brand-foot span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.auth-brand-foot .btn-theme {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #c8cdd8;
+}
+.auth-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+  background: var(--surface);
+  background-image: radial-gradient(
+    ellipse 70% 50% at 50% -10%,
+    color-mix(in srgb, var(--accent) 7%, transparent) 0%,
+    transparent 70%
+  );
+}
+/* Champs plus généreux que dans l'app connectée : ici le formulaire EST la page. */
+.auth-main input:not([type="checkbox"]):not([type="radio"]),
+.auth-main select {
+  padding: 0.55rem 0.8rem;
+  font-size: 0.9rem;
+}
+/* Carte d'un écran court (connexion, mot de passe, vérification…). */
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 0;
+  padding: 1.9rem 2rem 1.7rem;
+  box-shadow: 0 18px 50px -24px color-mix(in srgb, var(--text) 35%, transparent);
+}
+.auth-card .panel-title {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+.auth-card .panel-title .dot {
+  width: 9px;
+  height: 9px;
+}
+.auth-card .panel-subtitle {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 1.4rem;
+}
+.auth-card .form-grid {
+  grid-template-columns: 1fr;
+  gap: 0.9rem;
+  margin-bottom: 1.2rem;
+}
+.auth-card .field {
+  gap: 0.35rem;
+}
+.auth-card .field-error {
+  display: block;
+}
+.auth-card .field-aside {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.auth-card .field-aside a {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-card .field-aside a:hover {
+  color: var(--accent);
+}
+.auth-card .btn-row {
+  margin-top: 0;
+}
+.auth-card .btn-row .btn {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+}
+/* Colonne large (inscription : plusieurs panneaux, grille à deux colonnes conservée). */
+.auth-wide {
+  width: 100%;
+  max-width: 720px;
+}
+/* Encart d'information dans la carte (ex. session expirée). */
+.auth-notice {
+  margin: 0 0 1.1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--rad-sm);
+  background: var(--accent-dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+/* Lien alternatif sous la carte (« Pas encore de compte ? », « Retour à la connexion »). */
+.auth-alt {
+  margin-top: 1.4rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+  text-align: center;
+}
+.auth-alt a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Variante au-dessus du contenu (inscription : le formulaire est long, le lien
+   « Déjà inscrit ? » doit se voir en arrivant, pas après le captcha). */
+.auth-alt.is-top {
+  margin: 0 0 1rem;
+}
+.auth-alt a.is-muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+.auth-alt a:hover {
+  color: var(--accent);
+}
+/* Bouton-lien discret (ex. « Utiliser un code de secours »). */
+.auth-link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+.auth-link-btn:hover {
+  color: var(--accent);
+}
+@media (max-width: 760px) {
+  .auth-shell {
+    flex-direction: column;
+  }
+  /* Le volet devient un bandeau : logo + bascule de thème, sans l'accroche. */
+  .auth-brand {
+    flex: none;
+    position: relative;
+    height: auto;
+    padding: 1.1rem 1.25rem 1rem;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background-image: radial-gradient(
+      ellipse 60% 120% at 0% 50%,
+      color-mix(in srgb, var(--accent) 22%, transparent) 0%,
+      transparent 70%
+    );
+  }
+  .auth-brand .logo {
+    font-size: 1.5rem;
+  }
+  .auth-brand-body,
+  .auth-brand-foot span {
+    display: none;
+  }
+  .auth-brand-foot {
+    position: absolute;
+    top: 0.9rem;
+    right: 1rem;
+    padding: 0;
+    border: 0;
+  }
+  .auth-main {
+    padding: 1.5rem 1rem 2rem;
+    justify-content: flex-start;
+  }
+  .auth-card {
+    padding: 1.5rem 1.25rem 1.4rem;
+  }
+}

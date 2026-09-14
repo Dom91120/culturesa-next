@@ -156,15 +156,9 @@ export function RegisterForm({
   });
 
   return (
-    <form onSubmit={submit} style={{ width: "80%", maxWidth: "100%", margin: "0 auto" }}>
-      <div className="mode-toggle">
-        Déjà inscrit ?{" "}
-        <Link
-          href="/auth/login"
-          style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}
-        >
-          Se connecter
-        </Link>
+    <form onSubmit={submit} className="auth-wide">
+      <div className="auth-alt is-top">
+        Déjà inscrit ? <Link href="/auth/login">Se connecter</Link>
       </div>
       <div className="panel">
         <div className="panel-title">

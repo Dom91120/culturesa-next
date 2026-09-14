@@ -13,7 +13,7 @@ export function ConfirmDelete({ token }: { token: string | null }) {
 
   if (!token) {
     return (
-      <div className="panel">
+      <div className="panel auth-card">
         <div className="panel-title">
           <span className="dot" style={{ background: "#e5484d" }} />
           Lien invalide
@@ -36,7 +36,7 @@ export function ConfirmDelete({ token }: { token: string | null }) {
 
   if (status === "done") {
     return (
-      <div className="panel">
+      <div className="panel auth-card">
         <div className="panel-title">
           <span className="dot" />
           Compte supprimé
@@ -57,7 +57,7 @@ export function ConfirmDelete({ token }: { token: string | null }) {
 
   if (status === "error" && reason === "last_admin") {
     return (
-      <div className="panel">
+      <div className="panel auth-card">
         <div className="panel-title">
           <span className="dot" style={{ background: "#e5484d" }} />
           Suppression impossible
@@ -72,7 +72,7 @@ export function ConfirmDelete({ token }: { token: string | null }) {
 
   if (status === "error") {
     return (
-      <div className="panel">
+      <div className="panel auth-card">
         <div className="panel-title">
           <span className="dot" style={{ background: "#e5484d" }} />
           Lien invalide ou expiré
@@ -87,7 +87,7 @@ export function ConfirmDelete({ token }: { token: string | null }) {
 
   return (
     <div
-      className="panel"
+      className="panel auth-card"
       style={{ borderColor: "color-mix(in srgb, #e5484d 45%, var(--border))" }}
     >
       <div className="panel-title">

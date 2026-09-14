@@ -18,7 +18,7 @@ function ResetForm() {
 
   if (!token || errorParam) {
     return (
-      <div className="panel" style={{ textAlign: "center", padding: "2rem 1.5rem" }}>
+      <div className="panel auth-card" style={{ textAlign: "center" }}>
         <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".5rem" }}>
           <span className="dot" />
           Lien invalide ou expiré
@@ -52,11 +52,12 @@ function ResetForm() {
   });
 
   return (
-    <div className="panel">
+    <div className="panel auth-card">
       <div className="panel-title">
         <span className="dot" />
         Nouveau mot de passe
       </div>
+      <div className="panel-subtitle">Choisissez un nouveau mot de passe pour votre compte.</div>
       <form onSubmit={handleSubmit}>
         <div className="form-grid">
           <div className="field full">
@@ -95,11 +96,7 @@ function ResetForm() {
               placeholder="••••••••"
               autoComplete="new-password"
             />
-            {error && (
-              <span className="field-error" style={{ display: "block" }}>
-                {error}
-              </span>
-            )}
+            {error && <span className="field-error">{error}</span>}
           </div>
         </div>
         <div className="btn-row">

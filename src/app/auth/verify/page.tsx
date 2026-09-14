@@ -8,7 +8,7 @@ export default async function VerifyPage({
   const { email } = await searchParams;
 
   return (
-    <div className="panel" style={{ textAlign: "center", padding: "2rem 1.5rem" }}>
+    <div className="panel auth-card" style={{ textAlign: "center" }}>
       <div style={{ fontSize: "2.5rem", marginBottom: ".75rem" }}>📧</div>
       <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".5rem" }}>
         <span className="dot" />

@@ -19,16 +19,7 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div
-        className="panel"
-        style={{
-          textAlign: "center",
-          padding: "2rem 1.5rem",
-          width: "60%",
-          maxWidth: "100%",
-          margin: "0 auto",
-        }}
-      >
+      <div className="panel auth-card" style={{ textAlign: "center" }}>
         <div style={{ fontSize: "2.5rem", marginBottom: ".75rem" }}>📧</div>
         <div className="panel-title" style={{ justifyContent: "center", marginBottom: ".5rem" }}>
           <span className="dot" />
@@ -57,15 +48,15 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
-      <div className="panel">
+    <>
+      <div className="panel auth-card">
         <div className="panel-title">
           <span className="dot" />
           Mot de passe oublié
         </div>
-        <p style={{ fontSize: ".82rem", color: "var(--muted)", marginBottom: "1rem" }}>
+        <div className="panel-subtitle">
           Saisissez votre e-mail pour recevoir un lien de réinitialisation.
-        </p>
+        </div>
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
             <div className="field full">
@@ -89,11 +80,11 @@ export default function ForgotPasswordPage() {
           </div>
         </form>
       </div>
-      <div className="mode-toggle">
-        <Link href="/auth/login" style={{ color: "var(--muted)", textDecoration: "underline" }}>
+      <div className="auth-alt">
+        <Link href="/auth/login" className="is-muted">
           ← Retour à la connexion
         </Link>
       </div>
-    </div>
+    </>
   );
 }

@@ -64,172 +64,126 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
   // passe est vérifié et n'a plus à être affiché ni renvoyé.
   if (etape === "code") {
     return (
-      <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
-        <form onSubmit={handleCode}>
-          <div className="panel">
-            <div className="panel-title">
-              <span className="dot" />
-              Vérification en deux étapes
-            </div>
-            <div className="form-grid">
-              <div className="field full">
-                <label htmlFor="l-code">
-                  {codeSecours ? "Code de secours" : "Code à 6 chiffres"}{" "}
-                  <span className="required-star">*</span>
-                </label>
-                <input
-                  id="l-code"
-                  type="text"
-                  required
-                  inputMode={codeSecours ? "text" : "numeric"}
-                  autoComplete="one-time-code"
-                  // Cas où la règle d'accessibilité s'inverse : cet écran apparaît APRÈS
-                  // une action délibérée (envoi du formulaire), le bouton qui portait le
-                  // focus a disparu, et ce champ est le seul de la page. Sans autoFocus,
-                  // un lecteur d'écran resterait sur un focus orphelin.
-                  // biome-ignore lint/a11y/noAutofocus: focus légitime après action utilisateur
-                  autoFocus
-                  placeholder={codeSecours ? "xxxxx-xxxxx" : "000000"}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-                {error && (
-                  <span className="field-error" style={{ display: "block" }}>
-                    {error}
-                  </span>
-                )}
-                <div style={{ marginTop: ".5rem", fontSize: ".75rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCodeSecours(!codeSecours);
-                      setCode("");
-                    }}
-                    style={{
-                      background: "none",
-                      border: 0,
-                      padding: 0,
-                      color: "var(--muted)",
-                      textDecoration: "underline",
-                      cursor: "pointer",
-                      font: "inherit",
-                    }}
-                  >
-                    {codeSecours
-                      ? "Utiliser l'application d'authentification"
-                      : "Téléphone perdu ? Utiliser un code de secours"}
-                  </button>
-                </div>
-              </div>
+      <form onSubmit={handleCode} className="panel auth-card">
+        <div className="panel-title">
+          <span className="dot" />
+          Vérification en deux étapes
+        </div>
+        <div className="panel-subtitle">
+          {codeSecours
+            ? "Saisissez l'un de vos codes de secours."
+            : "Saisissez le code affiché par votre application d'authentification."}
+        </div>
+        <div className="form-grid">
+          <div className="field full">
+            <label htmlFor="l-code">
+              {codeSecours ? "Code de secours" : "Code à 6 chiffres"}{" "}
+              <span className="required-star">*</span>
+            </label>
+            <input
+              id="l-code"
+              type="text"
+              required
+              inputMode={codeSecours ? "text" : "numeric"}
+              autoComplete="one-time-code"
+              // Cas où la règle d'accessibilité s'inverse : cet écran apparaît APRÈS
+              // une action délibérée (envoi du formulaire), le bouton qui portait le
+              // focus a disparu, et ce champ est le seul de la page. Sans autoFocus,
+              // un lecteur d'écran resterait sur un focus orphelin.
+              // biome-ignore lint/a11y/noAutofocus: focus légitime après action utilisateur
+              autoFocus
+              placeholder={codeSecours ? "xxxxx-xxxxx" : "000000"}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            {error && <span className="field-error">{error}</span>}
+            <div style={{ marginTop: ".3rem" }}>
+              <button
+                type="button"
+                className="auth-link-btn"
+                onClick={() => {
+                  setCodeSecours(!codeSecours);
+                  setCode("");
+                }}
+              >
+                {codeSecours
+                  ? "Utiliser l'application d'authentification"
+                  : "Téléphone perdu ? Utiliser un code de secours"}
+              </button>
             </div>
           </div>
-          <div className="btn-row">
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={pending || code.trim().length < 6}
-            >
-              {pending ? "Vérification…" : "Valider →"}
-            </button>
-          </div>
-        </form>
-      </div>
+        </div>
+        <div className="btn-row">
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={pending || code.trim().length < 6}
+          >
+            {pending ? "Vérification…" : "Valider →"}
+          </button>
+        </div>
+      </form>
     );
   }
 
   return (
     <>
-      <div className="mode-toggle">
-        Pas encore de compte ?{" "}
-        <Link
-          href="/auth/register"
-          style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "underline" }}
-        >
-          Créer un compte
-        </Link>
-      </div>
-
-      <div style={{ width: "60%", maxWidth: "100%", margin: "0 auto" }}>
-        <form onSubmit={handleSubmit}>
-          <div className="panel">
-            <div className="panel-title">
-              <span className="dot" />
-              Se connecter
-            </div>
-            {/* Déconnexion automatique (délai d'inactivité ou durée maximale de session,
-                cf. server/session-policy.ts) : sans ce message, l'usager se retrouve
-                devant le formulaire sans comprendre pourquoi. */}
-            {expired && (
-              <div
-                role="status"
-                style={{
-                  margin: "0 0 1rem",
-                  padding: ".7rem .9rem",
-                  border: "1px solid var(--border)",
-                  borderLeft: "3px solid var(--accent)",
-                  borderRadius: 6,
-                  fontSize: ".85rem",
-                  lineHeight: 1.5,
-                }}
-              >
-                Votre session a expiré après une période d&apos;inactivité. Merci de vous
-                reconnecter.
-              </div>
-            )}
-            <div className="form-grid">
-              <div className="field full">
-                <label htmlFor="l-email">
-                  E-mail <span className="required-star">*</span>
-                </label>
-                <input
-                  id="l-email"
-                  type="text"
-                  required
-                  placeholder="marie@exemple.fr"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="field full">
-                <label htmlFor="l-pwd">
-                  Mot de passe <span className="required-star">*</span>
-                </label>
-                <input
-                  id="l-pwd"
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                {error && (
-                  <span className="field-error" style={{ display: "block" }}>
-                    {error}
-                  </span>
-                )}
-                <div style={{ marginTop: ".4rem", textAlign: "right" }}>
-                  <Link
-                    href="/auth/forgot-password"
-                    style={{
-                      fontSize: ".75rem",
-                      color: "var(--muted)",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    Mot de passe oublié ?
-                  </Link>
-                </div>
-              </div>
-            </div>
+      <form onSubmit={handleSubmit} className="panel auth-card">
+        <div className="panel-title">
+          <span className="dot" />
+          Se connecter
+        </div>
+        <div className="panel-subtitle">Accédez à vos réservations.</div>
+        {/* Déconnexion automatique (délai d'inactivité ou durée maximale de session,
+            cf. server/session-policy.ts) : sans ce message, l'usager se retrouve
+            devant le formulaire sans comprendre pourquoi. */}
+        {expired && (
+          <div role="status" className="auth-notice">
+            Votre session a expiré après une période d&apos;inactivité. Merci de vous reconnecter.
           </div>
-          <div className="btn-row">
-            <button type="submit" className="btn btn-primary" disabled={pending || !canSubmit}>
-              {pending ? "Connexion…" : "Connexion →"}
-            </button>
+        )}
+        <div className="form-grid">
+          <div className="field full">
+            <label htmlFor="l-email">
+              E-mail <span className="required-star">*</span>
+            </label>
+            <input
+              id="l-email"
+              type="text"
+              required
+              placeholder="marie@exemple.fr"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
-        </form>
+          <div className="field full">
+            <div className="field-aside">
+              <label htmlFor="l-pwd">
+                Mot de passe <span className="required-star">*</span>
+              </label>
+              <Link href="/auth/forgot-password">Mot de passe oublié ?</Link>
+            </div>
+            <input
+              id="l-pwd"
+              type="password"
+              required
+              placeholder="••••••••"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {error && <span className="field-error">{error}</span>}
+          </div>
+        </div>
+        <div className="btn-row">
+          <button type="submit" className="btn btn-primary" disabled={pending || !canSubmit}>
+            {pending ? "Connexion…" : "Connexion →"}
+          </button>
+        </div>
+      </form>
+      <div className="auth-alt">
+        Pas encore de compte ? <Link href="/auth/register">Créer un compte</Link>
       </div>
     </>
   );
