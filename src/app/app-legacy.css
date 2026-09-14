@@ -6155,7 +6155,7 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
    générale) ; police un cran sous celle des en-têtes de jour (Dom 2026-09-14). */
 .agenda-page .agenda-allday-corner {
   background: var(--surface);
-  font-size: 0.7rem;
+  font-size: 0.66rem;
 }
 .agenda-page .agenda-grid.is-realweek .agenda-header-cell:not(.agenda-allday-corner) {
   padding: 2px 0.4rem;
