@@ -6074,33 +6074,35 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 /* Périodes : contrôle segmenté sur fond en creux ; l'onglet actif ressort en clair, avec
    un point de la couleur de la période (--period-color, posée inline par l'onglet). */
 .agenda-page .period-tabs {
-  /* 28 px de haut (Dom 2026-09-14) : 2 px de marge + onglets de 22 px + bordure. Quand la
-     place manque (mobile), les onglets passent à la ligne : hauteur libre, rayon de 14 px
+  /* 26 px de haut (Dom 2026-09-14) : 2 px de marge + onglets de 20 px + bordure. Quand la
+     place manque (mobile), les onglets passent à la ligne : hauteur libre, rayon de 13 px
      (= capsule sur une ligne, rectangle arrondi sur deux). */
   box-sizing: border-box;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  min-height: 28px;
+  min-height: 26px;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 13px;
   background: var(--surface2);
   margin: 0.55rem 0 0;
 }
 .agenda-page .period-btn {
   box-sizing: border-box;
-  height: 22px;
+  height: 20px;
   border: 0;
   line-height: 1;
   font-weight: 600;
   color: var(--muted);
 }
 /* Sélecteur à id : prime sur la règle compacte `#agenda-period-tabs .period-btn` (taille
-   0.66rem et retraits, centrage optique +1 px en haut conservé) ; texte resserré (Dom). */
+   0.66rem et retraits) ; texte resserré ; centrage optique de 3 px vers le bas, en pixels
+   entiers (un demi-pixel se perd à l'arrondi sur écran classique ; la police a un bas de
+   casse généreux et sans décalage le texte paraît haut — Dom 2026-09-14). */
 .agenda-page #agenda-period-tabs .period-btn {
-  padding: 1px 0.44rem 0;
+  padding: 3px 0.44rem 0;
   font-size: 0.66rem;
   letter-spacing: -0.2px;
 }
@@ -6119,6 +6121,11 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
   width: 7px;
   height: 7px;
   background: var(--period-color, var(--accent));
+  /* Le décalage optique de 3 px du texte (ci-dessus) ne concerne pas la pastille : on la
+     ramène près du centre de l'onglet, un demi-pixel sous le centre géométrique (Dom
+     2026-09-14). */
+  position: relative;
+  top: -0.5px;
 }
 
 /* Grille : carte à angles de 12 px et ombre légère ; en-têtes et colonne des heures sur le
