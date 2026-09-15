@@ -271,13 +271,19 @@ function PanelTitle({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="panel-title cfg-stat-title">
-      <span className={`rg-ico is-${tone}`}>{icon ?? <ChartBarGlyph size={14} />}</span>
-      <span style={{ minWidth: 0 }}>
-        {title}
-        {hint && <span className="cfg-stat-hint">{hint}</span>}
-      </span>
-    </div>
+    <>
+      <div className="panel-title cfg-stat-title" style={hint ? { marginBottom: 0 } : undefined}>
+        <span className={`rg-ico is-${tone}`}>{icon ?? <ChartBarGlyph size={14} />}</span>
+        <span style={{ minWidth: 0 }}>{title}</span>
+      </div>
+      {/* Sous-texte sur toute la largeur du panneau, sans le retrait du pictogramme
+          (Dom 2026-09-15). */}
+      {hint && (
+        <p className="cfg-stat-hint" style={{ margin: "0.15rem 0 0.85rem" }}>
+          {hint}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -843,12 +849,12 @@ export default async function StatsPage({
       </div>
 
       {/* Grille unique : anneaux (5, ou 4 sans présence) PUIS panneaux — tout s'enchaîne
-          sans colonne vide entre les deux sections. Colonnes responsives : 250px de
-          largeur minimum par panneau, retour à la ligne en dessous. */}
+          sans colonne vide entre les deux sections. Colonnes responsives : 280px de
+          largeur minimum par panneau (Dom 2026-09-15), retour à la ligne en dessous. */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
           gap: ".85rem",
         }}
       >
@@ -1020,9 +1026,17 @@ export default async function StatsPage({
                 </tr>
               </thead>
               <tbody>
+                {/* Filets en pointillé fin entre les lignes, celui sous l'entête plein ;
+                    lignes d'environ 16 px (Dom 2026-09-15). */}
                 {sl.byMonth.map((r, i) => (
-                  <tr key={`${r.label}-${i}`} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ color: "var(--muted)", padding: ".35rem 0" }}>{r.label}</td>
+                  <tr
+                    key={`${r.label}-${i}`}
+                    style={{
+                      borderTop: `1px ${i === 0 ? "solid" : "dotted"} var(--border)`,
+                      lineHeight: 1,
+                    }}
+                  >
+                    <td style={{ color: "var(--muted)", padding: "2px 0" }}>{r.label}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: "#8a93a8" }}>
                       {r.creneaux}
                     </td>
