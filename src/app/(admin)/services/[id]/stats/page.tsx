@@ -274,7 +274,8 @@ function PanelTitle({
     <>
       <div className="panel-title cfg-stat-title" style={hint ? { marginBottom: 0 } : undefined}>
         <span className={`rg-ico is-${tone}`}>{icon ?? <ChartBarGlyph size={14} />}</span>
-        <span style={{ minWidth: 0 }}>{title}</span>
+        {/* Interligne 1 (Dom 2026-09-15) : un titre sur deux lignes reste compact. */}
+        <span style={{ minWidth: 0, lineHeight: 1 }}>{title}</span>
       </div>
       {/* Sous-texte sur toute la largeur du panneau, sans le retrait du pictogramme
           (Dom 2026-09-15). */}
