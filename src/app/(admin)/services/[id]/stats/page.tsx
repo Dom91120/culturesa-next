@@ -265,7 +265,7 @@ function PanelTitle({
   tone = "ok",
   icon,
 }: {
-  title: string;
+  title: React.ReactNode;
   hint?: string;
   tone?: Tone;
   icon?: React.ReactNode;
@@ -304,8 +304,10 @@ function DonutPanel({
   palette = PALETTE,
   tone,
   icon,
+  hint,
 }: {
-  title: string;
+  title: React.ReactNode;
+  hint?: string;
   data: LabeledCount[];
   centerValue?: string;
   centerLabel?: string;
@@ -319,7 +321,7 @@ function DonutPanel({
   const empty = colored.every((d) => d.value === 0);
   return (
     <div className="panel">
-      <PanelTitle title={title} tone={tone} icon={icon} />
+      <PanelTitle title={title} hint={hint} tone={tone} icon={icon} />
       {empty ? (
         EMPTY
       ) : (
@@ -441,7 +443,7 @@ function Panel({
   icon,
   children,
 }: {
-  title: string;
+  title: React.ReactNode;
   hint?: string;
   empty: boolean;
   tone?: Tone;
@@ -469,11 +471,12 @@ function AreaChart({ data, color }: { data: LabeledCount[]; color: string }) {
   const area = `${x(0)},${H - pad} ${line} ${x(n - 1)},${H - pad}`;
   return (
     <div>
+      {/* Proportions conservées (plus d'étirement) : les points restent ronds — mêmes
+          points que FillCurve (Dom 2026-09-15). */}
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
-        height="150"
-        preserveAspectRatio="none"
+        style={{ height: "auto", display: "block" }}
         aria-hidden="true"
       >
         <polygon points={area} fill={color} opacity={0.15} />
@@ -484,6 +487,17 @@ function AreaChart({ data, color }: { data: LabeledCount[]; color: string }) {
           strokeWidth={2}
           vectorEffect="non-scaling-stroke"
         />
+        {data.map((d, i) => (
+          <circle
+            key={`${d.label}-${i}`}
+            cx={x(i)}
+            cy={y(d.value)}
+            r={3}
+            fill={color}
+            stroke="var(--surface1)"
+            strokeWidth={1.5}
+          />
+        ))}
       </svg>
       {/* Numéros de mois = axe X, remontés DANS la marge basse interne du SVG (pad=14
           → ~16px rendus) pour coller à la courbe ; valeurs aérées en dessous.
@@ -853,6 +867,7 @@ export default async function StatsPage({
           sans colonne vide entre les deux sections. Colonnes responsives : 280px de
           largeur minimum par panneau (Dom 2026-09-15), retour à la ligne en dessous. */}
       <div
+        className="cfg-stat-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
@@ -861,7 +876,8 @@ export default async function StatsPage({
       >
         {stats.prevu > 0 && (
           <DonutPanel
-            title="Présence — séances passées ou pointées"
+            title="Présences"
+            hint="Le taux se rapporte aux présents par rapport aux séances pointées"
             // Absents scindés « prévenus / non prévenus » dès qu'une absence pointée avait
             // été signalée à l'avance ; sinon une seule part « Absents ».
             data={[
@@ -932,7 +948,13 @@ export default async function StatsPage({
 
         {wl && wl.outcomes.length > 0 && (
           <DonutPanel
-            title="Liste d'attente — issue des inscriptions"
+            title={
+              <>
+                Liste d&apos;attente&nbsp;:
+                <br />
+                issue des inscriptions
+              </>
+            }
             tone="danger"
             icon={<ListDetailsGlyph size={14} />}
             data={wl.outcomes.map((o) => ({
@@ -1066,7 +1088,13 @@ export default async function StatsPage({
 
         {wl && (
           <Panel
-            title="Liste d'attente — sans place par catégorie"
+            title={
+              <>
+                Liste d&apos;attente&nbsp;:
+                <br />
+                sans place par catégorie
+              </>
+            }
             hint="Inscriptions closes sans réservation (périodes échues, retraits), catégorie figée à la clôture"
             tone="danger"
             icon={<ListDetailsGlyph size={14} />}
@@ -1086,7 +1114,13 @@ export default async function StatsPage({
 
         {wl && (
           <Panel
-            title="Liste d'attente — sans place par structure"
+            title={
+              <>
+                Liste d&apos;attente&nbsp;:
+                <br />
+                sans place par structure
+              </>
+            }
             hint="Inscriptions closes sans réservation (périodes échues, retraits), structure figée à la clôture"
             tone="purple"
             icon={<ListDetailsGlyph size={14} />}
@@ -1107,7 +1141,13 @@ export default async function StatsPage({
 
         {wl && (
           <Panel
-            title="Inscriptions en liste d'attente par mois"
+            title={
+              <>
+                Liste d&apos;attente&nbsp;:
+                <br />
+                inscriptions par mois
+              </>
+            }
             hint="Toutes issues confondues, à la date d'inscription"
             tone="danger"
             icon={<ListDetailsGlyph size={14} />}

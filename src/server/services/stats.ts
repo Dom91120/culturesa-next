@@ -371,13 +371,11 @@ export async function getServiceStats(
       distincts: sumOfMaxByUser(pop, (b) => b.enfants),
     }));
 
-  // ── Prévu / réalisé : les stats comptent ce qui a été SAISI, sans blocage (validée ou
-  // non — le verrou, c'est l'acte de pointage qui le porte). Population = séances passées
-  // (date ≤ aujourd'hui) + séances pointées quelle que soit leur date (un pointage saisi
-  // vaut constat que la séance a eu lieu).
-  const pastOcc = occ.filter(
-    (b) => b.slot.slotDate != null && (b.pointage != null || ymd(b.slot.slotDate) <= today),
-  );
+  // ── Prévu / réalisé : les stats comptent ce qui a été SAISI, validée ou non (le verrou,
+  // c'est l'acte de pointage qui le porte). Population = séances passées, jour d'aujourd'hui
+  // compris — le pointage est refusé sur une séance future (setBookingPointageAction), la
+  // clause « ou pointées » d'origine (2026-07-14) ne visait plus rien (Dom 2026-09-15).
+  const pastOcc = occ.filter((b) => b.slot.slotDate != null && ymd(b.slot.slotDate) <= today);
   const prevu = pastOcc.length;
   const presents = pastOcc.filter((b) => b.pointage === "present").length;
   const absents = pastOcc.filter((b) => b.pointage === "absent").length;

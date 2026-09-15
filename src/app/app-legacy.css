@@ -5468,6 +5468,10 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 /* Statistiques : bandeau de cartes (rg-step avec repli) et titres de panneaux. */
 .cfg-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.6rem;padding-bottom:.85rem}
 .cfg-kpis .rg-step{min-width:0}
+/* Grille des panneaux : l'écart vertical entre deux rangées = le gap de la grille seul, sans la
+   marge basse des .panel (sinon 27 px, contre 13,6 px entre les compteurs et la grille — Dom
+   2026-09-15). */
+.cfg-stat-grid>.panel{margin-bottom:0}
 .cfg-kpis .rg-step .v{font-size:1.45rem}
 .cfg-stat-title{font-size:.82rem;font-weight:600;align-items:center;gap:.6rem} /* texte centré sur le pictogramme (Dom 2026-09-15) */
 .cfg-stat-title .rg-ico{width:24px;height:24px;border-radius:6px}

@@ -599,7 +599,8 @@ par la tâche de rétention. Les exports et anonymisations RGPD, eux, restent da
   du service), empêchant toute annulation ou déplacement côté usager.
 - **Pointage / absence prévenue** — le pointage constate la présence ou l'absence **après** la
   séance ; l'absence prévenue est un signalement **à l'avance** (usager ou gestionnaire) qui
-  n'annule pas la réservation et pré-remplit le pointage « Absent ».
+  n'annule pas la réservation ; en mode pointage, le premier clic sur la séance pose alors
+  directement « Absent ».
 - **Jauge** — la capacité d'un créneau ; selon le service, les accompagnants y sont comptés ou non.
 - **Vacances scolaires** — récupérées depuis le calendrier officiel selon la zone ; un jour de
   vacances n'est réservable que si le service et le demandeur sont ouverts.
