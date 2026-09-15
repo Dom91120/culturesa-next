@@ -95,7 +95,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       ]);
     }
     section("Remplissage moyen par mois (%)", "%", stats.fillByMonth);
-    section("Remplissage moyen par structure (%)", "%", stats.fillByStructure);
     // Deux lectures par exercice : Total = cumul des séances, Distincts = 1 fois par inscrit.
     lines.push([]);
     lines.push(["Effectifs (enfants) par exercice", "Total", "Distincts"]);

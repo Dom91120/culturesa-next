@@ -16,6 +16,17 @@ export function toDateInput(d: Date | null | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Mois abrégé fr-FR d'une clé « AAAA-MM » (« 2026-09 » → « sept. », « 2026-05 » → « mai »),
+ * pour les tableaux « par mois » des statistiques (Dom 2026-09-15 : lettres plutôt que numéro).
+ */
+const MONTH_SHORT_FMT = new Intl.DateTimeFormat("fr-FR", { month: "short" });
+export function monthShortLabel(bucket: string): string {
+  const m = Number(bucket.slice(5, 7));
+  if (!Number.isInteger(m) || m < 1 || m > 12) return bucket;
+  return MONTH_SHORT_FMT.format(new Date(2000, m - 1, 1));
+}
+
 /** Date courte fr-FR "JJ/MM/AAAA" — source unique (7 copies avant l'audit 2026-07-18). */
 export const DATE_FMT_FR = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",

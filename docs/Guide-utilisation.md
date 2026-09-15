@@ -308,8 +308,7 @@ Le **remplissage moyen** (compteur et courbe par mois) porte sur **toutes les s�
 de la plage : une séance restée sans réservation compte 0 %. Le compteur rappelle en dessous le
 remplissage des seules séances réservées quand il diffère. L'occupation d'une séance se mesure
 en enfants (et accompagnants, selon le réglage du service) sur la capacité du créneau s'il a une
-jauge, sinon en nombre de réservations sur la capacité. Le remplissage **par structure** reste
-calculé sur les séances réservées, une séance vide n'appartenant à aucune structure.
+jauge, sinon en nombre de réservations sur la capacité.
 
 Si le service utilise la **liste d'attente**, le tableau de bord montre aussi qui n'a **pas
 trouvé de place** : compteurs « En attente aujourd'hui », « Placés depuis la liste »

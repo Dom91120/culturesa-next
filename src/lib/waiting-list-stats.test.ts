@@ -80,7 +80,7 @@ describe("computeWaitlistStats", () => {
       { label: "Ecole élémentaire", value: 2 },
       { label: "Maternelle Jules Verne", value: 1 },
     ]);
-    expect(s.byMonth).toEqual([{ label: "9", value: 7 }]);
+    expect(s.byMonth).toEqual([{ label: "sept.", value: 7 }]);
   });
 
   it("le filtre de dates porte sur la date d'inscription ; « en attente » reste l'état du jour", () => {
@@ -103,7 +103,7 @@ describe("computeWaitlistStats", () => {
       { label: "Sans place", value: 1 },
       { label: "Toujours en attente", value: 1 },
     ]);
-    expect(s.byMonth).toEqual([{ label: "9", value: 2 }]);
+    expect(s.byMonth).toEqual([{ label: "sept.", value: 2 }]);
   });
 });
 

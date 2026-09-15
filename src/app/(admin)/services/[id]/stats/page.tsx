@@ -1049,25 +1049,6 @@ export default async function StatsPage({
           <FillCurve data={stats.fillByMonth} color="#e8a45a" />
         </Panel>
 
-        <Panel
-          title="Remplissage moyen par structure (jauge)"
-          tone="purple"
-          icon={<TargetGlyph size={14} />}
-          empty={stats.fillByStructure.length === 0}
-        >
-          {stats.fillByStructure.map((r) => (
-            <BarRow
-              key={r.label}
-              label={r.label}
-              value={r.value}
-              max={100}
-              color="#a07dd4"
-              suffix="%"
-              labelAbove
-            />
-          ))}
-        </Panel>
-
         {wl && (
           <Panel
             title="Liste d'attente — sans place par catégorie"

@@ -1,5 +1,6 @@
 import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
+import { monthShortLabel } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import { schoolYearLabel } from "@/lib/school-year";
 import { computeSlotStats, type SlotStats } from "@/lib/slot-stats";
@@ -82,8 +83,6 @@ type ServiceStats = {
   // seulement le top 10) pour un centre d'anneau exact.
   topThemes: LabeledCount[];
   themedCount: number;
-  // Taux de remplissage moyen (%, unités de jauge) des créneaux réservés, par structure.
-  fillByStructure: LabeledCount[];
   // Effectifs (enfants) par exercice — TOUS exercices (ignore la plage de dates), pour
   // suivre l'évolution d'une année scolaire à l'autre. Respecte le filtre de type.
   // Deux lectures par exercice : total = cumul des séances (volume), distincts = règle
@@ -108,7 +107,8 @@ function ymd(d: Date): string {
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
 // Libellés de mois : le NUMÉRO du mois (1..12) — demande Dom 2026-07-25 (colonnes
 // étroites des courbes mensuelles) ; l'année reste lisible via le filtre d'exercice.
-const monthLabel = (bucket: string): string => String(Number(bucket.slice(5, 7)));
+// Mois en lettres abrégées (Dom 2026-09-15), comme le tableau « Créneaux par mois ».
+const monthLabel = (bucket: string): string => monthShortLabel(bucket);
 
 function inRange(d: string, from: string | null, to: string | null): boolean {
   return (!from || d >= from) && (!to || d <= to);
@@ -347,33 +347,6 @@ export async function getServiceStats(
       value: Math.round(sum / (monthFillCnt.get(bucket) ?? 1)),
     }));
 
-  // Remplissage moyen par structure : moyenne PAR SÉANCE, comme la moyenne globale et
-  // la courbe mensuelle. Une séance ne compte qu'UNE FOIS par structure présente —
-  // pondérer par occurrence (correctif 2026-07-25) comptait deux fois les séances
-  // partagées, or ce sont les mieux remplies : sur un service à structure unique la
-  // valeur affichée dépassait la moyenne globale (44 % vs 40 %), ce qui n'a pas de sens.
-  const fillSum = new Map<string, number>();
-  const fillCnt = new Map<string, number>();
-  const countedStructSession = new Set<string>();
-  for (const b of occ) {
-    if (!b.slot.slotDate) continue;
-    const sessionKey = sessionKeyOf(b, ymd(b.slot.slotDate));
-    const f = sessionFill.get(sessionKey);
-    if (f == null) continue;
-    const s = structOf(b);
-    if (countedStructSession.has(`${s}|${sessionKey}`)) continue;
-    countedStructSession.add(`${s}|${sessionKey}`);
-    fillSum.set(s, (fillSum.get(s) ?? 0) + f);
-    fillCnt.set(s, (fillCnt.get(s) ?? 0) + 1);
-  }
-  const fillByStructure = [...fillSum.entries()]
-    .map(([label, sum]) => ({
-      label: shortStructureLabel(label),
-      value: Math.round(sum / (fillCnt.get(label) ?? 1)),
-    }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
-
   // Évolution mensuelle : nombre d'occurrences datées par mois.
   const byMonth = [...monthCount.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -513,7 +486,6 @@ export async function getServiceStats(
     topNiveaux: topN(niveauMap, 10),
     topThemes: topN(themeMap, 10),
     themedCount,
-    fillByStructure,
     effectifsByExercice,
     waitlist,
     slots,

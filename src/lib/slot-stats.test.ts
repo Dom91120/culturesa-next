@@ -40,8 +40,8 @@ describe("computeSlotStats", () => {
     expect(s.creneauxLibresPasses).toBe(1); // R2 (p2 est à venir)
     expect(s.tauxOccupation).toBe(50);
     expect(s.byMonth).toEqual([
-      { label: "9", creneaux: 2, reserves: 1, seances: 1 }, // R1, R2
-      { label: "10", creneaux: 3, reserves: 1, seances: 1 }, // R1, p1, p2 — seul p1 réservé
+      { label: "sept.", creneaux: 2, reserves: 1, seances: 1 }, // R1, R2
+      { label: "oct.", creneaux: 3, reserves: 1, seances: 1 }, // R1, p1, p2 — seul p1 réservé
     ]);
   });
 
@@ -90,13 +90,13 @@ describe("computeSlotStats", () => {
       dateTo: "2026-09-30",
     });
     expect(s.creneaux).toBe(2); // R1, p
-    expect(s.byMonth).toEqual([{ label: "9", creneaux: 2, reserves: 0, seances: 0 }]);
+    expect(s.byMonth).toEqual([{ label: "sept.", creneaux: 2, reserves: 0, seances: 0 }]);
   });
 
   it("jauge : 3 séances sur une occurrence = 1 créneau réservé, 3 séances dans le mois", () => {
     const s = computeSlotStats([slot("m1", "2026-09-01")], new Map([["m1", 3]]), all);
     expect(s.creneauxReserves).toBe(1);
     expect(s.tauxOccupation).toBe(100);
-    expect(s.byMonth).toEqual([{ label: "9", creneaux: 1, reserves: 1, seances: 3 }]);
+    expect(s.byMonth).toEqual([{ label: "sept.", creneaux: 1, reserves: 1, seances: 3 }]);
   });
 });

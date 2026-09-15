@@ -8,6 +8,8 @@
 // dans ce cas que l'écran affiche ce volet.
 // =====================================================================================
 
+import { monthShortLabel } from "@/lib/format";
+
 export type SlotStatRow = {
   // Créneau DATÉ : miroir d'un récurrent (parentSlotId non null) ou ponctuel (null).
   id: string;
@@ -89,7 +91,7 @@ export function computeSlotStats(
     byMonth: [...monthAgg.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([bucket, m]) => ({
-        label: String(Number(bucket.slice(5, 7))),
+        label: monthShortLabel(bucket),
         creneaux: m.creneaux.size,
         reserves: m.reserves.size,
         seances: m.seances,

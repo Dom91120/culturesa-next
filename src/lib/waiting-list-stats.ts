@@ -1,3 +1,5 @@
+import { monthShortLabel } from "@/lib/format";
+
 // =====================================================================================
 // Statistiques de la LISTE D'ATTENTE d'un service (fonctions pures, testées) : à partir de
 // l'historique des inscriptions clôturées (liste_attente_historique) et des inscriptions
@@ -144,7 +146,7 @@ export function computeWaitlistStats(
   }
   const byMonth = [...months.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([m, value]) => ({ label: String(Number(m.slice(5, 7))), value }));
+    .map(([m, value]) => ({ label: monthShortLabel(m), value }));
 
   return {
     waitingNow: live.length,
