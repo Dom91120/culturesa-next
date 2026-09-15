@@ -904,7 +904,7 @@ export default async function StatsPage({
 
         {showSlots && sl.creneaux > 0 && (
           <DonutPanel
-            title="Créneaux — réservés / libres"
+            title="Créneaux réservés / libres"
             tone="neutral"
             icon={<CalendarTimeGlyph size={14} />}
             data={[

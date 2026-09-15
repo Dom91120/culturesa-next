@@ -299,8 +299,7 @@ diffère du nombre de séances, un volet **créneaux** s'ajoute. Un créneau **r
 pour un seul créneau**, comme dans la liste des créneaux ouverts des Éditions, et un ponctuel
 pour un ; un récurrent est « réservé » dès qu'une de ses occurrences l'est. Le volet comprend
 les compteurs « Créneaux proposés » (avec les libres, dont ceux entièrement passés) et
-« Créneaux réservés » (part des créneaux portant au moins une séance), un anneau **« Créneaux —
-réservés / libres »** et un tableau **« Créneaux par mois »** (créneaux ayant une occurrence
+« Créneaux réservés » (part des créneaux portant au moins une séance), un anneau **« Créneaux réservés / libres »** et un tableau **« Créneaux par mois »** (créneaux ayant une occurrence
 dans le mois, réservés dans le mois, séances ; les créneaux libres du mois figurent dans
 l'export CSV). L'export CSV contient toujours ce volet.
 
