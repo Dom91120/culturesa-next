@@ -3818,7 +3818,9 @@ textarea.theme-pending:focus::placeholder {
    surplombants), aligné sur la ligne de base du chiffre. */
 .rg-step .v.is-inline {
   display: flex;
-  align-items: baseline;
+  /* Centré sur le chiffre, et non sur sa ligne de base : un libellé sur deux lignes
+     s'étale de part et d'autre du chiffre au lieu de pendre dessous (Dom 2026-09-16). */
+  align-items: center;
   gap: 0.35rem;
   margin-top: 0;
 }
