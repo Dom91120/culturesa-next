@@ -321,6 +321,34 @@ describe("assertSlotCapacity", () => {
     ).rejects.toThrow("Ce créneau est complet.");
   });
 
+  it("exclusions : excludeBookingId et excludeBookingIds fusionnés en un seul notIn (échange)", async () => {
+    const slot: CapacitySlot = {
+      capacity: 3,
+      jauge: false,
+      service: { capacity: 99, gaugeAccompagnants: false },
+    };
+    const { tx, count } = capacityTx({ slot, count: 0 });
+    await assertSlotCapacity(tx, {
+      ...capacityBase,
+      excludeBookingId: 7,
+      excludeBookingIds: [11, 12],
+    });
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        slotId: "sl1",
+        periodId: 4,
+        bookingType: "recurring",
+        id: { notIn: [7, 11, 12] },
+      },
+    });
+    // Sans exclusion : pas de clause id.
+    const none = capacityTx({ slot, count: 0 });
+    await assertSlotCapacity(none.tx, capacityBase);
+    expect(none.count).toHaveBeenCalledWith({
+      where: { slotId: "sl1", periodId: 4, bookingType: "recurring" },
+    });
+  });
+
   it("jauge sur créneau vide : sommes null comptées 0", async () => {
     const slot: CapacitySlot = {
       capacity: 1,
@@ -360,7 +388,7 @@ describe("assertSlotCapacity", () => {
     const { tx, count } = capacityTx({ slot, count: 0 });
     await assertSlotCapacity(tx, { ...capacityBase, excludeBookingId: 42 });
     expect(count).toHaveBeenCalledWith({
-      where: expect.objectContaining({ id: { not: 42 } }),
+      where: expect.objectContaining({ id: { notIn: [42] } }),
     });
   });
 });

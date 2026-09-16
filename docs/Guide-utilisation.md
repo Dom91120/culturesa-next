@@ -242,7 +242,13 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   alimente les **Statistiques**.
 
 > 💡 Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation
-> vers un autre créneau pour la déplacer. Pour la déposer dans une **autre semaine**, survolez la
+> vers un autre créneau pour la déplacer. Déposée sur un créneau **sans réservation**, elle y
+> est déplacée aussitôt ; déposée sur un créneau **déjà réservé**, une fenêtre demande de
+> choisir : **« Déplacer ici, à côté »** (si le créneau a encore de la place) ou **« Échanger
+> les créneaux »** avec l'une des réservations présentes — celle sous le curseur est
+> présélectionnée. L'échange est fait en une seule opération : les deux réservations changent
+> de créneau en même temps, sans qu'aucun créneau ne soit libre un instant (ce qui laissait à
+> la liste d'attente le temps de s'y placer). Pour la déposer dans une **autre semaine**, survolez la
 > flèche ◂ ou ▸, ou le **bord gauche ou droit** de la grille, pendant le glisser : l'agenda change
 > de semaine, puis déposez la réservation. Survoler un **onglet de période** bascule de même sur
 > cette période.

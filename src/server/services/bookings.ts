@@ -293,6 +293,9 @@ export async function assertSlotCapacity(
     enfants: number;
     accompagnants: number;
     excludeBookingId?: number;
+    // Échange de créneaux (swap) : les DEUX réservations quittent leur créneau — celle qui
+    // part du créneau visé ne compte plus dans son occupation.
+    excludeBookingIds?: number[];
   },
 ) {
   // Anti-IDOR : le créneau doit appartenir au service annoncé (refuse un slotId
@@ -315,7 +318,11 @@ export async function assertSlotCapacity(
     params.bookingType === "unique"
       ? { slotId: params.slotId, bookingType: "unique" }
       : { slotId: params.slotId, periodId: params.periodId, bookingType: "recurring" };
-  if (params.excludeBookingId != null) occWhere.id = { not: params.excludeBookingId };
+  const excluded = [
+    ...(params.excludeBookingId != null ? [params.excludeBookingId] : []),
+    ...(params.excludeBookingIds ?? []),
+  ];
+  if (excluded.length > 0) occWhere.id = { notIn: excluded };
   let used: number;
   let mine: number;
   if (gaugeOn) {

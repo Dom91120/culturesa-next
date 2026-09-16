@@ -59,7 +59,7 @@ import {
   ymd,
 } from "@/lib/agenda-core";
 import { isFrenchHoliday } from "@/lib/french-holidays";
-import { gaugeColor } from "@/lib/gauge";
+import { gaugeColor, gaugeUnits } from "@/lib/gauge";
 import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { resolveSlotRange } from "@/lib/slot-range";
@@ -89,6 +89,7 @@ import {
   setBookingValidatedAction,
   setServiceCreatePrefsAction,
   setServiceDefaultCapacityAction,
+  swapBookingsAction,
   updateSlotBatchAction,
 } from "./actions";
 import { CopyWeekConfirmModal, SlotDeleteModal } from "./agenda-confirm-modals";
@@ -96,6 +97,7 @@ import { badgeTitle, fmtDateLongFr } from "./agenda-format";
 import { BookingCreateModal, type UserOpt } from "./booking-create-modal";
 import { BookingDeleteModal } from "./booking-delete-modal";
 import { BookingDetailModal } from "./booking-detail-modal";
+import { BookingDropModal, type DropCandidate } from "./booking-drop-modal";
 import { BookingStackModal } from "./booking-stack-modal";
 import { asCreateKind, type CreateKind, sanitizeDemIds } from "./create-prefs";
 import { DefaultDemandeursModal } from "./default-demandeurs-modal";
@@ -1634,6 +1636,31 @@ export function AgendaGrid({
 
   // Récapitulatif d'une réservation pour la modale de confirmation de suppression
   // (nom + créneau · jour · période · date), port du legacy askDeleteBooking.
+  // ── Dépôt d'une réservation glissée (Dom 2026-09-16) ──
+  // Créneau SANS réservation : déplacement direct. Créneau qui en porte déjà : fenêtre
+  // de choix « déplacer à côté » / « échanger avec … » (BookingDropModal) — la zone libre
+  // d'un créneau est petite et tous les gestionnaires ne distinguent pas le dépôt sur le
+  // créneau du dépôt sur un badge ; on ne tranche pas à leur place. `targetBookingId` =
+  // badge sous le curseur au lâcher (présélection de l'échange), null sur la zone libre.
+  const [dropChoice, setDropChoice] = useState<{
+    dragged: Booking;
+    block: Block;
+    targetBookingId: number | null;
+  } | null>(null);
+  function handleDrop(dragged: Booking, block: Block, targetBookingId: number | null) {
+    // Refus : changement de type (récurrent↔ponctuel) — même règle que le serveur.
+    if (uniqueIdSet.has(dragged.slotId) !== uniqueIdSet.has(block.slotId)) return;
+    // Récurrent en Semaine réelle : on agit sur la réservation PARENTE.
+    const mover = actionBooking(dragged);
+    if (mover.slotId === block.slotId) return; // déjà sur ce créneau
+    const others = block.bookings.filter((bk) => actionBooking(bk).id !== mover.id);
+    if (others.length === 0) {
+      runResult(moveBookingAction(mover.id, service.id, block.slotId));
+      return;
+    }
+    setDropChoice({ dragged, block, targetBookingId });
+  }
+
   function bookingRecap(bk: Booking): { name: string; details: string; recurring: boolean } {
     const recurring = !uniqueIdSet.has(bk.slotId);
     const name = bk.structure || bk.demandeur || bk.name || "cette réservation";
@@ -2387,7 +2414,7 @@ export function AgendaGrid({
     clearTip,
     openCapModal,
     openCreate,
-    runResult,
+    handleDrop,
     onResizeSlotMouseDown,
     onResizeSlotMouseDownH,
     onDeleteEmptySlot,
@@ -2423,7 +2450,7 @@ export function AgendaGrid({
         clearTip,
         openCapModal,
         openCreate,
-        runResult,
+        handleDrop,
         onResizeSlotMouseDown,
         onResizeSlotMouseDownH,
         onDeleteEmptySlot,
@@ -2579,7 +2606,9 @@ export function AgendaGrid({
             if (uniqueIdSet.has(dragged.slotId) === isPonctuelCell) e.preventDefault();
           }}
           onDrop={(e) => {
-            // Le créneau est la cible de drop : déplace la résa glissée ici.
+            // Le créneau est la cible de drop : déplacement direct s'il est vide, sinon
+            // fenêtre de choix déplacer / échanger (handleDrop). Le badge éventuellement
+            // sous le curseur (data-bkid) présélectionne la réservation à échanger.
             e.preventDefault();
             e.stopPropagation();
             const id = draggingIdRef.current;
@@ -2587,11 +2616,9 @@ export function AgendaGrid({
             const dragged = bookings.find((bk) => bk.id === id);
             setDraggingId(null);
             if (!dragged) return;
-            // Refus : changement de type (récurrent↔ponctuel).
-            if (uniqueIdSet.has(dragged.slotId) !== isPonctuelCell) return;
-            // Récurrent en Semaine réelle : on déplace la réservation PARENTE (toute la
-            // récurrente), pas l'occurrence glissée.
-            runResult(moveBookingAction(actionBooking(dragged).id, service.id, b.slotId));
+            const hit = (e.target as HTMLElement).closest<HTMLElement>("[data-bkid]");
+            const targetBookingId = hit ? Number(hit.dataset.bkid) : null;
+            handleDrop(dragged, b, Number.isFinite(targetBookingId) ? targetBookingId : null);
           }}
         >
           {/* Créneau récurrent : cadence au centre — parité A/B (mono-parité) ou « Toutes »
@@ -3787,10 +3814,13 @@ export function AgendaGrid({
                   const id = draggingId;
                   setDraggingId(null);
                   const dragged = bookings.find((bk) => bk.id === id);
-                  // Récurrent en Semaine réelle : on déplace la réservation PARENTE (le
-                  // serveur refuse un changement de type récurrent↔ponctuel).
-                  if (slot && dragged)
-                    runResult(moveBookingAction(actionBooking(dragged).id, service.id, slot.id));
+                  if (!slot || !dragged) return;
+                  // Dépôt hors bloc (fond de colonne) : même règle que sur le bloc — via
+                  // le bloc du créneau ce jour-là s'il existe (réservations présentes →
+                  // fenêtre de choix), sinon déplacement direct de la PARENTE.
+                  const block = blocksByDay[d]?.find((x) => x.slotId === slot.id);
+                  if (block) handleDrop(dragged, block, null);
+                  else runResult(moveBookingAction(actionBooking(dragged).id, service.id, slot.id));
                 }}
               >
                 <AgendaDayBackground
@@ -3955,7 +3985,7 @@ export function AgendaGrid({
               ? "Consultation seule : cliquez sur une réservation pour ouvrir sa fiche. Ce service ne vous est pas confié en gestion."
               : creationMode
                 ? "Saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
-                : "Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer."}
+                : "Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer ; déposée sur un créneau déjà réservé, vous choisissez entre déplacer et échanger les créneaux."}
           </p>
           {/* Légende alignée à DROITE, une ligne vide sous l'astuce (retour Dom 2026-09-04). */}
           <div
@@ -4163,6 +4193,60 @@ export function AgendaGrid({
           onChanged={() => router.refresh()}
         />
       )}
+
+      {dropChoice &&
+        (() => {
+          const { dragged, block, targetBookingId } = dropChoice;
+          const mover = actionBooking(dragged);
+          // Candidates à l'échange = réservations PARENTES du créneau visé (une occurrence
+          // récurrente y représente sa parente), sans doublon, hors la réservation glissée.
+          const seen = new Set<number>();
+          const candidates: DropCandidate[] = [];
+          for (const bk of block.bookings) {
+            const p = actionBooking(bk);
+            if (p.id === mover.id || seen.has(p.id)) continue;
+            seen.add(p.id);
+            const r = bookingRecap(p);
+            candidates.push({ id: p.id, label: r.name, details: p.name !== r.name ? p.name : "" });
+          }
+          // Place pour un déplacement « à côté » : occupation du bloc (déjà en unités de
+          // jauge si le créneau en a une) + la réservation glissée.
+          const units = block.jauge
+            ? gaugeUnits(mover.enfants, mover.accompagnants, service.gaugeAccompagnants)
+            : 1;
+          const canMove = block.used + units <= block.capacity;
+          const slot = uniqueIdSet.has(block.slotId)
+            ? uniqueSlots.find((s) => s.id === block.slotId)
+            : slots.find((s) => s.id === block.slotId);
+          const st = (slot?.startTime || "").slice(0, 5);
+          const en = (slot?.endTime || "").slice(0, 5);
+          const targetLabel = `${DAY_NAMES[block.dayKey] ?? block.dayKey} ${st && en ? `${st} – ${en}` : "journée entière"}`;
+          const hitBk =
+            targetBookingId != null ? bookings.find((x) => x.id === targetBookingId) : null;
+          const preselected = hitBk ? actionBooking(hitBk).id : null;
+          return (
+            <BookingDropModal
+              movingLabel={bookingRecap(mover).name}
+              targetLabel={targetLabel}
+              candidates={candidates}
+              preselectedId={
+                preselected != null && candidates.some((c) => c.id === preselected)
+                  ? preselected
+                  : null
+              }
+              canMove={canMove}
+              onCancel={() => setDropChoice(null)}
+              onMove={() => {
+                setDropChoice(null);
+                runResult(moveBookingAction(mover.id, service.id, block.slotId));
+              }}
+              onSwap={(otherId) => {
+                setDropChoice(null);
+                runResult(swapBookingsAction(mover.id, otherId, service.id));
+              }}
+            />
+          );
+        })()}
 
       {deleteTarget &&
         (() => {

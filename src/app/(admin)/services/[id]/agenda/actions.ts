@@ -1276,6 +1276,114 @@ export async function moveBookingAction(
   return { ok: true };
 }
 
+/**
+ * ÉCHANGE de créneaux entre deux réservations (Dom 2026-09-16) : A prend le créneau de B,
+ * B celui de A, dans UNE transaction — plus de fenêtre où un créneau est libre entre
+ * deux déplacements (cas vécu : la tâche liste d'attente avait attribué le créneau
+ * libéré un instant pendant un échange fait en deux glissers). Mêmes règles que le
+ * déplacement : même service, même type des deux côtés, aucune des deux verrouillée par
+ * un pointage ; pour une récurrente, période et parité suivent le créneau d'arrivée et les
+ * occurrences sont régénérées. Capacité : chaque créneau d'arrivée doit accueillir
+ * l'entrante une fois la sortante partie (les deux exclues du décompte).
+ */
+export async function swapBookingsAction(
+  bookingIdA: number,
+  bookingIdB: number,
+  serviceId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireServiceManager(serviceId);
+  const a = idSchema.safeParse(bookingIdA);
+  const b = idSchema.safeParse(bookingIdB);
+  if (!a.success || !b.success || a.data === b.data) {
+    return { ok: false, error: "Données invalides." };
+  }
+  const select = {
+    id: true,
+    slotId: true,
+    bookingType: true,
+    parentBookingId: true,
+    pointage: true,
+    periodId: true,
+    enfants: true,
+    accompagnants: true,
+  } as const;
+  const [ba, bb] = await Promise.all([
+    prisma.booking.findFirst({ where: { id: a.data, serviceId }, select }),
+    prisma.booking.findFirst({ where: { id: b.data, serviceId }, select }),
+  ]);
+  if (!ba || !bb) return { ok: false, error: "Réservation introuvable." };
+  if (ba.bookingType !== bb.bookingType) {
+    return { ok: false, error: "Impossible d'échanger une récurrente avec une ponctuelle." };
+  }
+  if (ba.slotId === bb.slotId) {
+    return { ok: false, error: "Ces deux réservations sont déjà sur le même créneau." };
+  }
+  if ((await bookingLocked(ba)) || (await bookingLocked(bb))) {
+    return { ok: false, error: "Réservation verrouillée." };
+  }
+  const wantType = ba.bookingType === "recurring" ? "recurring" : "unique";
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await assertNotLockedByPointageInTx(tx, ba.id, serviceId);
+        await assertNotLockedByPointageInTx(tx, bb.id, serviceId);
+        // Cible de chacune = créneau de l'autre (période / parité résolues pour un récurrent).
+        const targetFor = async (slotId: string) => {
+          if (wantType === "recurring") {
+            const t = await resolveRecurringTarget(tx, { serviceId, slotId });
+            return { periodId: t.periodId, week: t.week };
+          }
+          const s = await tx.slot.findFirst({
+            where: { id: slotId, serviceId },
+            select: { slotType: true },
+          });
+          if (s?.slotType !== "unique") throw new BookingError("Ce créneau n'est pas disponible.");
+          return { periodId: null as number | null, week: "" as "" | "A" | "B" };
+        };
+        const [tA, tB] = [await targetFor(bb.slotId), await targetFor(ba.slotId)];
+        // Anti-surbooking des DEUX côtés, les deux réservations quittant leur créneau.
+        for (const [mover, slotId, target] of [
+          [ba, bb.slotId, tA],
+          [bb, ba.slotId, tB],
+        ] as const) {
+          await assertSlotCapacity(tx, {
+            serviceId,
+            slotId,
+            bookingType: wantType,
+            periodId: target.periodId,
+            enfants: mover.enfants,
+            accompagnants: mover.accompagnants,
+            excludeBookingIds: [ba.id, bb.id],
+          });
+        }
+        const now = new Date();
+        const ua = await tx.booking.update({
+          where: { id: ba.id },
+          data: { slotId: bb.slotId, periodId: tA.periodId, week: tA.week, autoValidateFrom: now },
+        });
+        const ub = await tx.booking.update({
+          where: { id: bb.id },
+          data: { slotId: ba.slotId, periodId: tB.periodId, week: tB.week, autoValidateFrom: now },
+        });
+        if (wantType === "recurring") {
+          const cutoffISO = todayParisISO();
+          await syncRecurringChildren(tx, ua, { cutoffISO });
+          await syncRecurringChildren(tx, ub, { cutoffISO });
+        }
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    if (e instanceof BookingError) return { ok: false, error: e.message };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      return { ok: false, error: "Modification simultanée détectée, réessayez." };
+    }
+    throw e;
+  }
+  revalidatePath(`/services/${serviceId}/agenda`);
+  return { ok: true };
+}
+
 const createSchema = z
   .object({
     serviceId: z.string().min(1),
