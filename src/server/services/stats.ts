@@ -1,12 +1,14 @@
 import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
-import { monthShortLabel } from "@/lib/format";
+import { monthShortLabel, toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
+import { isOfferDateClosed } from "@/lib/offer-closure";
 import { schoolYearLabel } from "@/lib/school-year";
 import { computeSlotStats, type SlotStats } from "@/lib/slot-stats";
 import { computeWaitlistStats, type WaitlistStats } from "@/lib/waiting-list-stats";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
+import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
 
 // =====================================================================================
 // Statistiques d'un service. Agrégation 100 % serveur, sans dépendance de graphes :
@@ -224,17 +226,47 @@ export async function getServiceStats(
   // réservations (matérialisés à la création du récurrent / de la période). Sert au
   // volet créneaux ET au remplissage moyen (séances vides à 0 %). Filtre de type
   // appliqué au CRÉNEAU (miroir = récurrent).
-  const slotRows = await prisma.slot.findMany({
-    where: {
-      serviceId,
-      slotDate: {
-        not: null,
-        ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
-        ...(dateTo ? { lte: new Date(`${dateTo}T00:00:00.000Z`) } : {}),
+  const [slotRowsRaw, exerciceRows, schoolHolidays] = await Promise.all([
+    prisma.slot.findMany({
+      where: {
+        serviceId,
+        slotDate: {
+          not: null,
+          ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+          ...(dateTo ? { lte: new Date(`${dateTo}T00:00:00.000Z`) } : {}),
+        },
       },
-    },
-    select: { id: true, slotDate: true, parentSlotId: true, capacity: true },
-  });
+      select: { id: true, slotDate: true, parentSlotId: true, capacity: true },
+    }),
+    // Réglages d'ouverture par exercice (dates, jours actifs, fériés, vacances) : les
+    // jours que l'agenda HACHURE ne sont pas une offre (cf. lib/offer-closure).
+    prisma.exercice.findMany({
+      where: { serviceId },
+      select: {
+        dateStart: true,
+        dateEnd: true,
+        activeDays: true,
+        openOnHolidays: true,
+        openOnSchoolHolidays: true,
+      },
+    }),
+    getSchoolZone().then((zone) => loadSchoolHolidayRanges(prisma, zone)),
+  ]);
+  const offerExercices = exerciceRows.map((e) => ({
+    dateStart: toDateInput(e.dateStart),
+    dateEnd: toDateInput(e.dateEnd),
+    activeDays: e.activeDays,
+    openOnHolidays: e.openOnHolidays,
+    openOnSchoolHolidays: e.openOnSchoolHolidays,
+  }));
+  // Offre EFFECTIVE : les miroirs matérialisés sur un jour fermé de l'exercice (vacances
+  // scolaires fermées, férié fermé, jour inactif) sont écartés — l'agenda les hachure
+  // et rien ne peut s'y réserver (Dom 2026-09-16 : 84 % de remplissage sur un trimestre
+  // dont les seules séances vides étaient les vacances d'hiver). Une réservation qui
+  // existerait malgré tout sur une telle date reste comptée via sessionAgg (union).
+  const slotRows = slotRowsRaw.filter(
+    (s) => !s.slotDate || !isOfferDateClosed(ymd(s.slotDate), offerExercices, schoolHolidays),
+  );
   const slotTypePass = (s: { parentSlotId: string | null }): boolean =>
     type === "rec" ? s.parentSlotId != null : type === "uniq" ? s.parentSlotId == null : true;
   // Séances PROPOSÉES (même clé que sessionAgg : créneau récurrent parent ?? créneau,

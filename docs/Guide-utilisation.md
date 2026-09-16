@@ -318,7 +318,9 @@ dans le mois, réservés dans le mois, séances ; les créneaux libres du mois f
 l'export CSV). L'export CSV contient toujours ce volet.
 
 Le **remplissage moyen** (compteur et courbe par mois) porte sur **toutes les séances proposées**
-de la plage : une séance restée sans réservation compte 0 %. Le compteur rappelle en dessous le
+de la plage : une séance restée sans réservation compte 0 %. Les jours que l'agenda hachure —
+vacances scolaires et jours fériés quand l'exercice les ferme, jours inactifs — ne font pas
+partie de l'offre : ni le remplissage ni le volet créneaux ne les comptent. Le compteur rappelle en dessous le
 remplissage des seules séances réservées quand il diffère. L'occupation d'une séance se mesure
 en enfants (et accompagnants, selon le réglage du service) sur la capacité du créneau s'il a une
 jauge, sinon en nombre de réservations sur la capacité.
