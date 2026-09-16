@@ -5658,7 +5658,9 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 /* Statistiques : bandeau de cartes (rg-step avec repli) et titres de panneaux. */
 .cfg-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  /* Colonnes de 180 px minimum (Dom 2026-09-16) : un libellé comme « Fréquentation
+     enfants » tient plus souvent sur une ligne à côté du chiffre. */
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 0.6rem;
   padding-bottom: 0.85rem;
 }
