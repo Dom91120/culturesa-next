@@ -147,3 +147,58 @@ export async function markWaitlistBookingsDeleted(
   });
   return r.count;
 }
+
+/**
+ * RETOUR EN FILE après REFUS (Dom 2026-09-16) : quand un gestionnaire refuse une
+ * réservation obtenue par INSCRIPTION AUTOMATIQUE (issue AUTO_BOOKED), l'usager n'a rien
+ * demandé de plus que sa place dans la file — il la retrouve, À SA PLACE D'ORIGINE :
+ * l'entrée vivante est recréée avec la date d'inscription, les disponibilités, les
+ * périodes et le choix d'inscription automatique figés dans l'historique, et la ligne
+ * d'historique est supprimée (le placement n'a pas tenu, il ne compte plus comme tel).
+ *
+ * À appeler AVANT la suppression des réservations, et avant markWaitlistBookingsDeleted
+ * (une ligne remise en file n'a plus de trace de suppression à porter). Seul le REFUS
+ * relance : une réservation validée puis supprimée, ou annulée par l'usager, ne remet
+ * personne en file. Sans effet si l'usager a déjà une entrée vivante sur le service.
+ * Les créneaux déjà signalés ne sont pas conservés : la tâche planifiée pourra prévenir
+ * à nouveau. Renvoie les usagers remis en file.
+ */
+export async function requeueRefusedAutoBookings(
+  db: Prisma.TransactionClient,
+  bookings: Prisma.BookingWhereInput,
+): Promise<{ serviceId: string; userId: string; inscritAt: Date }[]> {
+  const logs = await db.waitingListLog.findMany({
+    where: { booking: bookings, issue: "AUTO_BOOKED", userId: { not: null } },
+    select: {
+      id: true,
+      serviceId: true,
+      userId: true,
+      disponibilites: true,
+      periodIds: true,
+      autoInscription: true,
+      inscritAt: true,
+    },
+  });
+  const requeued: { serviceId: string; userId: string; inscritAt: Date }[] = [];
+  for (const l of logs) {
+    if (!l.userId) continue;
+    const live = await db.waitingListEntry.findUnique({
+      where: { serviceId_userId: { serviceId: l.serviceId, userId: l.userId } },
+      select: { id: true },
+    });
+    if (live) continue;
+    await db.waitingListEntry.create({
+      data: {
+        serviceId: l.serviceId,
+        userId: l.userId,
+        disponibilites: l.disponibilites,
+        periodIds: l.periodIds,
+        autoInscription: l.autoInscription,
+        createdAt: l.inscritAt,
+      },
+    });
+    await db.waitingListLog.delete({ where: { id: l.id } });
+    requeued.push({ serviceId: l.serviceId, userId: l.userId, inscritAt: l.inscritAt });
+  }
+  return requeued;
+}

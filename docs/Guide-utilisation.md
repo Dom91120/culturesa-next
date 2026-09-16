@@ -161,7 +161,10 @@ sur chaque période), vous ne pouvez pas vous inscrire sur la liste d'attente de
 Votre inscription vaut **jusqu'à la fin de la dernière période souhaitée** (l'échéance est
 rappelée dans la fenêtre) : passé ce terme, elle est close automatiquement et vous en êtes
 informé par e-mail. **Toute réservation obtenue** sur le service — faite par vous, par un
-gestionnaire ou automatiquement — vous retire de la liste.
+gestionnaire ou automatiquement — vous retire de la liste. Si le service **refuse** une
+réservation qui vous avait été faite automatiquement, vous **retrouvez votre place** dans la
+liste, avec vos disponibilités et votre date d'inscription d'origine : l'e-mail de refus vaut
+alors information, il n'y a rien à refaire.
 La liste vous est aussi proposée au bon moment : un clic sur un créneau **complet** affiche un lien
 « s'inscrire sur la liste d'attente » (la demi-journée du créneau est précochée), la fenêtre
 **« Plus aucune place disponible »** porte un bouton d'inscription, et les e-mails de refus ou de
@@ -229,7 +232,11 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   de retirer une inscription. La tâche planifiée « Liste d'attente » prévient ou inscrit les
   usagers dès qu'un créneau réservable se libère, et **clôt les inscriptions échues** (périodes
   souhaitées terminées, e-mail à l'usager). **Toute réservation obtenue** sur le service (par
-  l'usager, par un gestionnaire ou automatiquement) retire l'usager de la liste. Chaque
+  l'usager, par un gestionnaire ou automatiquement) retire l'usager de la liste. **Refuser**
+  une réservation issue d'une inscription automatique **remet l'usager dans la liste à sa
+  place d'origine** (date d'inscription, disponibilités et périodes conservées), et retire
+  ce placement de l'historique ; une réservation validée puis supprimée, ou annulée par
+  l'usager, ne le remet pas en liste. Chaque
   inscription close (inscrit automatiquement, a obtenu une réservation, périodes échues sans
   place, retiré de la liste d'attente par l'usager ou par le service) est conservée dans un historique qui
   alimente les **Statistiques**.

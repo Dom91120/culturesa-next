@@ -24,6 +24,7 @@ import {
 } from "@/schemas/slot";
 import { prisma } from "@/server/db";
 import { requireServiceAccess, requireServiceManager } from "@/server/guards";
+import { journal } from "@/server/log";
 import {
   ABSENCE_CANDIDATE_SELECT,
   absencePrevenueAtFromYmd,
@@ -77,6 +78,7 @@ import { deleteWaitingEntryById } from "@/server/services/waiting-list";
 import {
   closeWaitingEntries,
   markWaitlistBookingsDeleted,
+  requeueRefusedAutoBookings,
 } from "@/server/services/waiting-list-close";
 
 // Jours : source unique = DAYS (schemas/config). type DayKeyT en dérive (audit D2).
@@ -1042,6 +1044,24 @@ export async function deleteBookingAdminAction(
     await prisma.$transaction(
       async (tx) => {
         await assertNotLockedByPointageInTx(tx, id.data, serviceId);
+        // REFUS d'une réservation obtenue par inscription automatique : l'usager
+        // retrouve sa place dans la file d'attente (Dom 2026-09-16) — avant la trace
+        // de suppression, la ligne d'historique étant retirée avec la remise en file.
+        if (!booking.validated) {
+          const back = await requeueRefusedAutoBookings(tx, { id: id.data });
+          for (const r of back) {
+            journal.info(
+              "liste-attente",
+              "retour en file après refus d'une inscription automatique",
+              {
+                serviceId: r.serviceId,
+                userId: r.userId,
+                inscritAt: r.inscritAt.toISOString(),
+                bookingId: id.data,
+              },
+            );
+          }
+        }
         // Trace pour l'historique de la liste d'attente (réservation obtenue puis
         // supprimée / refusée par le service).
         await markWaitlistBookingsDeleted(
