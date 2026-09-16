@@ -16,6 +16,7 @@ import {
   waitlistDeadline,
   waitlistExpired,
 } from "@/lib/waiting-list";
+import { agendaIsQuiet } from "@/lib/waiting-list-quiet";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { formatSlotLabel, sendBookingConfirmationMail } from "@/server/services/booking-mail";
@@ -29,6 +30,7 @@ import {
 import { sendTemplatedMail } from "@/server/services/mail-send";
 import { reservePonctuelInTx, reserveRecurringInTx } from "@/server/services/user-booking";
 import { closeWaitingEntries } from "@/server/services/waiting-list-close";
+import { getWaitlistQuietMinutes, lastAgendaActivity } from "@/server/services/waiting-list-quiet";
 
 // ─── Liste d'attente (réglage PAR SERVICE, Paramètres > Configuration) ───────────
 // Un usager dépose ses DISPONIBILITÉS par demi-journée (cf. lib/waiting-list) et,
@@ -504,6 +506,9 @@ export type WaitingListRunStats = {
   notified: number;
   booked: number;
   expired: number;
+  // Services dont l'appariement a été reporté : agenda modifié il y a moins que le délai
+  // de carence (cf. lib/waiting-list-quiet).
+  onHold: number;
 };
 
 /**
@@ -520,8 +525,10 @@ export async function runWaitingList(now: Date = new Date()): Promise<WaitingLis
     notified: 0,
     booked: 0,
     expired: 0,
+    onHold: 0,
   };
   const today = todayParisISO(now);
+  const quietMinutes = await getWaitlistQuietMinutes();
   const services = await prisma.service.findMany({
     where: { waitingList: { some: {} } },
     select: { id: true, listeAttente: true },
@@ -547,7 +554,13 @@ export async function runWaitingList(now: Date = new Date()): Promise<WaitingLis
     }
     if (!svc.listeAttente) continue;
 
-    // 2. Appariement.
+    // 2. Appariement — seulement si l'agenda du service est CALME depuis le délai de
+    // carence (Dom 2026-09-16) : un créneau libéré un instant par une manipulation en
+    // cours (échange en deux glissers…) n'est pas attribué. Reporté au passage suivant.
+    if (!agendaIsQuiet(await lastAgendaActivity(prisma, svc.id), now, quietMinutes)) {
+      stats.onHold++;
+      continue;
+    }
     stats.services++;
     const candidates = await serviceCandidates(svc.id, now);
     const entries = await prisma.waitingListEntry.findMany({

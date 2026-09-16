@@ -250,7 +250,11 @@ de la barre d&#39;options, avec le nombre d&#39;inscrits, ouvre la liste des usa
 avec leurs disponibilités, leurs périodes souhaitées, leur choix d&#39;inscription automatique
 et l&#39;<strong>échéance</strong> de l&#39;inscription (fin de la dernière période souhaitée) ; un bouton permet
 de retirer une inscription. La tâche planifiée « Liste d&#39;attente » prévient ou inscrit les
-usagers dès qu&#39;un créneau réservable se libère, et <strong>clôt les inscriptions échues</strong> (périodes
+usagers dès qu&#39;un créneau réservable se libère — mais seulement quand l&#39;agenda du service
+est <strong>au calme</strong> depuis un certain temps (15 minutes par défaut, réglable par
+l&#39;administrateur dans Tâches planifiées) : un créneau libéré un instant pendant une
+manipulation n&#39;est pas attribué, le service est repris au passage suivant —, et <strong>clôt les
+inscriptions échues</strong> (périodes
 souhaitées terminées, e-mail à l&#39;usager). <strong>Toute réservation obtenue</strong> sur le service (par
 l&#39;usager, par un gestionnaire ou automatiquement) retire l&#39;usager de la liste. <strong>Refuser</strong>
 une réservation issue d&#39;une inscription automatique <strong>remet l&#39;usager dans la liste à sa

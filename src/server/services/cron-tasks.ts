@@ -60,7 +60,7 @@ export const CRON_TASKS: CronTaskDef[] = [
     key: "waiting-list",
     label: "Liste d'attente",
     description:
-      "Pour chaque inscrit sur une liste d'attente (services où le réglage est actif), dans l'ordre d'inscription : cherche les créneaux réservables correspondant à ses disponibilités, l'inscrit automatiquement s'il l'a demandé, sinon le prévient par e-mail des nouveaux créneaux libérés.",
+      "Pour chaque inscrit sur une liste d'attente (services où le réglage est actif), dans l'ordre d'inscription : cherche les créneaux réservables correspondant à ses disponibilités, l'inscrit automatiquement s'il l'a demandé, sinon le prévient par e-mail des nouveaux créneaux libérés. Un service dont l'agenda vient d'être modifié est reporté au passage suivant (délai de carence, ci-dessous).",
     defaultSchedule: { type: "everyMinutes", step: 5 },
     runnable: true,
   },
@@ -277,8 +277,12 @@ export function summarizeWaitingList(r: {
   notified: number;
   booked: number;
   expired: number;
+  onHold?: number;
 }): string {
-  return `${r.entries} inscrit(s) sur ${r.services} service(s) : ${r.booked} inscription(s) automatique(s), ${r.notified} e-mail(s) « créneaux libérés », ${r.expired} inscription(s) échue(s)`;
+  const hold = r.onHold
+    ? `, ${r.onHold} service(s) reporté(s) (agenda en cours de modification)`
+    : "";
+  return `${r.entries} inscrit(s) sur ${r.services} service(s) : ${r.booked} inscription(s) automatique(s), ${r.notified} e-mail(s) « créneaux libérés », ${r.expired} inscription(s) échue(s)${hold}`;
 }
 
 export function summarizeRgpdRetention(r: { notified: number; anonymized: number }): string {

@@ -230,7 +230,11 @@ L'agenda du gestionnaire permet de gérer les créneaux et les réservations de 
   avec leurs disponibilités, leurs périodes souhaitées, leur choix d'inscription automatique
   et l'**échéance** de l'inscription (fin de la dernière période souhaitée) ; un bouton permet
   de retirer une inscription. La tâche planifiée « Liste d'attente » prévient ou inscrit les
-  usagers dès qu'un créneau réservable se libère, et **clôt les inscriptions échues** (périodes
+  usagers dès qu'un créneau réservable se libère — mais seulement quand l'agenda du service
+  est **au calme** depuis un certain temps (15 minutes par défaut, réglable par
+  l'administrateur dans Tâches planifiées) : un créneau libéré un instant pendant une
+  manipulation n'est pas attribué, le service est repris au passage suivant —, et **clôt les
+  inscriptions échues** (périodes
   souhaitées terminées, e-mail à l'usager). **Toute réservation obtenue** sur le service (par
   l'usager, par un gestionnaire ou automatiquement) retire l'usager de la liste. **Refuser**
   une réservation issue d'une inscription automatique **remet l'usager dans la liste à sa

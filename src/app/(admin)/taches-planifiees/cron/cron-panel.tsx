@@ -139,6 +139,7 @@ export function CronPanel({
   crontab,
   lastCronPass,
   generatedAt,
+  children,
 }: {
   rows: CronTaskRow[];
   cronSecretConfigured: boolean;
@@ -147,6 +148,8 @@ export function CronPanel({
   lastCronPass: string | null;
   /** Instant du relevé serveur (ISO) : base des libellés relatifs, stable à l'hydratation. */
   generatedAt: string;
+  /** Réglages liés aux tâches (ex. délai de carence de la liste d'attente), sous le tableau. */
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -438,6 +441,8 @@ export function CronPanel({
           </tbody>
         </table>
       </div>
+
+      {children}
 
       <div className="cron-foot">
         {/* Légende des points d'état, sur une ligne (Dom 2026-09-08). */}

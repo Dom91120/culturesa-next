@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { MAX_WAITLIST_QUIET_MINUTES } from "@/lib/waiting-list-quiet";
 import { requireRole } from "@/server/guards";
 import { runAutoValidation } from "@/server/services/auto-validate";
 import { createAutoBackup } from "@/server/services/backup";
@@ -23,6 +24,7 @@ import { sendManagerDigest } from "@/server/services/manager-notice";
 import { runRgpdRetention } from "@/server/services/rgpd";
 import { runValidationNotices } from "@/server/services/validation-notice";
 import { runWaitingList } from "@/server/services/waiting-list";
+import { setWaitlistQuietMinutes } from "@/server/services/waiting-list-quiet";
 
 export type RunCronResult = { ok: true; summary: string } | { ok: false; error: string };
 
@@ -92,6 +94,22 @@ export async function updateCronScheduleAction(
     return { ok: false, error: "Planification invalide." };
   }
   await setCronSchedule(key, schedule);
+  revalidatePath("/taches-planifiees/cron");
+  return { ok: true };
+}
+
+/**
+ * Délai de carence de l'attribution automatique (liste d'attente) : minutes de calme
+ * exigées sur l'agenda d'un service avant que la tâche ne l'apparie (0 = aucun délai).
+ */
+export async function setWaitlistQuietMinutesAction(
+  minutes: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireRole("administrateur");
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_WAITLIST_QUIET_MINUTES) {
+    return { ok: false, error: `Délai invalide (0 à ${MAX_WAITLIST_QUIET_MINUTES} minutes).` };
+  }
+  await setWaitlistQuietMinutes(minutes);
   revalidatePath("/taches-planifiees/cron");
   return { ok: true };
 }

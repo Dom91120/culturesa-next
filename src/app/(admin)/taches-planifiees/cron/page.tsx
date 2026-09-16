@@ -9,19 +9,22 @@ import {
   readCrontabFile,
   scheduleLabel,
 } from "@/server/services/cron-tasks";
+import { getWaitlistQuietMinutes } from "@/server/services/waiting-list-quiet";
 import { CronPanel, type CronTaskRow } from "./cron-panel";
+import { WaitlistQuietField } from "./waitlist-quiet-field";
 
 export const dynamic = "force-dynamic";
 
 export default async function CronPage() {
   // Administration réservée aux administrateurs.
   await requireRole("administrateur");
-  const [runs, schedules, lastCronAts, crontab, backups] = await Promise.all([
+  const [runs, schedules, lastCronAts, crontab, backups, quietMinutes] = await Promise.all([
     getCronRuns(),
     getCronSchedules(),
     getLastCronAts(),
     readCrontabFile(),
     listBackups(),
+    getWaitlistQuietMinutes(),
   ]);
 
   // La sauvegarde tourne dans le conteneur cron sans passer par l'app : sa dernière
@@ -65,6 +68,8 @@ export default async function CronPage() {
       crontab={crontab}
       lastCronPass={lastCronPass ? lastCronPass.toISOString() : null}
       generatedAt={now.toISOString()}
-    />
+    >
+      <WaitlistQuietField initial={quietMinutes} />
+    </CronPanel>
   );
 }
