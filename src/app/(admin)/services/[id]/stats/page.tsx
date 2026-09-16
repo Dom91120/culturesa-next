@@ -46,7 +46,6 @@ function MetricCard({
   sub,
   hint,
   icon,
-  inline = false,
 }: {
   value: number | string;
   label: string;
@@ -54,11 +53,10 @@ function MetricCard({
   sub?: string;
   hint?: string;
   icon?: React.ReactNode;
-  // Valeur et libellé sur UNE ligne (« 5 Fréquentation enfants »), sous-texte dessous —
-  // maquette Dom 2026-09-16 pour la tuile enfants.
-  inline?: boolean;
 }) {
   const tint = color ?? "var(--accent)";
+  // Valeur et libellé sur UNE ligne (« 5 Fréquentation enfants »), sous-texte dessous —
+  // maquette Dom 2026-09-16, étendue à toutes les tuiles de la rangée.
   return (
     <div className="rg-step" title={hint} style={{ cursor: hint ? "help" : undefined }}>
       <span
@@ -68,19 +66,10 @@ function MetricCard({
         {icon ?? <ChartBarGlyph size={13} />}
       </span>
       <div style={{ minWidth: 0 }}>
-        {inline ? (
-          <div className="v is-inline" style={{ color: tint }}>
-            {value}
-            <span className="l">{label}</span>
-          </div>
-        ) : (
-          <>
-            <div className="l">{label}</div>
-            <div className="v" style={{ color: tint }}>
-              {value}
-            </div>
-          </>
-        )}
+        <div className="v is-inline" style={{ color: tint }}>
+          {value}
+          <span className="l">{label}</span>
+        </div>
         {sub && <div className="s">{sub}</div>}
       </div>
     </div>
@@ -781,7 +770,6 @@ export default async function StatsPage({
           label="Fréquentation enfants"
           color="#d98cc0"
           icon={<UsersGlyph size={13} />}
-          inline
           sub={`${stats.enfantsCumul} sur les séances`}
           hint="Effectif estimé : chaque inscrit compte une seule fois, avec l'effectif de sa réservation la plus nombreuse (récurrent ou re-réservations ne comptent qu'une fois). En dessous, le cumul sur les séances : une réservation récurrente compte ses enfants à chaque séance"
         />
