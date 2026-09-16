@@ -3464,7 +3464,7 @@ textarea.theme-pending:focus::placeholder {
   flex-direction: column;
   gap: 1px;
   font-size: 0.7rem;
-  line-height: 1.25;
+  line-height: 1;
   white-space: normal;
   overflow: visible;
 }
