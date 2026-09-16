@@ -303,7 +303,12 @@ remplissage). Les données sont **filtrables et
 exportables en CSV**.
 
 Les statistiques comptent des **séances** (une réservation à une date donnée, chaque occurrence
-d'une réservation récurrente comptant une fois). Dès que le nombre de **créneaux** proposés
+d'une réservation récurrente comptant une fois). Les **effectifs** font exception : le compteur
+**« Fréquentation enfants »**, celui des accompagnants et les répartitions **par jour, par
+structure, par niveau et par thème** comptent des **enfants distincts** — chaque inscrit compte
+une seule fois, avec l'effectif de sa réservation la plus nombreuse, de sorte qu'une réservation
+récurrente ne pèse pas ses séances. Le compteur « Fréquentation enfants » rappelle en dessous
+le cumul sur les séances. Dès que le nombre de **créneaux** proposés
 diffère du nombre de séances, un volet **créneaux** s'ajoute. Un créneau **récurrent compte
 pour un seul créneau**, comme dans la liste des créneaux ouverts des Éditions, et un ponctuel
 pour un ; un récurrent est « réservé » dès qu'une de ses occurrences l'est. Le volet comprend

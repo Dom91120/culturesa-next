@@ -16,12 +16,14 @@ import { prisma } from "@/server/db";
 // `occ` = filtré au type et à la plage de dates. Le pointage (prévu/réalisé) vit sur ces
 // mêmes occurrences (séances passées, plus toute séance pointée — validée ou non).
 //
-// EXCEPTION (décision produit 2026-07-25) : les EFFECTIFS (enfants, accompagnants,
-// effectifs par exercice) sont des personnes, pas des volumes de séances. Sans identité
-// des enfants en base, on les estime par la « règle du max » : pour chaque usager ayant
-// réservé dans la population, on retient l'effectif de sa réservation la plus nombreuse
-// (un récurrent ou des re-réservations du même usager ne comptent qu'une fois). Le cumul
-// par séance reste exposé (enfantsCumul → tuile « Fréquentation enfants »).
+// EXCEPTION (décision produit 2026-07-25, étendue le 2026-09-16) : les EFFECTIFS (enfants,
+// accompagnants, effectifs par exercice, et les RÉPARTITIONS par jour / structure / niveau
+// / thème) sont des personnes, pas des volumes de séances. Sans identité des enfants en
+// base, on les estime par la « règle du max » : pour chaque usager ayant réservé dans la
+// population (ou dans la part de la répartition), on retient l'effectif de sa réservation
+// la plus nombreuse (un récurrent ou des re-réservations du même usager ne comptent qu'une
+// fois). Le cumul par séance reste exposé (enfantsCumul → sous-texte de la tuile
+// « Fréquentation enfants »). Le comptage mensuel et le remplissage restent en séances.
 // =====================================================================================
 
 export type StatsType = "all" | "rec" | "uniq";
@@ -69,7 +71,8 @@ type ServiceStats = {
   tauxPresence: number | null; // présents / (présents + absents)
   tauxAbsence: number | null; // absents / (présents + absents)
   tauxRealisation: number | null; // présents / prévu
-  // Graphes
+  // Graphes. byDay / topStructures / topNiveaux / topThemes = ENFANTS DISTINCTS par part
+  // (règle du max par usager à l'intérieur de la part) ; byMonth = séances.
   byDay: LabeledCount[];
   byMonth: LabeledCount[];
   // Remplissage moyen (%, unités de jauge) par mois — même règle que avgFill (toute
@@ -79,8 +82,8 @@ type ServiceStats = {
   topNiveaux: LabeledCount[];
   // Répartition par thème (texte saisi/choisi par l'usager) — occurrences ayant un thème
   // non vide. topThemes = top 10 (comme topStructures/topNiveaux, pas de normalisation de
-  // casse en mode « libre ») ; themedCount = total RÉEL (toutes occurrences avec thème, pas
-  // seulement le top 10) pour un centre d'anneau exact.
+  // casse en mode « libre ») ; themedCount = enfants distincts parmi TOUTES les séances
+  // thémées (pas seulement le top 10) pour un centre d'anneau exact.
   topThemes: LabeledCount[];
   themedCount: number;
   // Effectifs (enfants) par exercice — TOUS exercices (ignore la plage de dates), pour
@@ -265,26 +268,40 @@ export async function getServiceStats(
   const recurringCount = occ.filter((b) => b.parentBookingId != null).length;
   const uniqueCount = occ.filter((b) => b.parentBookingId == null).length;
 
-  // Répartitions (jour / structures / niveaux) + comptage mensuel + agrégats par SÉANCE
-  // (= créneau récurrent parent ?? créneau, + date) pour le remplissage.
-  const dayMap = new Map<string, number>();
-  const structMap = new Map<string, number>();
-  const niveauMap = new Map<string, number>();
-  const themeMap = new Map<string, number>();
+  // Répartitions (jour / structures / niveaux / thèmes) en ENFANTS DISTINCTS (Dom
+  // 2026-09-16) : dans chaque groupe, règle du max par usager — un récurrent de 14 séances
+  // à 3 enfants pèse 3 dans « Lundi » et dans sa structure, pas 14. Le comptage mensuel et
+  // les agrégats par SÉANCE (= créneau récurrent parent ?? créneau, + date, pour le
+  // remplissage) restent en séances.
+  const dayGroups = new Map<string, Map<string, number>>();
+  const structGroups = new Map<string, Map<string, number>>();
+  const niveauGroups = new Map<string, Map<string, number>>();
+  const themeGroups = new Map<string, Map<string, number>>();
+  const addMax = (
+    groups: Map<string, Map<string, number>>,
+    key: string,
+    b: (typeof occ)[number],
+  ) => {
+    const g = groups.get(key) ?? new Map<string, number>();
+    g.set(b.userId, Math.max(g.get(b.userId) ?? 0, b.enfants));
+    groups.set(key, g);
+  };
+  const sumGroup = (g: Map<string, number>) => [...g.values()].reduce((s, v) => s + v, 0);
+  const groupsToMap = (groups: Map<string, Map<string, number>>) =>
+    new Map([...groups].map(([k, g]) => [k, sumGroup(g)]));
   const monthCount = new Map<string, number>();
   const sessionAgg = new Map<string, { occ: number; cap: number; month: string }>();
   for (const b of occ) {
     if (!b.slot.slotDate) continue;
     const dateStr = ymd(b.slot.slotDate);
     const dk = dayKeyOf(b.slot.slotDay, b.slot.slotDate);
-    if (dk) dayMap.set(dk, (dayMap.get(dk) ?? 0) + 1);
-    structMap.set(structOf(b), (structMap.get(structOf(b)) ?? 0) + 1);
-    const niv = b.niveauLabel.trim() || "(aucun)";
-    niveauMap.set(niv, (niveauMap.get(niv) ?? 0) + 1);
+    if (dk) addMax(dayGroups, dk, b);
+    addMax(structGroups, structOf(b), b);
+    addMax(niveauGroups, b.niveauLabel.trim() || "(aucun)", b);
     // Thème : seules les occurrences ayant EFFECTIVEMENT un thème saisi comptent (pas de
     // catégorie "(sans thème)" — sur un service sans thèmes, ça noierait le panneau).
     const theme = b.themeLabel?.trim();
-    if (theme) themeMap.set(theme, (themeMap.get(theme) ?? 0) + 1);
+    if (theme) addMax(themeGroups, theme, b);
     const bucket = dateStr.slice(0, 7);
     monthCount.set(bucket, (monthCount.get(bucket) ?? 0) + 1);
     const key = sessionKeyOf(b, dateStr);
@@ -297,6 +314,10 @@ export async function getServiceStats(
     sessionAgg.set(key, cur);
   }
 
+  const dayMap = groupsToMap(dayGroups);
+  const structMap = groupsToMap(structGroups);
+  const niveauMap = groupsToMap(niveauGroups);
+  const themeMap = groupsToMap(themeGroups);
   const byDay = DAYS.filter((d) => dayMap.has(d)).map((d) => ({
     label: DAY_NAMES[d],
     value: dayMap.get(d) ?? 0,
@@ -394,7 +415,12 @@ export async function getServiceStats(
 
   // Total RÉEL des occurrences avec thème (avant réduction au top 10) : sert de centre
   // d'anneau exact, comme distinctUsers pour le ring « Top structures ».
-  const themedCount = [...themeMap.values()].reduce((s, v) => s + v, 0);
+  // Centre de l'anneau des thèmes : enfants distincts parmi les séances THÉMÉES (un même
+  // inscrit sur deux thèmes ne compte qu'une fois — la somme des parts le compterait deux fois).
+  const themedCount = sumOfMaxByUser(
+    occ.filter((b) => b.slot.slotDate && b.themeLabel?.trim()),
+    (b) => b.enfants,
+  );
 
   // ── Créneaux (offre) ─────────────────────────────────────────────────────────
   // Sur `slotRows` (cf. plus haut). « Réservé » = porte au moins une séance, quel que

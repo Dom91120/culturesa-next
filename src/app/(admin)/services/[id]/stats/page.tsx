@@ -36,6 +36,9 @@ const C_ABSENT = "#e06b6b";
 // Absence prévenue à l'avance : orange, comme le macaron « A » des badges de l'agenda.
 const C_ABSENT_PREVENU = "#e8a45a";
 const C_NONE = "rgba(127,127,127,.32)";
+// Sous-titre des répartitions comptées en enfants distincts (jour, structures, niveaux, thèmes).
+const HINT_ENFANTS_DISTINCTS =
+  "Enfants distincts : chaque inscrit compte une fois, avec l'effectif de sa réservation la plus nombreuse (un récurrent ne compte pas ses séances)";
 
 // ── Briques d'affichage ───────────────────────────────────────────────────────
 
@@ -973,8 +976,12 @@ export default async function StatsPage({
           />
         )}
 
+        {/* Répartitions en ENFANTS DISTINCTS (Dom 2026-09-16) : dans chaque part, un inscrit
+            compte une fois avec sa réservation la plus nombreuse — un récurrent ne pèse pas
+            ses 14 séances. */}
         <DonutPanel
           title="Répartition par jour"
+          hint={HINT_ENFANTS_DISTINCTS}
           icon={<CalendarTimeGlyph size={14} />}
           data={forDonut(stats.byDay, 6)}
           centerValue={peakDay ? peakDay.label : "—"}
@@ -984,6 +991,7 @@ export default async function StatsPage({
 
         <DonutPanel
           title="Top structures"
+          hint={HINT_ENFANTS_DISTINCTS}
           icon={<UsersGlyph size={14} />}
           data={forDonut(stats.topStructures, 5)}
           centerValue={String(stats.distinctUsers)}
@@ -993,9 +1001,10 @@ export default async function StatsPage({
         {showThemes && (
           <DonutPanel
             title="Répartition par thème"
+            hint={HINT_ENFANTS_DISTINCTS}
             data={forDonut(stats.topThemes, 6)}
             centerValue={String(stats.themedCount)}
-            centerLabel="séances"
+            centerLabel="enfants"
           />
         )}
 
@@ -1154,7 +1163,12 @@ export default async function StatsPage({
           </Panel>
         )}
 
-        <Panel title="Top niveaux" tone="info" empty={stats.topNiveaux.length === 0}>
+        <Panel
+          title="Top niveaux"
+          hint={HINT_ENFANTS_DISTINCTS}
+          tone="info"
+          empty={stats.topNiveaux.length === 0}
+        >
           {stats.topNiveaux.map((r) => (
             <BarRow key={r.label} label={r.label} value={r.value} max={niveauMax} color="#5ab4e8" />
           ))}

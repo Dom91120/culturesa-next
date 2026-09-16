@@ -66,11 +66,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       lines.push([title, valLabel]);
       for (const r of rows) lines.push([r.label, String(r.value)]);
     };
-    section("Par jour", "Réservations", stats.byDay);
-    section("Par mois", "Réservations", stats.byMonth);
-    section("Top structures", "Réservations", stats.topStructures);
-    section("Top niveaux", "Réservations", stats.topNiveaux);
-    section("Par thème", "Réservations", stats.topThemes);
+    // Répartitions en enfants distincts (règle du max par inscrit, Dom 2026-09-16) ;
+    // le comptage mensuel reste en séances.
+    section("Par jour", "Enfants distincts", stats.byDay);
+    section("Par mois", "Séances", stats.byMonth);
+    section("Top structures", "Enfants distincts", stats.topStructures);
+    section("Top niveaux", "Enfants distincts", stats.topNiveaux);
+    section("Par thème", "Enfants distincts", stats.topThemes);
     // Créneaux (offre) : toujours exporté — l'écran ne l'affiche que si créneaux ≠ séances.
     const sl = stats.slots;
     lines.push([]);
