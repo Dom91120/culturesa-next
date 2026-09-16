@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requireServiceManager } from "@/server/guards";
 import { listServicePeriods, parseActiveDays } from "@/server/services/periods";
 import { getService } from "@/server/services/services";
 import { ParamsSubnav } from "../params-subnav";
@@ -11,6 +12,9 @@ function toISODate(d: Date | null): string {
 
 export default async function PeriodesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Paramétrage = gestion uniquement : un rattachement en consultation s'arrête à l'agenda,
+  // aux éditions et aux statistiques (le layout du service n'exige que la consultation).
+  await requireServiceManager(id);
   const service = await getService(id);
   if (!service) notFound();
 

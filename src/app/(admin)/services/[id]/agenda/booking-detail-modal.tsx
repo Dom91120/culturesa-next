@@ -73,6 +73,7 @@ export function BookingDetailModal({
   absencePrevenueEnabled,
   readOnly,
   canEdit,
+  viewOnly = false,
   editBookingId,
   notice,
   onClose,
@@ -98,6 +99,10 @@ export function BookingDetailModal({
   readOnly: boolean;
   // Participants + thème modifiables (indépendant de `readOnly`).
   canEdit: boolean;
+  // Rattachement en CONSULTATION : la fiche est intégralement figée — absence prévenue et
+  // motif compris, que `readOnly` laisse sciemment saisissables en gestion. Le serveur
+  // refuse de toute façon toute écriture à ce niveau.
+  viewOnly?: boolean;
   // Réservation cible de l'enregistrement (la PARENTE pour une occurrence récurrente).
   editBookingId: number;
   // Bandeau explicatif (portée récurrente, consultation…) — le verrou pointage prime.
@@ -135,6 +140,7 @@ export function BookingDetailModal({
   // règles que le serveur (assertAbsenceDeclarable, allowPast). Une fois la séance
   // pointée, le signalement reste affiché mais figé.
   const absenceEditable =
+    !viewOnly &&
     absencePrevenueEnabled &&
     !readOnlyAbsence(readOnly, booking) &&
     occurrenceYmd != null &&
@@ -142,11 +148,11 @@ export function BookingDetailModal({
   // Motif saisissable dès que la séance est absente : le pointage (et son motif) n'est
   // pas gouverné par le verrou — la fiche d'une occurrence pointée est justement en
   // consultation (readOnly), brancher sur readOnly le rendait insaisissable. Idem pour
-  // une absence PRÉVENUE en cours de saisie (case cochée).
-  const motifEditable = booking.pointage === "absent" || (absenceEditable && absent);
+  // une absence PRÉVENUE en cours de saisie (case cochée). Jamais en `viewOnly`.
+  const motifEditable = !viewOnly && (booking.pointage === "absent" || (absenceEditable && absent));
   // Suppression : action de gestion — jamais en consultation ni sur une résa
   // verrouillée par le pointage (mêmes règles que la croix des badges).
-  const canDelete = !readOnly && !locked;
+  const canDelete = !readOnly && !locked && !viewOnly;
   // Le champ thème n'apparaît que si le service est en mode thèmes (liste) OU si la
   // réservation a déjà un thème non vide (rester fidèle au legacy sans le masquer à tort).
   const showTheme = themesMode === "liste" || booking.theme.trim() !== "";

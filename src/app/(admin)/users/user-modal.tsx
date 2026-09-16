@@ -22,6 +22,8 @@ type Props = {
   onSaved: () => void;
 };
 
+type ServiceLevel = "gestion" | "consultation";
+
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: "utilisateur", label: "Utilisateur" },
   { value: "gestionnaire", label: "Gestionnaire" },
@@ -59,7 +61,11 @@ export function UserModal({
     user ? String(user.accompagnants) : "",
   );
   const [role, setRole] = useState<string>(user?.role ?? "utilisateur");
-  const [serviceIds, setServiceIds] = useState<string[]>(user?.serviceIds ?? []);
+  // Services rattachés → niveau (gestion / consultation). Un service absent = non rattaché.
+  const [serviceLevels, setServiceLevels] = useState<Record<string, ServiceLevel>>(() =>
+    Object.fromEntries((user?.services ?? []).map((s) => [s.id, s.level])),
+  );
+  const serviceIds = useMemo(() => Object.keys(serviceLevels), [serviceLevels]);
   const [error, setError] = useState<string | null>(null);
   const [resetInfo, setResetInfo] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -110,7 +116,16 @@ export function UserModal({
   }, [niveauOpen]);
 
   function toggleService(id: string) {
-    setServiceIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+    setServiceLevels((cur) => {
+      if (id in cur) {
+        const { [id]: _removed, ...rest } = cur;
+        return rest;
+      }
+      return { ...cur, [id]: "gestion" };
+    });
+  }
+  function setServiceLevel(id: string, level: ServiceLevel) {
+    setServiceLevels((cur) => ({ ...cur, [id]: level }));
   }
 
   function submit() {
@@ -153,7 +168,7 @@ export function UserModal({
       // ou crée sous cette catégorie.
       structureId: saisieLibre || !structureId ? null : Number(structureId),
       structureLibre: saisieLibre ? structureTexte.trim() : "",
-      services: serviceIds,
+      services: serviceIds.map((id) => ({ id, level: serviceLevels[id] })),
     };
     startTransition(async () => {
       const res =
@@ -418,7 +433,7 @@ export function UserModal({
               const r = e.target.value;
               setRole(r);
               // Hors rôle gestionnaire : pas de services rattachés.
-              if (r !== "gestionnaire") setServiceIds([]);
+              if (r !== "gestionnaire") setServiceLevels({});
             }}
           >
             {ROLE_OPTIONS.map((o) => (
@@ -446,17 +461,35 @@ export function UserModal({
                 Aucun service disponible
               </span>
             ) : (
-              services.map((s) => (
-                <label key={s.id} className="uc-service-row">
-                  <span>{s.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={serviceIds.includes(s.id)}
-                    disabled={!isManager}
-                    onChange={() => toggleService(s.id)}
-                  />
-                </label>
-              ))
+              services.map((s) => {
+                const linked = s.id in serviceLevels;
+                return (
+                  <label key={s.id} className="uc-service-row">
+                    <span>{s.label}</span>
+                    <span className="uc-service-ctl">
+                      {/* Niveau du rattachement : gestion (tout) ou consultation (agenda,
+                          éditions, statistiques en lecture seule). Visible une fois coché. */}
+                      {linked && (
+                        <select
+                          aria-label={`Niveau sur ${s.label}`}
+                          value={serviceLevels[s.id]}
+                          disabled={!isManager}
+                          onChange={(e) => setServiceLevel(s.id, e.target.value as ServiceLevel)}
+                        >
+                          <option value="gestion">Gestion</option>
+                          <option value="consultation">Consultation</option>
+                        </select>
+                      )}
+                      <input
+                        type="checkbox"
+                        checked={linked}
+                        disabled={!isManager}
+                        onChange={() => toggleService(s.id)}
+                      />
+                    </span>
+                  </label>
+                );
+              })
             )}
           </div>
         </div>

@@ -13,11 +13,14 @@ import { removeWaitingEntryAction } from "./actions";
 export function WaitingListAdminModal({
   serviceId,
   rows,
+  readOnly = false,
   onClose,
   onChanged,
 }: {
   serviceId: string;
   rows: WaitingAdminRow[];
+  // Rattachement en consultation : la liste se lit, aucune inscription ne se retire.
+  readOnly?: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -145,15 +148,17 @@ export function WaitingListAdminModal({
                       : "—"}
                   </td>
                   <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      style={{ fontSize: ".66rem", padding: ".2rem .5rem" }}
-                      disabled={pending}
-                      onClick={() => remove(r.id)}
-                    >
-                      {removing === r.id ? "Retrait…" : "Retirer"}
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ fontSize: ".66rem", padding: ".2rem .5rem" }}
+                        disabled={pending}
+                        onClick={() => remove(r.id)}
+                      >
+                        {removing === r.id ? "Retrait…" : "Retirer"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

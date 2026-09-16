@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     const role = (session.user as { role?: Role }).role ?? "utilisateur";
     if (role !== "administrateur") {
       const managed = await prisma.serviceManager.findMany({
-        where: { userId: session.user.id },
+        where: { userId: session.user.id, level: "gestion" },
         select: { serviceId: true },
       });
       const inScope = await isUserInServicesRgpdScope(

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import type { Role } from "@/generated/prisma/client";
+import type { ManagerLevel, Role } from "@/generated/prisma/client";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { checkSessionPolicy, sessionDeadlineAt, shouldTouch } from "@/server/session-policy";
@@ -132,19 +132,51 @@ export async function requireRole(min: Role) {
 }
 
 /**
- * Exige que l'usager puisse ADMINISTRER ce service : administrateur (tous les services)
- * ou gestionnaire dont la liste `ServiceManager` contient ce service. Liste vide =
- * aucun accès (deny par défaut, cf. legacy `require_manager_service`). Redirige vers la
- * liste des services si l'accès est refusé (même logique que `requireRole`).
+ * Niveau de droit effectif d'un compte sur un service : `gestion` (tout), `consultation`
+ * (agenda, éditions, statistiques en lecture seule) ou null (aucun rattachement). Un
+ * administrateur est `gestion` partout. Deny par défaut : liste `ServiceManager` vide =
+ * aucun accès (cf. legacy `require_manager_service`).
+ */
+export async function serviceAccessLevel(
+  userId: string,
+  role: Role,
+  serviceId: string,
+): Promise<ManagerLevel | null> {
+  if (role === "administrateur") return "gestion";
+  if (role !== "gestionnaire") return null;
+  const mgr = await prisma.serviceManager.findUnique({
+    where: { userId_serviceId: { userId, serviceId } },
+    select: { level: true },
+  });
+  return mgr?.level ?? null;
+}
+
+/**
+ * Exige que l'usager puisse ADMINISTRER ce service (niveau `gestion`) : administrateur
+ * (tous les services) ou gestionnaire rattaché en gestion. Un rattachement en
+ * `consultation` est REFUSÉ ici : c'est le garde de toutes les actions serveur et des
+ * pages de paramétrage, donc le lecteur ne peut rien écrire par construction — même si
+ * une interface laissait passer un geste. Redirige vers la liste des services si l'accès
+ * est refusé (même logique que `requireRole`).
  */
 export async function requireServiceManager(serviceId: string) {
   const session = await requireRole("gestionnaire");
   const role = (session.user as { role?: Role }).role ?? "utilisateur";
-  if (role === "administrateur") return session;
-  const mgr = await prisma.serviceManager.findUnique({
-    where: { userId_serviceId: { userId: session.user.id, serviceId } },
-    select: { serviceId: true },
-  });
-  if (!mgr) redirect("/configuration");
+  const level = await serviceAccessLevel(session.user.id, role, serviceId);
+  if (level !== "gestion") redirect("/configuration");
   return session;
+}
+
+/**
+ * Exige au moins la CONSULTATION de ce service (gestion ou consultation) et renvoie le
+ * niveau, pour que la page adapte son rendu (agenda figé, onglets masqués). À n'appeler
+ * que depuis des lectures : layout du service, pages agenda / éditions / statistiques,
+ * routes d'export. Jamais depuis une action qui écrit (→ `requireServiceManager`).
+ */
+export async function requireServiceAccess(serviceId: string) {
+  const session = await requireRole("gestionnaire");
+  const role = (session.user as { role?: Role }).role ?? "utilisateur";
+  const level = await serviceAccessLevel(session.user.id, role, serviceId);
+  if (!level) redirect("/configuration");
+  return { session, level, readOnly: level === "consultation" };
 }

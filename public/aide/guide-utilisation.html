@@ -213,6 +213,14 @@ rappel <strong>la veille</strong> (J-1).</p>
 <p>Les gestionnaires accèdent à un espace d&#39;administration <strong>limité aux services qui leur sont
 confiés</strong>. Chaque service dispose des onglets <strong>Agenda</strong>, <strong>Éditions</strong>, <strong>Statistiques</strong> et
 <strong>Paramètres</strong>.</p>
+<p>Un service peut être confié à un gestionnaire à deux niveaux, réglés par l&#39;administrateur dans la
+fiche du compte : en <strong>gestion</strong> (tout ce qui suit), ou en <strong>consultation</strong>, en lecture seule. Un
+service en consultation — par exemple celui d&#39;un service voisin du même lieu, dont on veut suivre
+l&#39;activité — se reconnaît à l&#39;<strong>œil</strong> qui suit son nom dans la barre latérale : ses onglets
+<strong>Agenda</strong>, <strong>Éditions</strong> et <strong>Statistiques</strong> s&#39;ouvrent normalement (impression et exports compris),
+mais rien ne s&#39;y modifie — ni créneau, ni réservation, ni pointage, ni validation — et l&#39;onglet
+<strong>Paramètres</strong> n&#39;existe pas. Un gestionnaire en consultation ne reçoit pas les e-mails adressés
+aux gestionnaires du service.</p>
 <h3 id="agenda-créneaux-et-réservations">Agenda — créneaux et réservations</h3>
 <p>L&#39;agenda du gestionnaire permet de gérer les créneaux et les réservations de chaque usager.</p>
 <ul>
@@ -464,7 +472,10 @@ un service sans e-mail ni gestionnaire, où personne ne les recevrait.</p>
 <h3 id="utilisateurs">Utilisateurs</h3>
 <p>L&#39;onglet a deux sous-onglets. <strong>« Comptes »</strong> : la liste des utilisateurs permet de rechercher
 (nom, e-mail, structure), filtrer et modifier les comptes : informations, <strong>rôle</strong> (utilisateur,
-gestionnaire, administrateur), structure / service rattaché, services gérés et statut RGPD. Des
+gestionnaire, administrateur), structure / service rattaché, services gérés et statut RGPD. Pour
+un gestionnaire, chaque service coché porte son <strong>niveau</strong> : <strong>Gestion</strong> (par défaut) ou
+<strong>Consultation</strong> (agenda, éditions et statistiques en lecture seule) ; la colonne d&#39;affiliation
+le rappelle par la mention « (consultation) » après le nom du service. Des
 <strong>filtres rapides</strong> au-dessus du tableau isolent une population avec son effectif : tous,
 utilisateurs, gestionnaires, administrateurs, <strong>non confirmés</strong>, anonymisés. Chaque ligne montre
 l&#39;avatar et l&#39;e-mail du compte, son <strong>statut</strong> — « Confirmé » (adresse e-mail confirmée),

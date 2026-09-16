@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { EchangesConfig } from "@/app/(admin)/echanges/echanges-config";
 import { getModeleRows } from "@/app/(admin)/echanges/mail-rows";
+import { requireServiceManager } from "@/server/guards";
 import { getService } from "@/server/services/services";
 import { ParamsSubnav } from "../params-subnav";
 
@@ -10,6 +11,9 @@ import { ParamsSubnav } from "../params-subnav";
 // création de types personnalisés est centralisée en administration (types globaux).
 export default async function ServiceEchangesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Paramétrage = gestion uniquement : un rattachement en consultation s'arrête à l'agenda,
+  // aux éditions et aux statistiques (le layout du service n'exige que la consultation).
+  await requireServiceManager(id);
   const service = await getService(id);
   if (!service) notFound();
 

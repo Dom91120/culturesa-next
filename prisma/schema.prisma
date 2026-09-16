@@ -28,6 +28,16 @@ enum ThemesMode {
   liste
 }
 
+// Niveau de droit d'un gestionnaire sur UN service (Dom 2026-09-16) : `gestion` = tout
+// (agenda, réservations, paramètres) ; `consultation` = agenda, éditions et statistiques
+// EN LECTURE SEULE — aucune action serveur n'accepte ce niveau. Cas d'usage : deux
+// services d'un même lieu (ludothèque / médiathèque) qui veulent voir l'agenda de l'autre
+// sans avoir la main dessus.
+enum ManagerLevel {
+  gestion
+  consultation
+}
+
 enum SlotType {
   recurring
   unique
@@ -294,9 +304,11 @@ model Service {
 
 // Gestionnaires nominatifs d'un service (relation N-N user <-> service).
 // Remplit la colonne "Structure / Service" pour les comptes gestionnaires.
+// `level` : gestion (défaut) ou consultation (lecture seule), cf. enum ManagerLevel.
 model ServiceManager {
   userId    String
   serviceId String
+  level     ManagerLevel @default(gestion)
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)

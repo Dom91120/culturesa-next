@@ -5434,49 +5434,253 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 
 /* ── Paramètres de service : onglets Configuration et Périodes (vocabulaire Échanges/RGPD :
    lignes .ex-krow, pictos .rg-ico, pastilles, puces .acct-chip) ─────────────────────── */
-.cfg-row{grid-template-columns:28px minmax(0,1fr) auto;padding:.45rem .5rem}
-.cfg-kds{font-size:.68rem;color:var(--muted);line-height:1.35;margin-top:1px;max-width:640px;text-wrap:pretty}
-.cfg-below{grid-column:2 / -1;min-width:0}
-.cfg-ctl{display:flex;align-items:center;gap:.5rem;justify-self:end}
-.cfg-chips{display:flex;flex-wrap:wrap;gap:.3rem;justify-content:flex-end}
-.cfg-hint{display:flex;align-items:baseline;gap:.35rem;font-size:.7rem;color:var(--muted);flex-wrap:wrap;justify-content:flex-end;min-height:18px;line-height:1.3}
-.cfg-select{height:22px;box-sizing:border-box;font-size:.74rem;font-weight:400;padding:0 .35rem;border-radius:var(--rad-sm);border:1px solid var(--border);background:var(--surface1);color:var(--text)}
-.cfg-textarea{width:100%;max-width:640px;min-height:70px;resize:vertical;font-size:.76rem;line-height:1.4;padding:.4rem .5rem;border-radius:var(--rad-sm);border:1px solid var(--border);background:var(--surface1);color:var(--text)}
-.cfg-dhead,.cfg-drow{display:grid;grid-template-columns:28px minmax(0,1fr) 90px 90px 120px 28px;gap:.6rem;align-items:center}
-.cfg-grp{margin:1.6rem 0 .9rem;color:var(--text)}
-.cfg-grp .hint{color:var(--muted)}
-.cfg-grp-right{margin-left:.6rem;order:1;display:inline-flex;align-items:center;gap:.3rem}
-.cfg-dhead{padding:.3rem 0;margin:0 .5rem;border-bottom:1px solid var(--border);font-size:.66rem;font-weight:600;color:var(--muted)}
-.cfg-dhead span:nth-child(3),.cfg-dhead span:nth-child(4),.cfg-dhead span:nth-child(5){text-align:center}
-.cfg-drow{padding:.35rem .5rem;border-radius:8px;font-size:.78rem}
-.cfg-drow:hover,.cfg-trow:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
-.cfg-drow:hover .ms-acts,.cfg-trow:hover .ms-acts{opacity:1}
-.cfg-c{display:flex;justify-content:center}
-.cfg-trow{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:.6rem;align-items:center;padding:.35rem .5rem;border-radius:8px;font-size:.78rem}
-.cfg-trow input{width:100%;box-sizing:border-box;font:inherit;font-size:.78rem;font-weight:600;padding:.1rem .4rem;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--text);outline:none;box-shadow:none}
-.cfg-trow input:hover{border-color:var(--border)}
-.cfg-trow input:focus{border-color:var(--accent);background:var(--surface1);box-shadow:none}
-.cfg-num{width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:700;background:color-mix(in srgb,var(--slot-uniq-color) 18%,transparent);color:var(--slot-uniq-color)}
-.cfg-phead,.cfg-prow{display:grid;grid-template-columns:24px 44px 60px minmax(0,1fr) 96px 96px 120px;gap:.6rem;align-items:center}
-.cfg-phead{padding:.3rem 0;margin:0 .5rem;border-bottom:1px solid var(--border);font-size:.66rem;font-weight:600;color:var(--muted)}
-.cfg-phead span:nth-child(2),.cfg-phead span:nth-child(3),.cfg-phead span:nth-child(n+5){text-align:center}
-.cfg-prow{padding:.15rem .5rem;border-radius:8px;font-size:.78rem;color:var(--text)}
-.cfg-prow:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
-.cfg-prow.is-selected{background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.cfg-prow > span:nth-child(2),.cfg-prow > span:nth-child(3),.cfg-prow > span:nth-child(n+5){text-align:center}
-.cfg-chip-locked{opacity:.55;cursor:default;pointer-events:none}
+.cfg-row {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  padding: 0.45rem 0.5rem;
+}
+.cfg-kds {
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 1px;
+  max-width: 640px;
+  text-wrap: pretty;
+}
+.cfg-below {
+  grid-column: 2 / -1;
+  min-width: 0;
+}
+.cfg-ctl {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-self: end;
+}
+.cfg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+.cfg-hint {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-height: 18px;
+  line-height: 1.3;
+}
+.cfg-select {
+  height: 22px;
+  box-sizing: border-box;
+  font-size: 0.74rem;
+  font-weight: 400;
+  padding: 0 0.35rem;
+  border-radius: var(--rad-sm);
+  border: 1px solid var(--border);
+  background: var(--surface1);
+  color: var(--text);
+}
+.cfg-textarea {
+  width: 100%;
+  max-width: 640px;
+  min-height: 70px;
+  resize: vertical;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--rad-sm);
+  border: 1px solid var(--border);
+  background: var(--surface1);
+  color: var(--text);
+}
+.cfg-dhead,
+.cfg-drow {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 90px 90px 120px 28px;
+  gap: 0.6rem;
+  align-items: center;
+}
+.cfg-grp {
+  margin: 1.6rem 0 0.9rem;
+  color: var(--text);
+}
+.cfg-grp .hint {
+  color: var(--muted);
+}
+.cfg-grp-right {
+  margin-left: 0.6rem;
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.cfg-dhead {
+  padding: 0.3rem 0;
+  margin: 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.cfg-dhead span:nth-child(3),
+.cfg-dhead span:nth-child(4),
+.cfg-dhead span:nth-child(5) {
+  text-align: center;
+}
+.cfg-drow {
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.cfg-drow:hover,
+.cfg-trow:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.cfg-drow:hover .ms-acts,
+.cfg-trow:hover .ms-acts {
+  opacity: 1;
+}
+.cfg-c {
+  display: flex;
+  justify-content: center;
+}
+.cfg-trow {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.cfg-trow input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  box-shadow: none;
+}
+.cfg-trow input:hover {
+  border-color: var(--border);
+}
+.cfg-trow input:focus {
+  border-color: var(--accent);
+  background: var(--surface1);
+  box-shadow: none;
+}
+.cfg-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.66rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--slot-uniq-color) 18%, transparent);
+  color: var(--slot-uniq-color);
+}
+.cfg-phead,
+.cfg-prow {
+  display: grid;
+  grid-template-columns: 24px 44px 60px minmax(0, 1fr) 96px 96px 120px;
+  gap: 0.6rem;
+  align-items: center;
+}
+.cfg-phead {
+  padding: 0.3rem 0;
+  margin: 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.cfg-phead span:nth-child(2),
+.cfg-phead span:nth-child(3),
+.cfg-phead span:nth-child(n + 5) {
+  text-align: center;
+}
+.cfg-prow {
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+.cfg-prow:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.cfg-prow.is-selected {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.cfg-prow > span:nth-child(2),
+.cfg-prow > span:nth-child(3),
+.cfg-prow > span:nth-child(n + 5) {
+  text-align: center;
+}
+.cfg-chip-locked {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
 /* Statistiques : bandeau de cartes (rg-step avec repli) et titres de panneaux. */
-.cfg-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.6rem;padding-bottom:.85rem}
-.cfg-kpis .rg-step{min-width:0}
+.cfg-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.6rem;
+  padding-bottom: 0.85rem;
+}
+.cfg-kpis .rg-step {
+  min-width: 0;
+}
 /* Grille des panneaux : l'écart vertical entre deux rangées = le gap de la grille seul, sans la
    marge basse des .panel (sinon 27 px, contre 13,6 px entre les compteurs et la grille — Dom
    2026-09-15). */
-.cfg-stat-grid>.panel{margin-bottom:0}
-.cfg-kpis .rg-step .v{font-size:1.45rem}
-.cfg-stat-title{font-size:.82rem;font-weight:600;align-items:center;gap:.6rem} /* texte centré sur le pictogramme (Dom 2026-09-15) */
-.cfg-stat-title .rg-ico{width:24px;height:24px;border-radius:6px}
-.cfg-stat-hint{display:block;font-size:.68rem;font-weight:400;color:var(--muted);margin-top:2px;letter-spacing:0}
-.cfg-date{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;color:var(--muted);letter-spacing:0;text-transform:none;font-weight:400}
+.cfg-stat-grid > .panel {
+  margin-bottom: 0;
+}
+.cfg-kpis .rg-step .v {
+  font-size: 1.45rem;
+}
+.cfg-stat-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  align-items: center;
+  gap: 0.6rem;
+} /* texte centré sur le pictogramme (Dom 2026-09-15) */
+.cfg-stat-title .rg-ico {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+.cfg-stat-hint {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 2px;
+  letter-spacing: 0;
+}
+.cfg-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+}
 
 /* ── Écrans d'authentification (connexion, inscription, mot de passe, vérification,
    suppression de compte) — refonte Dom 2026-09-14. Reprend la grammaire du shell
@@ -6313,4 +6517,29 @@ html.light .agenda-page .agenda-block-cadence.is-multi {
     font-size: 0.66rem;
     border-radius: 7px;
   }
+}
+
+/* Barre latérale : œil « consultation seule » d'un service en lecture seule (Dom 2026-09-16).
+   Suit le libellé, dans son gris ; disparaît avec lui quand la barre est repliée. */
+#service-sidebar button .sb-consult {
+  flex: 0 0 auto;
+  margin-left: 0.35rem;
+  opacity: 0.7;
+}
+:is(#service-sidebar-wrap.collapsed, html.sb-collapsed #service-sidebar-wrap) .sb-consult {
+  display: none;
+}
+/* Modale de compte : niveau du rattachement (Gestion / Consultation) à gauche de la case,
+   dans la même rangée compacte que le libellé du service (Dom 2026-09-16). */
+.uc-service-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.uc-service-ctl select {
+  font-size: 0.68rem;
+  padding: 0.1rem 0.3rem;
+  min-height: 0;
+  height: auto;
+  line-height: 1.3;
 }

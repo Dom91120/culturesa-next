@@ -714,7 +714,10 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
       body: (
         <>
           <p style={P}>
-            Vous gérez les services qui vous sont confiés et les réservations de leurs usagers.
+            Vous gérez les services qui vous sont confiés et les réservations de leurs usagers. Un
+            service marqué d'un œil dans la barre latérale vous est confié en{" "}
+            <strong>consultation</strong> : vous en suivez l'agenda, les éditions et les
+            statistiques sans pouvoir y intervenir.
           </p>
           <p style={{ margin: 0 }}>
             La première étape <strong>indispensable</strong> consiste à paramétrer votre service.

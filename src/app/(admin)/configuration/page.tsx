@@ -48,7 +48,11 @@ export default async function ConfigurationPage() {
       listNiveaux(),
       // Comptes gestionnaire par service : sans e-mail de contact, ce sont eux qui
       // reçoivent les e-mails du service (colonne « Gestionnaires » de la modale).
-      prisma.serviceManager.groupBy({ by: ["serviceId"], _count: { _all: true } }),
+      prisma.serviceManager.groupBy({
+        by: ["serviceId"],
+        where: { level: "gestion" },
+        _count: { _all: true },
+      }),
     ]);
   const managersByService = new Map(managerCounts.map((m) => [m.serviceId, m._count._all]));
   const demandeurOptions = demandeurs.map((d) => ({ id: d.id, label: d.label }));

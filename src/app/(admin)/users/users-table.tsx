@@ -48,7 +48,8 @@ export type UserRow = {
   demandeurLabel: string | null;
   structureLabel: string | null;
   anonymized: boolean;
-  serviceIds: string[];
+  // Services rattachés (gestionnaire) avec leur niveau : gestion ou consultation.
+  services: { id: string; level: "gestion" | "consultation" }[];
   serviceLabels: string[];
   bookingCount: number;
 };

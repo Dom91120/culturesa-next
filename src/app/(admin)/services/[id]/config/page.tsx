@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { requireServiceManager } from "@/server/guards";
 import { getServiceDemandeurSettings } from "@/server/services/demandeur-settings";
 import { getService } from "@/server/services/services";
 import { getServiceThemes } from "@/server/services/themes";
@@ -11,6 +12,9 @@ import { ConfigPanel } from "./config-panel";
 // serveur que les onglets Demandeurs et Thèmes (qui restent en place pour l'instant).
 export default async function ConfigPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Paramétrage = gestion uniquement : un rattachement en consultation s'arrête à l'agenda,
+  // aux éditions et aux statistiques (le layout du service n'exige que la consultation).
+  await requireServiceManager(id);
   const service = await getService(id);
   if (!service) notFound();
 

@@ -27,7 +27,7 @@ export default async function UsersComptesPage() {
         demandeur: { select: { label: true } },
         structure: { select: { label: true } },
         managedServices: {
-          select: { serviceId: true, service: { select: { label: true } } },
+          select: { serviceId: true, level: true, service: { select: { label: true } } },
         },
         _count: { select: { bookings: true } },
       },
@@ -64,8 +64,11 @@ export default async function UsersComptesPage() {
     demandeurLabel: u.demandeur?.label ?? null,
     structureLabel: u.structure?.label ?? null,
     anonymized: u.anonymizedAt != null,
-    serviceIds: u.managedServices.map((m) => m.serviceId),
-    serviceLabels: u.managedServices.map((m) => m.service.label),
+    services: u.managedServices.map((m) => ({ id: m.serviceId, level: m.level })),
+    // Rattachement en consultation (lecture seule) : signalé dans la colonne Affiliation.
+    serviceLabels: u.managedServices.map((m) =>
+      m.level === "consultation" ? `${m.service.label} (consultation)` : m.service.label,
+    ),
     bookingCount: u._count.bookings,
   }));
 

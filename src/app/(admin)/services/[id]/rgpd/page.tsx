@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requireServiceManager } from "@/server/guards";
 import { getRetentionYears, listServiceRgpdUsers } from "@/server/services/rgpd";
 import { getService } from "@/server/services/services";
 import { ParamsSubnav } from "../params-subnav";
@@ -6,6 +7,9 @@ import { ServiceRgpdPanel } from "./service-rgpd-panel";
 
 export default async function ServiceRgpdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Paramétrage = gestion uniquement : un rattachement en consultation s'arrête à l'agenda,
+  // aux éditions et aux statistiques (le layout du service n'exige que la consultation).
+  await requireServiceManager(id);
   const service = await getService(id);
   if (!service) notFound();
 

@@ -291,8 +291,14 @@ export function AgendaGrid({
   autoRefreshSeconds,
   viewerEmail,
   waitingEntries,
+  readOnly,
 }: {
   service: Service;
+  // Rattachement en CONSULTATION (ManagerLevel) : la grille est figée — pas de mode
+  // création / validation / pointage, pas de création ni de glisser de réservation, pas de
+  // croix ni de menu contextuel, fiches en lecture seule. Le serveur refuse de toute façon
+  // toute action à ce niveau (requireServiceManager) : ce drapeau n'est que l'interface.
+  readOnly: boolean;
   // Inscrits sur la liste d'attente (ordre d'inscription) — vide si réglage inactif.
   waitingEntries: WaitingAdminRow[];
   periods: Period[];
@@ -448,8 +454,13 @@ export function AgendaGrid({
   // retient son premier passage, qui réenregistrerait inutilement les valeurs relues
   // (et écraserait un assainissement — « rec » retombé sur « uniq » — avant même que le
   // gestionnaire n'ait touché à quoi que ce soit).
+  //
+  // Jamais en consultation : l'action exige le niveau gestion et son refus REDIRIGE
+  // (→ /configuration → /), ce qui renvoyait le lecteur sur son premier service à peine
+  // l'agenda affiché (vu en dev, où StrictMode rejoue l'effet et déjoue le verrou).
   const prefsMounted = useRef(false);
   useEffect(() => {
+    if (readOnly) return;
     if (!prefsMounted.current) {
       prefsMounted.current = true;
       return;
@@ -463,7 +474,7 @@ export function AgendaGrid({
         createDemandeurIds: createDemIds,
       });
     });
-  }, [service.id, createKind, parityScoped, jaugeMode, createDemIds]);
+  }, [readOnly, service.id, createKind, parityScoped, jaugeMode, createDemIds]);
   // Glisser-créer en cours : top des colonnes (commun), quart de départ/courant (en
   // minutes, snappés), et jour de départ/courant (le glissé horizontal sélectionne
   // toutes les colonnes entre startDay et curDay → un créneau par colonne au relâché).
@@ -2457,6 +2468,7 @@ export function AgendaGrid({
       // en Semaine réelle INCLUS : la réservation récurrente se pose sur la période
       // couvrante + parité de la semaine affichée (cf. submitCreate).
       const cellCreatable =
+        !readOnly &&
         !creationMode &&
         !cellFull &&
         (isPonctuelCell || (effectivePeriodId != null && effectivePeriodId > 0));
@@ -2789,12 +2801,13 @@ export function AgendaGrid({
                     // (audit perf 2026-07-19).
                     data-bkid={bk.id}
                     className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${locked ? " is-locked" : ""}`}
-                    // Déplaçable (récurrent en Semaine réelle inclus : déplace la parente).
-                    draggable={!locked}
+                    // Déplaçable (récurrent en Semaine réelle inclus : déplace la parente) —
+                    // jamais en consultation.
+                    draggable={!locked && !readOnly}
                     style={{
                       ...badgeStyle(bk.validated),
                       position: "relative",
-                      cursor: quickActive ? "pointer" : locked ? "default" : "grab",
+                      cursor: quickActive || readOnly ? "pointer" : locked ? "default" : "grab",
                       // L'ombre portée (box-shadow 2px 2px 4px) déborde sous le badge sans
                       // occuper de hauteur en flux : on réserve l'extent de l'ombre (offset 2
                       // + blur 4 = 6px) afin que le centrage vertical (justify-content du
@@ -2805,22 +2818,23 @@ export function AgendaGrid({
                     // Clic droit → menu « Copier » (récurrent en Semaine réelle inclus :
                     // copie/coupe la réservation récurrente, résolue à la parente au collage).
                     onContextMenu={(e) => {
-                      // Verrouillée (pointée / occurrence pointée) → pas de copier/couper.
-                      if (creationMode || locked) return;
+                      // Verrouillée (pointée / occurrence pointée) ou consultation → pas de
+                      // copier/couper.
+                      if (creationMode || locked || readOnly) return;
                       e.preventDefault();
                       e.stopPropagation();
                       clearTip();
                       setCtxMenu({ x: e.clientX, y: e.clientY, kind: "booking", booking: bk });
                     }}
                     onDragStart={
-                      locked
+                      locked || readOnly
                         ? undefined
                         : (e) => {
                             e.stopPropagation();
                             setDraggingId(bk.id);
                           }
                     }
-                    onDragEnd={locked ? undefined : () => setDraggingId(null)}
+                    onDragEnd={locked || readOnly ? undefined : () => setDraggingId(null)}
                     onClick={(e) => {
                       // Le badge porte les actions sur la réservation (cf. legacy).
                       // Validation/pointage ON = clic rapide (valider = parente, pointer =
@@ -2835,7 +2849,7 @@ export function AgendaGrid({
                       ces modes enchaînent les clics rapides, une croix au survol y est un
                       risque de suppression accidentelle (Dom 2026-08-29). Récurrent en
                       Semaine réelle : supprime la réservation récurrente via la parente. */}
-                    {!locked && !validation && !pointageMode && (
+                    {!locked && !validation && !pointageMode && !readOnly && (
                       <button
                         type="button"
                         className="planning-name-tag-close"
@@ -2921,6 +2935,7 @@ export function AgendaGrid({
       createKind,
       batchSlotIds,
       uniqueWeeksById,
+      readOnly,
     ],
   );
 
@@ -3155,8 +3170,8 @@ export function AgendaGrid({
             à gauche — sous le titre, loin de la colonne où l'œil l'attend. */}
         <div style={{ display: "flex", alignItems: "center", gap: ".4rem", marginLeft: "auto" }}>
           {/* Hors création : cases à cocher (validation / pointage, une par ligne), à
-              gauche du bouton Imprimer. */}
-          {!creationMode && (
+              gauche du bouton Imprimer. Aucune en consultation. */}
+          {!creationMode && !readOnly && (
             <div
               className="planning-options-row"
               style={{ flexDirection: "column", alignItems: "flex-end", gap: 0, lineHeight: 1.1 }}
@@ -3385,31 +3400,34 @@ export function AgendaGrid({
                 tip="Imprimer la liste des réservations"
               />
             )}
-            {/* Bouton « Mode création » (bascule) : pictogramme rouge, fond rouge enfoncé. */}
-            <button
-              type="button"
-              onClick={() => toggleCreationMode(!creationMode)}
-              data-tip="Mode création"
-              aria-label="Mode création"
-              aria-pressed={creationMode}
-              className={`toolbar-icon-btn is-danger${creationMode ? " is-active" : ""}`}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            {/* Bouton « Mode création » (bascule) : pictogramme rouge, fond rouge enfoncé.
+                Absent en consultation (rien à créer). */}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => toggleCreationMode(!creationMode)}
+                data-tip="Mode création"
+                aria-label="Mode création"
+                aria-pressed={creationMode}
+                className={`toolbar-icon-btn is-danger${creationMode ? " is-active" : ""}`}
               >
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                <path d="m15 5 4 4" />
-              </svg>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  <path d="m15 5 4 4" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -3933,9 +3951,11 @@ export function AgendaGrid({
               le conseil dépend du mode création. */}
           <p className="agenda-hint" style={{ margin: 0 }}>
             <span aria-hidden="true">💡</span>{" "}
-            {creationMode
-              ? "Saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
-              : "Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer."}
+            {readOnly
+              ? "Consultation seule : cliquez sur une réservation pour ouvrir sa fiche. Ce service ne vous est pas confié en gestion."
+              : creationMode
+                ? "Saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
+                : "Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer."}
           </p>
           {/* Légende alignée à DROITE, une ligne vide sous l'astuce (retour Dom 2026-09-04). */}
           <div
@@ -3981,9 +4001,11 @@ export function AgendaGrid({
           validation={validation}
           pointageMode={pointageMode}
           creationMode={creationMode}
+          readOnly={readOnly}
           // Créables : pas complet, période active pour un récurrent (mêmes conditions
-          // que cellCreatable — récurrent en Semaine réelle inclus).
+          // que cellCreatable — récurrent en Semaine réelle inclus), jamais en consultation.
           creatable={
+            !readOnly &&
             stackBlock.used < stackBlock.capacity &&
             (uniqueIdSet.has(stackKey.slotId) ||
               (effectivePeriodId != null && effectivePeriodId > 0))
@@ -4075,7 +4097,9 @@ export function AgendaGrid({
           // Lecture seule si la fiche pointe une réservation récurrente PARENTE (les actions
           // de gestion passent par les occurrences), ou si elle est verrouillée par un
           // pointage (pointée / parent à miroir pointé) → ni suppression, ni validation.
-          const readOnly = !!recurSlot || lockedByPointage(bk);
+          const bookingReadOnly = !!recurSlot || lockedByPointage(bk);
+          // Rattachement en consultation : la fiche est intégralement figée.
+          const viewOnly = readOnly;
           // Récurrent : la fiche peut porter la PARENTE (vue Modèle) ou une occurrence
           // miroir (vue Semaine réelle) — dans les deux cas l'édition cible la parente,
           // qui propage aux occurrences.
@@ -4085,14 +4109,14 @@ export function AgendaGrid({
           // (récurrent), sinon comme avant (tout sauf verrou pointage).
           const canEdit = isRecurring
             ? !parentBk.validated && !lockedByPointage(parentBk)
-            : !readOnly;
+            : !bookingReadOnly;
           const editBookingId = isRecurring ? parentBk.id : bk.id;
           // Bandeau : seule l'info de PORTÉE reste (récurrente éditable → la modif vaut
           // pour toutes les occurrences). Les anciennes phrases d'état (« validée —
           // dévalidez-la… », « Consultation… ») sont supprimées : l'état est déjà dit
           // par le cadenas et par le rendu figé des champs (retour Dom 2026-08-29).
           const notice =
-            isRecurring && canEdit
+            isRecurring && canEdit && !viewOnly
               ? "Réservation récurrente — les participants et le thème s'appliquent à toutes les occurrences."
               : null;
           return (
@@ -4111,8 +4135,11 @@ export function AgendaGrid({
               // « Absence prévenue » ; null sur la parente récurrente (vue Modèle).
               occurrenceYmd={uniqSlot?.slotDate ?? null}
               absencePrevenueEnabled={service.absencePrevenue}
-              readOnly={readOnly}
-              canEdit={canEdit}
+              // Consultation (rattachement en lecture seule) : tout est figé, absence
+              // prévenue et motif compris — `viewOnly` prime sur les autres drapeaux.
+              readOnly={viewOnly || bookingReadOnly}
+              canEdit={!viewOnly && canEdit}
+              viewOnly={viewOnly}
               editBookingId={editBookingId}
               notice={notice}
               onClose={() => setDetail(null)}
@@ -4131,6 +4158,7 @@ export function AgendaGrid({
         <WaitingListAdminModal
           serviceId={service.id}
           rows={waitingEntries}
+          readOnly={readOnly}
           onClose={() => setWaitlistOpen(false)}
           onChanged={() => router.refresh()}
         />

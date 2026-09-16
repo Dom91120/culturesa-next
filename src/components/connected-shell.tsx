@@ -5,7 +5,14 @@ import { useEffect } from "react";
 import { SIDEBAR_WRAP_STYLE, SidebarBrand, SidebarToggle, UserBar } from "@/components/app-shell";
 import { useSidebarCollapse } from "@/components/use-sidebar-collapse";
 
-export type ServiceItem = { id: string; label: string; icon: string | null };
+export type ServiceItem = {
+  id: string;
+  label: string;
+  icon: string | null;
+  // Niveau du compte courant sur ce service : `consultation` = lecture seule (agenda,
+  // éditions, statistiques) — pas d'onglet Paramètres, pictogramme « œil » dans la barre.
+  level?: "gestion" | "consultation";
+};
 type Tab = { href: string; label: string; icon: string };
 
 const ADMIN_TABS: Tab[] = [
@@ -18,13 +25,38 @@ const ADMIN_TABS: Tab[] = [
   { href: "/journal", label: "Journal", icon: "📜" },
 ];
 
-function serviceTabs(id: string): Tab[] {
+// Onglets ouverts à un rattachement en consultation (les autres relèvent du paramétrage).
+const CONSULT_TABS = new Set(["agenda", "editions", "stats"]);
+
+function serviceTabs(id: string, readOnly: boolean): Tab[] {
   return [
     { href: `/services/${id}/agenda`, label: "Agenda", icon: "📆" },
     { href: `/services/${id}/editions`, label: "Éditions", icon: "📋" },
     { href: `/services/${id}/stats`, label: "Statistiques", icon: "📈" },
-    { href: `/services/${id}`, label: "Paramètres", icon: "🔧" },
+    ...(readOnly ? [] : [{ href: `/services/${id}`, label: "Paramètres", icon: "🔧" }]),
   ];
+}
+
+/** Œil « consultation seule » à côté du libellé d'un service en lecture seule. */
+function ConsultGlyph() {
+  return (
+    <svg
+      className="sb-consult"
+      xmlns="http://www.w3.org/2000/svg"
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
 }
 
 export function ConnectedShell({
@@ -48,8 +80,14 @@ export function ConnectedShell({
   const serviceMatch = pathname.match(/^\/services\/([^/]+)/);
   const activeServiceId = serviceMatch ? serviceMatch[1] : null;
   const adminActive = !activeServiceId && pathname !== "/mon-compte";
+  const isReadOnly = (id: string | null) =>
+    !!id && services.find((s) => s.id === id)?.level === "consultation";
   // Onglets d'administration réservés aux administrateurs.
-  const tabs = activeServiceId ? serviceTabs(activeServiceId) : isAdmin ? ADMIN_TABS : [];
+  const tabs = activeServiceId
+    ? serviceTabs(activeServiceId, isReadOnly(activeServiceId))
+    : isAdmin
+      ? ADMIN_TABS
+      : [];
 
   // Onglet actif = le href le plus long qui préfixe le chemin courant.
   let activeHref = "";
@@ -113,6 +151,9 @@ export function ConnectedShell({
         }
       }
     } catch {}
+    // Service en consultation : seuls agenda / éditions / statistiques existent pour lui —
+    // venir de « Paramètres » d'un autre service y ouvrirait une page refusée.
+    if (isReadOnly(id) && !CONSULT_TABS.has(target.split("/")[0])) target = "agenda";
     router.push(`/services/${id}/${target}`);
   }
 
@@ -136,11 +177,21 @@ export function ConnectedShell({
                 key={s.id}
                 type="button"
                 className={activeServiceId === s.id ? "active" : ""}
-                title={effCollapsed ? s.label : undefined}
+                title={
+                  effCollapsed
+                    ? s.level === "consultation"
+                      ? `${s.label} (consultation seule)`
+                      : s.label
+                    : s.level === "consultation"
+                      ? "Consultation seule"
+                      : undefined
+                }
                 onClick={() => goToService(s.id)}
               >
                 <span className="sb-icon">{s.icon || "📄"}</span>
                 <span className="sb-label">{s.label}</span>
+                {/* Lecture seule : œil discret après le libellé (masqué avec lui, barre repliée). */}
+                {s.level === "consultation" && <ConsultGlyph />}
               </button>
             ))}
 

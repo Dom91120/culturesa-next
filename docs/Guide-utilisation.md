@@ -191,6 +191,15 @@ Les gestionnaires accèdent à un espace d'administration **limité aux services
 confiés**. Chaque service dispose des onglets **Agenda**, **Éditions**, **Statistiques** et
 **Paramètres**.
 
+Un service peut être confié à un gestionnaire à deux niveaux, réglés par l'administrateur dans la
+fiche du compte : en **gestion** (tout ce qui suit), ou en **consultation**, en lecture seule. Un
+service en consultation — par exemple celui d'un service voisin du même lieu, dont on veut suivre
+l'activité — se reconnaît à l'**œil** qui suit son nom dans la barre latérale : ses onglets
+**Agenda**, **Éditions** et **Statistiques** s'ouvrent normalement (impression et exports compris),
+mais rien ne s'y modifie — ni créneau, ni réservation, ni pointage, ni validation — et l'onglet
+**Paramètres** n'existe pas. Un gestionnaire en consultation ne reçoit pas les e-mails adressés
+aux gestionnaires du service.
+
 ### Agenda — créneaux et réservations
 
 L'agenda du gestionnaire permet de gérer les créneaux et les réservations de chaque usager.
@@ -481,7 +490,10 @@ un service sans e-mail ni gestionnaire, où personne ne les recevrait.
 
 L'onglet a deux sous-onglets. **« Comptes »** : la liste des utilisateurs permet de rechercher
 (nom, e-mail, structure), filtrer et modifier les comptes : informations, **rôle** (utilisateur,
-gestionnaire, administrateur), structure / service rattaché, services gérés et statut RGPD. Des
+gestionnaire, administrateur), structure / service rattaché, services gérés et statut RGPD. Pour
+un gestionnaire, chaque service coché porte son **niveau** : **Gestion** (par défaut) ou
+**Consultation** (agenda, éditions et statistiques en lecture seule) ; la colonne d'affiliation
+le rappelle par la mention « (consultation) » après le nom du service. Des
 **filtres rapides** au-dessus du tableau isolent une population avec son effectif : tous,
 utilisateurs, gestionnaires, administrateurs, **non confirmés**, anonymisés. Chaque ligne montre
 l'avatar et l'e-mail du compte, son **statut** — « Confirmé » (adresse e-mail confirmée),

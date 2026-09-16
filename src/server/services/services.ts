@@ -1,4 +1,4 @@
-import type { Role } from "@/generated/prisma/client";
+import type { ManagerLevel, Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 
@@ -16,11 +16,26 @@ export async function listServicesForCurrentAdmin() {
   // matche aucun ServiceManager → aucun service (et non plus « tous » comme auparavant).
   const where =
     role === "administrateur" ? undefined : { managers: { some: { userId: userId ?? "" } } };
-  return prisma.service.findMany({
+  const rows = await prisma.service.findMany({
     where,
     orderBy: [{ position: "asc" }, { label: "asc" }],
-    select: { id: true, label: true, icon: true, contactEmail: true },
+    select: {
+      id: true,
+      label: true,
+      icon: true,
+      contactEmail: true,
+      // Niveau du compte courant sur ce service (gestion / consultation) : la barre
+      // latérale signale la lecture seule et masque l'onglet Paramètres. Un
+      // administrateur n'a pas de ligne ServiceManager → gestion partout.
+      managers: { where: { userId: userId ?? "" }, select: { level: true } },
+    },
   });
+  return rows.map(({ managers, ...s }) => ({
+    ...s,
+    level: (role === "administrateur"
+      ? "gestion"
+      : (managers[0]?.level ?? "gestion")) as ManagerLevel,
+  }));
 }
 
 export function getService(id: string) {

@@ -23,7 +23,7 @@ import {
   uniqueSlotBatchCreateSchema,
 } from "@/schemas/slot";
 import { prisma } from "@/server/db";
-import { requireServiceManager } from "@/server/guards";
+import { requireServiceAccess, requireServiceManager } from "@/server/guards";
 import {
   ABSENCE_CANDIDATE_SELECT,
   absencePrevenueAtFromYmd,
@@ -86,14 +86,14 @@ const idSchema = z.coerce.number().int().positive();
 
 /**
  * Sessions datées (occurrences) du service sur [fromYmd, toYmd] avec leurs participants
- * nominatifs — pour l'impression « liste » de l'agenda admin. Gardé gestionnaire.
+ * nominatifs — pour l'impression « liste » de l'agenda admin. Gardé au niveau consultation.
  */
 export async function listAgendaSessionsAction(
   serviceId: string,
   fromYmd: string,
   toYmd: string,
 ): Promise<DatedSession[]> {
-  await requireServiceManager(serviceId);
+  await requireServiceAccess(serviceId); // lecture : la consultation imprime aussi
   return listDatedSessions(serviceId, fromYmd, toYmd);
 }
 

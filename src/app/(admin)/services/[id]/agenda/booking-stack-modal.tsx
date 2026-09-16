@@ -36,6 +36,7 @@ export function BookingStackModal({
   validation,
   pointageMode,
   creationMode,
+  readOnly,
   creatable,
   themeMode,
   gaugeAccompagnants,
@@ -62,6 +63,9 @@ export function BookingStackModal({
   validation: boolean;
   pointageMode: boolean;
   creationMode: boolean;
+  // Rattachement en consultation : pas de bascules, pas de glisser, pas de croix ni de
+  // menu contextuel — la pile ne sert qu'à lire (les fiches s'ouvrent figées).
+  readOnly: boolean;
   // Clic sur le FOND du créneau → création (mêmes conditions que la grille :
   // pas complet, pas un récurrent en semaine réelle, période active) — calculé
   // par le parent qui connaît la période effective.
@@ -238,26 +242,28 @@ export function BookingStackModal({
             « Mode pointage » seulement en « Semaine réelle » (le pointage n'a
             de sens que sur une semaine datée — cf. legacy). La croix de
             fermeture est positionnée en haut à droite de la modale (modal-close). */}
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-          {/* Validation (porte sur la réservation parente pour un récurrent) + pointage
-              (par occurrence). */}
-          <label className="planning-option" style={{ margin: 0 }}>
-            Mode validation{" "}
-            <input
-              type="checkbox"
-              checked={validation}
-              onChange={(e) => onToggleValidation(e.target.checked)}
-            />
-          </label>
-          <label className="planning-option" style={{ margin: 0 }}>
-            Mode pointage{" "}
-            <input
-              type="checkbox"
-              checked={pointageMode}
-              onChange={(e) => onTogglePointage(e.target.checked)}
-            />
-          </label>
-        </div>
+        {!readOnly && (
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            {/* Validation (porte sur la réservation parente pour un récurrent) + pointage
+              (par occurrence). Aucune bascule en consultation. */}
+            <label className="planning-option" style={{ margin: 0 }}>
+              Mode validation{" "}
+              <input
+                type="checkbox"
+                checked={validation}
+                onChange={(e) => onToggleValidation(e.target.checked)}
+              />
+            </label>
+            <label className="planning-option" style={{ margin: 0 }}>
+              Mode pointage{" "}
+              <input
+                type="checkbox"
+                checked={pointageMode}
+                onChange={(e) => onTogglePointage(e.target.checked)}
+              />
+            </label>
+          </div>
+        )}
       </div>
       {/* Tri : en haut à droite du tableau, SOUS les bascules de l'en-tête — une rangée
           basse (16 px) rien que pour lui, au-dessus de la bordure pointillée du bloc. */}
@@ -352,10 +358,10 @@ export function BookingStackModal({
                 className={`planning-name-tag ${bk.validated ? "is-validated" : "is-pending"}${lockedByPointage(bk) ? " is-locked" : ""}`}
                 // Glisser-déplacer depuis la pile : sauf si verrouillée (pointée / occurrence
                 // pointée). Récurrent en Semaine réelle inclus (déplace la parente).
-                draggable={!lockedByPointage(bk)}
+                draggable={!lockedByPointage(bk) && !readOnly}
                 style={{
                   ...badgeStyle(bk.validated),
-                  cursor: !lockedByPointage(bk) ? "grab" : "default",
+                  cursor: readOnly ? "pointer" : !lockedByPointage(bk) ? "grab" : "default",
                   position: "relative",
                   opacity:
                     draggingId === bk.id ||
@@ -398,18 +404,19 @@ export function BookingStackModal({
                 // Clic droit → menu « Copier » (récurrent en Semaine réelle inclus ; pas en
                 // création ni sur une réservation verrouillée par un pointage).
                 onContextMenu={(e) => {
-                  if (creationMode || lockedByPointage(bk)) return;
+                  if (creationMode || readOnly || lockedByPointage(bk)) return;
                   e.preventDefault();
                   e.stopPropagation();
                   onContextMenu(bk, e.clientX, e.clientY);
                 }}
               >
                 <PointagePill pointage={bk.pointage} />
-                {/* Croix masquée si verrouillée (pointée / occurrence pointée), et en modes
+                {/* Croix masquée si verrouillée (pointée / occurrence pointée), en modes
                       validation/pointage — mêmes règles que les badges de la grille (clics
-                      rapides = pas de croix de suppression au survol). Récurrent en Semaine
-                      réelle : supprime la réservation récurrente (via la parente). */}
-                {!lockedByPointage(bk) && !validation && !pointageMode && (
+                      rapides = pas de croix de suppression au survol) — et en consultation.
+                      Récurrent en Semaine réelle : supprime la réservation récurrente (via
+                      la parente). */}
+                {!lockedByPointage(bk) && !validation && !pointageMode && !readOnly && (
                   <button
                     type="button"
                     className="planning-name-tag-close"

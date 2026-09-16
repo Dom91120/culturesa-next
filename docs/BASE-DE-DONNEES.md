@@ -23,6 +23,7 @@ Descriptif de la base **PostgreSQL** : diagramme des relations (ERD) + dictionna
 | Enum | Valeurs | Usage |
 |---|---|---|
 | `Role` | `utilisateur`, `gestionnaire`, `administrateur` | rôle du compte |
+| `ManagerLevel` | `gestion`, `consultation` | niveau d'un gestionnaire sur UN service (`ServiceManager.level`) : gestion = tout ; consultation = agenda, éditions et statistiques en lecture seule |
 | `ThemesMode` | `libre`, `liste` | saisie du thème d'une réservation |
 | `SlotType` | `recurring`, `unique` | type de créneau (récurrent / ponctuel ou miroir) |
 | `BookingType` | `recurring`, `unique` | type de réservation |
@@ -174,6 +175,10 @@ Activité réservable. PK = id applicatif (`svc_00N`).
 
 #### `ServiceManager` → `service_manager`
 Gestionnaires nominatifs d'un service (N-N). PK composite `(userId, serviceId)` ; `userId` ↗ `user` (Cascade), `serviceId` ↗ `services` (Cascade). Index `serviceId`.
+
+| Colonne | Type | Défaut | Description |
+|---|---|---|---|
+| level | `ManagerLevel` | gestion | niveau du rattachement (2026-09-16) : `gestion` = tout ; `consultation` = agenda, éditions et statistiques en lecture seule — aucune action serveur n'accepte ce niveau (`requireServiceManager` exige `gestion`, `requireServiceAccess` accepte les deux), et il n'est pas destinataire des e-mails « gestionnaires » du service |
 
 #### `Slot` → `slots`
 Créneau. **1 slot = 1 jour.** Récurrent (modèle) **ou** unique/miroir (daté).

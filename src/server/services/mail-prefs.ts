@@ -390,7 +390,9 @@ export async function serviceManagerRecipients(serviceId: string): Promise<Resol
     select: {
       contactEmail: true,
       managers: {
-        where: { user: { role: "gestionnaire", anonymizedAt: null } },
+        // Niveau gestion uniquement : un rattachement en consultation ne gère pas le
+        // service, il n'a pas à recevoir ses notifications.
+        where: { level: "gestion", user: { role: "gestionnaire", anonymizedAt: null } },
         select: { user: { select: { email: true, prenom: true } } },
       },
     },

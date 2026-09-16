@@ -1,7 +1,7 @@
 import puppeteer from "puppeteer";
 import { escapeHtml } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
-import { reponseApi, requireServiceManagerApi } from "@/server/guards-api";
+import { reponseApi, requireServiceAccessApi } from "@/server/guards-api";
 import { argsChromium } from "@/server/pdf-browser";
 
 // PDF serveur des éditions (Puppeteer). On réutilise la page d'édition existante en média
@@ -32,7 +32,7 @@ const PORTRAIT_KINDS = ["inscrits", "creneaux", "planning", "attente-demande", "
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return reponseApi(async () => {
-    await requireServiceManagerApi(id, "/services/[id]/editions/pdf");
+    await requireServiceAccessApi(id, "/services/[id]/editions/pdf");
 
     const reqUrl = new URL(req.url);
     const kind = reqUrl.searchParams.get("kind") ?? "liste";

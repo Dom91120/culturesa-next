@@ -1,6 +1,6 @@
 import { csvResponse } from "@/lib/csv";
 import { prisma } from "@/server/db";
-import { reponseApi, requireServiceManagerApi } from "@/server/guards-api";
+import { reponseApi, requireServiceAccessApi } from "@/server/guards-api";
 import { listEditionRows, listInscrits, listOpenSlots } from "@/server/services/editions";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import {
@@ -38,7 +38,7 @@ const HEADER = [
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return reponseApi(async () => {
-    await requireServiceManagerApi(id, "/services/[id]/editions/export");
+    await requireServiceAccessApi(id, "/services/[id]/editions/export");
 
     const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
     if (!service) return new Response("Service introuvable", { status: 404 });

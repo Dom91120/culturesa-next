@@ -5,7 +5,7 @@ import { absencePrevenueDto } from "@/lib/agenda-core";
 import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
-import { getSession } from "@/server/guards";
+import { getSession, requireServiceAccess } from "@/server/guards";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { currentExerciceIdForService, eligiblePeriodsWhere } from "@/server/services/exercice";
 import { loadSchoolHolidayRanges } from "@/server/services/holidays";
@@ -15,6 +15,9 @@ import { AgendaGrid } from "./agenda-grid";
 
 export default async function AgendaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Niveau du compte sur ce service (le layout a déjà exigé au moins la consultation) :
+  // en consultation, la grille est rendue figée.
+  const { readOnly } = await requireServiceAccess(id);
   // (Les réglages d'ouverture sont portés par chaque exercice, cf. plus bas.)
   const service = await prisma.service.findUnique({
     where: { id },
@@ -350,6 +353,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         schoolHolidays={schoolHolidays}
         autoRefreshSeconds={autoRefreshSeconds}
         viewerEmail={(await getSession())?.user.email ?? ""}
+        readOnly={readOnly}
       />
       <AdminDemInfo rows={demRows} />
     </>

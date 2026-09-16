@@ -1,6 +1,6 @@
 import { csvResponse } from "@/lib/csv";
 import { prisma } from "@/server/db";
-import { reponseApi, requireServiceManagerApi } from "@/server/guards-api";
+import { reponseApi, requireServiceAccessApi } from "@/server/guards-api";
 import { getServiceStats } from "@/server/services/stats";
 import { parseStatsDate, parseStatsType } from "../params";
 
@@ -8,7 +8,7 @@ import { parseStatsDate, parseStatsType } from "../params";
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return reponseApi(async () => {
-    await requireServiceManagerApi(id, "/services/[id]/stats/export");
+    await requireServiceAccessApi(id, "/services/[id]/stats/export");
 
     const sp = new URL(req.url).searchParams;
     const type = parseStatsType(sp.get("type"));

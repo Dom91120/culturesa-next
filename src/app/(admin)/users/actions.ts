@@ -44,8 +44,18 @@ const baseUserSchema = z.object({
   // envoie l'un ou l'autre selon la catégorie, jamais les deux : `structureId` quand
   // il y a une liste, ce libellé sinon.
   structureLibre: z.string().trim().max(STRUCTURE_LIBRE_MAX).default(""),
-  services: z.array(z.string().min(1)).default([]),
+  // Services rattachés (rôle gestionnaire), chacun avec son niveau : gestion (tout) ou
+  // consultation (agenda, éditions, statistiques en lecture seule).
+  services: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        level: z.enum(["gestion", "consultation"]).default("gestion"),
+      }),
+    )
+    .default([]),
 });
+type ServiceLink = { id: string; level: "gestion" | "consultation" };
 
 /**
  * Identifiant de structure à écrire, le libellé saisi étant résolu si la catégorie
@@ -99,7 +109,10 @@ function requireKidsForUser(
 // Un gestionnaire sans service rattaché n'aurait accès à rien (ServiceManager,
 // liste vide = aucun service) : on impose au moins un service à la création
 // comme à l'édition. Sans objet pour les autres rôles (services vidés).
-function requireServicesForManager(d: { role: string; services: string[] }, ctx: z.RefinementCtx) {
+function requireServicesForManager(
+  d: { role: string; services: ServiceLink[] },
+  ctx: z.RefinementCtx,
+) {
   if (d.role === "gestionnaire" && d.services.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -124,25 +137,32 @@ const createUserSchema = baseUserSchema
 export type UpdateUserInput = z.input<typeof updateUserSchema>;
 export type CreateUserInput = z.input<typeof createUserSchema>;
 
-/** Synchronise la table ServiceManager (delta) pour un gestionnaire. */
+/** Synchronise la table ServiceManager (delta : ajouts, retraits, niveaux) pour un gestionnaire. */
 async function syncManagedServices(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   userId: string,
-  serviceIds: string[],
+  services: ServiceLink[],
 ) {
   const existing = await tx.serviceManager.findMany({
     where: { userId },
-    select: { serviceId: true },
+    select: { serviceId: true, level: true },
   });
-  const have = new Set(existing.map((s) => s.serviceId));
-  const want = new Set(serviceIds);
-  const toAdd = serviceIds.filter((id) => !have.has(id));
-  const toRemove = [...have].filter((id) => !want.has(id));
+  const have = new Map(existing.map((s) => [s.serviceId, s.level]));
+  const want = new Map(services.map((s) => [s.id, s.level]));
+  const toRemove = [...have.keys()].filter((id) => !want.has(id));
   if (toRemove.length) {
     await tx.serviceManager.deleteMany({ where: { userId, serviceId: { in: toRemove } } });
   }
-  for (const serviceId of toAdd) {
-    await tx.serviceManager.create({ data: { userId, serviceId } });
+  for (const [serviceId, level] of want) {
+    const current = have.get(serviceId);
+    if (current === undefined) {
+      await tx.serviceManager.create({ data: { userId, serviceId, level } });
+    } else if (current !== level) {
+      await tx.serviceManager.update({
+        where: { userId_serviceId: { userId, serviceId } },
+        data: { level },
+      });
+    }
   }
 }
 
