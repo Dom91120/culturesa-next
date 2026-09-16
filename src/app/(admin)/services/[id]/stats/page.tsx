@@ -663,9 +663,7 @@ export default async function StatsPage({
 
   const niveauMax = Math.max(1, ...stats.topNiveaux.map((r) => r.value));
 
-  // Métriques dérivées « intéressantes ». La moyenne par séance se calcule sur le CUMUL
-  // (enfants × séances), pas sur l'effectif distinct.
-  const moyEnfants = stats.total > 0 ? (stats.enfantsCumul / stats.total).toFixed(1) : "0";
+  // Métriques dérivées « intéressantes ».
   const moyParInscrit =
     stats.distinctUsers > 0 ? (stats.total / stats.distinctUsers).toFixed(1) : "0";
   const peakDay = [...stats.byDay].sort((a, b) => b.value - a.value)[0];
@@ -773,7 +771,9 @@ export default async function StatsPage({
           value={stats.enfantsCumul}
           label="Fréquentation enfants"
           color="#d98cc0"
-          sub={`${moyEnfants} / séance`}
+          // Sous-texte = rappel de l'effectif distinct (Dom 2026-09-16), et non plus la
+          // moyenne par séance, qui se déduit du cumul et du nombre de séances.
+          sub={`${stats.enfants} enfant${stats.enfants > 1 ? "s" : ""} distinct${stats.enfants > 1 ? "s" : ""}`}
           hint="Cumul sur les séances : une réservation récurrente compte ses enfants à chaque séance"
         />
         {stats.accompagnants > 0 && (
