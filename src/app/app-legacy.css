@@ -3827,7 +3827,8 @@ textarea.theme-pending:focus::placeholder {
 .rg-step .v.is-inline .l {
   font-size: 0.78rem;
   font-weight: 400;
-  line-height: 1.15;
+  /* Interligne minimal : deux lignes de libellé restent dans la hauteur du chiffre. */
+  line-height: 1;
   color: var(--text);
   /* Tuile étroite (7 compteurs sur la rangée) : le libellé passe à la ligne plutôt
      que d'être tronqué. */
