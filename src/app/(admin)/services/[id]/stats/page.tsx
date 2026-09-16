@@ -760,21 +760,16 @@ export default async function StatsPage({
           color="#5ab4e8"
           icon={<UsersGlyph size={13} />}
         />
+        {/* Une seule tuile enfants (Dom 2026-09-16) : la VALEUR est l'effectif distinct
+            (règle du max par inscrit) ; le cumul enfants × séances, ex-valeur de la tuile,
+            passe en sous-texte. L'ancienne tuile « Enfants distincts » disait la même chose. */}
         <MetricCard
           value={stats.enfants}
-          label="Enfants distincts"
-          color="#e8a45a"
-          icon={<UsersGlyph size={13} />}
-          hint="Effectif estimé : chaque inscrit compte une seule fois, avec l'effectif de sa réservation la plus nombreuse (récurrent ou re-réservations ne comptent qu'une fois)"
-        />
-        <MetricCard
-          value={stats.enfantsCumul}
           label="Fréquentation enfants"
           color="#d98cc0"
-          // Sous-texte = rappel de l'effectif distinct (Dom 2026-09-16), et non plus la
-          // moyenne par séance, qui se déduit du cumul et du nombre de séances.
-          sub={`${stats.enfants} enfant${stats.enfants > 1 ? "s" : ""} distinct${stats.enfants > 1 ? "s" : ""}`}
-          hint="Cumul sur les séances : une réservation récurrente compte ses enfants à chaque séance"
+          icon={<UsersGlyph size={13} />}
+          sub={`${stats.enfantsCumul} sur les séances`}
+          hint="Effectif estimé : chaque inscrit compte une seule fois, avec l'effectif de sa réservation la plus nombreuse (récurrent ou re-réservations ne comptent qu'une fois). En dessous, le cumul sur les séances : une réservation récurrente compte ses enfants à chaque séance"
         />
         {stats.accompagnants > 0 && (
           <MetricCard
