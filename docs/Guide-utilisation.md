@@ -519,6 +519,10 @@ du même navigateur, et un compte ne garde que ses cinq sessions les plus récen
 
 *Figure 13 — Gestion des comptes utilisateurs*
 
+![Fiche d'un compte gestionnaire : services rattachés et niveau](img/13b-compte-gestionnaire.png)
+
+*Figure 13 bis — Fiche d'un compte gestionnaire : chaque service coché porte son niveau, Gestion ou Consultation*
+
 ### Échanges — e-mails (réglages globaux)
 
 L'onglet **Échanges** règle les e-mails **au niveau global** (communs à tous les services), en

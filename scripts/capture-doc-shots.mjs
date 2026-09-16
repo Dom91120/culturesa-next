@@ -276,6 +276,36 @@ try {
     await ctx.close();
   }
 
+  // ── 13 bis. Fiche d'un compte gestionnaire (services rattachés + niveau) ─────────────
+  // Ouvre la fiche d'un gestionnaire rattaché à DEUX services, l'un en gestion, l'autre
+  // en consultation (Dom 2026-09-16), pour montrer le sélecteur Gestion / Consultation.
+  // Compte réel : identité floutée (jetons) — y compris les VALEURS des champs, que le
+  // floutage des feuilles de texte ne couvre pas.
+  if (want("compte-gestionnaire")) {
+    const { ctx, page } = await openAs(browser, ADMIN, "/users/comptes", ".acct-table tbody tr");
+    const opened = await page.evaluate(() => {
+      const row = [...document.querySelectorAll(".acct-table tbody tr")].find((tr) =>
+        /\(consultation\)/.test(tr.textContent ?? ""),
+      );
+      const btn = row?.querySelector('button[aria-label="Modifier la fiche"]');
+      if (!(btn instanceof HTMLElement)) return false;
+      btn.click();
+      return true;
+    });
+    if (!opened) throw new Error("compte-gestionnaire : aucun compte rattaché en consultation");
+    await page.waitForSelector(".uc-services-list select", { timeout: 15000 });
+    await page.evaluate((tokens) => {
+      const res = tokens.map((t) => new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+      for (const el of document.querySelectorAll("input")) {
+        if (el.value && res.some((re) => re.test(el.value))) el.style.filter = "blur(5px)";
+      }
+      // Le bloc Services doit être visible : on y amène la modale (contenu défilant).
+      document.querySelector(".uc-services-list")?.scrollIntoView({ block: "center" });
+    }, BLUR_TOKENS);
+    await shot(page, "docs/img/13b-compte-gestionnaire.png", { settle: 600 });
+    await ctx.close();
+  }
+
   // ── 14. Administration › Messagerie ─────────────────────────────────────────────────
   if (want("messagerie")) {
     const { ctx, page } = await openAs(browser, ADMIN, "/messagerie");
