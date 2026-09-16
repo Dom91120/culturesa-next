@@ -419,9 +419,19 @@ export function UsersTable({
                     <RolePill role={u.role} dim={u.anonymized} />
                   </td>
                   <td title={aff.label}>
-                    <span className="acct-aff">
+                    <span className={`acct-aff${aff.kind === "service" ? " is-services" : ""}`}>
                       {aff.kind && AFF_GLYPH[aff.kind]}
-                      <span>{aff.label}</span>
+                      {/* Gestionnaire : un service par ligne, police réduite — la liste
+                          complète se lit sans troncature (Dom 2026-09-16). */}
+                      {aff.kind === "service" ? (
+                        <span className="acct-aff-lines">
+                          {u.serviceLabels.map((l) => (
+                            <span key={l}>{l}</span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span>{aff.label}</span>
+                      )}
                     </span>
                   </td>
                   <td>{formatTel(u.tel)}</td>

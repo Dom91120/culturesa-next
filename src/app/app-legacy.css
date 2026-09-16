@@ -3451,6 +3451,28 @@ textarea.theme-pending:focus::placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Services d'un gestionnaire : un par ligne, police réduite, sans troncature — la
+   colonne affiche toute la liste (Dom 2026-09-16). Pictogramme calé sur la 1re ligne. */
+.acct-aff.is-services {
+  align-items: flex-start;
+}
+.acct-aff.is-services svg {
+  margin-top: 2px;
+}
+.acct-aff-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  white-space: normal;
+  overflow: visible;
+}
+.acct-aff-lines > span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
 .acct-actions {
   display: flex;
   justify-content: flex-end;
