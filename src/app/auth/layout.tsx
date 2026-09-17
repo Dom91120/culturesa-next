@@ -40,7 +40,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </ul>
         </div>
         <div className="auth-brand-foot">
-          <span>Espace usagers &amp; gestionnaires</span>
+          <span>Espaces usagers &amp; gestionnaires</span>
           <ThemeToggle />
         </div>
       </aside>

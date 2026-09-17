@@ -79,7 +79,7 @@ export function BookingDropModal({
           style={{ marginTop: 3 }}
         />
         <span>
-          <strong>Déplacer ici, à côté</strong>
+          <strong>Déplacer ici</strong>
           <br />
           <span style={{ color: "var(--muted)", fontSize: ".76rem" }}>
             {canMove

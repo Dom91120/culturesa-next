@@ -203,9 +203,26 @@ export function SlotConfigModal({
                 </g>
               </svg>
             </button>
-            <span style={{ fontSize: ".82rem", color: "var(--text)" }}>
+            {/* Le libellé bascule aussi la jauge, comme la capsule (Dom 2026-09-17) : bouton
+                en texte nu, sans le grisage de l'icône, pour rester lisible dans les deux états. */}
+            <button
+              type="button"
+              onClick={() => setJauge((v) => !v)}
+              title={jauge ? "Désactiver la jauge" : "Activer la jauge"}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                font: "inherit",
+                fontSize: ".82rem",
+                color: "var(--text)",
+                textTransform: "none",
+                letterSpacing: 0,
+              }}
+            >
               {jauge ? "Jauge active" : "Jauge inactive"}
-            </span>
+            </button>
           </div>
           <span
             style={{
