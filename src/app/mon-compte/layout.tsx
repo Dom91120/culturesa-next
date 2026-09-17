@@ -1,5 +1,5 @@
 import { ConnectedShell } from "@/components/connected-shell";
-import { OnboardingModal } from "@/components/onboarding-modal";
+import { OnboardingModalLazy } from "@/components/onboarding-modal-lazy";
 import { SessionWatchdog } from "@/components/session-watchdog";
 import { UserShell } from "@/components/user-shell";
 import type { Role } from "@/generated/prisma/client";
@@ -14,21 +14,22 @@ import { listServicesForCurrentAdmin } from "@/server/services/services";
 // shell utilisateur (UserShell) avec ses activités réservables.
 export default async function MonCompteLayout({ children }: { children: React.ReactNode }) {
   const session = await requireUser();
-  // Rôle lu EN BASE (comme les layouts (app) et (admin)) : une session fraîchement
-  // créée peut porter un rôle vide — le pied de sidebar affichait alors l'e-mail au
-  // lieu du libellé, et un admin frais serait tombé sur le shell usager.
-  let role: Role = (session.user as { role?: Role }).role || "utilisateur";
-  try {
-    const me = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true },
-    });
-    if (me?.role) role = me.role;
-  } catch {
-    /* colonne indisponible : on garde le rôle de session */
-  }
+  // Rôle et échéance de session en une seule vague (auparavant en série — audit perf
+  // 2026-09-17). Rôle lu EN BASE (comme les layouts (app) et (admin)) : une session
+  // fraîchement créée peut porter un rôle vide — le pied de sidebar affichait alors
+  // l'e-mail au lieu du libellé, et un admin frais serait tombé sur le shell usager.
+  // Colonne indisponible → on garde le rôle de session.
+  const [me, deadline] = await Promise.all([
+    prisma.user
+      .findUnique({
+        where: { id: session.user.id },
+        select: { role: true },
+      })
+      .catch(() => null),
+    sessionDeadline(),
+  ]);
+  const role: Role = me?.role || (session.user as { role?: Role }).role || "utilisateur";
   const user = { name: session.user.name ?? "", email: session.user.email, role };
-  const deadline = await sessionDeadline();
   const watchdog = deadline !== null && <SessionWatchdog expiresAt={deadline} />;
 
   if (role === "gestionnaire" || role === "administrateur") {
@@ -41,7 +42,7 @@ export default async function MonCompteLayout({ children }: { children: React.Re
         {children}
         {/* Monté fermé : SEUL récepteur de « Revoir la présentation » sur cette page
             (sans lui, l'entrée du menu ne faisait rien depuis Mon compte). */}
-        <OnboardingModal variant={role} open={false} />
+        <OnboardingModalLazy variant={role} open={false} />
         {watchdog}
       </ConnectedShell>
     );
@@ -55,7 +56,7 @@ export default async function MonCompteLayout({ children }: { children: React.Re
     >
       {children}
       {/* Monté fermé : récepteur de « Revoir la présentation » (cf. branche admin). */}
-      <OnboardingModal
+      <OnboardingModalLazy
         variant="usager"
         open={false}
         services={services.map((s) => ({ label: s.label }))}

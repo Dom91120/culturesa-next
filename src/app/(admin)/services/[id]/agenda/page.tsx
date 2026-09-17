@@ -18,32 +18,40 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   // Niveau du compte sur ce service (le layout a déjà exigé au moins la consultation) :
   // en consultation, la grille est rendue figée.
   const { readOnly } = await requireServiceAccess(id);
+  // Vague d'amorçage : quatre lectures indépendantes (le garde ci-dessus reste SEUL en
+  // tête — il peut rediriger). Auparavant enchaînées en série (audit perf 2026-09-17).
   // (Les réglages d'ouverture sont portés par chaque exercice, cf. plus bas.)
-  const service = await prisma.service.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      label: true,
-      capacity: true,
-      themesMode: true,
-      showPreviousExercices: true,
-      gaugeAccompagnants: true,
-      absencePrevenue: true,
-      listeAttente: true,
-      // Réglages mémorisés du mode « Création de créneau » (cf. agenda/create-prefs.ts).
-      createKind: true,
-      createParityScoped: true,
-      createJauge: true,
-      createDemandeurIds: true,
-    },
-  });
+  const [service, demRows, currentExoId, session] = await Promise.all([
+    prisma.service.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        label: true,
+        capacity: true,
+        themesMode: true,
+        showPreviousExercices: true,
+        gaugeAccompagnants: true,
+        absencePrevenue: true,
+        listeAttente: true,
+        // Réglages mémorisés du mode « Création de créneau » (cf. agenda/create-prefs.ts).
+        createKind: true,
+        createParityScoped: true,
+        createJauge: true,
+        createDemandeurIds: true,
+      },
+    }),
+    // Modes : récurrent et A/B sont désormais TOUJOURS disponibles (la parité se règle par
+    // créneau) ; validation/thèmes sont dérivés de la matrice service × demandeur. Les lignes
+    // (avec libellé) servent aussi au bandeau debug admin.
+    getServiceDemandeurSettingsLabeled(id),
+    // Exercice COURANT (le plus récent) : périmètre par défaut des périodes, cf. plus bas.
+    currentExerciceIdForService(id),
+    // Session (mémoïsée par requête) : e-mail du gestionnaire connecté pour la grille.
+    getSession(),
+  ]);
   if (!service) notFound();
-
-  // Modes : récurrent et A/B sont désormais TOUJOURS disponibles (la parité se règle par
-  // créneau) ; validation/thèmes sont dérivés de la matrice service × demandeur. Les lignes
-  // (avec libellé) servent aussi au bandeau debug admin.
-  const demRows = await getServiceDemandeurSettingsLabeled(id);
   const modes = deriveServiceModes(demRows);
+  const viewerEmail = session?.user.email ?? "";
 
   // Champs de période chargés pour les onglets/bornes de l'agenda.
   const periodSelect = {
@@ -62,13 +70,16 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   ];
   // Périmètre par défaut = l'exercice COURANT (le plus récent) ; avec « Afficher les
   // exercices précédents », TOUTES les périodes du service (tous exercices) pour la
-  // nav ◀ exercice.
-  const currentExoId = await currentExerciceIdForService(id);
-  const periods = await prisma.period.findMany({
-    where: eligiblePeriodsWhere(id, service.showPreviousExercices, currentExoId),
-    orderBy: periodOrder,
-    select: periodSelect,
-  });
+  // nav ◀ exercice. Dans la même vague : la liste d'attente du service (réglage actif
+  // seulement — bouton + modale de la grille), qui ne dépend que du service.
+  const [periods, waitingEntries] = await Promise.all([
+    prisma.period.findMany({
+      where: eligiblePeriodsWhere(id, service.showPreviousExercices, currentExoId),
+      orderBy: periodOrder,
+      select: periodSelect,
+    }),
+    service.listeAttente ? listWaitingEntries(id) : Promise.resolve([]),
+  ]);
   // Aucune période à afficher → l'agenda n'a rien à montrer : on invite le gestionnaire
   // à agir (au lieu d'une grille vide et muette). Trois cas, du plus en amont au plus
   // proche : « le service n'a AUCUN exercice » (créer l'exercice avant toute période),
@@ -338,8 +349,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     <>
       <AgendaGrid
         service={service}
-        // Liste d'attente du service (réglage actif seulement) : bouton + modale de la grille.
-        waitingEntries={service.listeAttente ? await listWaitingEntries(id) : []}
+        waitingEntries={waitingEntries}
         periods={periodsData}
         slots={slotsData}
         uniqueSlots={uniqueSlotsData}
@@ -352,7 +362,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         serviceDemandeurs={serviceDemandeurs}
         schoolHolidays={schoolHolidays}
         autoRefreshSeconds={autoRefreshSeconds}
-        viewerEmail={(await getSession())?.user.email ?? ""}
+        viewerEmail={viewerEmail}
         readOnly={readOnly}
       />
       <AdminDemInfo rows={demRows} />

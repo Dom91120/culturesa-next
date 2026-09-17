@@ -7,10 +7,14 @@ import {
   ModalOverlay,
   WaitingListGlyph,
 } from "@/components/agenda-shared";
+import { useMediaQuery } from "@/components/use-media-query";
 import { markOnboardedAction } from "./onboarding-actions";
+// Événement global de rejeu (« Revoir la présentation ») : défini à part pour rester
+// importable sans embarquer la modale (cf. onboarding-replay-event.ts) ; ré-exporté ici
+// pour les importeurs historiques (app-shell).
+import { ONBOARDING_REPLAY_EVENT } from "./onboarding-replay-event";
 
-/** Événement global pour ré-ouvrir l'onboarding (« Revoir la présentation » du user-menu). */
-export const ONBOARDING_REPLAY_EVENT = "culturesa:onboarding-replay";
+export { ONBOARDING_REPLAY_EVENT };
 
 // `image` (optionnel) : illustration de fin d'étape, rendue sous le texte dans un
 // conteneur extensible qui la CENTRE verticalement dans l'espace restant du corps.
@@ -859,14 +863,7 @@ export function OnboardingModal({
   const [step, setStep] = useState(0);
   // Version MOBILE de la présentation (même seuil que le reste de l'app) : textes et
   // illustrations adaptés — le contenu suit si l'écran change en cours de route.
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
+  const isMobile = useMediaQuery("(max-width: 640px)");
 
   // Ré-ouverture à la demande depuis le user-menu (« Revoir la présentation ») : on
   // repart de la 1re étape. Le listener reste actif même quand la modale est masquée.

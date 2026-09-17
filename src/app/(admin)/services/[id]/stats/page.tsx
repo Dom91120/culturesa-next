@@ -595,20 +595,24 @@ export default async function StatsPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ type?: string; from?: string; to?: string; exercice?: string }>;
 }) {
-  const { id } = await params;
-  const sp = await searchParams;
-  const service = await prisma.service.findUnique({
-    where: { id },
-    select: {
-      label: true,
-      showPreviousExercices: true,
-      // Panneau « Répartition par thème » : uniquement si le service travaille en
-      // LISTE de thèmes non vide ET qu'au moins un demandeur a les thèmes activés.
-      themesMode: true,
-      _count: { select: { themes: true } },
-      demandeurSettings: { where: { themes: true }, select: { demandeurId: true }, take: 1 },
-    },
-  });
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
+  // Service + exercice courant : deux lectures indépendantes, en une seule vague
+  // (auparavant en série — audit perf 2026-09-17).
+  const [service, currentExoId] = await Promise.all([
+    prisma.service.findUnique({
+      where: { id },
+      select: {
+        label: true,
+        showPreviousExercices: true,
+        // Panneau « Répartition par thème » : uniquement si le service travaille en
+        // LISTE de thèmes non vide ET qu'au moins un demandeur a les thèmes activés.
+        themesMode: true,
+        _count: { select: { themes: true } },
+        demandeurSettings: { where: { themes: true }, select: { demandeurId: true }, take: 1 },
+      },
+    }),
+    currentExerciceIdForService(id),
+  ]);
   if (!service) notFound();
   const showThemes =
     service.themesMode === "liste" &&
@@ -622,8 +626,8 @@ export default async function StatsPage({
   // Exercices éligibles (comme l'agenda) : l'exercice COURANT par défaut, tous les
   // exercices non archivés si le service « affiche les exercices précédents »
   // (les périodes des exercices passés restent « actif » depuis la simplification
-  // des états). Le sélecteur porte sur ces exercices.
-  const currentExoId = await currentExerciceIdForService(id);
+  // des états). Le sélecteur porte sur ces exercices. (Exercice courant chargé dans la
+  // vague d'amorçage ; les périodes en dépendent, comme les bornes des statistiques.)
   const periodRows = await prisma.period.findMany({
     where: eligiblePeriodsWhere(id, service.showPreviousExercices, currentExoId),
     orderBy: [{ dateStart: "asc" }, { id: "asc" }],

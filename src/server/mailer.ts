@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { decryptSecret } from "@/server/secret-crypto";
@@ -80,6 +80,48 @@ function formatFrom(s: MailSettings): string {
   return s.fromName ? `${s.fromName} <${s.from}>` : s.from;
 }
 
+/**
+ * Transport SMTP MÉMOÏSÉ au niveau module (audit perf 2026-09-17). Avant : un
+ * transport neuf par e-mail (connexion + EHLO + STARTTLS + AUTH à chaque envoi) et
+ * SANS délai d'attente — un serveur SMTP muet suspendait l'action appelante sans
+ * limite. Désormais :
+ *  - pool de 2 connexions réutilisées (jusqu'à 50 messages chacune) ;
+ *  - délais explicites : connexion 10 s, bannière 10 s, socket 30 s ;
+ *  - clé = réglages SMTP effectifs (hôte, port, sécurité, identifiants) : une
+ *    modification dans Administration > Configuration recrée le transport au prochain
+ *    envoi, l'ancien pool étant fermé (`close()`) pour ne pas laisser de connexions
+ *    orphelines. Les réglages restent lus en base à chaque envoi (volume faible).
+ */
+let transportCache: { key: string; transport: Transporter } | null = null;
+
+function transportKey(s: MailSettings): string {
+  return JSON.stringify([s.host, s.port, s.security, s.username, s.password]);
+}
+
+function getTransport(s: MailSettings): Transporter {
+  const key = transportKey(s);
+  if (transportCache && transportCache.key === key) return transportCache.transport;
+  // Réglages changés : on ferme l'ancien pool (connexions au repos comprises).
+  transportCache?.transport.close();
+  const secure = s.security === "ssl" || s.port === 465;
+  const transport = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 2,
+    maxMessages: 50,
+    host: s.host,
+    port: s.port,
+    secure,
+    // STARTTLS : port non sécurisé + requireTLS quand security === "tls".
+    ...(s.security === "tls" ? { requireTLS: true } : {}),
+    auth: s.username ? { user: s.username, pass: s.password } : undefined,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  });
+  transportCache = { key, transport };
+  return transport;
+}
+
 export async function sendMail(opts: { to: string; subject: string; html: string; text?: string }) {
   const s = await getMailSettings();
 
@@ -92,15 +134,7 @@ export async function sendMail(opts: { to: string; subject: string; html: string
     );
   }
 
-  const secure = s.security === "ssl" || s.port === 465;
-  const transport = nodemailer.createTransport({
-    host: s.host,
-    port: s.port,
-    secure,
-    // STARTTLS : port non sécurisé + requireTLS quand security === "tls".
-    ...(s.security === "tls" ? { requireTLS: true } : {}),
-    auth: s.username ? { user: s.username, pass: s.password } : undefined,
-  });
+  const transport = getTransport(s);
 
   const logo = getLogoBuffer();
   const attachments = logo

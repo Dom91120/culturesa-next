@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
-import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-modal";
+import { ONBOARDING_REPLAY_EVENT } from "@/components/onboarding-replay-event";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/auth-client";
 import { initialsOf } from "@/lib/format";

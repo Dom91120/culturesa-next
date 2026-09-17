@@ -139,10 +139,18 @@ export function useAgendaToast<P extends object>() {
  * chaque tick — le refresh COMPLET (~18-20 requêtes + payload de tous les miroirs)
  * n'est déclenché que si la version a changé depuis le dernier tick. Baseline posée
  * au montage (la page vient d'être rendue). Sonde en échec (réseau, 401 après
- * expiration de session…) → refresh quand même (comportement historique, fail-open).
+ * expiration de session…) → refresh quand même à la PREMIÈRE erreur (fail-open
+ * historique : c'est ce refresh qui renvoie à l'écran de connexion une session
+ * expirée). Les erreurs SUIVANTES, elles, ne rafraîchissent plus et espacent la sonde
+ * en backoff exponentiel (intervalle × 2 à chaque échec, plafonné à 5 min) : un serveur
+ * injoignable ne déclenchait auparavant qu'une rafale de refresh complets à chaque tick
+ * (audit perf 2026-09-17). Premier succès → cadence normale, compteur remis à zéro.
  * Le retour d'onglet rafraîchit TOUJOURS (les données froides non couvertes par la
- * version — périodes, réglages — rattrapent à ce moment-là), puis rebase la version.
+ * version — périodes, réglages — rattrapent à ce moment-là), puis rebase la version
+ * et réarme la cadence normale.
  */
+const PROBE_BACKOFF_MAX_MS = 5 * 60 * 1000;
+
 export function useAgendaAutoRefresh(
   seconds: number,
   canRefresh: () => boolean,
@@ -182,35 +190,62 @@ export function useAgendaAutoRefresh(
     // course de quelques ms rendu → baseline : un changement pile dedans n'est
     // rattrapé qu'au changement suivant ou au retour d'onglet — assumé.)
     if (versionUrlRef.current) rebase();
-    const tick = async () => {
-      if (document.visibilityState !== "visible" || !canRef.current()) return;
-      if (!versionUrlRef.current) {
-        refreshRef.current();
-        return;
-      }
-      const v = await fetchVersion();
-      if (disposed || document.visibilityState !== "visible" || !canRef.current()) return;
-      // Sonde en échec → fail-open (refresh, cadence historique).
-      if (v == null) {
-        refreshRef.current();
-        return;
-      }
-      if (lastVersionRef.current !== null && v === lastVersionRef.current) return;
-      lastVersionRef.current = v;
-      refreshRef.current();
+    // Cadence : setTimeout réarmé à chaque tick (et non setInterval) pour pouvoir
+    // espacer la sonde en cas d'échecs répétés. `failures` = échecs consécutifs.
+    const baseMs = seconds * 1000;
+    let failures = 0;
+    let timer: number | null = null;
+    const currentDelay = () => Math.min(baseMs * 2 ** failures, PROBE_BACKOFF_MAX_MS);
+    const schedule = () => {
+      if (disposed) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(tick, currentDelay());
     };
+    const resetBackoff = () => {
+      if (failures === 0) return;
+      failures = 0;
+      schedule();
+    };
+    async function tick() {
+      timer = null;
+      try {
+        // Onglet caché / action en cours : rien (mais la cadence continue).
+        if (document.visibilityState !== "visible" || !canRef.current()) return;
+        if (!versionUrlRef.current) {
+          refreshRef.current();
+          return;
+        }
+        const v = await fetchVersion();
+        if (disposed || document.visibilityState !== "visible" || !canRef.current()) return;
+        if (v == null) {
+          // Sonde en échec : fail-open au PREMIER échec seulement (cf. docstring), puis
+          // silence et backoff jusqu'au prochain succès.
+          failures += 1;
+          if (failures === 1) refreshRef.current();
+          return;
+        }
+        failures = 0;
+        if (lastVersionRef.current !== null && v === lastVersionRef.current) return;
+        lastVersionRef.current = v;
+        refreshRef.current();
+      } finally {
+        schedule();
+      }
+    }
     const onVisibility = () => {
-      // Retour d'onglet : refresh inconditionnel + rebase (cf. docstring).
+      // Retour d'onglet : refresh inconditionnel + rebase (cf. docstring) ; le backoff
+      // éventuel est réarmé à la cadence normale (l'usager est de retour).
       if (document.visibilityState === "visible" && canRef.current()) {
         refreshRef.current();
         rebase();
+        resetBackoff();
       }
     };
-    const id = window.setInterval(tick, seconds * 1000);
+    schedule();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       disposed = true;
-      window.clearInterval(id);
+      if (timer !== null) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [seconds]);
