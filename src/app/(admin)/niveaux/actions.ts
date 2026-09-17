@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/lib/action-state";
 import { niveauSchema } from "@/schemas/referentiels";
 import { requireRole } from "@/server/guards";
 import * as svc from "@/server/services/niveaux";
@@ -9,8 +10,9 @@ import * as svc from "@/server/services/niveaux";
 // d'ordre et peut être rattaché à un demandeur (demandeurId optionnel).
 
 type NiveauData = { label: string; demandeurId: number | null; position: number };
-type Result = { ok: true } | { ok: false; error: string };
-type CreateResult = { ok: true; id: number } | { ok: false; error: string };
+// Union discriminée partagée (lib/action-state).
+type Result = ActionResult;
+type CreateResult = ActionResult<{ id: number }>;
 
 export async function createNiveauAction(input: NiveauData): Promise<CreateResult> {
   await requireRole("administrateur");

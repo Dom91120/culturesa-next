@@ -14,6 +14,7 @@ import { BookingError } from "./bookings";
 import {
   insertRecurringBookingInTx,
   type RecurringTarget,
+  relocateBookingInTx,
   resolveRecurringTarget,
   slotWeekOf,
 } from "./recurring-booking";
@@ -210,6 +211,131 @@ describe("insertRecurringBookingInTx", () => {
       enfants: 2,
       accompagnants: 1,
       theme: "Contes",
+    });
+  });
+});
+
+// ─── relocateBookingInTx — déplacement gestionnaire (glisser-déposer + échange) ──
+
+describe("relocateBookingInTx", () => {
+  const booking = { id: 77, enfants: 3, accompagnants: 1 };
+  const base = {
+    serviceId: "s1",
+    booking,
+    targetSlotId: "sl2",
+    excludeBookingIds: [77],
+    now: new Date("2026-09-17T10:00:00Z"),
+    cutoffISO: "2026-09-17",
+  };
+
+  /**
+   * Client factice : `slot.findFirst` sert la résolution de la cible (récurrent : select
+   * complet ; ponctuel : slotType seul) PUIS le créneau relu par assertSlotCapacity
+   * (capacité/jauge). `count` = occupation hors jauge.
+   */
+  function relocateTx(opts: {
+    target: Partial<FoundSlot> | null;
+    capacity?: number;
+    occupied?: number;
+  }) {
+    const capacitySlot =
+      opts.target === null
+        ? null
+        : {
+            capacity: opts.capacity ?? 10,
+            jauge: false,
+            service: { capacity: 99, gaugeAccompagnants: false },
+          };
+    const findFirst = vi
+      .fn()
+      .mockResolvedValueOnce(opts.target === null ? null : { ...goodSlot, ...opts.target })
+      .mockResolvedValueOnce(capacitySlot);
+    const count = vi.fn(async () => opts.occupied ?? 0);
+    // Ligne renvoyée par l'update (Booking) : la réservation + les champs écrits.
+    const update = vi.fn(
+      async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => ({
+        ...booking,
+        bookingType: data.periodId == null ? "unique" : "recurring",
+        ...data,
+        id: where.id,
+      }),
+    );
+    return {
+      tx: fakeTx({ slot: { findFirst }, booking: { count, update } }),
+      findFirst,
+      count,
+      update,
+    };
+  }
+
+  it("cible RÉCURRENTE : période et parité SUIVENT le créneau, occurrences régénérées", async () => {
+    const { tx, findFirst, count, update } = relocateTx({ target: { periodId: 59, weeks: "A" } });
+    const updated = await relocateBookingInTx(tx, { ...base, wantType: "recurring" });
+    // Résolution bornée au service (anti-IDOR), sans période annoncée (elle suit la cible).
+    expect(findFirst).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ where: { id: "sl2", serviceId: "s1" } }),
+    );
+    // Jauge décomptée sur {créneau cible, période cible}, la réservation déplacée exclue.
+    expect(count).toHaveBeenCalledWith({
+      where: { slotId: "sl2", periodId: 59, bookingType: "recurring", id: { notIn: [77] } },
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { slotId: "sl2", periodId: 59, week: "A", autoValidateFrom: base.now },
+    });
+    // La ligne mise à jour EST le ParentForSync ; gestionnaire → cutoff = aujourd'hui.
+    expect(syncRecurringChildren).toHaveBeenCalledWith(tx, updated, { cutoffISO: "2026-09-17" });
+    expect(updated).toEqual(expect.objectContaining({ id: 77, slotId: "sl2", periodId: 59 }));
+  });
+
+  it("cible PONCTUELLE : aucune période (NULL), parité vide, pas de régénération", async () => {
+    const { tx, count, update } = relocateTx({ target: { slotType: "unique" } });
+    await relocateBookingInTx(tx, { ...base, wantType: "unique" });
+    expect(count).toHaveBeenCalledWith({
+      where: { slotId: "sl2", bookingType: "unique", id: { notIn: [77] } },
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { slotId: "sl2", periodId: null, week: "", autoValidateFrom: base.now },
+    });
+    expect(syncRecurringChildren).not.toHaveBeenCalled();
+  });
+
+  it("jauge dépassée sur le créneau d'arrivée → « Ce créneau est complet. », rien n'est écrit", async () => {
+    const { tx, update } = relocateTx({ target: { slotType: "unique" }, capacity: 2, occupied: 2 });
+    await expect(relocateBookingInTx(tx, { ...base, wantType: "unique" })).rejects.toThrow(
+      "Ce créneau est complet.",
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("créneau d'un autre service (ou absent) → refus, rien n'est écrit", async () => {
+    for (const wantType of ["recurring", "unique"] as const) {
+      const { tx, update } = relocateTx({ target: null });
+      await expect(relocateBookingInTx(tx, { ...base, wantType })).rejects.toThrow(
+        "Ce créneau n'est pas disponible.",
+      );
+      expect(update).not.toHaveBeenCalled();
+    }
+  });
+
+  it("type incompatible (récurrente déposée sur un ponctuel, et l'inverse) → refus", async () => {
+    const surPonctuel = relocateTx({ target: { slotType: "unique" } });
+    await expect(
+      relocateBookingInTx(surPonctuel.tx, { ...base, wantType: "recurring" }),
+    ).rejects.toThrow("Ce créneau n'est pas disponible.");
+    const surRecurrent = relocateTx({ target: { slotType: "recurring" } });
+    await expect(
+      relocateBookingInTx(surRecurrent.tx, { ...base, wantType: "unique" }),
+    ).rejects.toThrow("Ce créneau n'est pas disponible.");
+  });
+
+  it("échange : les DEUX réservations sont exclues du décompte du créneau d'arrivée", async () => {
+    const { tx, count } = relocateTx({ target: { slotType: "unique" } });
+    await relocateBookingInTx(tx, { ...base, wantType: "unique", excludeBookingIds: [77, 78] });
+    expect(count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: { notIn: [77, 78] } }),
     });
   });
 });

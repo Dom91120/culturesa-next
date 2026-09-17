@@ -1,6 +1,6 @@
-import type { Prisma } from "@/generated/prisma/client";
+import type { Booking, Prisma } from "@/generated/prisma/client";
 import type { BookingConfirmationParams } from "@/server/services/booking-mail";
-import { BookingError, bookingUserSnapshot } from "@/server/services/bookings";
+import { assertSlotCapacity, BookingError, bookingUserSnapshot } from "@/server/services/bookings";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import { closeWaitingEntries } from "@/server/services/waiting-list-close";
 
@@ -10,6 +10,9 @@ import { closeWaitingEntries } from "@/server/services/waiting-list-close";
 //  déplacement admin, déplacement usager) : résolution/validation du créneau
 //  cible (anti-injection periodId, dérivation de parité) et insertion
 //  (booking.create + matérialisation des enfants + paramètres d'e-mail).
+//  Depuis l'audit 2026-09-17 (D4) : aussi le DÉPLACEMENT gestionnaire d'une
+//  réservation vers un autre créneau (`relocateBookingInTx`), partagé par le
+//  glisser-déposer et l'échange de créneaux (×2 avant).
 //  Les POLITIQUES restent chez les appelants : gardes usager (accès service,
 //  délai, limites, mode validation) côté reservations/actions.ts ; overrides
 //  gestionnaire (validée d'emblée, pas de délai → cutoffISO) côté agenda/actions.ts.
@@ -161,4 +164,75 @@ export async function insertRecurringBookingInTx(
     accompagnants: params.accompagnants,
     theme: params.theme,
   };
+}
+
+/**
+ * DÉPLACE (côté gestionnaire) une réservation vers un autre créneau du MÊME service et du
+ * MÊME type — récurrent→récurrent, ponctuel→ponctuel —, DANS la transaction de l'appelant.
+ * Source unique du glisser-déposer (`moveBookingAction`) et de l'échange de créneaux
+ * (`swapBookingsAction`, appelée deux fois), dupliqués avant l'audit 2026-09-17 (D4).
+ *
+ *   - récurrent : résolution partagée (`resolveRecurringTarget`) — la période et la
+ *     parité SUIVENT le créneau cible (sans quoi la jauge restait décomptée sur
+ *     {slotId, ancienne période} et une « A » déposée sur un créneau « B » devenait
+ *     fantôme, audits 2026-07-17/19) ;
+ *   - ponctuel : créneau ponctuel du service, aucune période (NULL) — aligné sur le
+ *     chemin usager (moveInTx) ;
+ *   - anti-surbooking (`assertSlotCapacity`), les réservations `excludeBookingIds`
+ *     (celle qui bouge ; les deux en cas d'échange) ne comptant plus dans l'occupation ;
+ *   - `autoValidateFrom` réinitialisé à `now` (logique d'origine) ;
+ *   - récurrent : occurrences régénérées sur les miroirs du nouveau créneau — la ligne
+ *     mise à jour EST le ParentForSync. `cutoffISO` = aujourd'hui côté gestionnaire (pas
+ *     de délai de réservation).
+ *
+ * Les gardes d'appartenance au service et de verrou pointage (booking-lock) restent à
+ * l'appelant, qui doit avoir RELU `booking` dans la même transaction (valeurs fraîches
+ * de enfants/accompagnants — correctif de course S8). Renvoie la réservation mise à jour.
+ */
+export async function relocateBookingInTx(
+  tx: Prisma.TransactionClient,
+  args: {
+    serviceId: string;
+    booking: { id: number; enfants: number; accompagnants: number };
+    targetSlotId: string;
+    wantType: "recurring" | "unique";
+    excludeBookingIds: number[];
+    now: Date;
+    cutoffISO: string;
+  },
+): Promise<Booking> {
+  const { serviceId, booking, targetSlotId, wantType } = args;
+  let periodId: number | null = null;
+  let week: "" | "A" | "B" = "";
+  if (wantType === "recurring") {
+    const target = await resolveRecurringTarget(tx, { serviceId, slotId: targetSlotId });
+    periodId = target.periodId;
+    week = target.week;
+  } else {
+    // Défense en profondeur : créneau cible du même service (anti-IDOR) et ponctuel.
+    const target = await tx.slot.findFirst({
+      where: { id: targetSlotId, serviceId },
+      select: { slotType: true },
+    });
+    if (target?.slotType !== "unique") {
+      throw new BookingError("Ce créneau n'est pas disponible.");
+    }
+  }
+  await assertSlotCapacity(tx, {
+    serviceId,
+    slotId: targetSlotId,
+    bookingType: wantType,
+    periodId,
+    enfants: booking.enfants,
+    accompagnants: booking.accompagnants,
+    excludeBookingIds: args.excludeBookingIds,
+  });
+  const updated = await tx.booking.update({
+    where: { id: booking.id },
+    data: { slotId: targetSlotId, periodId, week, autoValidateFrom: args.now },
+  });
+  if (wantType === "recurring") {
+    await syncRecurringChildren(tx, updated, { cutoffISO: args.cutoffISO });
+  }
+  return updated;
 }

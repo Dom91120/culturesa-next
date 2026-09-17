@@ -364,8 +364,9 @@ export async function assertReservationLimits(
   params: {
     serviceId: string;
     userId: string;
-    // Récurrent : periodId de la réservation ; ponctuel : periodId du SLOT (0 = aucun).
-    periodId: number;
+    // Récurrent : periodId de la réservation ; ponctuel : periodId du SLOT (null = aucun,
+    // conformément au modèle `Booking.periodId Int?` ; 0 reste toléré comme « aucun »).
+    periodId: number | null;
     // Réservation à EXCLURE du décompte (déplacement : la résa déplacée ne doit pas
     // se compter elle-même, sinon faux rejet à la limite pour un move intra-exercice).
     excludeBookingId?: number;
@@ -399,12 +400,13 @@ export async function limiteReservationAtteinte(
   params: {
     serviceId: string;
     userId: string;
-    periodId: number;
+    // null (ponctuel hors période) ou ≤ 0 = aucune période → aucune limite.
+    periodId: number | null;
     excludeBookingId?: number;
   },
 ): Promise<LimiteAtteinte> {
   const { serviceId, userId, periodId, excludeBookingId } = params;
-  if (!(periodId > 0)) return null;
+  if (periodId == null || !(periodId > 0)) return null;
   const notSelf = excludeBookingId != null ? { id: { not: excludeBookingId } } : {};
   const period = await db.period.findUnique({
     where: { id: periodId },
@@ -622,7 +624,7 @@ export async function createUniqueBookingInTx(
     serviceId: slot.serviceId,
     slotId: slot.id,
     bookingType: "unique",
-    periodId: 0,
+    periodId: null,
     enfants: input.enfants,
     accompagnants: input.accompagnants,
   });
@@ -631,7 +633,7 @@ export async function createUniqueBookingInTx(
   await assertReservationLimits(tx, {
     serviceId: slot.serviceId,
     userId,
-    periodId: slot.periodId ?? 0,
+    periodId: slot.periodId,
   });
   const created = await tx.booking.create({
     data: {

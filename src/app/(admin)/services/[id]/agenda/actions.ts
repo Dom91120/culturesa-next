@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { isBookingLockedByPointage } from "@/lib/agenda-core";
+import type { ActionResult } from "@/lib/action-state";
 import { todayParisISO } from "@/lib/booking-delay";
 import {
   bookingAccompagnantsSchema,
@@ -33,6 +34,13 @@ import {
   YMD_RE,
 } from "@/server/services/booking-absence";
 import {
+  assertNotLockedByPointage,
+  assertNotLockedByPointageInTx,
+  bookingLocked,
+  LOCK_CANDIDATE_SELECT,
+  type LockCandidate,
+} from "@/server/services/booking-lock";
+import {
   type BookingConfirmationParams,
   sendBookingAbsenceMail,
   sendBookingCancellationMail,
@@ -51,6 +59,7 @@ import {
 import { type DatedSession, listDatedSessions } from "@/server/services/editions";
 import {
   insertRecurringBookingInTx,
+  relocateBookingInTx,
   resolveRecurringTarget,
 } from "@/server/services/recurring-booking";
 import {
@@ -74,7 +83,7 @@ import {
   getValidationNoticeDelay,
   validationNoticeWindow,
 } from "@/server/services/validation-notice";
-import { deleteWaitingEntryById } from "@/server/services/waiting-list";
+import { closeWaitingEntryById } from "@/server/services/waiting-list";
 import {
   closeWaitingEntries,
   markWaitlistBookingsDeleted,
@@ -85,6 +94,25 @@ import {
 type DayKeyT = (typeof DAYS)[number];
 
 const idSchema = z.coerce.number().int().positive();
+
+/** Création de réservation : `needsConfirm` accompagne un refus « maximum atteint » à confirmer. */
+type CreateBookingResult = ActionResult<Record<never, never>, { needsConfirm?: boolean }>;
+
+/**
+ * E-mail envoyé APRÈS la réponse (audit 2026-09-17, P1b) : la notification est
+ * best-effort et n'a jamais fait échouer l'action, mais elle était ATTENDUE avant de
+ * répondre — le geste du gestionnaire payait la latence SMTP. `after` (next/server)
+ * l'exécute une fois la réponse partie ; l'échec est journalisé, pas propagé.
+ */
+function envoyerApresReponse(quoi: string, envoi: () => Promise<unknown>): void {
+  after(async () => {
+    try {
+      await envoi();
+    } catch (e) {
+      console.error(`[agenda] e-mail différé (${quoi})`, e);
+    }
+  });
+}
 
 /**
  * Sessions datées (occurrences) du service sur [fromYmd, toYmd] avec leurs participants
@@ -99,65 +127,14 @@ export async function listAgendaSessionsAction(
   return listDatedSessions(serviceId, fromYmd, toYmd);
 }
 
-/** Un parent récurrent a-t-il au moins un miroir (enfant) POINTÉ ? → il devient immuable. */
-async function parentLockedByPointage(parentId: number): Promise<boolean> {
-  return (
-    (await prisma.booking.count({
-      where: { parentBookingId: parentId, pointage: { not: null } },
-    })) > 0
-  );
-}
-
-/**
- * Une réservation est-elle verrouillée pour toute action de gestion (supprimer,
- * modifier, déplacer, copier, valider) ? Règles :
- *   - un MIROIR (enfant, parentBookingId non null) est toujours immuable ;
- *   - une réservation autonome POINTÉE est verrouillée ;
- *   - un PARENT récurrent dont un miroir est pointé est verrouillé.
- * Seul le pointage d'un miroir échappe à ce verrou (géré à part).
- */
-async function bookingLocked(b: {
-  id: number;
-  bookingType: string;
-  parentBookingId: number | null;
-  pointage: string | null;
-}): Promise<boolean> {
-  // Miroir pointé calculé en BDD ; le reste du prédicat est partagé avec le client.
-  const hasPointedChild = b.bookingType === "recurring" && (await parentLockedByPointage(b.id));
-  return isBookingLockedByPointage(b, hasPointedChild);
-}
-
-/**
- * Re-vérifie le verrou pointage/miroir DANS la transaction d'écriture (anti-TOCTOU,
- * audit 2026-07-17) : un pointage posé entre la lecture hors transaction et l'écriture
- * ne passe plus inaperçu. Le pré-contrôle hors transaction reste utile (message rapide),
- * mais c'est CETTE vérification qui fait foi. Lève BookingError.
- * (Ex-`assertBookingUnlockedInTx`, renommée — audit 2026-07-24 — pour ne plus être
- * quasi homonyme de `bookings.assertBookingUnlocked`, le verrou VALIDATION bloquante.)
- */
-async function assertNotLockedByPointageInTx(
-  tx: Prisma.TransactionClient,
-  bookingId: number,
-  serviceId: string,
-): Promise<void> {
-  const b = await tx.booking.findFirst({
-    where: { id: bookingId, serviceId },
-    select: { id: true, bookingType: true, parentBookingId: true, pointage: true },
-  });
-  if (!b) throw new BookingError("Réservation introuvable.");
-  const hasPointedChild =
-    b.bookingType === "recurring" &&
-    (await tx.booking.count({ where: { parentBookingId: b.id, pointage: { not: null } } })) > 0;
-  if (isBookingLockedByPointage(b, hasPointedChild)) {
-    throw new BookingError("Réservation verrouillée (séance pointée ou miroir).");
-  }
-}
+// (Verrou pointage/miroir — `bookingLocked`, `assertNotLockedByPointage[InTx]` : source
+// unique dans server/services/booking-lock, partagée avec le chemin usager — audit 2026-09-17.)
 
 export async function setBookingValidatedAction(
   bookingId: number,
   serviceId: string,
   validated: boolean,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
@@ -183,7 +160,7 @@ export async function setBookingValidatedAction(
   });
   if (!b) return { ok: false, error: "Réservation introuvable." };
   // Miroir non validable ; parent/​autonome verrouillé par un pointage non plus.
-  if (await bookingLocked(b)) {
+  if (await bookingLocked(prisma, b)) {
     return { ok: false, error: "Réservation verrouillée (séance pointée ou miroir)." };
   }
   const changed = b.validated !== validated;
@@ -208,11 +185,7 @@ export async function setBookingValidatedAction(
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Modification simultanée détectée, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e, { conflict: "Modification simultanée détectée, réessayez." });
   }
   revalidatePath(`/services/${serviceId}/agenda`);
 
@@ -220,18 +193,21 @@ export async function setBookingValidatedAction(
   // uniquement sur transition réelle) : e-mail « validée » ou « en attente » (port legacy).
   // IMMÉDIAT seulement si le délai de regroupement est à 0 ; sinon le cron s'en charge.
   if (changed && noticeDelay === 0 && b.slot) {
-    await sendBookingConfirmationMail({
-      userId: b.userId,
-      serviceId,
-      serviceLabel: b.service?.label ?? "",
-      // Validation → « Réservation confirmée » ; dévalidation → « Réservation remise en attente ».
-      trigger: validated ? "confirm_validate" : "unvalidate",
-      slot: b.slot,
-      periodId: b.periodId,
-      enfants: b.enfants,
-      accompagnants: b.accompagnants,
-      theme: b.themeLabel ?? "",
-    });
+    const slot = b.slot;
+    envoyerApresReponse("validation", () =>
+      sendBookingConfirmationMail({
+        userId: b.userId,
+        serviceId,
+        serviceLabel: b.service?.label ?? "",
+        // Validation → « Réservation confirmée » ; dévalidation → « Réservation remise en attente ».
+        trigger: validated ? "confirm_validate" : "unvalidate",
+        slot,
+        periodId: b.periodId,
+        enfants: b.enfants,
+        accompagnants: b.accompagnants,
+        theme: b.themeLabel ?? "",
+      }),
+    );
   }
   return { ok: true };
 }
@@ -246,7 +222,7 @@ export async function setBookingPointageAction(
   // (tous les affichages sont conditionnés à pointage = absent) mais réapparaît
   // si le gestionnaire réactive l'absence (décision Dom 2026-08-29).
   motif?: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
@@ -303,7 +279,7 @@ export async function setBookingAbsenceAction(
   absent: boolean,
   motif?: string,
   prevenuLe?: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success || typeof absent !== "boolean") return { ok: false, error: "Données invalides." };
@@ -350,15 +326,17 @@ export async function setBookingAbsenceAction(
   });
   revalidatePath(`/services/${serviceId}/agenda`);
   if (absent && b.absencePrevenueAt == null) {
-    await sendBookingAbsenceMail({
-      userId: b.userId,
-      serviceId,
-      slotId: b.slotId,
-      // Occurrence d'une récurrente : la période est portée par la parente.
-      periodId: b.periodId ?? b.parent?.periodId ?? null,
-      motif: motif !== undefined ? motif.trim() : b.pointageMotif,
-      trigger: "absence_manager",
-    });
+    envoyerApresReponse("absence prévenue", () =>
+      sendBookingAbsenceMail({
+        userId: b.userId,
+        serviceId,
+        slotId: b.slotId,
+        // Occurrence d'une récurrente : la période est portée par la parente.
+        periodId: b.periodId ?? b.parent?.periodId ?? null,
+        motif: motif !== undefined ? motif.trim() : b.pointageMotif,
+        trigger: "absence_manager",
+      }),
+    );
   }
   return { ok: true };
 }
@@ -367,11 +345,11 @@ export async function setBookingAbsenceAction(
 export async function removeWaitingEntryAction(
   serviceId: string,
   entryId: number,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(entryId);
   if (!id.success) return { ok: false, error: "Données invalides." };
-  const ok = await deleteWaitingEntryById(serviceId, id.data);
+  const ok = await closeWaitingEntryById(serviceId, id.data);
   if (!ok) return { ok: false, error: "Inscription introuvable." };
   revalidatePath(`/services/${serviceId}/agenda`);
   return { ok: true };
@@ -398,7 +376,7 @@ export async function saveSlotConfigAction(input: {
   // pour un ponctuel, qui porte déjà sa date.
   dateStart?: string | null;
   dateEnd?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   const { serviceId, slotId, capacity, demandeurIds } = input;
   const jauge = input.jauge === true;
@@ -491,7 +469,7 @@ export async function copyWeekSlotsAction(input: {
   periodId: number;
   fromWeek: "A" | "B";
   toWeek: "A" | "B";
-}): Promise<{ ok: boolean; error?: string; created?: number }> {
+}): Promise<ActionResult<{ created: number }>> {
   await requireServiceManager(input.serviceId);
   const rec = await copyRecurringWeek(
     input.serviceId,
@@ -518,7 +496,7 @@ export async function copyWeekSlotsAction(input: {
 export async function setServiceDefaultCapacityAction(input: {
   serviceId: string;
   value: number;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   // Bornée [MIN, MAX] comme la création/reconfig (le défaut service n'avait pas de
   // plafond → un défaut > 9999 faisait ensuite échouer la validation à la création).
@@ -548,7 +526,7 @@ export async function setServiceCreatePrefsAction(input: {
   createParityScoped: boolean;
   createJauge: boolean;
   createDemandeurIds: number[];
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   const kind = ["rec", "uniq", "multi"].includes(input.createKind) ? input.createKind : "uniq";
   const configured = await prisma.serviceDemandeurSettings.findMany({
@@ -652,7 +630,7 @@ export async function createRecurringSlotAction(input: {
   // Plage du créneau dans sa période (« YYYY-MM-DD »), vide = toute la période.
   dateStart?: string | null;
   dateEnd?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   // Validation de la frontière : horaires (HH:MM, fin > début), capacité (entier ≥ 1),
   // jour et identifiants. Le typage TS ne protège pas une server action des entrées brutes.
@@ -690,7 +668,7 @@ export async function createUniqueSlotBatchAction(input: {
   demandeurIds?: number[];
   jauge?: boolean;
   weeks?: string;
-}): Promise<{ ok: boolean; error?: string; created?: number; skipped?: number }> {
+}): Promise<ActionResult<{ created: number; skipped: number }>> {
   await requireServiceManager(input.serviceId);
   const parsed = uniqueSlotBatchCreateSchema.safeParse(input);
   if (!parsed.success) {
@@ -723,7 +701,7 @@ export async function cloneSlotAtTimesAction(input: {
   slotId: string;
   startTime: string;
   endTime: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   const times = slotMoveTimesSchema.safeParse(input);
   if (!times.success) {
@@ -747,7 +725,7 @@ export async function moveRecurringSlotAction(input: {
   toDayKey: string;
   startTime: string;
   endTime: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   if (
     !(DAYS as readonly string[]).includes(input.fromDayKey) ||
@@ -780,7 +758,7 @@ export async function moveUniqueSlotAction(input: {
   slotDate: string;
   startTime: string;
   endTime: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   // Frontière : date + horaires validés comme à la création — ils étaient persistés
   // bruts (audit 2026-07-19 ; une date invalide finissait en 500 Prisma).
@@ -807,10 +785,7 @@ export async function moveUniqueSlotAction(input: {
 }
 
 /** Supprime un créneau (et ses miroirs/réservations) depuis l'agenda. */
-export async function deleteSlotAction(
-  serviceId: string,
-  slotId: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function deleteSlotAction(serviceId: string, slotId: string): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const res = await deleteSlots(serviceId, [slotId]);
   revalidatePath(`/services/${serviceId}/agenda`);
@@ -826,7 +801,7 @@ export async function deleteSlotAction(
 export async function deleteSlotSeriesAction(
   serviceId: string,
   slotId: string,
-): Promise<{ ok: boolean; deleted?: number; error?: string }> {
+): Promise<ActionResult<{ deleted: number }>> {
   await requireServiceManager(serviceId);
   const ref = await prisma.slot.findFirst({
     where: { id: slotId, serviceId, slotType: "unique" },
@@ -882,12 +857,7 @@ export async function updateSlotBatchAction(input: {
   // Date du créneau de référence (geste courant), pour le repli hors-lot.
   refSlotDate: string;
   dayDelta?: number;
-}): Promise<{
-  ok: boolean;
-  updated?: BatchUpdatedItem[];
-  skipped?: number;
-  error?: string;
-}> {
+}): Promise<ActionResult<{ updated: BatchUpdatedItem[]; skipped: number }>> {
   await requireServiceManager(input.serviceId);
   // Frontière : date + horaires validés comme à la création (persistés bruts avant
   // l'audit 2026-07-19) ; dayDelta borné (décalage d'un geste de drag, jamais plus
@@ -984,7 +954,7 @@ const revertItemsSchema = z
 export async function revertSlotBatchAction(input: {
   serviceId: string;
   items: BatchUpdatedItem[];
-}): Promise<{ ok: boolean; reverted?: number; error?: string }> {
+}): Promise<ActionResult<{ reverted: number }>> {
   await requireServiceManager(input.serviceId);
   const items = revertItemsSchema.safeParse(input.items);
   if (!items.success) {
@@ -1008,7 +978,7 @@ export async function deleteBookingAdminAction(
   bookingId: number,
   serviceId: string,
   motif?: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
@@ -1029,7 +999,7 @@ export async function deleteBookingAdminAction(
   if (!booking) return { ok: false, error: "Réservation introuvable." };
   // Miroir immuable, ou réservation/​parent verrouillé par un pointage → pas de suppression.
   if (
-    await bookingLocked({
+    await bookingLocked(prisma, {
       id: id.data,
       bookingType: booking.bookingType,
       parentBookingId: booking.parentBookingId,
@@ -1074,11 +1044,7 @@ export async function deleteBookingAdminAction(
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Suppression simultanée détectée, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e, { conflict: "Suppression simultanée détectée, réessayez." });
   }
   revalidatePath(`/services/${serviceId}/agenda`);
 
@@ -1086,14 +1052,16 @@ export async function deleteBookingAdminAction(
   // réglages globaux « Envoyer »/« Destinataire »/« Modèle » du déclencheur honorés
   // (l'ancien envoi direct à l'usager ignorait le réglage Destinataire — audit
   // 2026-07-17). Suppression d'une réservation validée vs refus d'une demande.
-  await sendBookingCancellationMail({
-    userId: booking.userId,
-    serviceId,
-    slotId: booking.slotId,
-    periodId: booking.periodId,
-    motif: (motif ?? "").trim().slice(0, 1000),
-    trigger: booking.validated ? "cancel_manager" : "refuse",
-  });
+  envoyerApresReponse("suppression", () =>
+    sendBookingCancellationMail({
+      userId: booking.userId,
+      serviceId,
+      slotId: booking.slotId,
+      periodId: booking.periodId,
+      motif: (motif ?? "").trim().slice(0, 1000),
+      trigger: booking.validated ? "cancel_manager" : "refuse",
+    }),
+  );
   return { ok: true };
 }
 
@@ -1122,7 +1090,7 @@ export async function updateBookingDetailAction(input: {
   enfants: number;
   accompagnants: number;
   theme: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   const parsed = detailSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
@@ -1142,7 +1110,7 @@ export async function updateBookingDetailAction(input: {
   if (current.parentBookingId != null) {
     return { ok: false, error: "Une séance (miroir) n'est pas modifiable." };
   }
-  if (await bookingLocked({ id: d.bookingId, ...current })) {
+  if (await bookingLocked(prisma, { id: d.bookingId, ...current })) {
     return { ok: false, error: "Réservation pointée, non modifiable." };
   }
   try {
@@ -1178,11 +1146,7 @@ export async function updateBookingDetailAction(input: {
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Modification simultanée détectée, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e, { conflict: "Modification simultanée détectée, réessayez." });
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
   return { ok: true };
@@ -1194,83 +1158,52 @@ export async function moveBookingAction(
   bookingId: number,
   serviceId: string,
   slotId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const id = idSchema.safeParse(bookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
-  // Miroir immuable / réservation verrouillée par un pointage → pas de déplacement.
-  // Anti-IDOR : la réservation doit appartenir au service couvert par le guard.
+  // Miroir immuable / réservation verrouillée par un pointage → pas de déplacement
+  // (pré-contrôle hors transaction : message rapide ; la vérification qui fait foi est
+  // celle de la transaction). Anti-IDOR : réservation du service couvert par le guard.
   const lk = await prisma.booking.findFirst({
     where: { id: id.data, serviceId },
-    select: {
-      id: true,
-      bookingType: true,
-      parentBookingId: true,
-      pointage: true,
-      periodId: true,
-      enfants: true,
-      accompagnants: true,
-    },
+    select: LOCK_CANDIDATE_SELECT,
   });
   if (!lk) return { ok: false, error: "Réservation introuvable." };
-  if (await bookingLocked(lk)) return { ok: false, error: "Réservation verrouillée." };
+  if (await bookingLocked(prisma, lk)) return { ok: false, error: "Réservation verrouillée." };
   try {
     await prisma.$transaction(
       async (tx) => {
-        // Verrou pointage re-vérifié dans la transaction (anti-TOCTOU).
-        await assertNotLockedByPointageInTx(tx, id.data, serviceId);
-        // Défense en profondeur (audit 2026-07-17) : créneau cible du MÊME service et
-        // du MÊME type que la réservation (récurrent→récurrent, ponctuel→ponctuel),
-        // comme le chemin usager (moveInTx). Récurrent : résolution partagée
-        // (recurring-booking.ts) — la période et la parité SUIVENT le créneau cible
-        // (sans quoi la jauge restait décomptée sur {slotId, ancienne période} et une
-        // "A" déposée sur un créneau "B" devenait fantôme, audits 2026-07-17/19).
-        // Ponctuel → aucune période (NULL), aligné sur le chemin usager.
-        const wantType = lk.bookingType === "recurring" ? "recurring" : "unique";
-        let newPeriodId: number | null = null;
-        let newWeek: "" | "A" | "B" = "";
-        if (wantType === "recurring") {
-          const target = await resolveRecurringTarget(tx, { serviceId, slotId });
-          newPeriodId = target.periodId;
-          newWeek = target.week;
-        } else {
-          const target = await tx.slot.findFirst({
-            where: { id: slotId, serviceId },
-            select: { slotType: true },
-          });
-          if (target?.slotType !== "unique") {
-            throw new BookingError("Ce créneau n'est pas disponible.");
-          }
-        }
-        // Anti-surbooking : déplacer vers un créneau complet est refusé (jauge/capacité).
-        await assertSlotCapacity(tx, {
-          serviceId,
-          slotId,
-          bookingType: wantType,
-          periodId: newPeriodId,
-          enfants: lk.enfants,
-          accompagnants: lk.accompagnants,
-          excludeBookingId: id.data,
+        // RELECTURE dans la transaction (anti-TOCTOU pour le verrou pointage ; valeurs
+        // FRAÎCHES de enfants/accompagnants pour la jauge — la pré-lecture hors
+        // transaction pouvait être périmée, correctif S8 audit 2026-09-17).
+        const fresh = await tx.booking.findFirst({
+          where: { id: id.data, serviceId },
+          select: { ...LOCK_CANDIDATE_SELECT, enfants: true, accompagnants: true },
         });
-        const updated = await tx.booking.update({
-          where: { id: id.data },
-          // auto_validate_from réinitialisé à NOW() sur un déplacement (cf. logique d'origine).
-          data: { slotId, periodId: newPeriodId, week: newWeek, autoValidateFrom: new Date() },
-        });
-        // Récurrente : régénère les enfants sur les miroirs du nouveau créneau — la
-        // ligne mise à jour EST le ParentForSync (plus de refetch nécessaire).
+        if (!fresh) throw new BookingError("Réservation introuvable.");
+        await assertNotLockedByPointage(tx, fresh);
+        // Cible du même service et du même type, jauge, mise à jour, régénération des
+        // occurrences : cœur partagé avec l'échange (recurring-booking.relocateBookingInTx).
         // Gestionnaire : pas de délai de réservation, on borne juste au présent.
-        if (updated.bookingType === "recurring")
-          await syncRecurringChildren(tx, updated, { cutoffISO: todayParisISO() });
+        await relocateBookingInTx(tx, {
+          serviceId,
+          booking: fresh,
+          targetSlotId: slotId,
+          wantType: fresh.bookingType === "recurring" ? "recurring" : "unique",
+          excludeBookingIds: [fresh.id],
+          now: new Date(),
+          cutoffISO: todayParisISO(),
+        });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Déplacement simultané détecté, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e, {
+      conflict: "Déplacement simultané détecté, réessayez.",
+      // uq_recurring : l'usager a déjà une réservation sur le créneau d'arrivée.
+      duplicate: "Cet usager a déjà une réservation sur ce créneau.",
+    });
   }
   revalidatePath(`/services/${serviceId}/agenda`);
   return { ok: true };
@@ -1290,95 +1223,84 @@ export async function swapBookingsAction(
   bookingIdA: number,
   bookingIdB: number,
   serviceId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ActionResult> {
   await requireServiceManager(serviceId);
   const a = idSchema.safeParse(bookingIdA);
   const b = idSchema.safeParse(bookingIdB);
   if (!a.success || !b.success || a.data === b.data) {
     return { ok: false, error: "Données invalides." };
   }
-  const select = {
-    id: true,
-    slotId: true,
-    bookingType: true,
-    parentBookingId: true,
-    pointage: true,
-    periodId: true,
-    enfants: true,
-    accompagnants: true,
-  } as const;
+  const select = { ...LOCK_CANDIDATE_SELECT, slotId: true, enfants: true, accompagnants: true };
+  // Contrôles COMMUNS au pré-contrôle (hors transaction, message rapide) et à la
+  // transaction (qui fait foi). Lève BookingError.
+  const controler = async (
+    db: Prisma.TransactionClient,
+    ba: LockCandidate & { slotId: string },
+    bb: LockCandidate & { slotId: string },
+  ) => {
+    if (ba.bookingType !== bb.bookingType) {
+      throw new BookingError("Impossible d'échanger une récurrente avec une ponctuelle.");
+    }
+    if (ba.slotId === bb.slotId) {
+      throw new BookingError("Ces deux réservations sont déjà sur le même créneau.");
+    }
+    if ((await bookingLocked(db, ba)) || (await bookingLocked(db, bb))) {
+      throw new BookingError("Réservation verrouillée.");
+    }
+  };
   const [ba, bb] = await Promise.all([
     prisma.booking.findFirst({ where: { id: a.data, serviceId }, select }),
     prisma.booking.findFirst({ where: { id: b.data, serviceId }, select }),
   ]);
   if (!ba || !bb) return { ok: false, error: "Réservation introuvable." };
-  if (ba.bookingType !== bb.bookingType) {
-    return { ok: false, error: "Impossible d'échanger une récurrente avec une ponctuelle." };
-  }
-  if (ba.slotId === bb.slotId) {
-    return { ok: false, error: "Ces deux réservations sont déjà sur le même créneau." };
-  }
-  if ((await bookingLocked(ba)) || (await bookingLocked(bb))) {
-    return { ok: false, error: "Réservation verrouillée." };
-  }
-  const wantType = ba.bookingType === "recurring" ? "recurring" : "unique";
   try {
+    await controler(prisma, ba, bb);
     await prisma.$transaction(
       async (tx) => {
-        await assertNotLockedByPointageInTx(tx, ba.id, serviceId);
-        await assertNotLockedByPointageInTx(tx, bb.id, serviceId);
-        // Cible de chacune = créneau de l'autre (période / parité résolues pour un récurrent).
-        const targetFor = async (slotId: string) => {
-          if (wantType === "recurring") {
-            const t = await resolveRecurringTarget(tx, { serviceId, slotId });
-            return { periodId: t.periodId, week: t.week };
-          }
-          const s = await tx.slot.findFirst({
-            where: { id: slotId, serviceId },
-            select: { slotType: true },
-          });
-          if (s?.slotType !== "unique") throw new BookingError("Ce créneau n'est pas disponible.");
-          return { periodId: null as number | null, week: "" as "" | "A" | "B" };
-        };
-        const [tA, tB] = [await targetFor(bb.slotId), await targetFor(ba.slotId)];
-        // Anti-surbooking des DEUX côtés, les deux réservations quittant leur créneau.
-        for (const [mover, slotId, target] of [
-          [ba, bb.slotId, tA],
-          [bb, ba.slotId, tB],
-        ] as const) {
-          await assertSlotCapacity(tx, {
-            serviceId,
-            slotId,
-            bookingType: wantType,
-            periodId: target.periodId,
-            enfants: mover.enfants,
-            accompagnants: mover.accompagnants,
-            excludeBookingIds: [ba.id, bb.id],
-          });
-        }
+        // RELECTURE des deux réservations dans la transaction : créneau courant,
+        // compteurs et verrou pointage FRAIS (la pré-lecture hors transaction pouvait être
+        // périmée — un déplacement ou une modification concurrente entre les deux
+        // lectures faisait raisonner l'échange sur des valeurs fausses, correctif S8
+        // audit 2026-09-17). Anti-IDOR : bornées au service.
+        const fa = await tx.booking.findFirst({ where: { id: a.data, serviceId }, select });
+        const fb = await tx.booking.findFirst({ where: { id: b.data, serviceId }, select });
+        if (!fa || !fb) throw new BookingError("Réservation introuvable.");
+        await controler(tx, fa, fb);
+        // Cible de chacune = créneau (frais) de l'autre. Capacité : les DEUX quittent leur
+        // créneau — exclues toutes deux du décompte de chaque côté, quel que soit l'ordre
+        // des deux mises à jour. Récurrent : période/parité suivent le créneau d'arrivée
+        // et les occurrences sont régénérées (relocateBookingInTx).
+        const wantType = fa.bookingType === "recurring" ? "recurring" : "unique";
         const now = new Date();
-        const ua = await tx.booking.update({
-          where: { id: ba.id },
-          data: { slotId: bb.slotId, periodId: tA.periodId, week: tA.week, autoValidateFrom: now },
+        const cutoffISO = todayParisISO();
+        const excludeBookingIds = [fa.id, fb.id];
+        await relocateBookingInTx(tx, {
+          serviceId,
+          booking: fa,
+          targetSlotId: fb.slotId,
+          wantType,
+          excludeBookingIds,
+          now,
+          cutoffISO,
         });
-        const ub = await tx.booking.update({
-          where: { id: bb.id },
-          data: { slotId: ba.slotId, periodId: tB.periodId, week: tB.week, autoValidateFrom: now },
+        await relocateBookingInTx(tx, {
+          serviceId,
+          booking: fb,
+          targetSlotId: fa.slotId,
+          wantType,
+          excludeBookingIds,
+          now,
+          cutoffISO,
         });
-        if (wantType === "recurring") {
-          const cutoffISO = todayParisISO();
-          await syncRecurringChildren(tx, ua, { cutoffISO });
-          await syncRecurringChildren(tx, ub, { cutoffISO });
-        }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof BookingError) return { ok: false, error: e.message };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      return { ok: false, error: "Modification simultanée détectée, réessayez." };
-    }
-    throw e;
+    return mapBookingError(e, {
+      conflict: "Modification simultanée détectée, réessayez.",
+      // uq_recurring : même usager des deux côtés → doublon sur le créneau d'arrivée.
+      duplicate: "Cet usager a déjà une réservation sur ce créneau.",
+    });
   }
   revalidatePath(`/services/${serviceId}/agenda`);
   return { ok: true };
@@ -1409,7 +1331,8 @@ const createSchema = z
 async function avertissementMaxima(
   serviceId: string,
   userId: string,
-  periodId: number,
+  // null = créneau ponctuel hors période → aucun maximum applicable.
+  periodId: number | null,
   force: boolean,
 ): Promise<{ ok: false; error: string; needsConfirm: true } | null> {
   if (force) return null;
@@ -1430,7 +1353,7 @@ export async function createRecurringBookingAction(input: {
   theme: string;
   week: "" | "A" | "B";
   force?: boolean;
-}): Promise<{ ok: boolean; error?: string; needsConfirm?: boolean }> {
+}): Promise<CreateBookingResult> {
   await requireServiceManager(input.serviceId);
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) {
@@ -1484,8 +1407,11 @@ export async function createRecurringBookingAction(input: {
     });
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
-  // Confirmation à l'usager (best-effort), APRÈS le commit.
-  if (mail) await sendBookingConfirmationMail(mail);
+  // Confirmation à l'usager (best-effort), APRÈS le commit et après la réponse.
+  const confirmation: BookingConfirmationParams | null = mail;
+  if (confirmation) {
+    envoyerApresReponse("création récurrente", () => sendBookingConfirmationMail(confirmation));
+  }
   return { ok: true };
 }
 
@@ -1515,7 +1441,7 @@ export async function createUniqueBookingAction(input: {
   accompagnants: number;
   theme: string;
   force?: boolean;
-}): Promise<{ ok: boolean; error?: string; needsConfirm?: boolean }> {
+}): Promise<CreateBookingResult> {
   await requireServiceManager(input.serviceId);
   const parsed = createUniqueSchema.safeParse(input);
   if (!parsed.success) {
@@ -1544,17 +1470,18 @@ export async function createUniqueBookingAction(input: {
   if (slot.slotDate && slot.slotDate.toISOString().slice(0, 10) < todayParisISO()) {
     return { ok: false, error: "Ce créneau est passé." };
   }
-  const avert = await avertissementMaxima(d.serviceId, d.userId, slot.periodId ?? 0, d.force);
+  const avert = await avertissementMaxima(d.serviceId, d.userId, slot.periodId, d.force);
   if (avert) return avert;
   try {
     await prisma.$transaction(
       async (tx) => {
         // Anti-surbooking : le gestionnaire ne peut pas dépasser la jauge/capacité.
+        // Ponctuelle : aucune période (NULL, modèle `Booking.periodId Int?`).
         await assertSlotCapacity(tx, {
           serviceId: d.serviceId,
           slotId: d.slotId,
           bookingType: "unique",
-          periodId: 0,
+          periodId: null,
           enfants: d.enfants,
           accompagnants: d.accompagnants,
         });
@@ -1591,22 +1518,24 @@ export async function createUniqueBookingAction(input: {
     });
   }
   revalidatePath(`/services/${d.serviceId}/agenda`);
-  // Confirmation à l'usager (best-effort) : réservation créée par un gestionnaire = validée.
-  await sendBookingConfirmationMail({
-    userId: d.userId,
-    serviceId: d.serviceId,
-    serviceLabel: slot.service.label,
-    trigger: "confirm_manager_create",
-    slot: {
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      slotDate: slot.slotDate,
-      slotDay: slot.slotDay,
-    },
-    enfants: d.enfants,
-    accompagnants: d.accompagnants,
-    theme: d.theme,
-  });
+  // Confirmation à l'usager (best-effort, après la réponse) : créée par un gestionnaire = validée.
+  envoyerApresReponse("création ponctuelle", () =>
+    sendBookingConfirmationMail({
+      userId: d.userId,
+      serviceId: d.serviceId,
+      serviceLabel: slot.service.label,
+      trigger: "confirm_manager_create",
+      slot: {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        slotDate: slot.slotDate,
+        slotDay: slot.slotDay,
+      },
+      enfants: d.enfants,
+      accompagnants: d.accompagnants,
+      theme: d.theme,
+    }),
+  );
   return { ok: true };
 }
 
@@ -1638,7 +1567,7 @@ export async function copyBookingAction(input: {
   target:
     | { kind: "recurring"; periodId: number; dayKey: string; slotId: string; week: "" | "A" | "B" }
     | { kind: "unique"; slotId: string };
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   const id = idSchema.safeParse(input.sourceBookingId);
   if (!id.success) return { ok: false, error: "Données invalides." };
@@ -1663,7 +1592,7 @@ export async function copyBookingAction(input: {
   }
   // Miroir non copiable ; source verrouillée par un pointage non plus.
   if (
-    await bookingLocked({
+    await bookingLocked(prisma, {
       id: id.data,
       bookingType: src.bookingType,
       parentBookingId: src.parentBookingId,
@@ -1729,7 +1658,7 @@ export async function cutBookingAction(input: {
   target:
     | { kind: "recurring"; periodId: number; dayKey: string; slotId: string; week: "" | "A" | "B" }
     | { kind: "unique"; slotId: string };
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<ActionResult> {
   await requireServiceManager(input.serviceId);
   const res = await copyBookingAction(input);
   if (!res.ok) return res;

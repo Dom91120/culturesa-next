@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { ActionResult } from "@/lib/action-state";
 import { prisma } from "@/server/db";
 import { requireRole } from "@/server/guards";
 
@@ -14,8 +15,9 @@ const rowSchema = z.object({
   structureLibre: z.boolean(),
 });
 
-type CreateResult = { ok: true; id: number } | { ok: false; error: string };
-type Result = { ok: true } | { ok: false; error: string };
+// Union discriminée partagée (lib/action-state).
+type CreateResult = ActionResult<{ id: number }>;
+type Result = ActionResult;
 
 export async function createDemandeurAction(input: {
   label: string;

@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import type { ActionResult } from "@/lib/action-state";
 import { earliestBookableISO, todayParisISO } from "@/lib/booking-delay";
 import { isDispoKey } from "@/lib/waiting-list";
 import {
@@ -19,6 +21,7 @@ import {
   assertAbsenceDeclarable,
   MAX_ABSENCE_MOTIF,
 } from "@/server/services/booking-absence";
+import { assertNotLockedByPointage } from "@/server/services/booking-lock";
 import {
   type BookingCancellationParams,
   type BookingConfirmationParams,
@@ -46,7 +49,7 @@ import { resolveRecurringTarget } from "@/server/services/recurring-booking";
 import { syncRecurringChildren } from "@/server/services/recurring-children";
 import { reservePonctuelInTx, reserveRecurringInTx } from "@/server/services/user-booking";
 import {
-  deleteWaitingEntry,
+  closeWaitingEntry,
   getWaitingEntry,
   MAX_DISPOS,
   saveWaitingEntry,
@@ -57,9 +60,26 @@ function revalidate(serviceId: string) {
   revalidatePath(`/reservations/${serviceId}`);
 }
 
-type Result = { ok: boolean; error?: string };
+// Union discriminée partagée (lib/action-state) : `error` toujours présent sur un refus.
+type Result = ActionResult;
 
 // (mapBookingError : source unique dans server/services/bookings — audit 2026-07-17.)
+
+/**
+ * E-mail envoyé APRÈS la réponse (audit 2026-09-17, P1b) : best-effort, il ne fait pas
+ * échouer l'action mais était ATTENDU avant de répondre — l'usager payait la latence
+ * SMTP à la validation de son panier. `after` (next/server) l'exécute une fois la réponse
+ * partie ; l'échec est journalisé, pas propagé. L'ordre relatif des envois est conservé.
+ */
+function envoyerApresReponse(quoi: string, envoi: () => Promise<unknown>): void {
+  after(async () => {
+    try {
+      await envoi();
+    } catch (e) {
+      console.error(`[reservations] e-mail différé (${quoi})`, e);
+    }
+  });
+}
 
 // ── Cœurs transactionnels (composables dans UNE tx — panier atomique commitDraft) ──
 // Chaque helper exécute validation + écritures d'UNE opération dans le `tx` fourni et
@@ -214,7 +234,8 @@ async function moveInTx(
     serviceId,
     slotId: target.slotId,
     bookingType: target.ponctuel ? "unique" : "recurring",
-    periodId: target.ponctuel ? 0 : (target.periodId ?? 0),
+    // Ponctuel : aucune période (NULL) ; récurrent : période validée par resolveRecurringTarget.
+    periodId: target.ponctuel ? null : (target.periodId ?? null),
     enfants: booking.enfants,
     accompagnants: booking.accompagnants,
     excludeBookingId: bookingId,
@@ -226,7 +247,7 @@ async function moveInTx(
   await assertReservationLimits(tx, {
     serviceId,
     userId,
-    periodId: target.ponctuel ? (uniqueSlot?.periodId ?? 0) : (target.periodId ?? 0),
+    periodId: target.ponctuel ? (uniqueSlot?.periodId ?? null) : (target.periodId ?? null),
     excludeBookingId: bookingId,
   });
   const validated = !(await isValidationMode(tx, userId, serviceId));
@@ -303,17 +324,14 @@ async function updateInTx(
     },
   });
   if (!b) throw new BookingError("Réservation introuvable.");
-  if (b.parentBookingId != null) {
-    throw new BookingError("Une séance (miroir) n'est pas modifiable.");
-  }
-  // Pointée (elle-même ou une de ses séances) → figée, comme l'annulation.
-  if (b.pointage != null) throw new BookingError("Réservation pointée, non modifiable.");
-  const pointedChildren = await tx.booking.count({
-    where: { parentBookingId: b.id, pointage: { not: null } },
+  // Miroir immuable ; pointée (elle-même ou une de ses séances) → figée, comme
+  // l'annulation. MÊME règle que le gestionnaire (services/booking-lock), formulations
+  // usager conservées.
+  await assertNotLockedByPointage(tx, b, {
+    miroir: "Une séance (miroir) n'est pas modifiable.",
+    pointage: "Réservation pointée, non modifiable.",
+    seance: "Réservation pointée, non modifiable.",
   });
-  if (pointedChildren > 0) {
-    throw new BookingError("Réservation pointée, non modifiable.");
-  }
   // Validation bloquante : une résa validée (mode validation ON) est verrouillée.
   await assertBookingUnlocked(tx, userId, b);
   // Anti-surbooking : augmenter les compteurs ne doit pas dépasser la jauge/capacité
@@ -524,12 +542,14 @@ export async function joinWaitingList(serviceId: string, raw: unknown): Promise<
       parsed.data.periodIds ?? [],
     );
     if (created) {
-      await sendWaitlistMail("waitlist_join", {
-        userId: session.user.id,
-        serviceId,
-        dispos: parsed.data.dispos.join(","),
-        periodIds: parsed.data.periodIds ?? [],
-      });
+      envoyerApresReponse("inscription liste d'attente", () =>
+        sendWaitlistMail("waitlist_join", {
+          userId: session.user.id,
+          serviceId,
+          dispos: parsed.data.dispos.join(","),
+          periodIds: parsed.data.periodIds ?? [],
+        }),
+      );
     }
   } catch (e) {
     return mapBookingError(e);
@@ -541,7 +561,7 @@ export async function joinWaitingList(serviceId: string, raw: unknown): Promise<
 /** Retrait de la liste d'attente du service (l'usager lui-même). */
 export async function leaveWaitingList(serviceId: string): Promise<Result> {
   const session = await requireUser();
-  await deleteWaitingEntry(serviceId, session.user.id);
+  await closeWaitingEntry(serviceId, session.user.id);
   revalidate(serviceId);
   return { ok: true };
 }
@@ -598,14 +618,16 @@ export async function setMyAbsence(serviceId: string, raw: unknown): Promise<Res
     data: absenceWriteData(absent, "usager", motif),
   });
   if (absent && b.absencePrevenueAt == null) {
-    await sendBookingAbsenceMail({
-      userId: session.user.id,
-      serviceId,
-      slotId: b.slotId,
-      periodId: b.periodId ?? b.parent?.periodId ?? null,
-      motif: motif ?? b.pointageMotif,
-      trigger: "absence_user",
-    });
+    envoyerApresReponse("absence prévenue", () =>
+      sendBookingAbsenceMail({
+        userId: session.user.id,
+        serviceId,
+        slotId: b.slotId,
+        periodId: b.periodId ?? b.parent?.periodId ?? null,
+        motif: motif ?? b.pointageMotif,
+        trigger: "absence_user",
+      }),
+    );
   }
   revalidate(serviceId);
   return { ok: true };
@@ -629,9 +651,13 @@ export async function commitDraft(serviceId: string, rawDraft: unknown): Promise
   } catch (e) {
     return mapBookingError(e);
   }
-  // Notifications best-effort, après commit : confirmations d'ajout + annulations de résas validées.
-  for (const m of confirmations) await sendBookingConfirmationMail(m);
-  for (const c of cancellations) await sendBookingCancellationMail(c);
+  // Notifications best-effort, après commit ET après la réponse (P1b) : confirmations
+  // d'ajout puis annulations de résas validées, dans cet ordre, envoyées une à une.
+  const aEnvoyer = { confirmations, cancellations };
+  envoyerApresReponse("panier", async () => {
+    for (const m of aEnvoyer.confirmations) await sendBookingConfirmationMail(m);
+    for (const c of aEnvoyer.cancellations) await sendBookingCancellationMail(c);
+  });
   revalidate(serviceId);
   return { ok: true };
 }

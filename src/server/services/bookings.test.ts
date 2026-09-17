@@ -24,6 +24,7 @@ import {
   BookingError,
   effectiveOpenOnSchoolHolidays,
   isValidationMode,
+  limiteReservationAtteinte,
   limitesEpuiseesPourListeAttente,
   mapBookingError,
   resolveEffectiveDemandeurId,
@@ -391,6 +392,23 @@ describe("assertSlotCapacity", () => {
       where: expect.objectContaining({ id: { notIn: [42] } }),
     });
   });
+
+  it("ponctuel avec periodId NULL (modèle Booking.periodId Int?) : décompte par créneau, sans période", async () => {
+    const slot: CapacitySlot = {
+      capacity: 2,
+      jauge: false,
+      service: { capacity: 99, gaugeAccompagnants: false },
+    };
+    const { tx, count } = capacityTx({ slot, count: 1 });
+    await expect(
+      assertSlotCapacity(tx, { ...capacityBase, bookingType: "unique", periodId: null }),
+    ).resolves.toBeUndefined();
+    // La branche ponctuelle ignore la période : jamais de `periodId: null` dans le where
+    // (qui ne compterait que les lignes à NULL et laisserait passer un surbooking).
+    expect(count).toHaveBeenCalledWith({
+      where: { slotId: "sl1", bookingType: "unique" },
+    });
+  });
 });
 
 // ─── assertReservationLimits — quotas usager par période / par exercice ──────
@@ -424,6 +442,19 @@ describe("assertReservationLimits", () => {
     await expect(
       assertReservationLimits(tx, { ...limitsBase, periodId: 0 }),
     ).resolves.toBeUndefined();
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it("sans période (periodId NULL — ponctuel hors période) : aucune limite, aucune requête", async () => {
+    const { tx, findUnique } = limitsTx({});
+    await expect(
+      assertReservationLimits(tx, { ...limitsBase, periodId: null }),
+    ).resolves.toBeUndefined();
+    expect(findUnique).not.toHaveBeenCalled();
+    // Variante « avertir sans lever » du gestionnaire : même règle.
+    await expect(
+      limiteReservationAtteinte(tx, { ...limitsBase, periodId: null }),
+    ).resolves.toBeNull();
     expect(findUnique).not.toHaveBeenCalled();
   });
 
