@@ -929,7 +929,6 @@ export async function moveRecurringSlot(
   if (!period?.dateStart || !period?.dateEnd) {
     return { ok: false, error: "Période introuvable ou sans dates" };
   }
-  const capVal = slot.capacity ?? service.capacity;
   const weeks = normalizeWeeks(slot.weeks);
   // Contexte de génération UNIQUE (bornes + ouverture de l'exercice + fériés) —
   // période sans exercice = FERMÉ : aucun miroir, cf. opening.ts / loadMirrorContext.
@@ -962,9 +961,12 @@ export async function moveRecurringSlot(
         if (existingMirrors.length) {
           await tx.slot.deleteMany({ where: { id: { in: existingMirrors.map((m) => m.id) } } });
         }
+        // La capacité est conservée TELLE QUELLE : `null` = « suit la capacité du
+        // service ». La persister résolue figeait silencieusement le repli au
+        // déplacement (audit 2026-09-17) ; buildMirrorRows fait lui-même le repli.
         await tx.slot.update({
           where: { id: slotId },
-          data: { startTime, endTime, weeks, slotDay: toDayKey, capacity: capVal },
+          data: { startTime, endTime, weeks, slotDay: toDayKey },
         });
         // Un seul createMany (pipeline unique buildMirrorRows) ; miroirs régénérés
         // avec la jauge du récurrent déplacé.
@@ -977,7 +979,7 @@ export async function moveRecurringSlot(
             endTime,
             weeks,
             slotDay: toDayKey,
-            capacity: capVal,
+            capacity: slot.capacity,
             jauge: slot.jauge,
             // Déplacer un créneau ne change pas sa plage : les miroirs régénérés
             // restent bornés comme avant.

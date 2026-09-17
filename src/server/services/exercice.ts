@@ -628,8 +628,12 @@ export async function undoCycle(serviceId: string): Promise<void> {
           where: { serviceId, visibleToUsers: true },
           data: { visibleToUsers: false },
         });
-        await tx.exercice.update({
-          where: { id: visibleFromExerciceId },
+        // `updateMany` scopé au service : si l'exercice porteur d'avant la bascule a été
+        // supprimé entre-temps, on n'a rien à rallumer (0 ligne) au lieu d'un P2025 qui
+        // faisait échouer TOUTE l'annulation (audit 2026-09-17). Anti-IDOR par la même
+        // occasion (l'id vient du journal, on le borne quand même).
+        await tx.exercice.updateMany({
+          where: { id: visibleFromExerciceId, serviceId },
           data: { visibleToUsers: true },
         });
       }

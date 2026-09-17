@@ -1030,8 +1030,9 @@ describe("moveRecurringSlot", () => {
     expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["u_a", "u_b"] } } });
     expect(update).toHaveBeenCalledWith({
       where: { id: "sl_1" },
-      // Capacité nulle → repli sur celle du service, désormais persistée.
-      data: { startTime: "10:00", endTime: "11:00", weeks: "A", slotDay: "mar", capacity: 5 },
+      // Capacité NON touchée : `null` continue de suivre celle du service (le
+      // déplacement ne fige plus le repli) ; les miroirs, eux, reçoivent le repli.
+      data: { startTime: "10:00", endTime: "11:00", weeks: "A", slotDay: "mar" },
     });
     const rows = rowsOf(createMany);
     // Mardis A à partir du 14/09 : seul le 22/09 (08/09 hors plage, 15 et 29 = B).

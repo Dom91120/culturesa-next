@@ -56,6 +56,22 @@ function assertExerciceOwned<T extends { serviceId: string | null }>(
 /** Erreur métier de gestion des périodes/exercices (message destiné à l'admin). */
 export class PeriodError extends Error {}
 
+/**
+ * Traduction UNIQUE des erreurs d'une transaction sérialisable sur les périodes :
+ * refus métier de la régénération des miroirs (`SlotMutationError`) et conflit de
+ * sérialisation Postgres (P2034, deux gestionnaires en même temps) deviennent des
+ * `PeriodError` affichables ; tout le reste est relancé tel quel. Partagée par la mise
+ * à jour, la suppression et la configuration d'ouverture (auparavant seule la
+ * suppression traduisait P2034 — audit 2026-09-17).
+ */
+function rethrowAsPeriodError(e: unknown): never {
+  if (e instanceof SlotMutationError) throw new PeriodError(e.message);
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+    throw new PeriodError("Modification simultanée détectée, réessayez.");
+  }
+  throw e;
+}
+
 // ── Exercices (entité explicite, par service) ────────────────────────────────
 
 type ExerciceRow = {
@@ -401,6 +417,12 @@ export async function updateServicePeriod(
   if (datesChange) {
     const nextStart = input.dateStart !== undefined ? input.dateStart : current.dateStart;
     const nextEnd = input.dateEnd !== undefined ? input.dateEnd : current.dateEnd;
+    // Ordre des dates : vérifié QUEL QUE SOIT le rattachement — une période sans
+    // exercice (colonne nullable) n'était contrôlée que par le CHECK SQL, qui
+    // remontait une erreur Prisma brute (audit 2026-09-17).
+    if (nextStart && nextEnd && nextStart > nextEnd) {
+      throw new PeriodError("La date de début doit être avant la date de fin.");
+    }
     // Nouvelles dates : doivent rester dans l'exercice de la période + sans chevauchement.
     if (current.exerciceId != null) {
       await validatePeriodWithinExercice(serviceId, current.exerciceId, nextStart, nextEnd, id);
@@ -434,8 +456,7 @@ export async function updateServicePeriod(
       },
     );
   } catch (e) {
-    if (e instanceof SlotMutationError) throw new PeriodError(e.message);
-    throw e;
+    rethrowAsPeriodError(e);
   }
 }
 
@@ -468,10 +489,7 @@ export async function deleteServicePeriod(serviceId: string, id: number) {
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
-      throw new PeriodError("Modification simultanée détectée, réessayez.");
-    }
-    throw e;
+    rethrowAsPeriodError(e);
   }
 }
 
@@ -553,8 +571,7 @@ export async function saveExerciceOpeningConfig(
       },
     );
   } catch (e) {
-    if (e instanceof SlotMutationError) throw new PeriodError(e.message);
-    throw e;
+    rethrowAsPeriodError(e);
   }
 }
 

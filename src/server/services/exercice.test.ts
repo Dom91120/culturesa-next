@@ -1142,15 +1142,17 @@ describe("undoCycle", () => {
     expect(order(bookingDel)).toBeLessThan(order(slotDel));
     expect(order(bookingDel, 2)).toBeLessThan(order(m("period", "deleteMany")));
 
-    // 5 bis. « Affiché aux utilisateurs » : tout le service éteint (scopé), puis l'ancien porteur rallumé.
-    expect(arg(m("exercice", "updateMany"))).toEqual({
+    // 5 bis. « Affiché aux utilisateurs » : tout le service éteint (scopé), puis l'ancien
+    // porteur rallumé par un updateMany scopé au service (tolérant s'il a disparu).
+    expect(arg(m("exercice", "updateMany"), 0)).toEqual({
       where: { serviceId: SVC, visibleToUsers: true },
       data: { visibleToUsers: false },
     });
-    expect(arg(m("exercice", "update"))).toEqual({
-      where: { id: 11 },
+    expect(arg(m("exercice", "updateMany"), 1)).toEqual({
+      where: { id: 11, serviceId: SVC },
       data: { visibleToUsers: true },
     });
+    expect(m("exercice", "update")).not.toHaveBeenCalled();
 
     // 6-7. événement supprimé ; exercice créé par la bascule supprimé s'il est vide.
     expect(arg(m("cycleEvent", "delete"))).toEqual({ where: { id: 77 } });

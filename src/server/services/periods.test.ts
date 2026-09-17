@@ -640,10 +640,25 @@ describe("updateServicePeriod", () => {
     await expect(updateServicePeriod("s1", 31, { dateEnd: d("2027-02-19") })).rejects.toThrow(
       "Miroir réservé hors plage.",
     );
+    // Conflit de sérialisation → message « réessayez » (traduction partagée avec la
+    // suppression) ; toute autre erreur Prisma est relancée telle quelle.
     vi.mocked(regenerateRecurringMirrorsForPeriodInTx).mockRejectedValueOnce(prismaError("P2034"));
+    await expect(updateServicePeriod("s1", 31, { dateEnd: d("2027-02-19") })).rejects.toThrow(
+      "Modification simultanée détectée, réessayez.",
+    );
+    vi.mocked(regenerateRecurringMirrorsForPeriodInTx).mockRejectedValueOnce(prismaError("P2002"));
     await expect(updateServicePeriod("s1", 31, { dateEnd: d("2027-02-19") })).rejects.toThrow(
       Prisma.PrismaClientKnownRequestError,
     );
+  });
+
+  it("période sans exercice : dates INVERSÉES refusées avant toute transaction (plus seulement par le CHECK SQL)", async () => {
+    db.period.findUnique.mockResolvedValue({ ...currentPeriod, exerciceId: null });
+    await expect(
+      updateServicePeriod("s1", 31, { dateStart: d("2027-03-01"), dateEnd: d("2027-02-01") }),
+    ).rejects.toThrow("La date de début doit être avant la date de fin.");
+    expect(transaction).not.toHaveBeenCalled();
+    expect(db.period.update).not.toHaveBeenCalled();
   });
 
   it("période sans exercice de rattachement : dates changées sans contrôle d'exercice, régénération quand même", async () => {
