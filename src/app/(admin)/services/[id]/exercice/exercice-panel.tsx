@@ -12,6 +12,7 @@ import {
   HistoryGlyph,
   RefreshGlyph,
 } from "@/components/ui-glyphs";
+import { DATETIME_FMT_FR } from "@/lib/format";
 import type { ExercicePaneData } from "@/server/services/exercice";
 import { cycleAction, undoCycleAction } from "./actions";
 
@@ -24,7 +25,8 @@ type Props = {
 // AAAA-MM-JJ → JJ/MM/AAAA (affichage français des bornes d'exercice).
 const frDate = (ymd: string) => ymd.split("-").reverse().join("/");
 const plural = (n: number) => (n > 1 ? "s" : "");
-const DT_FMT = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+// Date + heure d'un instant en heure de Paris (source unique lib/format).
+const DT_FMT = DATETIME_FMT_FR;
 
 // Refonte Dom 2026-09-09 : en-tête à médaillon, trois tuiles de chiffres (ce que la bascule
 // reconduirait), puis deux cartes d'action toujours visibles — création à gauche, retour

@@ -13,7 +13,7 @@ import {
   UploadGlyph,
 } from "@/components/ui-glyphs";
 import { csvCell } from "@/lib/csv";
-import { dayLabel, TIME_FMT } from "../rgpd/audit-log";
+import { dayLabel, TIME_FMT, todayYesterdayKeys } from "@/lib/journal-days";
 import {
   Avatar,
   BuildingGlyph,
@@ -276,10 +276,7 @@ export function JournalTable({
   const from = courante * PAGE_SIZE;
   const visibles = filtrees.slice(from, from + PAGE_SIZE);
 
-  const todayYmd = generatedAt.slice(0, 10);
-  const yesterdayYmd = new Date(new Date(generatedAt).getTime() - 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const { todayYmd, yesterdayYmd } = todayYesterdayKeys(generatedAt);
 
   function refresh() {
     startTransition(() => router.refresh());

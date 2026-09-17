@@ -5,7 +5,16 @@ import { pad2 } from "@/lib/date-utc";
 // UNIQUE de la conversion instant ↔ heure murale FR + gestion DST (hiver/été), partagée
 // par les crons auto-validation (auto-validate.ts) et digest gestionnaire (manager-notice.ts).
 
-const TZ = "Europe/Paris";
+/**
+ * Fuseau de l'application. À poser EXPLICITEMENT sur tout `Intl.DateTimeFormat` qui
+ * formate un INSTANT (createdAt, dernière exécution…) et qui peut être rendu côté
+ * serveur : le conteneur tourne en UTC, le navigateur à Paris — sans fuseau explicite,
+ * le texte serveur (« 16:02 ») diffère du texte client (« 18:02 ») et React rejette
+ * l'hydratation (erreur #418, constatée en production le 2026-09-17). Les dates
+ * `@db.Date` (minuit UTC) gardent, elles, un formatage en UTC (DATE_FMT_FR_UTC).
+ */
+export const PARIS_TZ = "Europe/Paris";
+const TZ = PARIS_TZ;
 
 /** Minutes dont Paris est en avance sur UTC à cet instant (60 hiver / 120 été). */
 function parisOffsetMin(instant: Date): number {

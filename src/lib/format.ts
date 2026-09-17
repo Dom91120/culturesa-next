@@ -1,3 +1,4 @@
+import { PARIS_TZ } from "@/lib/paris-time";
 /**
  * Initiales d'un usager pour la pastille de la barre : 2 premières initiales du nom
  * (« Marie Curie » → « MC »), sinon 2 premières lettres du mot unique, sinon 1re lettre
@@ -27,11 +28,16 @@ export function monthShortLabel(bucket: string): string {
   return MONTH_SHORT_FMT.format(new Date(2000, m - 1, 1));
 }
 
-/** Date courte fr-FR "JJ/MM/AAAA" — source unique (7 copies avant l'audit 2026-07-18). */
+/**
+ * Date courte fr-FR "JJ/MM/AAAA" d'un INSTANT — source unique (7 copies avant l'audit
+ * 2026-07-18). Fuseau explicite : rendu identique serveur (UTC) / navigateur (Paris),
+ * cf. PARIS_TZ. Une valeur `@db.Date` (minuit UTC) donne le même jour en Paris.
+ */
 export const DATE_FMT_FR = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
+  timeZone: PARIS_TZ,
 });
 
 /** Idem, ancrée en UTC (dates `@db.Date`, sans dérive de fuseau à l'affichage). */
@@ -42,13 +48,14 @@ export const DATE_FMT_FR_UTC = new Intl.DateTimeFormat("fr-FR", {
   timeZone: "UTC",
 });
 
-/** Date + heure fr-FR "JJ/MM/AAAA HH:MM". */
+/** Date + heure fr-FR "JJ/MM/AAAA HH:MM" d'un instant, heure de Paris (cf. PARIS_TZ). */
 export const DATETIME_FMT_FR = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: PARIS_TZ,
 });
 
 /**

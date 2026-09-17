@@ -56,6 +56,12 @@ services:
       db:
         condition: service_healthy
     environment:
+      # Fuseau du processus Node : le code ancre déjà ses formateurs d'instants sur
+      # Europe/Paris (lib/paris-time PARIS_TZ), mais aligner aussi le conteneur sur le
+      # fuseau des postes évite tout écart résiduel (toLocale* sans fuseau, logs, cron
+      # planifié en heure murale) — constaté en production le 2026-09-17 : heures du
+      # Journal rendues en UTC par le serveur, puis corrigées par le navigateur.
+      TZ: Europe/Paris
       # Connexion à Postgres (service "db" du réseau interne)
       # L'application se connecte avec un rôle DÉDIÉ, non-superutilisateur : elle
       # n'a besoin que de ses propres objets, et restaure des dumps — donc du SQL

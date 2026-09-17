@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { ClockGlyph, HistoryGlyph, MailGlyph, RefreshGlyph } from "@/components/ui-glyphs";
 import { csvCell } from "@/lib/csv";
+import { dayLabel, TIME_FMT, todayYesterdayKeys } from "@/lib/journal-days";
 import { Avatar, DownloadGlyph, KeyGlyph, TrashGlyph, UserOffGlyph } from "../users/account-ui";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -129,22 +130,8 @@ function Actor({ party, action }: { party: AuditParty; action: string }) {
   );
 }
 
-const DAY_FMT = new Intl.DateTimeFormat("fr-FR", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-});
-export const TIME_FMT = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
-
-export function dayLabel(iso: string, todayYmd: string, yesterdayYmd: string): string {
-  const d = new Date(iso);
-  const ymd = d.toISOString().slice(0, 10);
-  const long = DAY_FMT.format(d);
-  const cap = long.charAt(0).toUpperCase() + long.slice(1);
-  if (ymd === todayYmd) return `Aujourd'hui · ${cap}`;
-  if (ymd === yesterdayYmd) return `Hier · ${cap}`;
-  return `${cap}${d.getFullYear() !== new Date(todayYmd).getFullYear() ? ` ${d.getFullYear()}` : ""}`;
-}
+// Jours et heures en heure de PARIS (lib/journal-days) — ré-exportés pour journal-table.
+export { dayLabel, TIME_FMT } from "@/lib/journal-days";
 
 export function AuditLog({ entries, generatedAt }: { entries: AuditEntry[]; generatedAt: string }) {
   const router = useRouter();
@@ -175,10 +162,7 @@ export function AuditLog({ entries, generatedAt }: { entries: AuditEntry[]; gene
   const from = current * PAGE_SIZE;
   const pageRows = filtered.slice(from, from + PAGE_SIZE);
 
-  const todayYmd = generatedAt.slice(0, 10);
-  const yesterdayYmd = new Date(new Date(generatedAt).getTime() - 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const { todayYmd, yesterdayYmd } = todayYesterdayKeys(generatedAt);
 
   function refresh() {
     startTransition(() => router.refresh());
