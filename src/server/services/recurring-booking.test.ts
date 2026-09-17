@@ -87,6 +87,12 @@ describe("resolveRecurringTarget", () => {
       resolveRecurringTarget(tx, { serviceId: "s1", slotId: "sl1", periodId: 0 }),
     ).rejects.toThrow("Période requise pour une réservation récurrente.");
   });
+  it("période annoncée `null` (absente côté client) → « Période requise », sans sentinelle 0", async () => {
+    const { tx } = targetTx(goodSlot);
+    await expect(
+      resolveRecurringTarget(tx, { serviceId: "s1", slotId: "sl1", periodId: null }),
+    ).rejects.toThrow("Période requise pour une réservation récurrente.");
+  });
   it("créneau récurrent SANS période (donnée incomplète) → « Période requise »", async () => {
     const { tx } = targetTx({ ...goodSlot, periodId: null });
     await expect(resolveRecurringTarget(tx, { serviceId: "s1", slotId: "sl1" })).rejects.toThrow(

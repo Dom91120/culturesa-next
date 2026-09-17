@@ -45,7 +45,8 @@ export async function reserveRecurringInTx(
   serviceId: string,
   args: {
     slotId: string;
-    periodId: number;
+    /** Période ANNONCÉE par le client ; `null` = absente → refus (une récurrente a toujours une période). */
+    periodId: number | null;
     theme: string;
     enfants: number;
     accompagnants: number;
@@ -55,12 +56,18 @@ export async function reserveRecurringInTx(
   },
   opts: ReserveOptions = {},
 ): Promise<BookingConfirmationParams> {
-  const { slotId, periodId, theme, enfants, accompagnants } = args;
+  const { slotId, periodId: announcedPeriodId, theme, enfants, accompagnants } = args;
   // Résolution/validation du créneau cible : type récurrent, service, période
   // annoncée obligatoire et ÉGALE à celle du créneau (anti-injection : jauge et
   // unicité uq_recurring cloisonnées par {slotId, periodId}), parité dérivée du
   // créneau — source unique partagée avec l'agenda admin (recurring-booking.ts).
-  const target = await resolveRecurringTarget(tx, { serviceId, slotId, periodId });
+  const target = await resolveRecurringTarget(tx, {
+    serviceId,
+    slotId,
+    periodId: announcedPeriodId,
+  });
+  // Période EFFECTIVE = celle du créneau (égale à l'annoncée, vérifiée ci-dessus).
+  const periodId = target.periodId;
   // Accès service : le demandeur effectif de l'usager doit accepter ce service.
   if (!(await userCanAccessService(tx, userId, serviceId))) {
     throw new BookingError("Vous n'avez pas accès à ce service.");
@@ -145,12 +152,10 @@ export async function reserveRecurringInTx(
 }
 
 /**
- * NB `dryRun` : les vérifications du ponctuel vivent DANS `createUniqueBookingInTx`
- * (bookings.ts), qui enchaîne sur l'insertion. L'essai à blanc ponctuel exécute donc
- * encore cette insertion (une ligne + clôture de file, sans enfants à matérialiser) et
- * COMPTE SUR L'ANNULATION de la transaction de l'appelant ; seule la lecture du créneau
- * pour l'e-mail est épargnée. Un `dryRun` propagé à createUniqueBookingInTx complèterait
- * le dispositif (hors périmètre de l'audit 2026-09-17).
+ * `dryRun` : les vérifications du ponctuel vivent DANS `createUniqueBookingInTx`
+ * (bookings.ts), qui reçoit l'option et s'arrête après la dernière garde — aucune
+ * écriture (ni réservation, ni snapshot, ni clôture de file), aucune lecture pour
+ * l'e-mail.
  */
 export async function reservePonctuelInTx(
   tx: Prisma.TransactionClient,
@@ -187,8 +192,8 @@ export async function reservePonctuelInTx(
   if (!parsed.success) {
     throw new BookingError(parsed.error.issues[0]?.message ?? "Données invalides.");
   }
-  await createUniqueBookingInTx(tx, userId, parsed.data, validated);
-  // Essai à blanc : règles passées (cf. NB ci-dessus), pas de lecture pour l'e-mail.
+  await createUniqueBookingInTx(tx, userId, parsed.data, validated, { dryRun: opts.dryRun });
+  // Essai à blanc : règles passées, rien n'a été écrit, pas de lecture pour l'e-mail.
   if (opts.dryRun) return null;
   // Slot pour l'e-mail de confirmation (lu dans la même transaction).
   const slot = await tx.slot.findUnique({

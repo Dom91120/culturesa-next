@@ -22,6 +22,7 @@ import {
   assertReservationLimits,
   assertSlotCapacity,
   BookingError,
+  cancelUserBookingInTx,
   effectiveOpenOnSchoolHolidays,
   isValidationMode,
   limiteReservationAtteinte,
@@ -692,5 +693,61 @@ describe("limitesEpuiseesPourListeAttente (liste d'attente)", () => {
         "u1",
       ),
     ).toBe(false);
+  });
+});
+
+// ─── cancelUserBookingInTx — annulation usager sous le verrou pointage PARTAGÉ ─────────
+// (services/booking-lock, reliquat audit 2026-09-17) : mêmes règles que le gestionnaire
+// et que l'édition usager, formulations d'annulation conservées.
+
+describe("cancelUserBookingInTx (verrou pointage partagé)", () => {
+  function cancelTx(booking: Record<string, unknown> | null, pointedChildren = 0) {
+    const deleteMany = vi.fn(async () => ({ count: 1 }));
+    const tx = fakeTx({
+      booking: {
+        findFirst: vi.fn(async () => booking),
+        count: vi.fn(async () => pointedChildren),
+        deleteMany,
+      },
+      // markWaitlistBookingsDeleted : aucune ligne d'historique liée.
+      waitingListLog: {
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+      },
+    });
+    return { tx, deleteMany };
+  }
+  const libre = { id: 7, bookingType: "recurring", parentBookingId: null, pointage: null };
+
+  it("réservation introuvable (ou d'un autre usager) → false, rien supprimé", async () => {
+    const { tx, deleteMany } = cancelTx(null);
+    expect(await cancelUserBookingInTx(tx, "u1", 7)).toBe(false);
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+  it("réservation libre → supprimée (bornée à l'usager)", async () => {
+    const { tx, deleteMany } = cancelTx(libre);
+    expect(await cancelUserBookingInTx(tx, "u1", 7)).toBe(true);
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: 7, userId: "u1" } });
+  });
+  it("réservation elle-même POINTÉE → refus, formulation d'annulation", async () => {
+    const { tx, deleteMany } = cancelTx({ ...libre, pointage: "present" });
+    await expect(cancelUserBookingInTx(tx, "u1", 7)).rejects.toThrow(
+      "Réservation pointée, annulation impossible.",
+    );
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+  it("parent récurrent dont une SÉANCE est pointée → refus", async () => {
+    const { tx, deleteMany } = cancelTx(libre, 1);
+    await expect(cancelUserBookingInTx(tx, "u1", 7)).rejects.toThrow(
+      "Une séance de cette réservation est pointée, annulation impossible.",
+    );
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+  it("MIROIR (séance d'une récurrente) → refus : ne s'annule pas séparément", async () => {
+    const { tx, deleteMany } = cancelTx({ ...libre, id: 8, parentBookingId: 7 });
+    await expect(cancelUserBookingInTx(tx, "u1", 8)).rejects.toThrow(
+      "Une séance (miroir) ne s'annule pas séparément.",
+    );
+    expect(deleteMany).not.toHaveBeenCalled();
   });
 });

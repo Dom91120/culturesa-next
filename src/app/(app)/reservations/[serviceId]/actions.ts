@@ -162,7 +162,8 @@ async function moveInTx(
     const t = await resolveRecurringTarget(tx, {
       serviceId,
       slotId: target.slotId,
-      periodId: target.periodId ?? 0,
+      // Période annoncée obligatoire : absente → `null` → refus (pas de sentinelle 0).
+      periodId: target.periodId ?? null,
     });
     slotWeek = t.week;
     restriction = t.demandeurIds;
@@ -477,7 +478,7 @@ async function commitDraftInTx(
       mails.push(
         await reserveRecurringInTx(tx, userId, serviceId, {
           slotId: a.slotId,
-          periodId: a.periodId ?? 0,
+          periodId: a.periodId ?? null,
           theme: a.theme,
           enfants: a.enfants,
           accompagnants: a.accompagnants,

@@ -7,6 +7,9 @@ import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { type BookingCreateInput, THEME_REQUIS_MSG } from "@/schemas/booking";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
+/** Erreur métier de réservation (message destiné à l'usager). */
+import { BookingError } from "@/server/services/booking-error";
+import { assertNotLockedByPointage, LOCK_CANDIDATE_SELECT } from "@/server/services/booking-lock";
 import { getSchoolZone, loadSchoolHolidayRanges } from "@/server/services/holidays";
 import { openingForDate } from "@/server/services/opening";
 import {
@@ -16,8 +19,8 @@ import {
 import { getServiceDemandeurSettings } from "./demandeur-settings";
 import { deriveServiceModes } from "./service-modes";
 
-/** Erreur métier de réservation (message destiné à l'usager). */
-export class BookingError extends Error {}
+// Ré-export : point d'import historique de BookingError pour toute la couche services.
+export { BookingError };
 
 /**
  * Mappe une erreur d'opération de réservation vers `{ ok:false, error }` :
@@ -564,6 +567,7 @@ export async function createUniqueBookingInTx(
   userId: string,
   input: BookingCreateInput,
   validated: boolean,
+  opts: { dryRun?: boolean } = {},
 ) {
   const slot = await tx.slot.findUnique({
     where: { id: input.slotId },
@@ -635,6 +639,10 @@ export async function createUniqueBookingInTx(
     userId,
     periodId: slot.periodId,
   });
+  // Essai à blanc (liste d'attente) : toutes les règles sont passées, on s'arrête AVANT
+  // toute écriture — ni réservation, ni snapshot, ni clôture de file. Le chemin réel
+  // ci-dessous est strictement inchangé.
+  if (opts.dryRun) return null;
   const created = await tx.booking.create({
     data: {
       bookingType: "unique",
@@ -671,18 +679,17 @@ export async function cancelUserBookingInTx(
 ) {
   const b = await tx.booking.findFirst({
     where: { id: bookingId, userId },
-    select: { pointage: true },
+    select: LOCK_CANDIDATE_SELECT,
   });
   if (!b) return false;
-  if (b.pointage != null) {
-    throw new BookingError("Réservation pointée, annulation impossible.");
-  }
-  const pointedChildren = await tx.booking.count({
-    where: { parentBookingId: bookingId, pointage: { not: null } },
+  // MÊME règle de verrou que le gestionnaire et que l'édition usager
+  // (services/booking-lock), formulations d'annulation conservées. Un miroir ne
+  // s'annule pas séparément de sa réservation récurrente.
+  await assertNotLockedByPointage(tx, b, {
+    miroir: "Une séance (miroir) ne s'annule pas séparément.",
+    pointage: "Réservation pointée, annulation impossible.",
+    seance: "Une séance de cette réservation est pointée, annulation impossible.",
   });
-  if (pointedChildren > 0) {
-    throw new BookingError("Une séance de cette réservation est pointée, annulation impossible.");
-  }
   // Trace pour l'historique de la liste d'attente (réservation obtenue puis annulée).
   await markWaitlistBookingsDeleted(tx, { id: bookingId }, "usager");
   const res = await tx.booking.deleteMany({ where: { id: bookingId, userId } });

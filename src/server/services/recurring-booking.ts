@@ -51,11 +51,11 @@ export type RecurringTarget = {
  * mauvaise plage. La parité de la réservation SUIT le créneau (Slot.weeks), pas
  * la semaine annoncée : un "A" forgé sur un créneau toutes-semaines divisait par
  * deux les occurrences matérialisées (audit 2026-07-19).
- * `periodId` omis (déplacement admin) : la période SUIT le créneau cible.
+ * `periodId` omis (déplacement admin) : la période SUIT le créneau cible ; `null` = refus.
  */
 export async function resolveRecurringTarget(
   tx: Prisma.TransactionClient,
-  args: { serviceId: string; slotId: string; periodId?: number },
+  args: { serviceId: string; slotId: string; periodId?: number | null },
 ): Promise<RecurringTarget> {
   const slot = await tx.slot.findFirst({
     where: { id: args.slotId, serviceId: args.serviceId },
@@ -74,8 +74,9 @@ export async function resolveRecurringTarget(
     throw new BookingError("Ce créneau n'est pas disponible.");
   }
   // Une réservation récurrente est TOUJOURS rattachée à une période (FK
-  // bookings.periodId) : refuse plutôt que de violer la FK.
-  if (args.periodId !== undefined && !(args.periodId > 0)) {
+  // bookings.periodId) : refuse plutôt que de violer la FK. `null` (période absente
+  // côté client) = période manquante, refusée sans passer par une sentinelle 0.
+  if (args.periodId !== undefined && !(args.periodId != null && args.periodId > 0)) {
     throw new BookingError("Période requise pour une réservation récurrente.");
   }
   if (!(slot.periodId != null && slot.periodId > 0)) {

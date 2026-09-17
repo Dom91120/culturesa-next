@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { isBookingLockedByPointage } from "@/lib/agenda-core";
-import { BookingError } from "@/server/services/bookings";
+import { BookingError } from "@/server/services/booking-error";
 
 // ════════════════════════════════════════════════════════════
 //  Verrou POINTAGE / MIROIR d'une réservation — source unique côté serveur (audit

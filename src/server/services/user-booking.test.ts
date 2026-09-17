@@ -150,6 +150,8 @@ describe("reservePonctuelInTx — essai à blanc (dryRun)", () => {
       { dryRun: true },
     );
     expect(createUniqueBookingInTx).toHaveBeenCalledTimes(1);
+    // L'option est PROPAGÉE : c'est le cœur ponctuel qui s'arrête avant toute écriture.
+    expect(vi.mocked(createUniqueBookingInTx).mock.calls[0]?.[4]).toEqual({ dryRun: true });
     expect(mail).toBeNull();
   });
 
@@ -163,5 +165,6 @@ describe("reservePonctuelInTx — essai à blanc (dryRun)", () => {
     });
     expect(mail?.slot.startTime).toBe("14:00");
     expect(mail?.trigger).toBe("confirm_create");
+    expect(vi.mocked(createUniqueBookingInTx).mock.calls[0]?.[4]).toEqual({ dryRun: undefined });
   });
 });
