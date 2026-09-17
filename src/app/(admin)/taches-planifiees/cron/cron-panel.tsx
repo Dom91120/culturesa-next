@@ -62,6 +62,22 @@ function staleAfterMs(s: CronSchedule): number {
 }
 
 /**
+ * Une échéance est « en retard » quand elle est dépassée de plus d'une minute sans
+ * déclenchement (tolérance = jitter du crontab, grille de 5 min). L'échéance théorique
+ * n'est plus rabattue sur « maintenant » (cf. nextCronRun) : un cron à l'arrêt se voit.
+ */
+function isOverdue(iso: string, nowMs: number): boolean {
+  return new Date(iso).getTime() < nowMs - 60_000;
+}
+
+/** Sous-libellé d'une échéance : « dans 3 min », ou « en retard · attendue il y a 12 j ». */
+function dueLabel(iso: string, nowMs: number): string {
+  return isOverdue(iso, nowMs)
+    ? `en retard · attendue ${relative(iso, nowMs)}`
+    : relative(iso, nowMs);
+}
+
+/**
  * Pastille de planification : type (intervalle / heure fixe) + valeur, chaque changement
  * enregistré immédiatement (action serveur). Les champs vivent dans la pastille.
  */
@@ -293,9 +309,16 @@ export function CronPanel({
           <div className="l">Prochaine échéance</div>
           {nextIso ? (
             <>
-              <div className="v">{relative(nextIso, nowMs)}</div>
+              <div
+                className="v"
+                style={isOverdue(nextIso, nowMs) ? { color: "var(--warn, #b7791f)" } : undefined}
+              >
+                {isOverdue(nextIso, nowMs) ? "En retard" : relative(nextIso, nowMs)}
+              </div>
               <div className="s">
-                {dtFmt.format(new Date(nextIso))} · {nextCount} tâche{nextCount > 1 ? "s" : ""}
+                {dtFmt.format(new Date(nextIso))}
+                {isOverdue(nextIso, nowMs) ? ` · attendue ${relative(nextIso, nowMs)}` : ""} ·{" "}
+                {nextCount} tâche{nextCount > 1 ? "s" : ""}
               </div>
             </>
           ) : (
@@ -411,7 +434,14 @@ export function CronPanel({
                   </td>
                   <td>
                     <div>{dtFmt.format(new Date(t.nextRun))}</div>
-                    <div className="cron-sub">{relative(t.nextRun, nowMs)}</div>
+                    <div
+                      className="cron-sub"
+                      style={
+                        isOverdue(t.nextRun, nowMs) ? { color: "var(--warn, #b7791f)" } : undefined
+                      }
+                    >
+                      {dueLabel(t.nextRun, nowMs)}
+                    </div>
                   </td>
                   <td>
                     <div className="acct-actions" style={{ opacity: 1 }}>

@@ -261,20 +261,29 @@ export function isScheduleDue(
   return !lastCronAt || lastCronAt.getTime() < target.getTime();
 }
 
-/** Prochaine échéance estimée (affichage admin). */
+/**
+ * Prochaine échéance THÉORIQUE (affichage admin) : dernier déclenchement planifié + pas,
+ * ou l'heure fixe attendue. Elle peut être DANS LE PASSÉ quand le conteneur cron ne tourne
+ * pas ou a du retard — et c'est voulu : l'ancienne version la rabattait sur « maintenant »,
+ * si bien que la colonne « Prochaine » affichait l'heure courante et « dans moins d'une
+ * minute » indéfiniment, masquant un cron à l'arrêt (Dom, 2026-09-17). Le panneau signale
+ * l'échéance dépassée en « en retard ». Jamais déclenchée → « au prochain passage » = maintenant.
+ */
 export function nextCronRun(
   schedule: CronSchedule,
   lastCronAt: Date | null,
   now: Date = new Date(),
 ): Date {
   if (schedule.type === "everyMinutes") {
-    const next = lastCronAt ? lastCronAt.getTime() + schedule.step * 60000 : now.getTime();
-    return new Date(Math.max(next, now.getTime()));
+    return lastCronAt ? new Date(lastCronAt.getTime() + schedule.step * 60000) : new Date(now);
   }
   const w = toParisWall(now);
   const targetMin = schedule.hour * 60 + schedule.minute;
   const today = parisWallToInstant(w.y, w.mo, w.da, targetMin);
   if (today.getTime() > now.getTime()) return today;
+  // Échéance du jour passée sans déclenchement depuis → elle est due (en retard), on
+  // l'affiche telle quelle ; déjà déclenchée → celle de demain.
+  if (!lastCronAt || lastCronAt.getTime() < today.getTime()) return today;
   return parisWallToInstant(w.y, w.mo, w.da + 1, targetMin);
 }
 
