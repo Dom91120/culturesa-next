@@ -1,3 +1,4 @@
+import { ymdUtc as toYmd } from "@/lib/date-utc";
 import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import { formatSlotLabel, waitlistDeletionLabel } from "@/lib/slot-label";
 import { dispoLabels, parsePeriodIds, waitlistDeadline } from "@/lib/waiting-list";
@@ -17,8 +18,6 @@ import { prisma } from "@/server/db";
 // inscriptions, placements, adresses des inscrits. Les deux éditions d'HISTORIQUE sont
 // scopées à l'exercice sélectionné par la DATE D'INSCRIPTION (comme les statistiques) ;
 // les trois autres décrivent l'ÉTAT DU JOUR.
-
-const toYmd = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Plage de dates d'un exercice (bornes incluses) pour filtrer `inscritAt`. */
 export type InscritRange = { from: Date | null; to: Date | null };

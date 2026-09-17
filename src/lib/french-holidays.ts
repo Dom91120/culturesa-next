@@ -4,13 +4,7 @@
 // la génération des miroirs (serveur) et le grisage des jours (client) doivent
 // exclure exactement les mêmes dates.
 
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function pad4(n: number): string {
-  return String(n).padStart(4, "0");
-}
+import { addDaysUtc, pad2, pad4 } from "@/lib/date-utc";
 
 /** Dimanche de Pâques (algorithme de Meeus/Jones/Butcher), en UTC. */
 function easterSunday(year: number): Date {
@@ -29,12 +23,6 @@ function easterSunday(year: number): Date {
   const month = Math.floor((h + l - 7 * m + 114) / 31); // 3 = mars, 4 = avril
   const day = ((h + l - 7 * m + 114) % 31) + 1;
   return new Date(Date.UTC(year, month - 1, day));
-}
-
-function addDaysUtc(d: Date, days: number): Date {
-  const r = new Date(d.getTime());
-  r.setUTCDate(r.getUTCDate() + days);
-  return r;
 }
 
 /** Jours fériés légaux français (fixes + mobiles liés à Pâques) d'une année. */

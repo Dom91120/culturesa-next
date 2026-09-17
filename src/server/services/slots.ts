@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { parseWeeks } from "@/lib/agenda-core";
+import { parseYmdUtc as fromISO, ymdUtc as toISO } from "@/lib/date-utc";
 import { mirrorDates } from "@/lib/mirror-dates";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { resolveSlotRange } from "@/lib/slot-range";
@@ -44,13 +45,7 @@ function mapSlotError(e: unknown, context: string): { ok: false; error: string }
 // l'enum Zod. type DayKey en dérive (audit duplication D2).
 type DayKey = (typeof DAYS)[number];
 
-function toISO(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function fromISO(dateStr: string): Date {
-  return new Date(`${dateStr}T00:00:00Z`);
-}
+// toISO / fromISO : alias locaux de lib/date-utc (ymdUtc / parseYmdUtc), importés en tête.
 
 // (parseWeeks : source unique lib/agenda-core — la copie locale divergeait sur les
 // valeurs sales, pas d'uppercase ni de repli « toutes semaines » ; audit 2026-07-19.)

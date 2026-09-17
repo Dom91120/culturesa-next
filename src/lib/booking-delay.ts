@@ -9,6 +9,7 @@
 // pour rester aligné sur les `slot.slotDate` (@db.Date).
 
 import { ISO_DAY_KEYS } from "@/lib/agenda-core";
+import { addDaysUtc, parseYmdUtc, ymdUtc } from "@/lib/date-utc";
 
 const PARIS = "Europe/Paris";
 
@@ -23,13 +24,10 @@ export function todayParisISO(now: Date = new Date()): string {
   }).format(now);
 }
 
-function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
+// Décalage d'une date ISO en jours (arithmétique UTC, cf. lib/date-utc).
+const addDays = (iso: string, n: number): string => ymdUtc(addDaysUtc(parseYmdUtc(iso), n));
 
-const dowKey = (iso: string) => ISO_DAY_KEYS[new Date(`${iso}T00:00:00Z`).getUTCDay()];
+const dowKey = (iso: string) => ISO_DAY_KEYS[parseYmdUtc(iso).getUTCDay()];
 
 /** Date ISO (YYYY-MM-DD) la plus proche réservable selon le délai du service. */
 export function earliestBookableISO(

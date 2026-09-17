@@ -1,8 +1,16 @@
 import { wrapEmailHtml } from "@/lib/email-theme";
-import { renderHtmlTemplate, renderSubjectTemplate } from "@/lib/mail-render";
+import { greeting, renderHtmlTemplate, renderSubjectTemplate } from "@/lib/mail-render";
 import { getAppUrl } from "@/server/config";
+import { prisma } from "@/server/db";
 import { sendMail, sendMailOrQueue } from "@/server/mailer";
 import { sanitizeTemplateHtml } from "@/server/services/mail-html";
+import {
+  type BookingTrigger,
+  isTriggerEnabled,
+  type ResolvedRecipient,
+  resolveTriggerKind,
+  resolveTriggerRecipients,
+} from "@/server/services/mail-prefs";
 import { getMailTemplate, htmlToText } from "@/server/services/mail-templates";
 
 /**
@@ -55,4 +63,90 @@ export async function sendTemplatedMail(opts: {
   const payload = { to: opts.to, ...built };
   if (opts.mode === "direct") await sendMail(payload);
   else await sendMailOrQueue(payload);
+}
+
+// ─── E-mails DÉCLENCHÉS par une action métier (réservation, liste d'attente) ──────────
+
+/**
+ * Envoie un e-mail templaté à chaque destinataire résolu, avec la salutation
+ * personnalisée pour l'usager concerné (`personal`) et neutre pour les autres
+ * (gestionnaires, administrateurs, adresse fixe). Template et appUrl fournis par
+ * l'appelant → utilisable en boucle batch (chargés une fois) comme en single-shot.
+ * Best-effort : chaque échec SMTP part en file (sendMailOrQueue).
+ */
+export async function sendToRecipients(opts: {
+  recipients: ReadonlyArray<ResolvedRecipient>;
+  tpl: { subject: string; html: string };
+  vars: Record<string, string>;
+  rawVars?: Record<string, string>;
+  appUrl: string;
+}): Promise<void> {
+  for (const r of opts.recipients) {
+    const prenom = r.personal ? r.prenom : "";
+    const vars = { ...opts.vars, salutation: greeting(prenom), prenom };
+    await sendMailOrQueue({
+      to: r.email,
+      ...buildTemplatedMail(opts.tpl, vars, opts.appUrl, opts.rawVars),
+    });
+  }
+}
+
+/** Contexte résolu passé au constructeur de variables d'un e-mail déclenché. */
+export type TriggeredMailContext = {
+  /** « Prénom Nom » de l'usager concerné ("" sans usager). */
+  usager: string;
+  /** URL publique de l'app, SANS slash final (getAppUrl). */
+  appUrl: string;
+  recipients: ReadonlyArray<ResolvedRecipient>;
+};
+
+/**
+ * Squelette COMMUN des e-mails déclenchés par une action (source unique — recopié dans
+ * booking-mail.ts et waiting-list.ts avant l'audit 2026-09-17, D5) :
+ *   1. déclencheur activé ? (réglage global « Envoyer ») — sinon rien ;
+ *   2. destinataires du réglage global « Destinataire » (usager concerné, gestionnaires
+ *      du service, administrateurs, adresse fixe) — aucun → rien ;
+ *   3. usager concerné (prénom/nom) + URL de l'app → `build` construit les variables
+ *      texte (et les variables HTML brutes : boutons, listes) propres à l'action ;
+ *      `null` → rien à envoyer ;
+ *   4. type d'e-mail EFFECTIF du déclencheur (re-routage global) → gabarit du service
+ *      (cascade service → global → défaut), un envoi par destinataire avec salutation.
+ * Totalement best-effort : toute erreur est journalisée sous `logTag`, jamais levée.
+ */
+export async function sendTriggeredMail(opts: {
+  trigger: BookingTrigger;
+  serviceId: string;
+  /** Usager concerné (destinataire « usager » + variable {{usager}}) ; absent = aucun. */
+  userId?: string | null;
+  build: (
+    ctx: TriggeredMailContext,
+  ) =>
+    | Promise<{ vars: Record<string, string>; rawVars?: Record<string, string> } | null>
+    | { vars: Record<string, string>; rawVars?: Record<string, string> }
+    | null;
+  /** Étiquette du journal d'erreur (nom de la fonction appelante). */
+  logTag: string;
+}): Promise<void> {
+  try {
+    if (!(await isTriggerEnabled(opts.trigger))) return;
+    const [recipients, concerned, appUrl] = await Promise.all([
+      resolveTriggerRecipients(opts.trigger, opts.serviceId, { userId: opts.userId }),
+      opts.userId
+        ? prisma.user.findUnique({
+            where: { id: opts.userId },
+            select: { prenom: true, nom: true },
+          })
+        : null,
+      getAppUrl(),
+    ]);
+    if (recipients.length === 0) return;
+    const usager = `${concerned?.prenom ?? ""} ${concerned?.nom ?? ""}`.trim();
+    const built = await opts.build({ usager, appUrl, recipients });
+    if (!built) return;
+    const kind = await resolveTriggerKind(opts.trigger);
+    const tpl = await getMailTemplate(kind, opts.serviceId);
+    await sendToRecipients({ recipients, tpl, vars: built.vars, rawVars: built.rawVars, appUrl });
+  } catch (e) {
+    console.error(`[${opts.logTag}] erreur:`, e);
+  }
 }

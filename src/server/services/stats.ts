@@ -1,5 +1,6 @@
 import { DAY_NAMES, ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { todayParisISO } from "@/lib/booking-delay";
+import { ymdUtc } from "@/lib/date-utc";
 import { monthShortLabel, toDateInput } from "@/lib/format";
 import { gaugeUnits } from "@/lib/gauge";
 import { isOfferDateClosed } from "@/lib/offer-closure";
@@ -104,10 +105,8 @@ type ServiceStats = {
   slots: SlotStats;
 };
 
-/** Date UTC → 'YYYY-MM-DD'. */
-function ymd(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+/** Date UTC → 'YYYY-MM-DD' (alias de lib/date-utc). */
+const ymd = ymdUtc;
 
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
 // Libellés de mois : le NUMÉRO du mois (1..12) — demande Dom 2026-07-25 (colonnes
@@ -414,7 +413,9 @@ export async function getServiceStats(
     if (!typePass(b) || !b.slot.slotDate) continue;
     const label = schoolYearLabel(b.slot.slotDate);
     if (!label) continue;
-    exoOcc.set(label, [...(exoOcc.get(label) ?? []), b]);
+    const bucket = exoOcc.get(label);
+    if (bucket) bucket.push(b);
+    else exoOcc.set(label, [b]);
   }
   const effectifsByExercice = [...exoOcc.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

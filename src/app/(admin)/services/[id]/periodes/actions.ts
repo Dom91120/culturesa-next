@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
+import { parseYmdUtc } from "@/lib/date-utc";
 import { DAYS, stringIdSchema } from "@/schemas/config";
 import { DATE_RE, TIME_RE } from "@/schemas/slot";
 import { requireServiceManager } from "@/server/guards";
@@ -20,10 +21,9 @@ import {
   updateServicePeriod,
 } from "@/server/services/periods";
 
-/** « YYYY-MM-DD » → Date (UTC minuit) ; vide → null. */
+/** « YYYY-MM-DD » → Date (UTC minuit, cf. lib/date-utc) ; vide → null. */
 function toDate(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  return new Date(`${value}T00:00:00.000Z`);
+  return value ? parseYmdUtc(value) : null;
 }
 
 const dateString = z.string().regex(DATE_RE, "Date invalide.").nullable().optional();

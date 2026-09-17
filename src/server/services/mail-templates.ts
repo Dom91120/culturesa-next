@@ -466,9 +466,12 @@ export async function isCustomMailTypeUsed(key: string, serviceId?: string): Pro
   return isConfigValueUsed(serviceId ? `mail.route.${serviceId}.` : "mail.route.", key);
 }
 
-/** Crée un type personnalisé (clé unique + libellé + contenu de départ). serviceId omis ⇒ global. */
+/**
+ * Crée un type personnalisé GLOBAL (clé unique + libellé + contenu de départ). Les types
+ * personnalisés ne se créent qu'en administration (portée globale, serviceId = "") — la
+ * création par service est abolie, le paramètre de portée a donc disparu (audit 2026-09-17).
+ */
 export async function createCustomMailType(
-  serviceId: string | undefined,
   label: string,
   description = "",
   recipient: string = DEFAULT_CUSTOM_RECIPIENT,
@@ -477,7 +480,7 @@ export async function createCustomMailType(
   const starter = customStarterTemplate(label);
   await prisma.mailType.create({
     data: {
-      serviceId: scopeOf(serviceId),
+      serviceId: scopeOf(undefined),
       key,
       label,
       description,

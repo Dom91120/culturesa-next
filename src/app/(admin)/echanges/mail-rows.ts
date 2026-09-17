@@ -326,14 +326,14 @@ export async function getRoutingRows(): Promise<RoutingRow[]> {
   }));
 }
 
-/** Lignes « Modèles » des types PERSONNALISÉS d'une portée (service ou, si omis, globale). */
-async function customRows(serviceId?: string): Promise<KindData[]> {
-  const [customTypes, usage] = await Promise.all([listCustomMailTypes(serviceId), routingUsage()]);
+/** Lignes « Modèles » des types PERSONNALISÉS (portée GLOBALE, la seule qui en crée). */
+async function customRows(): Promise<KindData[]> {
+  const [customTypes, usage] = await Promise.all([listCustomMailTypes(), routingUsage()]);
   return Promise.all(
     customTypes.map(async (t): Promise<KindData> => {
       const [content, used] = await Promise.all([
-        getMailTemplate(t.key, serviceId), // contenu propre à la portée
-        isCustomMailTypeUsed(t.key, serviceId), // routé ? (suppression interdite)
+        getMailTemplate(t.key), // contenu global
+        isCustomMailTypeUsed(t.key), // routé ? (suppression interdite)
       ]);
       // Pas de défaut intégré → la cible « Réinitialiser » est le gabarit de départ générique.
       const starter = customStarterTemplate(t.label);

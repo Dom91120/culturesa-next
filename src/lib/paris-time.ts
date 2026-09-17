@@ -1,11 +1,11 @@
 import { ISO_DAY_KEYS } from "@/lib/agenda-core";
+import { pad2 } from "@/lib/date-utc";
 
 // Calendrier Europe/Paris INDÉPENDANT du fuseau serveur (Node tourne en UTC) — SOURCE
 // UNIQUE de la conversion instant ↔ heure murale FR + gestion DST (hiver/été), partagée
 // par les crons auto-validation (auto-validate.ts) et digest gestionnaire (manager-notice.ts).
 
 const TZ = "Europe/Paris";
-const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** Minutes dont Paris est en avance sur UTC à cet instant (60 hiver / 120 été). */
 function parisOffsetMin(instant: Date): number {

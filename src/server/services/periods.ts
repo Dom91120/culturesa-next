@@ -1,5 +1,6 @@
 import type { ExerciceType } from "@/generated/prisma/client";
 import { Prisma } from "@/generated/prisma/client";
+import { parseYmdUtc, ymdUtc } from "@/lib/date-utc";
 import { holidaysInRange } from "@/lib/french-holidays";
 import { DAYS } from "@/schemas/config";
 import { prisma } from "@/server/db";
@@ -8,11 +9,6 @@ import {
   regenerateRecurringMirrorsForPeriodInTx,
   SlotMutationError,
 } from "@/server/services/slots";
-
-/** Format UTC 'YYYY-MM-DD' (cohérent avec toISO/fromISO de slots.ts). */
-function ymdUtc(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * (Re)remplit `period_holidays` avec les jours fériés français tombant dans
@@ -34,7 +30,7 @@ export async function refreshPeriodHolidays(
   if (!period?.dateStart || !period?.dateEnd) return;
   const rows = holidaysInRange(ymdUtc(period.dateStart), ymdUtc(period.dateEnd)).map((h) => ({
     periodId,
-    date: new Date(`${h.date}T00:00:00Z`),
+    date: parseYmdUtc(h.date),
     label: h.label,
   }));
   if (rows.length) await client.periodHoliday.createMany({ data: rows, skipDuplicates: true });

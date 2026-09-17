@@ -25,6 +25,19 @@ import {
 // cas de refus ; il renvoie les paramètres de l'e-mail de confirmation (à envoyer
 // APRÈS le commit, best-effort). AUCUNE garde d'authentification ici : c'est
 // l'appelant (action serveur, cron) qui porte l'identité et les droits.
+//
+// ESSAI À BLANC (`dryRun`, audit 2026-09-17 P3) : la liste d'attente demande « cet usager
+// pourrait-il réserver ce créneau maintenant ? » pour chaque inscrit × candidat. En
+// `dryRun: true`, le cœur exécute TOUTES les vérifications (accès, période ouverte,
+// participants, demandeurs, jauge, maximums, thème) et S'ARRÊTE avant toute écriture
+// (pas de booking.create, ni snapshot, ni clôture de file, ni matérialisation des
+// enfants) — le chemin réel est strictement inchangé. Renvoie les mêmes paramètres
+// d'e-mail que le chemin réel (jamais envoyés par l'appelant en essai).
+
+export type ReserveOptions = {
+  /** Vérifications seules, aucune écriture (cf. commentaire de tête). */
+  dryRun?: boolean;
+};
 
 export async function reserveRecurringInTx(
   tx: Prisma.TransactionClient,
@@ -40,6 +53,7 @@ export async function reserveRecurringInTx(
     // du créneau (Slot.weeks). Conservé pour compat des appelants.
     wk?: "A" | "B" | "";
   },
+  opts: ReserveOptions = {},
 ): Promise<BookingConfirmationParams> {
   const { slotId, periodId, theme, enfants, accompagnants } = args;
   // Résolution/validation du créneau cible : type récurrent, service, période
@@ -98,6 +112,26 @@ export async function reserveRecurringInTx(
   await assertThemeIfRequired(tx, userId, serviceId, theme);
   // Validation : validée d'emblée sauf si le demandeur EFFECTIF est en mode validation.
   const validated = !(await isValidationMode(tx, userId, serviceId));
+  const trigger = validated ? "confirm_create" : "pending_create";
+  // Essai à blanc : toutes les règles sont passées, on s'arrête AVANT toute écriture.
+  if (opts.dryRun) {
+    return {
+      userId,
+      serviceId: target.serviceId,
+      serviceLabel: target.serviceLabel,
+      trigger,
+      slot: {
+        startTime: target.startTime,
+        endTime: target.endTime,
+        slotDate: null,
+        slotDay: target.slotDay,
+      },
+      periodId: target.periodId,
+      enfants: myEnfants,
+      accompagnants: myAcc,
+      theme,
+    };
+  }
   // Insertion partagée (booking + réservations-enfants + paramètres d'e-mail).
   // Création par l'usager : confirmée d'emblée (validation off) ou demande en attente.
   return insertRecurringBookingInTx(tx, target, {
@@ -106,15 +140,24 @@ export async function reserveRecurringInTx(
     enfants: myEnfants,
     accompagnants: myAcc,
     validated,
-    trigger: validated ? "confirm_create" : "pending_create",
+    trigger,
   });
 }
 
+/**
+ * NB `dryRun` : les vérifications du ponctuel vivent DANS `createUniqueBookingInTx`
+ * (bookings.ts), qui enchaîne sur l'insertion. L'essai à blanc ponctuel exécute donc
+ * encore cette insertion (une ligne + clôture de file, sans enfants à matérialiser) et
+ * COMPTE SUR L'ANNULATION de la transaction de l'appelant ; seule la lecture du créneau
+ * pour l'e-mail est épargnée. Un `dryRun` propagé à createUniqueBookingInTx complèterait
+ * le dispositif (hors périmètre de l'audit 2026-09-17).
+ */
 export async function reservePonctuelInTx(
   tx: Prisma.TransactionClient,
   userId: string,
   serviceId: string,
   args: { slotId: string; theme: string; enfants: number; accompagnants: number },
+  opts: ReserveOptions = {},
 ): Promise<BookingConfirmationParams | null> {
   // Anti-IDOR / cohérence de la validation : le créneau doit appartenir au service
   // annoncé. Sinon `validated` (dérivé de `serviceId`) porterait sur un service
@@ -145,6 +188,8 @@ export async function reservePonctuelInTx(
     throw new BookingError(parsed.error.issues[0]?.message ?? "Données invalides.");
   }
   await createUniqueBookingInTx(tx, userId, parsed.data, validated);
+  // Essai à blanc : règles passées (cf. NB ci-dessus), pas de lecture pour l'e-mail.
+  if (opts.dryRun) return null;
   // Slot pour l'e-mail de confirmation (lu dans la même transaction).
   const slot = await tx.slot.findUnique({
     where: { id: args.slotId },

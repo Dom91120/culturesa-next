@@ -1,7 +1,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { pad2 } from "@/lib/date-utc";
 import { parisWallToInstant, toParisWall } from "@/lib/paris-time";
 import { getConfigMany, setConfig } from "@/server/config";
+import { prisma } from "@/server/db";
 
 /**
  * Tâches planifiées (onglet Administration › Tâches planifiées › CRON).
@@ -110,8 +112,6 @@ export function isValidSchedule(s: unknown): s is CronSchedule {
   return false;
 }
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
 /** Libellé lisible d'une planification. */
 export function scheduleLabel(s: CronSchedule): string {
   if (s.type === "everyMinutes") {
@@ -124,28 +124,36 @@ export function scheduleLabel(s: CronSchedule): string {
 
 const scheduleKey = (key: CronTaskKey) => `cron.schedule.${key}`;
 
+function taskDef(key: CronTaskKey): CronTaskDef {
+  // CRON_TASKS couvre toutes les clés du type : le repli ne sert qu'au typage.
+  return CRON_TASKS.find((t) => t.key === key) ?? CRON_TASKS[0];
+}
+
+/** Valeur brute de `cron.schedule.<clé>` → planification valide, sinon le défaut de la tâche. */
+function parseSchedule(raw: string, def: CronTaskDef): CronSchedule {
+  if (!def.runnable || !raw) return def.defaultSchedule;
+  try {
+    const parsed = JSON.parse(raw);
+    if (isValidSchedule(parsed)) return parsed;
+  } catch {
+    // valeur illisible → défaut
+  }
+  return def.defaultSchedule;
+}
+
 /** Planifications effectives (configurées, repli sur les défauts ; backup toujours par défaut). */
 export async function getCronSchedules(): Promise<Record<CronTaskKey, CronSchedule>> {
   const editable = CRON_TASKS.filter((t) => t.runnable);
   const cfg = await getConfigMany(editable.map((t) => scheduleKey(t.key)));
   const out = {} as Record<CronTaskKey, CronSchedule>;
-  for (const t of CRON_TASKS) {
-    out[t.key] = t.defaultSchedule;
-    if (!t.runnable) continue;
-    const raw = cfg[scheduleKey(t.key)];
-    if (!raw) continue;
-    try {
-      const parsed = JSON.parse(raw);
-      if (isValidSchedule(parsed)) out[t.key] = parsed;
-    } catch {
-      // valeur illisible → défaut
-    }
-  }
+  for (const t of CRON_TASKS) out[t.key] = parseSchedule(cfg[scheduleKey(t.key)] ?? "", t);
   return out;
 }
 
+/** Planification d'UNE tâche (une seule clé lue — appelé à chaque passage des routes cron). */
 export async function getCronSchedule(key: CronTaskKey): Promise<CronSchedule> {
-  return (await getCronSchedules())[key];
+  const cfg = await getConfigMany([scheduleKey(key)]);
+  return parseSchedule(cfg[scheduleKey(key)] ?? "", taskDef(key));
 }
 
 export async function setCronSchedule(key: CronTaskKey, schedule: CronSchedule): Promise<void> {
@@ -170,13 +178,66 @@ export async function getLastCronAts(): Promise<Partial<Record<CronTaskKey, Date
   return out;
 }
 
+/** Dernier déclenchement planifié d'UNE tâche (une seule clé lue). */
 export async function getLastCronAt(key: CronTaskKey): Promise<Date | null> {
-  return (await getLastCronAts())[key] ?? null;
+  const raw = (await getConfigMany([lastCronKey(key)]))[lastCronKey(key)];
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /** Marque le déclenchement planifié (posé AVANT l'exécution : une tentative par échéance). */
 export async function markCronAt(key: CronTaskKey, now: Date = new Date()): Promise<void> {
   await setConfig(lastCronKey(key), now.toISOString());
+}
+
+// ── Verrou d'exécution ───────────────────────────────────────────────────────────────
+
+/**
+ * Identifiant numérique (int32 signé, FNV-1a) du verrou d'une tâche — déterministe,
+ * calculé côté app pour rester lisible dans `pg_locks` (objid) et testable sans base.
+ */
+export function cronLockId(key: CronTaskKey): number {
+  let h = 0x811c9dc5;
+  for (const ch of `cron:${key}`) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h | 0;
+}
+
+/** Durée maximale d'une exécution sous verrou (l'export de base est la plus longue). */
+export const CRON_LOCK_TIMEOUT_MS = 30 * 60_000;
+
+export type CronLockOutcome<T> = { acquired: false } | { acquired: true; result: T };
+
+/**
+ * Exécute `fn` sous le VERROU de la tâche (audit 2026-09-17, A5) : `pg_try_advisory_xact_lock`
+ * dans une transaction tenue le temps de l'exécution, donc relâché quoi qu'il arrive (fin,
+ * erreur, coupure de connexion). Deux passages concurrents de la même tâche — deux appels
+ * du conteneur cron qui se chevauchent, ou une exécution manuelle pendant un passage
+ * planifié — ne se recouvrent plus : le second obtient `{ acquired: false }` sans rien
+ * faire. Sans verrou, « due ? » puis « marquer » n'étaient pas atomiques et deux passages
+ * pouvaient tourner ensemble (double e-mail, double inscription automatique).
+ *
+ * La transaction ne sert QU'AU verrou : `fn` travaille avec le client global (ses
+ * écritures — horodatage, journal — sont validées au fil de l'eau, visibles du passage
+ * suivant même si `fn` lève). `fn` doit donc ATTRAPER ses propres erreurs pour les
+ * consigner ; une exception qui remonte relâche simplement le verrou.
+ */
+export async function withCronLock<T>(
+  key: CronTaskKey,
+  fn: () => Promise<T>,
+): Promise<CronLockOutcome<T>> {
+  return prisma.$transaction(
+    async (tx) => {
+      const rows = await tx.$queryRaw<{ locked: boolean }[]>`
+        SELECT pg_try_advisory_xact_lock(${cronLockId(key)}::bigint) AS locked`;
+      if (!rows[0]?.locked) return { acquired: false as const };
+      return { acquired: true as const, result: await fn() };
+    },
+    { timeout: CRON_LOCK_TIMEOUT_MS, maxWait: 5_000 },
+  );
 }
 
 /**

@@ -1,9 +1,7 @@
 import { escapeHtml } from "@/lib/email-theme";
-import { greeting } from "@/lib/mail-render";
 import { formatSlotLabel } from "@/lib/slot-label";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
-import { sendMailOrQueue } from "@/server/mailer";
 import {
   type BookingTrigger,
   getTriggerRecipient,
@@ -12,7 +10,7 @@ import {
   resolveTriggerKind,
   resolveTriggerRecipients,
 } from "@/server/services/mail-prefs";
-import { buildTemplatedMail, sendTemplatedMail } from "@/server/services/mail-send";
+import { sendToRecipients, sendTriggeredMail } from "@/server/services/mail-send";
 import { getMailTemplate } from "@/server/services/mail-templates";
 
 // Notification e-mail envoyée à l'usager lors de la création d'une réservation.
@@ -220,15 +218,7 @@ export async function sendBookingConfirmationMailsBatch(
         theme: params.theme.trim(),
       };
 
-      for (const r of recipients) {
-        const prenom = r.personal ? r.prenom : "";
-        const vars = {
-          ...baseVars,
-          salutation: greeting(prenom),
-          prenom,
-        };
-        await sendMailOrQueue({ to: r.email, ...buildTemplatedMail(tpl, vars, appUrl) });
-      }
+      await sendToRecipients({ recipients, tpl, vars: baseVars, appUrl });
     }
   } catch (e) {
     console.error("[sendBookingConfirmationMailsBatch] erreur:", e);
@@ -284,20 +274,21 @@ export async function sendBookingAbsenceMail(params: BookingAbsenceParams): Prom
 
 /**
  * Cœur commun des e-mails « événement + motif » (annulation, refus, absence prévenue) :
- * déclencheur activé ? → destinataires du réglage global → variables usager / service /
- * créneau / période / motif → gabarit effectif du déclencheur. Ne lève jamais.
+ * squelette déclencheur / destinataires / gabarit de mail-send.ts (sendTriggeredMail) +
+ * variables usager / service / créneau / période / motif. Ne lève jamais.
  */
 async function sendBookingEventMail(
   trigger: BookingTrigger,
   params: Omit<BookingCancellationParams, "trigger">,
   logTag: string,
 ): Promise<void> {
-  try {
-    if (!(await isTriggerEnabled(trigger))) return;
-
-    const [recipients, slot, concerned] = await Promise.all([
-      resolveTriggerRecipients(trigger, params.serviceId, { userId: params.userId }),
-      prisma.slot.findUnique({
+  await sendTriggeredMail({
+    trigger,
+    serviceId: params.serviceId,
+    userId: params.userId,
+    logTag,
+    build: async ({ usager, appUrl }) => {
+      const slot = await prisma.slot.findUnique({
         where: { id: params.slotId },
         select: {
           startTime: true,
@@ -306,49 +297,33 @@ async function sendBookingEventMail(
           slotDay: true,
           service: { select: { label: true, listeAttente: true } },
         },
-      }),
-      prisma.user.findUnique({
-        where: { id: params.userId },
-        select: { prenom: true, nom: true },
-      }),
-    ]);
-    if (recipients.length === 0) return;
-
-    // Refus d'une demande / suppression par le service : l'usager n'a plus de place — on
-    // lui rappelle la liste d'attente si le service la propose (variable {{liste_attente}},
-    // HTML brut, vide sinon ; Dom 2026-09-06).
-    const rawVars: Record<string, string> = {};
-    if (slot?.service.listeAttente && (trigger === "refuse" || trigger === "cancel_manager")) {
-      const url = `${(await getAppUrl()).replace(/\/$/, "")}/reservations/${params.serviceId}`;
-      rawVars.liste_attente = `<p>Plus de place ? Vous pouvez vous inscrire sur la <strong>liste d'attente</strong> du service depuis <a href="${escapeHtml(url)}">l'agenda</a> : vous serez prévenu par e-mail dès qu'un créneau correspondant à vos disponibilités se libérera.</p>`;
-    }
-
-    const periodLabel = await resolvePeriodLabel({
-      serviceId: params.serviceId,
-      periodId: params.periodId,
-      slotDate: slot?.slotDate ?? null,
-    });
-
-    const baseVars: Record<string, string> = {
-      usager: `${concerned?.prenom ?? ""} ${concerned?.nom ?? ""}`.trim(),
-      service: slot?.service.label ?? "",
-      creneau: slot ? formatSlotLabel(slot) : "",
-      periode: periodLabel,
-      motif: params.motif,
-    };
-
-    const kind = await resolveTriggerKind(trigger);
-    for (const r of recipients) {
-      const prenom = r.personal ? r.prenom : "";
-      await sendTemplatedMail({
-        to: r.email,
-        kind,
-        vars: { ...baseVars, salutation: greeting(prenom), prenom },
-        rawVars,
-        serviceId: params.serviceId,
       });
-    }
-  } catch (e) {
-    console.error(`[${logTag}] erreur:`, e);
-  }
+
+      // Refus d'une demande / suppression par le service : l'usager n'a plus de place — on
+      // lui rappelle la liste d'attente si le service la propose (variable {{liste_attente}},
+      // HTML brut, vide sinon ; Dom 2026-09-06).
+      const rawVars: Record<string, string> = {};
+      if (slot?.service.listeAttente && (trigger === "refuse" || trigger === "cancel_manager")) {
+        const url = `${appUrl}/reservations/${params.serviceId}`;
+        rawVars.liste_attente = `<p>Plus de place ? Vous pouvez vous inscrire sur la <strong>liste d'attente</strong> du service depuis <a href="${escapeHtml(url)}">l'agenda</a> : vous serez prévenu par e-mail dès qu'un créneau correspondant à vos disponibilités se libérera.</p>`;
+      }
+
+      const periodLabel = await resolvePeriodLabel({
+        serviceId: params.serviceId,
+        periodId: params.periodId,
+        slotDate: slot?.slotDate ?? null,
+      });
+
+      return {
+        vars: {
+          usager,
+          service: slot?.service.label ?? "",
+          creneau: slot ? formatSlotLabel(slot) : "",
+          periode: periodLabel,
+          motif: params.motif,
+        },
+        rawVars,
+      };
+    },
+  });
 }

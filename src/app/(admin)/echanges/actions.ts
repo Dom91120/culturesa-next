@@ -161,7 +161,6 @@ export async function createMailTypeAction(
     return { ok: false, error: meta.error.issues[0]?.message ?? "Champ invalide." };
   }
   await createCustomMailType(
-    serviceId,
     meta.data.label,
     meta.data.description,
     meta.data.recipient || undefined,

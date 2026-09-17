@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { earliestBookableISO } from "@/lib/booking-delay";
+import { ymdUtc as toISO } from "@/lib/date-utc";
 import { slotWeekTag } from "@/lib/iso-week";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { effectiveOpenOnSchoolHolidays } from "@/server/services/bookings";
@@ -52,8 +53,6 @@ export const PARENT_FOR_SYNC_SELECT = {
   accompagnants: true,
   validated: true,
 } as const;
-
-const toISO = (d: Date) => d.toISOString().slice(0, 10);
 
 export { getSchoolZone };
 

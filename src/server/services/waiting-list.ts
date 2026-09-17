@@ -1,8 +1,8 @@
 import { Prisma } from "@/generated/prisma/client";
 import { ISO_DAY_KEYS } from "@/lib/agenda-core";
 import { earliestBookableISO, todayParisISO } from "@/lib/booking-delay";
+import { parseYmdUtc, ymdUtc as toYmd } from "@/lib/date-utc";
 import { emailButton } from "@/lib/email-theme";
-import { greeting } from "@/lib/mail-render";
 import {
   dispoLabels,
   isDispoKey,
@@ -17,18 +17,16 @@ import {
   waitlistExpired,
 } from "@/lib/waiting-list";
 import { agendaIsQuiet } from "@/lib/waiting-list-quiet";
-import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
 import { formatSlotLabel, sendBookingConfirmationMail } from "@/server/services/booking-mail";
 import { BookingError } from "@/server/services/bookings";
+import type { BookingTrigger } from "@/server/services/mail-prefs";
+import { sendTriggeredMail } from "@/server/services/mail-send";
 import {
-  type BookingTrigger,
-  isTriggerEnabled,
-  resolveTriggerKind,
-  resolveTriggerRecipients,
-} from "@/server/services/mail-prefs";
-import { sendTemplatedMail } from "@/server/services/mail-send";
-import { reservePonctuelInTx, reserveRecurringInTx } from "@/server/services/user-booking";
+  type ReserveOptions,
+  reservePonctuelInTx,
+  reserveRecurringInTx,
+} from "@/server/services/user-booking";
 import { closeWaitingEntries } from "@/server/services/waiting-list-close";
 import { getWaitlistQuietMinutes, lastAgendaActivity } from "@/server/services/waiting-list-quiet";
 
@@ -40,7 +38,9 @@ import { getWaitlistQuietMinutes, lastAgendaActivity } from "@/server/services/w
 // créneaux RÉSERVABLES par cet usager qui tombent dans ses disponibilités :
 //   • réservable = exactement les règles de l'agenda usager (accès du demandeur,
 //     période ouverte, délai, vacances, jauge, maximums…) — obtenu en rejouant le cœur
-//     de réservation dans une transaction ANNULÉE (« essai à blanc »), source unique ;
+//     de réservation en ESSAI À BLANC (`dryRun` : vérifications sans écriture) dans une
+//     transaction ANNULÉE par sécurité, source unique ; au plus MAX_TESTED_CANDIDATES
+//     créneaux essayés par inscrit et par passage ;
 //   • auto-inscription → réservation faite en son nom (participants de sa fiche),
 //     e-mail de réservation habituel + e-mail « inscrit depuis la liste d'attente »,
 //     puis retrait de la liste ;
@@ -59,6 +59,14 @@ import { getWaitlistQuietMinutes, lastAgendaActivity } from "@/server/services/w
 export const MAX_DISPOS = 14;
 /** Créneaux détaillés au maximum dans l'e-mail « créneaux libérés ». */
 const MAX_MAIL_SLOTS = 12;
+/**
+ * Créneaux ESSAYÉS À BLANC au maximum par inscrit et par passage (audit 2026-09-17, P3) :
+ * chaque essai coûte une transaction (≈ 8 lectures) ; un service à ponctuels peut offrir
+ * des dizaines de dates × des dizaines d'inscrits toutes les 5 minutes. On essaie les
+ * récurrents (séries, sans date) puis les ponctuels les plus PROCHES ; un créneau lointain
+ * non essayé le sera à un passage suivant, quand les plus proches seront passés.
+ */
+export const MAX_TESTED_CANDIDATES = 40;
 
 export type WaitingEntryDto = {
   id: number;
@@ -152,8 +160,11 @@ export async function saveWaitingEntry(
 
 export { closeWaitingEntries, type WaitingListClosure } from "./waiting-list-close";
 
-/** Retrait par l'usager lui-même (historisé : « a réservé » si une réservation a suivi). */
-export async function deleteWaitingEntry(serviceId: string, userId: string): Promise<boolean> {
+/**
+ * Retrait par l'usager lui-même : CLÔTURE historisée (issue LEFT, requalifiée « a réservé »
+ * si une réservation a suivi) — jamais de suppression directe.
+ */
+export async function closeWaitingEntry(serviceId: string, userId: string): Promise<boolean> {
   const n = await closeWaitingEntries(prisma, { serviceId, userId }, "LEFT");
   return n > 0;
 }
@@ -225,8 +236,8 @@ export async function listWaitingEntries(serviceId: string): Promise<WaitingAdmi
   });
 }
 
-/** Retrait d'une entrée par le gestionnaire (bornée au service : anti-IDOR). */
-export async function deleteWaitingEntryById(serviceId: string, id: number): Promise<boolean> {
+/** Retrait d'une entrée par le gestionnaire : CLÔTURE historisée (issue REMOVED), bornée au service (anti-IDOR). */
+export async function closeWaitingEntryById(serviceId: string, id: number): Promise<boolean> {
   const n = await closeWaitingEntries(prisma, { id, serviceId }, "REMOVED");
   return n > 0;
 }
@@ -267,7 +278,8 @@ export async function waitlistPeriodLabels(
 /**
  * E-mail de liste d'attente (inscription / créneaux libérés / inscription automatique /
  * inscription échue) : déclencheur global, destinataires du réglage, variables usager /
- * service / disponibilités / périodes / créneaux + bouton vers l'agenda. Best-effort, ne
+ * service / disponibilités / périodes / créneaux + bouton vers l'agenda. Squelette
+ * commun des e-mails déclenchés : mail-send.ts (sendTriggeredMail). Best-effort, ne
  * lève jamais.
  */
 export async function sendWaitlistMail(
@@ -281,49 +293,36 @@ export async function sendWaitlistMail(
     creneaux?: string[]; // libellés des créneaux concernés
   },
 ): Promise<void> {
-  try {
-    if (!(await isTriggerEnabled(trigger))) return;
-    const [recipients, user, service, appUrl, periodes] = await Promise.all([
-      resolveTriggerRecipients(trigger, params.serviceId, { userId: params.userId }),
-      prisma.user.findUnique({
-        where: { id: params.userId },
-        select: { prenom: true, nom: true },
-      }),
-      prisma.service.findUnique({ where: { id: params.serviceId }, select: { label: true } }),
-      getAppUrl(),
-      waitlistPeriodLabels(params.serviceId, params.periodIds ?? ""),
-    ]);
-    if (recipients.length === 0) return;
-    const url = `${appUrl.replace(/\/$/, "")}/reservations/${params.serviceId}`;
-    const creneaux = params.creneaux ?? [];
-    const baseVars: Record<string, string> = {
-      usager: `${user?.prenom ?? ""} ${user?.nom ?? ""}`.trim(),
-      service: service?.label ?? "",
-      disponibilites: dispoLabels(params.dispos).join(", "),
-      periodes: periodes.join(", "),
-      creneaux: creneaux.join(" ; "),
-      url,
-    };
-    const rawVars: Record<string, string> = {
-      bouton: emailButton(url, "Voir l'agenda"),
-      liste_creneaux: creneaux.length
-        ? `<ul>${creneaux.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>`
-        : "",
-    };
-    const kind = await resolveTriggerKind(trigger);
-    for (const r of recipients) {
-      const prenom = r.personal ? r.prenom : "";
-      await sendTemplatedMail({
-        to: r.email,
-        kind,
-        vars: { ...baseVars, salutation: greeting(prenom), prenom },
-        rawVars,
-        serviceId: params.serviceId,
-      });
-    }
-  } catch (e) {
-    console.error(`[sendWaitlistMail ${trigger}] erreur:`, e);
-  }
+  await sendTriggeredMail({
+    trigger,
+    serviceId: params.serviceId,
+    userId: params.userId,
+    logTag: `sendWaitlistMail ${trigger}`,
+    build: async ({ usager, appUrl }) => {
+      const [service, periodes] = await Promise.all([
+        prisma.service.findUnique({ where: { id: params.serviceId }, select: { label: true } }),
+        waitlistPeriodLabels(params.serviceId, params.periodIds ?? ""),
+      ]);
+      const url = `${appUrl}/reservations/${params.serviceId}`;
+      const creneaux = params.creneaux ?? [];
+      return {
+        vars: {
+          usager,
+          service: service?.label ?? "",
+          disponibilites: dispoLabels(params.dispos).join(", "),
+          periodes: periodes.join(", "),
+          creneaux: creneaux.join(" ; "),
+          url,
+        },
+        rawVars: {
+          bouton: emailButton(url, "Voir l'agenda"),
+          liste_creneaux: creneaux.length
+            ? `<ul>${creneaux.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>`
+            : "",
+        },
+      };
+    },
+  });
 }
 
 // ─── Appariement et traitement planifié ──────────────────────────────────────────
@@ -343,8 +342,6 @@ type Candidate = {
 
 /** Sentinelle d'annulation de l'essai à blanc (la transaction est volontairement rejetée). */
 class DryRunOk extends Error {}
-
-const toYmd = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
  * Créneaux CANDIDATS d'un service : récurrents des périodes ouvertes de l'exercice
@@ -390,7 +387,7 @@ async function serviceCandidates(serviceId: string, now: Date): Promise<Candidat
         slotType: "unique",
         parentSlotId: null, // les miroirs se réservent via la récurrente
         periodId: { in: periods.map((p) => p.id) },
-        slotDate: { gte: new Date(`${earliest}T00:00:00Z`) },
+        slotDate: { gte: parseYmdUtc(earliest) },
       },
       select: { id: true, slotDate: true, startTime: true, endTime: true, periodId: true },
     }),
@@ -446,28 +443,50 @@ function reserveCandidate(
   c: Candidate,
   p: Participants,
   theme: string,
+  opts: ReserveOptions = {},
 ) {
   return c.kind === "rec"
-    ? reserveRecurringInTx(tx, userId, serviceId, {
-        slotId: c.slotId,
-        periodId: c.periodId,
-        theme,
-        enfants: p.enfants,
-        accompagnants: p.accompagnants,
-      })
-    : reservePonctuelInTx(tx, userId, serviceId, {
-        slotId: c.slotId,
-        theme,
-        enfants: p.enfants,
-        accompagnants: p.accompagnants,
-      });
+    ? reserveRecurringInTx(
+        tx,
+        userId,
+        serviceId,
+        {
+          slotId: c.slotId,
+          periodId: c.periodId,
+          theme,
+          enfants: p.enfants,
+          accompagnants: p.accompagnants,
+        },
+        opts,
+      )
+    : reservePonctuelInTx(
+        tx,
+        userId,
+        serviceId,
+        { slotId: c.slotId, theme, enfants: p.enfants, accompagnants: p.accompagnants },
+        opts,
+      );
+}
+
+/**
+ * Sous-ensemble des candidats à ESSAYER à blanc, borné à `max` : les récurrents (séries,
+ * sans date) d'abord, puis les ponctuels par date croissante — tri STABLE, l'ordre
+ * d'appariement d'origine est conservé à date égale. Exportée pour les tests.
+ */
+export function nearestCandidates<T extends { slotDate: Date | null }>(
+  matching: readonly T[],
+  max: number = MAX_TESTED_CANDIDATES,
+): T[] {
+  const at = (c: T) => c.slotDate?.getTime() ?? Number.NEGATIVE_INFINITY;
+  return [...matching].sort((a, b) => at(a) - at(b)).slice(0, max);
 }
 
 /**
  * « Cet usager pourrait-il réserver ce créneau maintenant ? » — rejoue le cœur de
- * réservation dans une transaction volontairement ANNULÉE : toutes les règles de
- * l'agenda usager s'appliquent, sans écrire. Thème factice : un thème obligatoire ne
- * doit pas masquer une place libre (l'usager le saisira en réservant).
+ * réservation en ESSAI À BLANC (`dryRun` : toutes les règles de l'agenda usager, aucune
+ * écriture pour un récurrent) dans une transaction volontairement ANNULÉE (ceinture :
+ * un ponctuel écrit encore une ligne, cf. user-booking.ts). Thème factice : un thème
+ * obligatoire ne doit pas masquer une place libre (l'usager le saisira en réservant).
  */
 async function canBook(
   userId: string,
@@ -477,7 +496,7 @@ async function canBook(
 ): Promise<boolean> {
   try {
     await prisma.$transaction(async (tx) => {
-      await reserveCandidate(tx, userId, serviceId, c, p, "—");
+      await reserveCandidate(tx, userId, serviceId, c, p, "—", { dryRun: true });
       throw new DryRunOk();
     });
     return false;
@@ -594,10 +613,13 @@ export async function runWaitingList(now: Date = new Date()): Promise<WaitingLis
         // Le cœur exige au moins 1 accompagnant (fiche à 0 → 1 par défaut).
         accompagnants: Math.max(1, e.user.accompagnants),
       };
-      const bookable: Candidate[] = [];
-      for (const c of matching) {
-        if (await canBook(e.userId, svc.id, c, participants)) bookable.push(c);
+      // Essais à blanc BORNÉS (les plus proches) ; `bookable` garde l'ordre d'appariement
+      // d'origine (jour de semaine, heure) — c'est lui qui désigne l'inscription automatique.
+      const okKeys = new Set<string>();
+      for (const c of nearestCandidates(matching)) {
+        if (await canBook(e.userId, svc.id, c, participants)) okKeys.add(c.key);
       }
+      const bookable = matching.filter((c) => okKeys.has(c.key));
       if (bookable.length === 0) {
         // Plus rien de libre : on oublie ce qui avait été signalé, pour re-signaler si
         // une place réapparaît.

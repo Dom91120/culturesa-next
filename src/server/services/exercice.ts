@@ -1,5 +1,7 @@
+import { z } from "zod";
 import type { DayOfWeek, Prisma } from "@/generated/prisma/client";
 import { parseWeeks } from "@/lib/agenda-core";
+import { pad2, pad4, parseYmdUtc, ymdUtc } from "@/lib/date-utc";
 import { type DayKey, mirrorDates } from "@/lib/mirror-dates";
 import { isInSchoolHolidayRange } from "@/lib/school-holidays";
 import { schoolYearLabel } from "@/lib/school-year";
@@ -60,43 +62,53 @@ export type ExercicePaneData = {
   undo: UndoInfo;
 };
 
-type CycleEventData = {
-  newPeriodIds: number[];
-  newRecurringSlotIds: string[];
-  newMirrorSlotIds: string[];
+/**
+ * Contenu JSON d'un `CycleEvent.data` (journal d'une bascule, relu par l'annulation).
+ * Schéma zod = contrat d'écriture ET de lecture : la lecture passe par `safeParse` et un
+ * événement illisible (colonne éditée à la main, forme inconnue) REFUSE l'annulation au
+ * lieu de supprimer au hasard (audit 2026-09-17, A7). Les champs optionnels couvrent les
+ * événements antérieurs aux options ajoutées au fil du temps.
+ */
+const cycleEventDataSchema = z.object({
+  newPeriodIds: z.array(z.number().int()),
+  newRecurringSlotIds: z.array(z.string()),
+  newMirrorSlotIds: z.array(z.string()),
   // Ponctuels des lots « multi » reconduits — absent sur les événements antérieurs
   // à l'option (2026-07-25).
-  newMultiSlotIds?: string[];
+  newMultiSlotIds: z.array(z.string()).optional(),
   // Exercice créé par la bascule (par service) → supprimé tel quel à l'annulation.
-  newExerciceId: number | null;
+  // Absent sur les événements antérieurs à la création d'exercice par la bascule.
+  newExerciceId: z.number().int().nullable().optional(),
   // Exercice qui portait « Affiché aux utilisateurs » avant la bascule (le flag est
   // transféré au nouvel exercice) — restauré à l'annulation. Absent/null : aucun.
-  visibleFromExerciceId?: number | null;
+  visibleFromExerciceId: z.number().int().nullable().optional(),
   // Compte qui a lancé la bascule (absent sur les événements antérieurs au 2026-09-09).
-  actorId?: string;
-};
+  actorId: z.string().optional(),
+});
+type CycleEventData = z.infer<typeof cycleEventDataSchema>;
+
+/**
+ * Relit le `data` d'un CycleEvent ; `null` si la forme n'est pas celle attendue (journalisé
+ * avec l'id de l'événement pour diagnostic — la colonne est en base, pas dans la réponse).
+ */
+function readCycleEventData(ev: { id: number; data: unknown }): CycleEventData | null {
+  const parsed = cycleEventDataSchema.safeParse(ev.data);
+  if (parsed.success) return parsed.data;
+  console.error(`[exercice] CycleEvent #${ev.id} illisible :`, parsed.error.issues);
+  return null;
+}
 
 // =====================================================================================
 // Helpers — dates
 // =====================================================================================
 
-/** Date (colonne @db.Date) → « YYYY-MM-DD » en UTC ; null → null. */
+/** Date (colonne @db.Date) → « YYYY-MM-DD » en UTC ; null → null (cf. lib/date-utc). */
 function fmtDateUtc(d: Date | null): string | null {
-  return d ? d.toISOString().slice(0, 10) : null;
+  return d ? ymdUtc(d) : null;
 }
 
-/** « YYYY-MM-DD » → Date (UTC minuit). */
-function dateFromYmd(ymd: string): Date {
-  return new Date(`${ymd}T00:00:00.000Z`);
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function pad4(n: number): string {
-  return String(n).padStart(4, "0");
-}
+/** « YYYY-MM-DD » → Date (UTC minuit) — alias de lib/date-utc. */
+const dateFromYmd = parseYmdUtc;
 
 function isLeapYear(y: number): boolean {
   return y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
@@ -526,7 +538,9 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       }
 
       // 8. journaliser le cycle
-      const payload: CycleEventData = {
+      // Écriture TYPÉE par le schéma (`satisfies`) : un champ renommé ici casse à la
+      // compilation, plus en lecture six mois plus tard.
+      const payload = {
         newPeriodIds,
         newRecurringSlotIds,
         newMirrorSlotIds,
@@ -534,10 +548,8 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
         newExerciceId: exId,
         visibleFromExerciceId,
         ...(actorId ? { actorId } : {}),
-      };
-      await tx.cycleEvent.create({
-        data: { serviceId, data: payload as unknown as Prisma.InputJsonValue },
-      });
+      } satisfies CycleEventData;
+      await tx.cycleEvent.create({ data: { serviceId, data: payload } });
 
       return {
         created: newPeriodIds.length,
@@ -564,7 +576,12 @@ export async function undoCycle(serviceId: string): Promise<void> {
       });
       if (!ev) return; // no-op
 
-      const data = ev.data as unknown as CycleEventData;
+      const data = readCycleEventData(ev);
+      if (!data) {
+        throw new CycleError(
+          "Événement de bascule illisible : l'annulation est refusée pour ne rien supprimer à tort.",
+        );
+      }
       const newMirrorSlotIds = data.newMirrorSlotIds ?? [];
       const newMultiSlotIds = data.newMultiSlotIds ?? [];
       const newRecurringSlotIds = data.newRecurringSlotIds ?? [];
@@ -650,7 +667,17 @@ async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
   });
   if (!ev) return { hasUndo: false, createdAt: null, bookingsCount: 0, actorLabel: null };
 
-  const data = ev.data as unknown as CycleEventData;
+  // Événement illisible : rien à proposer à l'annulation (undoCycle refuserait de même) ;
+  // la date de bascule reste affichée pour situer le problème.
+  const data = readCycleEventData(ev);
+  if (!data) {
+    return {
+      hasUndo: false,
+      createdAt: ev.createdAt.toISOString(),
+      bookingsCount: 0,
+      actorLabel: null,
+    };
+  }
   const newPeriodIds = data.newPeriodIds ?? [];
   const allSlotIds = [
     ...(data.newRecurringSlotIds ?? []),

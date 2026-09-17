@@ -1,4 +1,10 @@
 import { todayParisISO } from "@/lib/booking-delay";
+import {
+  addDaysUtc as addDays,
+  mondayOfUtc as mondayOf,
+  parseYmdUtc as parseYmd,
+  ymdUtc as ymd,
+} from "@/lib/date-utc";
 import { DATE_FMT_FR_UTC as fmtShort } from "@/lib/format";
 import { prisma } from "@/server/db";
 import type { DatedSession } from "@/server/services/editions";
@@ -10,23 +16,13 @@ import {
 
 // Plage de dates partagée par les écrans « Plannings » et « Pointages » : vue
 // Hebdomadaire / Mensuelle / par Période (> 1 mois). Tout en UTC (cf. slots /
-// listDatedSessions).
+// listDatedSessions) — helpers de dates : lib/date-utc, ré-exportés sous leurs noms
+// historiques pour les écrans d'édition.
 
-export const ymd = (d: Date): string => d.toISOString().slice(0, 10);
-export const parseYmd = (s: string): Date => new Date(`${s}T00:00:00Z`);
+export { parseYmd, ymd };
+
 const reIso = /^\d{4}-\d{2}-\d{2}$/;
 
-function mondayOf(d: Date): Date {
-  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dow = (x.getUTCDay() + 6) % 7; // 0 = lundi
-  x.setUTCDate(x.getUTCDate() - dow);
-  return x;
-}
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setUTCDate(x.getUTCDate() + n);
-  return x;
-}
 const monthStart = (d: Date): Date => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 const monthEnd = (d: Date): Date => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
 const addMonthsToFirst = (d: Date, n: number): Date =>

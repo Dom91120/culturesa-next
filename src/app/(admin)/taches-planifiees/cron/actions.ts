@@ -19,6 +19,7 @@ import {
   summarizeRgpdRetention,
   summarizeValidationNotices,
   summarizeWaitingList,
+  withCronLock,
 } from "@/server/services/cron-tasks";
 import { sendManagerDigest } from "@/server/services/manager-notice";
 import { runRgpdRetention } from "@/server/services/rgpd";
@@ -31,6 +32,9 @@ export type RunCronResult = { ok: true; summary: string } | { ok: false; error: 
 /**
  * Exécute une tâche planifiée À LA DEMANDE depuis l'admin (mêmes traitements que les
  * routes /api/cron/*, tous idempotents) et consigne le résultat (trigger « manuel »).
+ * L'exécution manuelle ignore la planification (c'est son but) mais passe par le MÊME
+ * verrou que les routes cron : elle ne tourne jamais en parallèle d'un passage planifié
+ * (ni d'un autre clic), et inversement.
  */
 export async function runCronTaskAction(key: CronTaskKey): Promise<RunCronResult> {
   await requireRole("administrateur");
@@ -64,17 +68,26 @@ export async function runCronTaskAction(key: CronTaskKey): Promise<RunCronResult
       return { ok: false, error: "Cette tâche n'est pas exécutable depuis l'administration." };
   }
 
-  try {
-    const summary = await run();
-    await recordCronRun(key, { ok: true, trigger: "manuel", summary });
-    revalidatePath("/taches-planifiees/cron");
-    return { ok: true, summary };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Erreur inconnue.";
-    await recordCronRun(key, { ok: false, trigger: "manuel", summary: message });
-    revalidatePath("/taches-planifiees/cron");
-    return { ok: false, error: message };
+  const locked = await withCronLock<RunCronResult>(key, async () => {
+    try {
+      const summary = await run();
+      await recordCronRun(key, { ok: true, trigger: "manuel", summary });
+      return { ok: true, summary };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Erreur inconnue.";
+      await recordCronRun(key, { ok: false, trigger: "manuel", summary: message });
+      return { ok: false, error: message };
+    }
+  });
+  if (!locked.acquired) {
+    return {
+      ok: false,
+      error:
+        "Cette tâche est déjà en cours d'exécution (passage planifié ou autre lancement) : réessayez dans quelques instants.",
+    };
   }
+  revalidatePath("/taches-planifiees/cron");
+  return locked.result;
 }
 
 /**

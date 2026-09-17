@@ -1,13 +1,11 @@
 // Numéro de semaine ISO 8601 + parité A/B. Extrait pour être partagé sans créer de
 // cycle d'import entre slots.ts et recurring-children.ts.
 
-function fromISO(dateStr: string): Date {
-  return new Date(`${dateStr}T00:00:00Z`);
-}
+import { parseYmdUtc } from "@/lib/date-utc";
 
 /** Numéro de semaine ISO 8601 (= PHP date('W'), legacy _isoWeek). */
 export function isoWeek(dateStr: string): number {
-  const d = fromISO(dateStr);
+  const d = parseYmdUtc(dateStr);
   const day = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));

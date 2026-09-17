@@ -1,7 +1,6 @@
-import { greeting } from "@/lib/mail-render";
+import { addDaysUtc, parseYmdUtc, ymdUtc } from "@/lib/date-utc";
 import { getAppUrl } from "@/server/config";
 import { prisma } from "@/server/db";
-import { sendMailOrQueue } from "@/server/mailer";
 import { formatSlotLabel, resolvePeriodLabels } from "@/server/services/booking-mail";
 import {
   getTriggerRecipient,
@@ -10,7 +9,7 @@ import {
   resolveTriggerKind,
   resolveTriggerRecipients,
 } from "@/server/services/mail-prefs";
-import { buildTemplatedMail } from "@/server/services/mail-send";
+import { sendToRecipients } from "@/server/services/mail-send";
 import { getMailTemplate } from "@/server/services/mail-templates";
 
 // Rappels de réservation envoyés J-7 (« week ») puis J-1 (« day ») avant chaque
@@ -31,10 +30,6 @@ const OFFSETS: ReadonlyArray<readonly [Kind, number]> = [
 ];
 const ECHEANCE: Record<Kind, string> = { week: "dans une semaine", day: "demain" };
 
-// Date (UTC) → "YYYY-MM-DD" ; "YYYY-MM-DD" → Date à minuit UTC (cf. slots.ts).
-const toISO = (d: Date): string => d.toISOString().slice(0, 10);
-const fromISO = (s: string): Date => new Date(`${s}T00:00:00.000Z`);
-
 /**
  * Parcourt les occurrences à J-7 et J-1 et envoie le rappel aux réservations
  * confirmées qui n'en ont pas encore reçu. Best-effort : toute erreur d'envoi part
@@ -49,11 +44,11 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
   // Gabarit + préférence d'envoi sont PAR SERVICE → chargés plus bas, une fois par
   // service distinct de chaque lot (les réservations couvrent plusieurs services).
   const appUrl = await getAppUrl();
-  const todayMidnight = fromISO(toISO(now));
+  // Dates cibles en UTC (cf. lib/date-utc), alignées sur `slot.slotDate` (@db.Date).
+  const todayMidnight = parseYmdUtc(ymdUtc(now));
 
   for (const [kind, offset] of OFFSETS) {
-    const targetIso = toISO(new Date(todayMidnight.getTime() + offset * 86400000));
-    const targetDate = fromISO(targetIso);
+    const targetDate = addDaysUtc(todayMidnight, offset);
 
     // Tous les slots datés ce jour-là (créneaux ponctuels autonomes ET miroirs).
     const dated = await prisma.slot.findMany({
@@ -168,15 +163,7 @@ export async function runBookingReminders(now: Date = new Date()): Promise<{
       };
 
       try {
-        for (const r of recipients) {
-          const prenom = r.personal ? r.prenom : "";
-          const vars = {
-            ...baseVars,
-            salutation: greeting(prenom),
-            prenom,
-          };
-          await sendMailOrQueue({ to: r.email, ...buildTemplatedMail(tpl, vars, appUrl) });
-        }
+        await sendToRecipients({ recipients, tpl, vars: baseVars, appUrl });
         // Journalise l'envoi (best-effort déjà géré par la file). La contrainte
         // unique protège des doublons en cas de concurrence.
         await prisma.bookingReminder.create({
