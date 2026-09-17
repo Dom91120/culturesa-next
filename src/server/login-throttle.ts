@@ -101,29 +101,42 @@ export async function loginLockSeconds(email: string, db: Db = prisma): Promise<
   }
 }
 
-/** Enregistre un échec et arme l'attente suivante. Best-effort. */
+/**
+ * Enregistre un échec et arme l'attente suivante. Best-effort.
+ *
+ * ── Incrément ATOMIQUE (constat S7) ──
+ * Lire le compteur puis l'écrire laissait deux échecs simultanés (un attaquant
+ * qui envoie ses essais en rafale) lire la même valeur et n'en compter qu'un :
+ * le freinage sous-comptait exactement quand il devait mordre. `INSERT … ON
+ * CONFLICT DO UPDATE … RETURNING` fait la remise à zéro d'un compteur périmé et
+ * l'incrément en une seule instruction, comme rate-limit.ts. La péremption est
+ * jugée par l'horloge de la BASE (`now()`), une seule référence de temps.
+ *
+ * L'attente qui en découle est calculée par `delayForFailures` (logique testée,
+ * non dupliquée en SQL) et posée dans une seconde écriture CONDITIONNELLE : si
+ * un autre échec a déjà fait progresser le compteur entre-temps, c'est lui qui
+ * pose l'attente, la plus longue — jamais une écriture tardive ne la raccourcit.
+ */
 export async function recordLoginFailure(email: string, db: Db = prisma): Promise<void> {
   const emailHash = emailFingerprint(email);
-  const now = new Date();
+  const ttl = `${COUNTER_TTL_MS} milliseconds`;
   try {
-    const entry = await db.loginAttempt.findUnique({
-      where: { emailHash },
-      select: { failures: true, lastFailureAt: true },
-    });
-    // Compteur périmé → on repart de 1 plutôt que de poursuivre une série
-    // vieille de plusieurs mois.
-    const previous = entry && !isCounterStale(entry.lastFailureAt) ? entry.failures : 0;
-    const failures = previous + 1;
+    const rows = await db.$queryRaw<{ failures: number }[]>`
+      INSERT INTO login_attempts ("email_hash", "failures", "last_failure_at", "locked_until")
+      VALUES (${emailHash}, 1, now(), NULL)
+      ON CONFLICT ("email_hash") DO UPDATE SET
+        "failures" = CASE
+          WHEN login_attempts."last_failure_at" < now() - ${ttl}::interval THEN 1
+          ELSE login_attempts."failures" + 1
+        END,
+        "last_failure_at" = now()
+      RETURNING "failures"
+    `;
+    const failures = Number(rows[0]?.failures ?? 1);
     const delay = delayForFailures(failures);
-    const data = {
-      failures,
-      lastFailureAt: now,
-      lockedUntil: delay > 0 ? new Date(now.getTime() + delay) : null,
-    };
-    await db.loginAttempt.upsert({
-      where: { emailHash },
-      create: { emailHash, ...data },
-      update: data,
+    await db.loginAttempt.updateMany({
+      where: { emailHash, failures },
+      data: { lockedUntil: delay > 0 ? new Date(Date.now() + delay) : null },
     });
   } catch (e) {
     console.error("[login-throttle] enregistrement impossible:", e);

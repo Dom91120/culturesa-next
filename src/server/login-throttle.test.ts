@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   BASE_DELAY_MS,
   COUNTER_TTL_MS,
@@ -7,6 +7,7 @@ import {
   FREE_ATTEMPTS,
   isCounterStale,
   MAX_DELAY_MS,
+  recordLoginFailure,
   remainingLockSeconds,
 } from "./login-throttle";
 
@@ -132,5 +133,58 @@ describe("scénarios de bout en bout", () => {
     let total = 0;
     for (let n = 1; n <= 100; n++) total += delayForFailures(n);
     expect(total).toBeGreaterThan(60 * 60_000);
+  });
+});
+
+describe("recordLoginFailure — incrément atomique puis attente conditionnelle", () => {
+  // Base simulée via le paramètre `db` : on vérifie l'ENCHAÎNEMENT (une seule
+  // instruction d'incrément, attente posée sur le compteur RENDU), pas PostgreSQL.
+  function fauxDb(failures: number) {
+    const queryRaw = vi.fn().mockResolvedValue([{ failures }]);
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    return { db: { $queryRaw: queryRaw, loginAttempt: { updateMany } }, queryRaw, updateMany };
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: forme réduite du client Prisma
+  const asDb = (d: unknown) => d as any;
+
+  it("un seul aller-retour pour compter : pas de lecture préalable", async () => {
+    const { db, queryRaw } = fauxDb(1);
+    await recordLoginFailure("a@b.fr", asDb(db));
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    // La requête taguée reçoit l'empreinte, jamais l'adresse.
+    const valeurs = queryRaw.mock.calls[0]?.slice(1) ?? [];
+    expect(valeurs).toContain(emailFingerprint("a@b.fr"));
+    expect(valeurs.join("|")).not.toContain("a@b.fr");
+  });
+
+  it("sous le seuil → aucune attente armée", async () => {
+    const { db, updateMany } = fauxDb(FREE_ATTEMPTS);
+    await recordLoginFailure("a@b.fr", asDb(db));
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    const arg = updateMany.mock.calls[0]?.[0];
+    expect(arg.where).toEqual({ emailHash: emailFingerprint("a@b.fr"), failures: FREE_ATTEMPTS });
+    expect(arg.data.lockedUntil).toBeNull();
+  });
+
+  it("au-delà du seuil → attente posée sur le compteur rendu par la base", async () => {
+    const { db, updateMany } = fauxDb(FREE_ATTEMPTS + 2);
+    const avant = Date.now();
+    await recordLoginFailure("a@b.fr", asDb(db));
+    const arg = updateMany.mock.calls[0]?.[0];
+    // Conditionnelle sur `failures` : une écriture tardive ne raccourcit jamais l'attente.
+    expect(arg.where.failures).toBe(FREE_ATTEMPTS + 2);
+    const lockedUntil: Date = arg.data.lockedUntil;
+    expect(lockedUntil.getTime() - avant).toBeGreaterThanOrEqual(BASE_DELAY_MS * 2 - 50);
+    expect(lockedUntil.getTime() - avant).toBeLessThanOrEqual(BASE_DELAY_MS * 2 + 5_000);
+  });
+
+  it("base muette → best-effort, aucune exception", async () => {
+    const db = { $queryRaw: vi.fn().mockRejectedValue(new Error("hs")), loginAttempt: {} };
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(recordLoginFailure("a@b.fr", asDb(db))).resolves.toBeUndefined();
+    } finally {
+      err.mockRestore();
+    }
   });
 });

@@ -139,6 +139,10 @@ export async function anonymizeUser(userId: string, reason: AnonymizeReason): Pr
     // Verrouillage : suppression des comptes d'authentification (identifiants/mot de
     // passe) — le compte anonymisé ne doit plus être connectable.
     await tx.account.deleteMany({ where: { userId } });
+    // Second facteur : le secret TOTP et les codes de secours sont des données du
+    // titulaire, sans objet sur un compte qui ne se connecte plus — retirés comme
+    // le fait `resetTwoFactorAction` (constat S9).
+    await tx.twoFactor.deleteMany({ where: { userId } });
 
     await tx.rgpdLog.create({
       data: {

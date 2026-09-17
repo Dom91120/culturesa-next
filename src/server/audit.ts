@@ -37,6 +37,9 @@ export const AUDIT = {
   USER_UPDATED: "user.updated",
   USER_DELETED: "user.deleted",
   USER_PASSWORD_RESET_SENT: "user.password_reset_sent",
+  // Renvoi du courriel de confirmation d'adresse par un administrateur : comme le
+  // lien de mot de passe, c'est un envoi déclenché sur le compte d'un tiers.
+  USER_VERIFICATION_RESENT: "user.verification_resent",
   // Retirer un second facteur abaisse la protection d un compte privilegie.
   USER_2FA_RESET: "user.two_factor_reset",
   // Changement de catégorie/structure par l'USAGER lui-même (« Mon compte ») : la

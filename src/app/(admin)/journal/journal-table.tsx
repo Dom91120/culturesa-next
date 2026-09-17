@@ -79,6 +79,11 @@ const ACTION_META: Record<string, { label: string; family: Family; tone: Tone }>
     family: "comptes",
     tone: "ok",
   },
+  "user.verification_resent": {
+    label: "Courriel de confirmation renvoyé",
+    family: "comptes",
+    tone: "ok",
+  },
   "user.role_changed": { label: "Changement de rôle", family: "acces", tone: "warn" },
   "user.two_factor_reset": {
     label: "Double authentification réinitialisée",
@@ -137,6 +142,7 @@ function ActionIcon({ action }: { action: string }) {
       glyph = <PencilGlyph size={size} />;
       break;
     case "user.password_reset_sent":
+    case "user.verification_resent":
     case "config.mail_changed":
       glyph = <MailGlyph size={size} />;
       break;

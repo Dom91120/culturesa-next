@@ -397,6 +397,9 @@ export async function resendVerificationAction(email: string): Promise<ActionSta
   } catch {
     return { ok: false, error: "Échec de l'envoi du mail de confirmation." };
   }
+  // Envoi déclenché par un administrateur sur le compte d'un tiers : trace, APRÈS
+  // succès seulement — un envoi qui a échoué n'a rien changé (constat BAC4).
+  await recordAudit(AUDIT.USER_VERIFICATION_RESENT, { target: parsed.data });
   return { ok: true };
 }
 
@@ -411,6 +414,9 @@ export async function sendPasswordResetAction(email: string): Promise<ActionStat
   } catch {
     return { ok: false, error: "Échec de l'envoi du lien de réinitialisation." };
   }
+  // Un lien de réinitialisation envoyé sur un compte tiers est un levier de prise
+  // de contrôle : il laisse une trace, APRÈS succès de l'envoi (constat BAC4).
+  await recordAudit(AUDIT.USER_PASSWORD_RESET_SENT, { target: parsed.data });
   return { ok: true };
 }
 

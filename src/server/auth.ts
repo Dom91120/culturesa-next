@@ -31,6 +31,17 @@ import { pruneUserSessions } from "@/server/session-prune";
 // politique de complexité (Better Auth ne valide nativement que la longueur min).
 const PASSWORD_ENDPOINTS = new Set(["/sign-up/email", "/reset-password", "/change-password"]);
 
+// Longueur maximale des champs texte que l'usager peut réécrire via /update-user
+// (constat S6). Alignée sur schemas/user : prénom/nom 100, téléphone 30 ; `name`
+// est la concaténation « prénom nom » et `niveau` suit le plafond de l'admin.
+const UPDATE_USER_TEXT_MAX: Record<string, number> = {
+  prenom: 100,
+  nom: 100,
+  name: 100,
+  tel: 30,
+  niveau: 100,
+};
+
 /**
  * Décode une valeur d'en-tête transmise en `encodeURIComponent`.
  *
@@ -398,6 +409,18 @@ export const auth = betterAuth({
         const locked = ["demandeurId", "structureId", "enfants", "accompagnants", "role", "rgpdOk"];
         if (locked.some((k) => k in b)) {
           throw new APIError("BAD_REQUEST", { message: "Champ non modifiable." });
+        }
+        // Plafonds de longueur des champs texte restés modifiables : Better Auth ne
+        // borne rien, et ces colonnes sont sans limite en base. Mêmes plafonds que
+        // schemas/user (prenomSchema/nomSchema/telSchema) et que l'admin (niveau).
+        for (const [champ, max] of Object.entries(UPDATE_USER_TEXT_MAX)) {
+          const v = b[champ];
+          if (v === undefined || v === null) continue;
+          if (typeof v !== "string" || v.length > max) {
+            throw new APIError("BAD_REQUEST", {
+              message: `Champ « ${champ} » invalide (texte de ${max} caractères au plus).`,
+            });
+          }
         }
       }
 

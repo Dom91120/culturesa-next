@@ -35,9 +35,6 @@ export async function saveMailConfigAction(
   // authentiquement signés par elle (constat BAC3).
   const refus = await reauthOrError(password);
   if (refus) return refus;
-  // Les identifiants SMTP sont un secret : toute modification laisse une trace,
-  // sans jamais consigner la valeur elle-meme.
-  await recordAudit(AUDIT.MAIL_CONFIG_CHANGED, { target: input.host || null });
 
   const parsed = mailConfigSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
@@ -65,6 +62,14 @@ export async function saveMailConfigAction(
   if (d.password !== "") entries["mail.password"] = encryptSecret(d.password);
 
   await setConfigMany(entries);
+  // Les identifiants SMTP sont un secret : toute modification laisse une trace,
+  // sans jamais consigner la valeur elle-meme. APRÈS l'écriture réussie et avec le
+  // serveur VALIDÉ : journaliser avant, sur la saisie brute, inscrivait des
+  // « modifications » refusées ou jamais appliquées (constat S4).
+  await recordAudit(AUDIT.MAIL_CONFIG_CHANGED, {
+    target: d.host || null,
+    details: { driver: d.driver, motDePasseModifie: d.password !== "" },
+  });
   revalidatePath("/messagerie");
   return { ok: true };
 }

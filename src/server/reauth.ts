@@ -1,6 +1,7 @@
 import { verifyPassword } from "better-auth/crypto";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
+import { rateLimit } from "@/server/rate-limit";
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Ré-authentification avant les actes destructeurs (constat BAC3).
@@ -27,6 +28,28 @@ import { getSession } from "@/server/guards";
 /** Refus motivé, distinct d'une erreur métier : l'appelant l'affiche tel quel. */
 export class ReauthError extends Error {}
 
+// ── Freinage des tentatives (constat S1 de l'audit 2026-09-17) ──
+// La ré-authentification ne passe PAS par /sign-in : ni le quota par IP de Better
+// Auth ni le freinage par compte (login-throttle) ne la voient. Une session volée
+// pouvait donc essayer des mots de passe à volonté contre son propre titulaire,
+// exactement là où le mot de passe protège les actes les plus graves.
+//
+// Un seau par UTILISATEUR (pas par IP : c'est bien ce compte-là qu'on protège),
+// à fenêtre fixe, en base (rate-limit.ts) : atomique, partagé entre réplicas, et
+// ÉCHEC FERMÉ — base muette, refus. Le seau est vidé à chaque succès : seuls les
+// échecs CONSÉCUTIFS comptent, comme pour la connexion.
+/** Tentatives tolérées par fenêtre. Un administrateur qui se trompe cinq fois d'affilée attend. */
+export const REAUTH_MAX_ATTEMPTS = 5;
+/** Largeur de la fenêtre. */
+export const REAUTH_WINDOW_MS = 15 * 60_000;
+/** Message unique du refus par quota. */
+export const REAUTH_THROTTLED_MSG = "Trop de tentatives, réessayez plus tard.";
+
+/** Clé du seau de freinage d'un utilisateur. */
+export function reauthThrottleKey(userId: string): string {
+  return `reauth:${userId}`;
+}
+
 /**
  * Vérifie le mot de passe de l'usager CONNECTÉ avant un acte destructeur.
  * Lève `ReauthError` si la vérification échoue.
@@ -43,6 +66,14 @@ export async function requireReauth(password: unknown): Promise<void> {
   const session = await getSession();
   if (!session) throw new ReauthError("Session expirée. Reconnectez-vous.");
 
+  // Le quota se consomme AVANT la comparaison : une fois franchi, la réponse est la
+  // même que le mot de passe soit juste ou faux. Vérifier d'abord puis refuser
+  // laisserait le temps de réponse (scrypt) trahir la validité de l'essai.
+  const cle = reauthThrottleKey(session.user.id);
+  if (!(await rateLimit(cle, REAUTH_MAX_ATTEMPTS, REAUTH_WINDOW_MS))) {
+    throw new ReauthError(REAUTH_THROTTLED_MSG);
+  }
+
   // Compte « credential » = couple e-mail/mot de passe. Un compte qui n'en a pas
   // (créé par un fournisseur externe, hypothétique ici) ne peut pas confirmer
   // ainsi : on refuse plutôt que de laisser passer faute de mot de passe à
@@ -57,6 +88,15 @@ export async function requireReauth(password: unknown): Promise<void> {
 
   const ok = await verifyPassword({ hash: compte.password, password });
   if (!ok) throw new ReauthError("Mot de passe incorrect.");
+
+  // Succès : le seau est vidé, best-effort. Un échec ici ne doit pas refuser une
+  // confirmation par ailleurs valide — au pire, le compteur garde quelques essais
+  // de plus jusqu'à l'expiration de la fenêtre.
+  try {
+    await prisma.throttleBucket.deleteMany({ where: { key: cle } });
+  } catch (e) {
+    console.error("[reauth] remise à zéro du freinage impossible:", e);
+  }
 }
 
 /**

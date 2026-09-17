@@ -69,7 +69,9 @@ export async function GET(req: Request) {
     if (!user) return new Response("Usager introuvable", { status: 404 });
 
     // Journalise l'accès (RGPD art. 15) — sans donnée nominative dans details.
-    const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    // IP transmise par le proxy de confiance : entrée la plus À DROITE, les précédentes
+    // étant fournies par le client (même règle que src/server/audit.ts et src/proxy.ts).
+    const ip = (await headers()).get("x-forwarded-for")?.split(",").at(-1)?.trim() ?? null;
     await prisma.rgpdLog.create({
       data: {
         action: "export",
