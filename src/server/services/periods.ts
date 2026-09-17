@@ -179,32 +179,6 @@ export async function updateExercice(
   id: number,
   input: UpdateExerciceInput,
 ): Promise<ExerciceRow> {
-  const current = assertExerciceOwned(
-    serviceId,
-    await prisma.exercice.findUnique({
-      where: { id },
-      select: { serviceId: true, dateStart: true, dateEnd: true },
-    }),
-  );
-  const nextStart = input.dateStart !== undefined ? input.dateStart : current.dateStart;
-  const nextEnd = input.dateEnd !== undefined ? input.dateEnd : current.dateEnd;
-  if (nextStart && nextEnd && nextStart > nextEnd) {
-    throw new PeriodError("La date de début doit être avant la date de fin.");
-  }
-  if (nextStart || nextEnd) {
-    const periods = await prisma.period.findMany({
-      where: { exerciceId: id, dateStart: { not: null }, dateEnd: { not: null } },
-      select: { dateStart: true, dateEnd: true, label: true },
-    });
-    for (const p of periods) {
-      if (
-        (nextStart && p.dateStart && p.dateStart < nextStart) ||
-        (nextEnd && p.dateEnd && p.dateEnd > nextEnd)
-      ) {
-        throw new PeriodError(`La période « ${p.label} » sortirait de la plage de l'exercice.`);
-      }
-    }
-  }
   const data: {
     label?: string;
     type?: ExerciceType;
@@ -215,7 +189,48 @@ export async function updateExercice(
   if (input.type !== undefined) data.type = input.type;
   if (input.dateStart !== undefined) data.dateStart = input.dateStart;
   if (input.dateEnd !== undefined) data.dateEnd = input.dateEnd;
-  return prisma.exercice.update({ where: { id }, data, select: EXERCICE_SELECT });
+  // Lecture, contrôle « les périodes datées tiennent dans la nouvelle plage » et écriture
+  // dans UNE transaction sérialisable : une période ajoutée ou étendue par un autre
+  // gestionnaire entre la lecture et l'update ne peut plus sortir de l'exercice à son
+  // insu (auparavant lecture puis écriture séparées — audit 2026-09-17).
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        const current = assertExerciceOwned(
+          serviceId,
+          await tx.exercice.findUnique({
+            where: { id },
+            select: { serviceId: true, dateStart: true, dateEnd: true },
+          }),
+        );
+        const nextStart = input.dateStart !== undefined ? input.dateStart : current.dateStart;
+        const nextEnd = input.dateEnd !== undefined ? input.dateEnd : current.dateEnd;
+        if (nextStart && nextEnd && nextStart > nextEnd) {
+          throw new PeriodError("La date de début doit être avant la date de fin.");
+        }
+        if (nextStart || nextEnd) {
+          const periods = await tx.period.findMany({
+            where: { exerciceId: id, dateStart: { not: null }, dateEnd: { not: null } },
+            select: { dateStart: true, dateEnd: true, label: true },
+          });
+          for (const p of periods) {
+            if (
+              (nextStart && p.dateStart && p.dateStart < nextStart) ||
+              (nextEnd && p.dateEnd && p.dateEnd > nextEnd)
+            ) {
+              throw new PeriodError(
+                `La période « ${p.label} » sortirait de la plage de l'exercice.`,
+              );
+            }
+          }
+        }
+        return tx.exercice.update({ where: { id }, data, select: EXERCICE_SELECT });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    rethrowAsPeriodError(e);
+  }
 }
 
 /** Suppression d'un exercice (anti-IDOR). Refuse s'il a encore des périodes. */
@@ -383,8 +398,8 @@ type UpdateServicePeriodInput = {
 };
 
 /**
- * Maj partielle d'une période. Si l'une des dates change, l'exerciceId est
- * recalculé à partir des nouvelles dates (en lisant l'autre date inchangée).
+ * Maj partielle d'une période. Si l'une des dates change, l'autre est lue sur la période ;
+ * l'exercice de rattachement reste INCHANGÉ (il n'est pas déduit des nouvelles dates).
  * Anti-IDOR : la période doit appartenir au service couvert par le guard appelant.
  */
 export async function updateServicePeriod(

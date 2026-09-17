@@ -66,8 +66,14 @@ export type ExercicePaneData = {
  * Contenu JSON d'un `CycleEvent.data` (journal d'une bascule, relu par l'annulation).
  * Schéma zod = contrat d'écriture ET de lecture : la lecture passe par `safeParse` et un
  * événement illisible (colonne éditée à la main, forme inconnue) REFUSE l'annulation au
- * lieu de supprimer au hasard (audit 2026-09-17, A7). Les champs optionnels couvrent les
+ * au lieu de supprimer au hasard (audit 2026-09-17, A7). Les champs optionnels couvrent les
  * événements antérieurs aux options ajoutées au fil du temps.
+ *
+ * Volontairement NON strict (`z.object`, pas `.strict()`) : les événements antérieurs au
+ * 2026-07-15 portaient des clés liées à l'archivage des périodes, notion supprimée depuis ;
+ * les refuser rendrait ces anciennes bascules inannulables. Une clé inconnue est ignorée.
+ * Ce n'est pas une porte à une faute de frappe : l'écriture est typée (`satisfies
+ * CycleEventData`), le compilateur refuse une clé qui ne serait pas dans ce schéma.
  */
 const cycleEventDataSchema = z.object({
   newPeriodIds: z.array(z.number().int()),
@@ -229,11 +235,18 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       }
 
       // 2. snapshot des créneaux récurrents actifs par période active — UNE requête
-      // pour toutes les périodes (le findMany PAR période était un N+1, audit perf).
-      const snapshotRows = await tx.slot.findMany({
-        where: { serviceId, periodId: { in: actives.map((p) => p.id) }, slotType: "recurring" },
-        include: { demandeurs: { select: { demandeurId: true } } },
-      });
+      // pour toutes les périodes (le findMany PAR période était un N+1, audit perf),
+      // et seulement si l'option « reconduire les créneaux » est cochée.
+      const snapshotRows = recreateSlots
+        ? await tx.slot.findMany({
+            where: {
+              serviceId,
+              periodId: { in: actives.map((p) => p.id) },
+              slotType: "recurring",
+            },
+            include: { demandeurs: { select: { demandeurId: true } } },
+          })
+        : [];
       const slotsByPeriod = new Map<number, SlotSnapshot[]>();
       for (const s of snapshotRows) {
         if (s.periodId == null) continue;
@@ -530,8 +543,11 @@ export async function cycleService(serviceId: string, opts: CycleOptions): Promi
       // service) — les usagers basculent sur le nouvel exercice comme avant.
       const visibleFromExerciceId = currentExoRow?.visibleToUsers ? currentExoRow.id : null;
       if (visibleFromExerciceId != null) {
-        await tx.exercice.update({
-          where: { id: visibleFromExerciceId },
+        // Extinction de TOUT le service (et pas seulement de l'exercice reconduit) : si
+        // deux exercices étaient visibles par erreur, la bascule rétablit l'unicité au
+        // lieu de la perpétuer — même geste que l'annulation (undoCycle).
+        await tx.exercice.updateMany({
+          where: { serviceId, visibleToUsers: true },
           data: { visibleToUsers: false },
         });
         await tx.exercice.update({ where: { id: exId }, data: { visibleToUsers: true } });
@@ -582,10 +598,10 @@ export async function undoCycle(serviceId: string): Promise<void> {
           "Événement de bascule illisible : l'annulation est refusée pour ne rien supprimer à tort.",
         );
       }
-      const newMirrorSlotIds = data.newMirrorSlotIds ?? [];
+      // Tableaux garantis par le schéma ; seul `newMultiSlotIds` est optionnel (option
+      // ajoutée le 2026-07-25).
+      const { newMirrorSlotIds, newRecurringSlotIds, newPeriodIds } = data;
       const newMultiSlotIds = data.newMultiSlotIds ?? [];
-      const newRecurringSlotIds = data.newRecurringSlotIds ?? [];
-      const newPeriodIds = data.newPeriodIds ?? [];
 
       // 1. miroirs uniques + ponctuels des lots multi reconduits : bookings unique
       // puis slots (mêmes suppressions, populations disjointes).
@@ -682,10 +698,10 @@ async function undoCycleInfo(serviceId: string): Promise<UndoInfo> {
       actorLabel: null,
     };
   }
-  const newPeriodIds = data.newPeriodIds ?? [];
+  const { newPeriodIds } = data;
   const allSlotIds = [
-    ...(data.newRecurringSlotIds ?? []),
-    ...(data.newMirrorSlotIds ?? []),
+    ...data.newRecurringSlotIds,
+    ...data.newMirrorSlotIds,
     ...(data.newMultiSlotIds ?? []),
   ];
 

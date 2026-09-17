@@ -552,6 +552,8 @@ function installCycleDb(f: CycleFixture = {}) {
       ),
       create: vi.fn(async () => ({ id: 900 })),
       update: vi.fn(async () => ({})),
+      // Extinction scopée au service du flag « Affiché aux utilisateurs » (étape 7).
+      updateMany: vi.fn(async () => ({ count: 1 })),
     },
     period: {
       findMany: vi.fn(async () => f.periods ?? [P1, P2]),
@@ -731,10 +733,15 @@ describe("cycleService — « Affiché aux utilisateurs » (un seul par service)
   it("l'exercice reconduit était visible → le flag passe au nouvel exercice, mémorisé dans le journal", async () => {
     installCycleDb();
     await cycleService(SVC, PERIODS_ONLY);
+    // Extinction scopée au SERVICE (rétablit l'unicité même si deux étaient visibles),
+    // puis le nouvel exercice prend le flag.
+    expect(arg(m("exercice", "updateMany"))).toEqual({
+      where: { serviceId: SVC, visibleToUsers: true },
+      data: { visibleToUsers: false },
+    });
     const update = m("exercice", "update");
-    expect(update).toHaveBeenCalledTimes(2);
-    expect(arg(update, 0)).toEqual({ where: { id: 11 }, data: { visibleToUsers: false } });
-    expect(arg(update, 1)).toEqual({ where: { id: 900 }, data: { visibleToUsers: true } });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(arg(update, 0)).toEqual({ where: { id: 900 }, data: { visibleToUsers: true } });
     expect(arg(m("cycleEvent", "create")).data).toMatchObject({
       data: { visibleFromExerciceId: 11 },
     });
@@ -938,7 +945,9 @@ describe("cycleService — lots multi-ponctuels reconduits", () => {
 
     // Filtre du snapshot : ponctuels de lot, jamais les miroirs ni les ponctuels isolés.
     const findMany = m("slot", "findMany");
-    expect(arg(findMany, 1).where).toEqual({
+    // Récurrents non reconduits → pas de snapshot récurrent : la lecture des lots est la 1re.
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(arg(findMany, 0).where).toEqual({
       serviceId: SVC,
       periodId: { in: [1] },
       slotType: "unique",
@@ -1033,7 +1042,8 @@ describe("cycleService — lots multi-ponctuels reconduits", () => {
     installCycleDb({ periods: [P1], multiSlots: [LOT_B1_A] });
     const r = await cycleService(SVC, PERIODS_ONLY);
     expect(r.multiSlotsCreated).toBe(0);
-    expect(m("slot", "findMany")).toHaveBeenCalledTimes(1); // snapshot récurrent seulement
+    // Ni snapshot récurrent (option décochée) ni lecture des lots : aucune requête créneau.
+    expect(m("slot", "findMany")).not.toHaveBeenCalled();
     expect(loadSchoolHolidayRanges).not.toHaveBeenCalled();
   });
 });

@@ -56,7 +56,9 @@ export function holidaysInRange(start: string, end: string): { date: string; lab
       if (h.date >= start && h.date <= end) out.push(h);
     }
   }
-  return out;
+  // Ordre chronologique (la liste source est « fixes puis mobiles ») : un affichage ou
+  // une comparaison de listes n'a pas à retrier.
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** Une date « YYYY-MM-DD » est-elle un jour férié français ? (port legacy _isFrenchHoliday) */

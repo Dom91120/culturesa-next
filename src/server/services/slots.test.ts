@@ -218,7 +218,12 @@ describe("buildMirrorRows", () => {
     expect(datesOf(build({ weeks: "A,B" }))).toEqual(all);
     expect(datesOf(build({ weeks: null }))).toEqual(all);
     expect(datesOf(build({ weeks: "B,A" }))).toEqual(all);
-    expect(datesOf(build({ weeks: " a " }))).toEqual(all);
+    expect(datesOf(build({ weeks: "x" }))).toEqual(all);
+  });
+
+  it("casse tolérée comme parseWeeks : « a » est la semaine A, pas « toutes les semaines »", () => {
+    expect(datesOf(build({ weeks: " a " }))).toEqual(["2026-09-07", "2026-09-21"]);
+    expect(datesOf(build({ weeks: "b" }))).toEqual(["2026-09-14", "2026-09-28"]);
   });
 
   it("jour férié (period_holidays) exclu, sauf exercice ouvert les fériés", () => {

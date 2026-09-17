@@ -72,7 +72,9 @@ function activeDayKeys(csv: string): DayKey[] {
  * persisté. `parseWeeks("")` renvoie ["A","B"], donc "" tourne bien chaque semaine.
  */
 function normalizeWeeks(weeks: string | null | undefined): string {
-  const w = (weeks ?? "").trim();
+  // Même tolérance de casse que `parseWeeks` (lib/agenda-core) : « a » est bien la
+  // semaine A, pas « toutes les semaines ».
+  const w = (weeks ?? "").trim().toUpperCase();
   return w === "A" || w === "B" ? w : "";
 }
 
@@ -480,12 +482,16 @@ export async function copyRecurringWeek(
     exerciceId: period.exerciceId,
   });
 
-  const slots = await prisma.slot.findMany({
-    where: { serviceId, periodId, slotType: "recurring" },
-  });
   // La plage entre dans la signature : deux créneaux de mêmes horaires mais de plages
   // différentes (sept.-oct. et nov.-déc.) ne sont pas des doublons.
-  const sig = (s: (typeof slots)[number]) =>
+  const sig = (s: {
+    startTime: string;
+    endTime: string;
+    slotDay: string | null;
+    capacity: number | null;
+    dateStart: Date | null;
+    dateEnd: Date | null;
+  }) =>
     [
       s.startTime,
       s.endTime,
@@ -495,34 +501,40 @@ export async function copyRecurringWeek(
       s.dateEnd ? toISO(s.dateEnd) : "",
     ].join("|");
 
-  // Signatures déjà présentes sur toWeek (anti-doublon).
-  const existingOnTo = new Set(slots.filter((s) => parseWeeks(s.weeks).includes(toWeek)).map(sig));
-  // À copier : tourne sur fromWeek, pas sur toWeek, et pas déjà présent à l'identique.
-  const toCopy = slots.filter(
-    (s) =>
-      parseWeeks(s.weeks).includes(fromWeek) &&
-      !parseWeeks(s.weeks).includes(toWeek) &&
-      !existingOnTo.has(sig(s)),
-  );
-
-  // Demandeurs autorisés des créneaux sources.
-  const demRows = toCopy.length
-    ? await prisma.slotDemandeur.findMany({
-        where: { slotId: { in: toCopy.map((s) => s.id) } },
-        select: { slotId: true, demandeurId: true },
-      })
-    : [];
-  const demBySlot = new Map<string, number[]>();
-  for (const r of demRows) {
-    const list = demBySlot.get(r.slotId) ?? [];
-    list.push(r.demandeurId);
-    demBySlot.set(r.slotId, list);
-  }
-
   let created = 0;
   try {
     await prisma.$transaction(
       async (tx) => {
+        // Lectures DANS la transaction sérialisable (comme copyPonctuelWeek) : un créneau
+        // ajouté sur toWeek entre la lecture et l'écriture ne peut plus être dupliqué
+        // (auparavant lu hors transaction — audit 2026-09-17).
+        const slots = await tx.slot.findMany({
+          where: { serviceId, periodId, slotType: "recurring" },
+        });
+        // Signatures déjà présentes sur toWeek (anti-doublon).
+        const existingOnTo = new Set(
+          slots.filter((s) => parseWeeks(s.weeks).includes(toWeek)).map(sig),
+        );
+        // À copier : tourne sur fromWeek, pas sur toWeek, et pas déjà présent à l'identique.
+        const toCopy = slots.filter(
+          (s) =>
+            parseWeeks(s.weeks).includes(fromWeek) &&
+            !parseWeeks(s.weeks).includes(toWeek) &&
+            !existingOnTo.has(sig(s)),
+        );
+        // Demandeurs autorisés des créneaux sources.
+        const demRows = toCopy.length
+          ? await tx.slotDemandeur.findMany({
+              where: { slotId: { in: toCopy.map((s) => s.id) } },
+              select: { slotId: true, demandeurId: true },
+            })
+          : [];
+        const demBySlot = new Map<string, number[]>();
+        for (const r of demRows) {
+          const list = demBySlot.get(r.slotId) ?? [];
+          list.push(r.demandeurId);
+          demBySlot.set(r.slotId, list);
+        }
         for (const s of toCopy) {
           // Un créneau récurrent sans slotDay (ne devrait pas exister) est ignoré.
           if (!s.slotDay) continue;
@@ -575,7 +587,11 @@ export async function copyRecurringWeek(
         }
         // Timeout élargi : la copie A↔B traite N créneaux × leurs miroirs en un lot.
       },
-      { timeout: 60_000, maxWait: 10_000 },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 60_000,
+        maxWait: 10_000,
+      },
     );
   } catch (e) {
     return mapSlotError(e, "copyRecurringWeek");
@@ -1146,7 +1162,7 @@ export async function deleteSlots(
           blocked = true;
           return;
         }
-        // Miroirs d'abord (pas de FK sur parentSlotId, mais on reste explicite).
+        // Miroirs d'abord : la FK Slot.parentSlotId (audit 2026-06) impose cet ordre.
         if (mirrorIds.length) await tx.slot.deleteMany({ where: { id: { in: mirrorIds } } });
         await tx.slot.deleteMany({ where: { id: { in: ownedIds } } });
       },
