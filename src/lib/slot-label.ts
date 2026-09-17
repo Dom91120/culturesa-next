@@ -4,6 +4,21 @@ import { DAY_NAMES } from "@/lib/agenda-core";
 // e-mails, les rappels, la liste d'attente et ses éditions). Source unique des noms de
 // jours = DAY_NAMES (lib/agenda-core — audit D2).
 
+/**
+ * Plage horaire d'un créneau : « 09:00 – 10:00 » (tiret demi-cadratin ENTOURÉ d'espaces,
+ * heures tronquées à HH:MM) ou « Journée entière » quand l'une des deux heures est vide
+ * (créneau all-day, cf. isAllDay). Source UNIQUE du libellé : grilles, modales, éditions,
+ * e-mails et exports (audit D3 2026-09-17 — dix réimplémentations, dont trois sans espaces).
+ */
+export function slotTimeLabel(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+): string {
+  const s = (startTime || "").slice(0, 5);
+  const e = (endTime || "").slice(0, 5);
+  return s && e ? `${s} – ${e}` : "Journée entière";
+}
+
 /** Libellé « créneau » lisible : date+heure (ponctuel) ou jour+heure (récurrent). */
 export function formatSlotLabel(slot: {
   startTime: string;
@@ -11,9 +26,7 @@ export function formatSlotLabel(slot: {
   slotDate: Date | null;
   slotDay: string | null;
 }): string {
-  const s = (slot.startTime || "").slice(0, 5);
-  const e = (slot.endTime || "").slice(0, 5);
-  const time = s && e ? `${s} – ${e}` : "Journée entière";
+  const time = slotTimeLabel(slot.startTime, slot.endTime);
   if (slot.slotDate) {
     // slotDate stocké à minuit UTC → formatage en UTC pour éviter tout décalage de jour.
     const d = slot.slotDate.toLocaleDateString("fr-FR", {

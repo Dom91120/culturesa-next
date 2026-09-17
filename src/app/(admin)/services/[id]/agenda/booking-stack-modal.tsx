@@ -10,6 +10,7 @@ import {
   toMinutes,
 } from "@/lib/agenda-core";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
+import { slotTimeLabel } from "@/lib/slot-label";
 import { badgeTitle } from "./agenda-format";
 import type { Booking } from "./agenda-grid";
 
@@ -188,8 +189,9 @@ export function BookingStackModal({
       ? a.name.localeCompare(b.name, "fr", { sensitivity: "base" }) || a.id - b.id
       : a.createdAt.localeCompare(b.createdAt) || a.id - b.id,
   );
+  // Journée entière (isAllDay ⇔ horaires vides) → « Journée entière », sinon « HH:MM – HH:MM ».
   const timeLabel = (s: { startTime: string; endTime: string }) =>
-    allday ? "Journée entière" : `${s.startTime} – ${s.endTime}`;
+    allday ? slotTimeLabel("", "") : slotTimeLabel(s.startTime, s.endTime);
 
   return (
     <ModalOverlay onClose={onClose}>

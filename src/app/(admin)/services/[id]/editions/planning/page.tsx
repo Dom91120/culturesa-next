@@ -1,4 +1,5 @@
 import { formatTel } from "@/lib/format";
+import { slotTimeLabel } from "@/lib/slot-label";
 import type { DatedSession } from "@/server/services/editions";
 import { formatDateHeading, type SessionBucket } from "../range";
 import { EditionScreenView, type EditionSearchParams, loadEditionScreen } from "../screen";
@@ -29,9 +30,7 @@ export default async function PlanningPage({
           return (
             <div key={`${s.startTime}-${s.endTime}`} style={{ marginBottom: ".6rem" }}>
               <div style={{ fontWeight: 600, fontSize: ".85rem", marginBottom: ".15rem" }}>
-                {s.startTime && s.endTime
-                  ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
-                  : "Journée entière"}{" "}
+                {slotTimeLabel(s.startTime, s.endTime)}{" "}
                 <span style={{ color: "var(--muted)", fontWeight: 400 }}>
                   ({visibles.length} inscrit{visibles.length > 1 ? "s" : ""})
                 </span>

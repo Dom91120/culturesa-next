@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ModalOverlay } from "@/components/agenda-shared";
 import { DAY_NAMES } from "@/lib/agenda-core";
+import { slotTimeLabel } from "@/lib/slot-label";
 import { fmtDateLongFr, plural } from "./agenda-format";
 import { OccurrencesField } from "./occurrences-field";
 
@@ -152,14 +153,9 @@ export function BookingCreateModal({
         ? fmtDateLongFr(ctx.slotDate)
         : "créneau ponctuel"
       : (DAY_NAMES[ctx.dayKey] ?? ctx.dayKey)) +
-    // Créneau « journée entière » (horaires vides) : libellé dédié au lieu de « – ».
-    (createSlot
-      ? ` · ${
-          !createSlot.startTime || !createSlot.endTime
-            ? "Journée entière"
-            : `${createSlot.startTime}–${createSlot.endTime}`
-        }`
-      : "");
+    // Créneau « journée entière » (horaires vides) : libellé dédié au lieu de « – »
+    // (slotTimeLabel, forme commune à toute l'application).
+    (createSlot ? ` · ${slotTimeLabel(createSlot.startTime, createSlot.endTime)}` : "");
 
   return (
     <ModalOverlay onClose={onClose}>

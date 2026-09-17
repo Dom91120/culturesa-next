@@ -1,11 +1,10 @@
 import { DAY_NAMES, ISO_DAY_KEYS, parseWeeks } from "@/lib/agenda-core";
 import { DATE_FMT_FR as dateFmt } from "@/lib/format";
+import { slotTimeLabel } from "@/lib/slot-label";
 import { prisma } from "@/server/db";
 
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
-
-/** Libellés des états de pointage (partagé par les écrans Liste et Pointages). */
-export const POINTAGE_LABEL: Record<string, string> = { present: "Présent", absent: "Absent" };
+// Libellé de créneau (« HH:MM – HH:MM » / « Journée entière ») : slotTimeLabel (lib/slot-label).
 
 /**
  * Cellule « Pointage » des listes/exports : l'état relevé, complété par le signalement
@@ -267,13 +266,11 @@ export async function listOpenSlots(serviceId: string, periodIds?: number[]): Pr
       // Récurrent limité à une parité : suffixe « — semaine A/B » (cf. parseWeeks).
       const weeks = parseWeeks(s.weeks);
       const weekSuffix = recurrent && weeks.length === 1 ? ` — semaine ${weeks[0]}` : "";
-      const start = s.startTime ? s.startTime.slice(0, 5) : "";
-      const end = s.endTime ? s.endTime.slice(0, 5) : "";
       return {
         jour: recurrent
           ? (DAY_NAMES[s.slotDay ?? ""] ?? s.slotDay ?? "—")
           : jourDateOf("unique", s.slotDate, null),
-        creneau: start && end ? `${start} – ${end}` : "Journée entière",
+        creneau: slotTimeLabel(s.startTime, s.endTime),
         type: recurrent ? `Récurrent${weekSuffix}` : "Ponctuel",
         recurrent,
         periode: s.period?.label ?? "—",
@@ -380,8 +377,6 @@ export async function listEditionRows(
   const periodLabel = new Map(periods.map((p) => [p.id, p.label]));
 
   return bookings.map((b) => {
-    const s = b.slot.startTime ? b.slot.startTime.slice(0, 5) : "";
-    const e = b.slot.endTime ? b.slot.endTime.slice(0, 5) : "";
     const demandeurLabel = b.user.demandeur?.label ?? "";
     // Séance issue d'une récurrente (enfant matérialisé, techniquement "unique") :
     // le TYPE affiché reste « Récurrente », la période et la date de dépôt sont
@@ -401,7 +396,7 @@ export async function listEditionRows(
       enfants: b.enfants,
       accompagnants: b.accompagnants,
       periode: periodLabel.get(b.periodId ?? b.parent?.periodId ?? 0) ?? "—",
-      creneau: s && e ? `${s} – ${e}` : "Journée entière",
+      creneau: slotTimeLabel(b.slot.startTime, b.slot.endTime),
       debut: b.slot.startTime,
       fin: b.slot.endTime,
       jour: jourDateOf(b.bookingType, b.slot.slotDate, b.slot.slotDay),

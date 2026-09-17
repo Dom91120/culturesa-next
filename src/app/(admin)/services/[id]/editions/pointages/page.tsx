@@ -1,3 +1,4 @@
+import { slotTimeLabel } from "@/lib/slot-label";
 import { type DatedSession, pointageCell } from "@/server/services/editions";
 import { formatDateHeading, type SessionBucket } from "../range";
 import { EditionScreenView, type EditionSearchParams, loadEditionScreen } from "../screen";
@@ -26,10 +27,7 @@ export default async function PointagesPage({
         style={{ marginBottom: "1.25rem", breakInside: "avoid" }}
       >
         <h3 className="ed-h3">
-          {formatDateHeading(s.date)} ·{" "}
-          {s.startTime && s.endTime
-            ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
-            : "Journée entière"}{" "}
+          {formatDateHeading(s.date)} · {slotTimeLabel(s.startTime, s.endTime)}{" "}
           <span style={{ color: "var(--muted)", fontWeight: 400 }}>
             ({visibles.length} inscrit{visibles.length > 1 ? "s" : ""})
           </span>

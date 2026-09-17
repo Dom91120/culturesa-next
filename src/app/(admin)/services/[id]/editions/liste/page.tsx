@@ -3,6 +3,7 @@ import { CheckGlyph } from "@/app/(admin)/users/account-ui";
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { HourglassGlyph, ListDetailsGlyph } from "@/components/ui-glyphs";
 import { formatTel } from "@/lib/format";
+import { slotTimeLabel } from "@/lib/slot-label";
 import { prisma } from "@/server/db";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import {
@@ -221,11 +222,7 @@ export default async function EditionsListePage({
               {/* Date, créneau en sous-ligne (Dom 2026-09-09). */}
               <td style={tdNoWrap}>
                 {s.dayLabel} {s.dateLabel}
-                <span className="ed-sub">
-                  {s.startTime && s.endTime
-                    ? `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`
-                    : "Journée entière"}
-                </span>
+                <span className="ed-sub">{slotTimeLabel(s.startTime, s.endTime)}</span>
               </td>
               <td style={tdNoWrap}>{a.demandeur || "—"}</td>
               <td style={tdNoWrap}>

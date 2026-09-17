@@ -19,10 +19,11 @@ import {
   AgendaLegendSwatch,
   AgendaTimeColumn,
   AgendaWeekHeader,
+  PeriodTabs,
   PointagePill,
   PrintIconButton,
-  TodayGlyph,
   WaitingListButton,
+  WeekNavCapsule,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
 import {
@@ -62,6 +63,7 @@ import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
 import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
+import { slotTimeLabel } from "@/lib/slot-label";
 import { resolveSlotRange } from "@/lib/slot-range";
 import { useDragInteraction } from "@/lib/use-drag-interaction";
 import type { ServiceModes } from "@/server/services/service-modes";
@@ -1668,11 +1670,7 @@ export function AgendaGrid({
       ? slots.find((s) => s.id === bk.slotId)
       : uniqueSlots.find((s) => s.id === bk.slotId);
     const parts: string[] = [];
-    if (slot) {
-      const s = (slot.startTime || "").slice(0, 5);
-      const e = (slot.endTime || "").slice(0, 5);
-      parts.push(s && e ? `${s} – ${e}` : "Journée entière");
-    }
+    if (slot) parts.push(slotTimeLabel(slot.startTime, slot.endTime));
     if (recurring) {
       if (bk.dayKey) parts.push(DAY_NAMES[bk.dayKey] ?? bk.dayKey);
       if (bk.periodId) {
@@ -2397,7 +2395,7 @@ export function AgendaGrid({
         period: periods.find((p) => p.id === effectivePeriodId)?.label ?? "",
         // `week` = cadence (affichée en gras, suivie de « : ») ; `dayHours` = jour · heures.
         week: cadence,
-        dayHours: `${dayName} · ${slot.startTime}–${slot.endTime}`,
+        dayHours: `${dayName} · ${slotTimeLabel(slot.startTime, slot.endTime)}`,
       };
     }
     if (!serviceDemandeurs.length) return { capacity, jauge, recurInfo, batchCount, multiCadence };
@@ -3077,119 +3075,34 @@ export function AgendaGrid({
             </span>
           </span>
         </div>
-        {/* Navigation semaine : centrée sur la même ligne que le titre et le sélecteur.
-            gap resserré : flèches au plus près du libellé (largeur figée).
-            Petits triangles ◂ ▸ (et non ◀ ▶) : même dessin, moins large — cette barre
-            partage sa ligne avec le titre et le sélecteur de période. */}
-        {/* Navigation semaine centrée en absolu par rapport au tableau (Dom 2026-09-14), comme
-            sur la page Réservations de l'usager : `margin: 0 auto` la centrait dans l'espace
-            restant entre le titre et les outils, donc décalée. */}
-        <div
-          className="periode-nav"
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            margin: 0,
-          }}
-        >
-          {/* Groupe ◂ label ▸ en capsule (.pn-main, CSS .agenda-page) ; « Aujourd'hui » est
-              ancré en absolu juste après ▸, hors du centrage. Pendant un glisser de
-              réservation, survoler une flèche fait défiler la semaine (dragWeekProps) ; un
-              bouton désactivé ne reçoit pas les événements de glisser, ce qui borne le
-              défilement comme le clic. */}
-          <span
-            className="pn-main"
-            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 0 }}
-          >
-            <button
-              type="button"
-              className="ex-arrow"
-              disabled={!canWeekPrev}
-              onClick={() => canWeekPrev && shiftWeek(-1)}
-              {...dragWeekProps(-1)}
-            >
-              ◂
-            </button>
-            <span
-              className="ex-nav-label"
-              // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) :
-              // les flèches ne bougent plus d'une semaine à l'autre. L'interlettrage
-              // resserré permet de tenir en 6rem sans changer la police.
-              // 6.25rem = 100 px : la semaine la plus large de l'année (« 23 mars ‣ 27
-              // mars », 98,5 px mesurés — mars ne s'abrège pas, contrairement à « sept. »
-              // ou « janv. ») tient sans déborder, avec 1,5 px de réserve.
-              style={{ width: "6.25rem", letterSpacing: "-.05em", textAlign: "center" }}
-            >
-              {/* Séparateur « ‣ » et non « → » : 4,6 px contre 13,5 px dans la police du
-                libellé. C'est ce qui fait tenir la semaine la plus longue de l'année
-                dans la boîte figée de 96 px — avec la flèche, elle débordait de 5 px.
-                Grossi (1.35em) car le glyphe est dessiné bien plus petit que la
-                hauteur d'x ; `lineHeight: 0` empêche ce grossissement de pousser la
-                hauteur de la ligne. */}
-              {mondayStr ? (
-                <>
-                  {shortDateFmt.format(addDays(mondayStr, firstDayOffset))}
-                  <span
-                    style={{
-                      fontSize: "1.35em",
-                      lineHeight: 0,
-                      // Descendu de ~1,5 px : le glyphe est dessiné haut dans sa boîte,
-                      // et grossi il tirait l'œil au-dessus de la ligne des dates.
-                      // Décalage PUREMENT visuel (position relative) : la hauteur de la
-                      // ligne ne bouge pas.
-                      position: "relative",
-                      top: ".12em",
-                    }}
-                  >
-                    {" ‣ "}
-                  </span>
-                  {shortDateFmt.format(addDays(mondayStr, lastDayOffset))}
-                </>
-              ) : (
-                "…"
-              )}
-            </span>
-            <button
-              type="button"
-              className="ex-arrow"
-              disabled={!canWeekNext}
-              onClick={() => canWeekNext && shiftWeek(1)}
-              {...dragWeekProps(1)}
-            >
-              ▸
-            </button>
-            {todayInVisiblePeriods && (
-              <button
-                type="button"
-                className="pn-today toolbar-icon-btn"
-                data-tip="Aujourd'hui"
-                aria-label="Aujourd'hui"
-                // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
-                // chrome que les boutons de la barre d'options ; identique à l'agenda usager.
-                // Hors flux, à droite de ▸ : ne compte pas dans le centrage de la nav.
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  left: "100%",
-                  marginLeft: ".4rem",
-                }}
-                onClick={() => {
+        {/* Navigation semaine (WeekNavCapsule, partagée avec l'agenda usager) : centrée en
+            absolu par rapport au tableau (Dom 2026-09-14) — `margin: 0 auto` la centrait
+            dans l'espace restant entre le titre et les outils, donc décalée. Pendant un
+            glisser de réservation, survoler une flèche fait défiler la semaine
+            (dragWeekProps). */}
+        <WeekNavCapsule
+          mondayStr={mondayStr}
+          firstDayOffset={firstDayOffset}
+          lastDayOffset={lastDayOffset}
+          canPrev={canWeekPrev}
+          canNext={canWeekNext}
+          onPrev={() => shiftWeek(-1)}
+          onNext={() => shiftWeek(1)}
+          prevProps={dragWeekProps(-1)}
+          nextProps={dragWeekProps(1)}
+          onToday={
+            todayInVisiblePeriods
+              ? () => {
                   // Retour à la semaine courante : on verrouille sur la période
                   // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
                   // qui diffère quand la semaine chevauche deux périodes — sinon
                   // on afficherait la période du mois précédent).
                   setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
                   setAnchorMonday(ymd(mondayOf(new Date())));
-                }}
-              >
-                <TodayGlyph size={15} />
-              </button>
-            )}
-          </span>
-        </div>
+                }
+              : undefined
+          }
+        />
         {/* Groupe de droite de l'en-tête (cases à cocher, ou réglages de création).
             `marginLeft: auto` : quand la ligne devient trop étroite et que ce groupe
             passe à la ligne suivante, il reste plaqué à DROITE. Sans lui, la ligne
@@ -3468,44 +3381,30 @@ export function AgendaGrid({
           marginBottom: ".5rem",
         }}
       >
-        <div className="period-tabs" id="agenda-period-tabs">
-          {visiblePeriods.map((p) => {
-            const active = p.id === coveringPeriod?.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className={`period-btn ${active ? "active" : ""}`}
-                style={
-                  {
-                    "--period-color": p.color,
-                    // Survolé pendant un glisser de réservation (dragPeriodProps).
-                    ...(dragPeriodArmed === p.id
-                      ? { outline: "2px solid var(--accent)", outlineOffset: 1 }
-                      : {}),
-                  } as React.CSSProperties
-                }
-                onClick={() => {
-                  // Onglet choisi = source de vérité : on fige la période ET on ancre la
-                  // semaine sur son début (cf. legacy _pickedP).
-                  if (p.dateStart) {
-                    setRwPeriodId(p.id);
-                    setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
-                  }
-                }}
-                {...dragPeriodProps(p)}
-              >
-                <span className="period-badge" />
-                {[p.etiquette, p.label].filter(Boolean).join(" · ")}
-              </button>
-            );
+        {/* Onglets de période (PeriodTabs, partagés avec l'agenda usager) : étiquette ·
+            libellé ; survolés pendant un glisser de réservation (dragPeriodProps), l'onglet
+            armé est souligné. */}
+        <PeriodTabs
+          periods={visiblePeriods}
+          activeId={coveringPeriod?.id}
+          onPick={(p) => {
+            // Onglet choisi = source de vérité : on fige la période ET on ancre la
+            // semaine sur son début (cf. legacy _pickedP).
+            if (p.dateStart) {
+              setRwPeriodId(p.id);
+              setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
+            }
+          }}
+          renderLabel={(p) => [p.etiquette, p.label].filter(Boolean).join(" · ")}
+          buttonProps={(p) => ({
+            ...dragPeriodProps(p),
+            style:
+              dragPeriodArmed === p.id
+                ? { outline: "2px solid var(--accent)", outlineOffset: 1 }
+                : undefined,
           })}
-          {periods.length === 0 && (
-            <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>
-              Aucune période active.
-            </span>
-          )}
-        </div>
+          emptyText={periods.length === 0 ? "Aucune période active." : undefined}
+        />
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
           {/* En mode création : champ « Capacité » + 👥 (+ Copier A/B). Les cases à cocher
               (masquer horaires / validation / pointage) sont dans l'en-tête. */}
@@ -4108,7 +4007,8 @@ export function AgendaGrid({
           const dayLabel = uniqSlot?.slotDate
             ? fmtDateLongFr(uniqSlot.slotDate)
             : (DAY_NAMES[bk.dayKey] ?? bk.dayKey);
-          const dayHour = dayLabel + (slot ? ` · ${slot.startTime}–${slot.endTime}` : "");
+          const dayHour =
+            dayLabel + (slot ? ` · ${slotTimeLabel(slot.startTime, slot.endTime)}` : "");
           // Occurrences (récurrent uniquement) = dates des réservations-ENFANTS réelles
           // de la récurrente (et non tous les miroirs du slot) → reflète exactement
           // les séances effectivement créées (cutoff, semaine A/B, vacances scolaires).
@@ -4218,9 +4118,10 @@ export function AgendaGrid({
           const slot = uniqueIdSet.has(block.slotId)
             ? uniqueSlots.find((s) => s.id === block.slotId)
             : slots.find((s) => s.id === block.slotId);
-          const st = (slot?.startTime || "").slice(0, 5);
-          const en = (slot?.endTime || "").slice(0, 5);
-          const targetLabel = `${DAY_NAMES[block.dayKey] ?? block.dayKey} ${st && en ? `${st} – ${en}` : "journée entière"}`;
+          // Libellé commun (slotTimeLabel) ; en milieu de phrase (« Lundi journée entière »),
+          // la majuscule initiale de « Journée entière » est abaissée.
+          const time = slotTimeLabel(slot?.startTime, slot?.endTime);
+          const targetLabel = `${DAY_NAMES[block.dayKey] ?? block.dayKey} ${time.charAt(0).toLowerCase()}${time.slice(1)}`;
           const hitBk =
             targetBookingId != null ? bookings.find((x) => x.id === targetBookingId) : null;
           const preselected = hitBk ? actionBooking(hitBk).id : null;
@@ -4333,7 +4234,7 @@ export function AgendaGrid({
           const recurSlot = slots.find((s) => s.id === capModal.slotId);
           const uniqSlot = uniqueSlots.find((s) => s.id === capModal.slotId);
           const slot = recurSlot ?? uniqSlot ?? null;
-          const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
+          const timePart = slot ? slotTimeLabel(slot.startTime, slot.endTime) : "";
           // Titre complet du créneau seul :
           //  • récurrent → « Créneau récurrent · <cadence> · <Jour> · <h–h> »
           //  • ponctuel  → « Créneau ponctuel · <Jour> <JJ/MM/AAAA> · <h–h> »
@@ -4405,7 +4306,7 @@ export function AgendaGrid({
             slots.find((s) => s.id === slotDeleteTarget) ??
             uniqueSlots.find((s) => s.id === slotDeleteTarget) ??
             null;
-          const timePart = slot ? `${slot.startTime}–${slot.endTime}` : "";
+          const timePart = slot ? slotTimeLabel(slot.startTime, slot.endTime) : "";
           // Choix « ce créneau / toute la série » dès que le créneau appartient à un lot
           // (batchId) — indépendant du sélecteur de type courant.
           const seriesCount = countSlotSeries(slotDeleteTarget);

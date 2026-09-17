@@ -4,7 +4,7 @@
 // l'identique des deux copies locales (audit duplication 2026-06).
 
 import { useEffect } from "react";
-import { DAY_NAMES, minutesToHHMM, type Pointage } from "@/lib/agenda-core";
+import { addDays, DAY_NAMES, minutesToHHMM, type Pointage, shortDateFmt } from "@/lib/agenda-core";
 
 // Coin haut-gauche + rangée d'en-têtes de jours de la grille (port legacy cornerAB).
 // Coin : grosse lettre A/B de la semaine active en mode A/B, sinon l'horloge.
@@ -485,6 +485,214 @@ export function TodayGlyph({ size = 24 }: { size?: number }) {
       <path d="M17 16H8" />
       <path d="m11 13-3 3 3 3" />
     </svg>
+  );
+}
+
+/**
+ * Capsule de navigation HEBDOMADAIRE des deux grilles (admin / usager), extraite à
+ * l'identique des deux copies (audit D1 2026-09-17) : conteneur `.periode-nav` centré en
+ * absolu sur la ligne de titre → capsule `.pn-main` (◂ libellé ▸) → bouton « Aujourd'hui »
+ * (`.pn-today`, TodayGlyph façon Outlook — Dom 2026-09-06) ancré hors du centrage.
+ *
+ * - `mondayStr` vide → libellé « … » ; sinon « 23 mars ‣ 27 mars » (dates courtes du premier
+ *   et du dernier jour travaillé : `firstDayOffset` / `lastDayOffset`).
+ * - `onToday` absent → pas de bouton « Aujourd'hui » (la grille le fournit seulement quand
+ *   une période visible couvre le jour courant).
+ * - `prevProps` / `nextProps` : attributs spread sur les flèches — côté admin, les
+ *   `dragWeekProps(±1)` (survoler une flèche pendant un glisser de réservation fait défiler
+ *   la semaine ; un bouton désactivé ne reçoit pas les événements, ce qui borne le
+ *   défilement comme le clic) et leur style « armé ».
+ * - `mobile` (agenda usager) : la nav reste DANS LE FLUX (premier élément de la ligne, le
+ *   titre y étant masqué) et « Aujourd'hui » aussi, à droite de ▸ (Dom 2026-09-05) — la
+ *   nav étant en flux calée à droite, le groupe se replie sans déborder.
+ */
+export function WeekNavCapsule({
+  mondayStr,
+  firstDayOffset,
+  lastDayOffset,
+  canPrev,
+  canNext,
+  onPrev,
+  onNext,
+  onToday,
+  prevProps,
+  nextProps,
+  mobile = false,
+  todayTitle = "Aujourd'hui",
+}: {
+  // Lundi de la semaine affichée (« YYYY-MM-DD »), null/vide = libellé « … ».
+  mondayStr: string | null;
+  firstDayOffset: number;
+  lastDayOffset: number;
+  canPrev: boolean;
+  canNext: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onToday?: () => void;
+  prevProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
+  nextProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
+  mobile?: boolean;
+  todayTitle?: string;
+}) {
+  return (
+    <div
+      className="periode-nav"
+      style={
+        mobile
+          ? { margin: 0 }
+          : {
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              // Neutralise la marge asymétrique de .periode-nav qui décalerait le
+              // centrage vertical (sinon la nav n'est pas au même niveau que le titre).
+              margin: 0,
+            }
+      }
+    >
+      {/* Groupe ◂ label ▸ : shrink-wrappé et positionné (relative) → « Aujourd'hui »
+          s'ancre en left:100% de CE groupe (juste après ▸), sans compter dans le centrage.
+          Capsule (bordure, arrondi, flèches rondes) : CSS .agenda-page / .user-agenda .pn-main.
+          Petits triangles ◂ ▸ (et non ◀ ▶) : même dessin, moins large — cette barre
+          partage sa ligne avec le titre et les outils. */}
+      <span
+        className="pn-main"
+        style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 0 }}
+      >
+        <button
+          type="button"
+          className="ex-arrow"
+          disabled={!canPrev}
+          onClick={() => canPrev && onPrev()}
+          {...prevProps}
+        >
+          ◂
+        </button>
+        <span
+          className="ex-nav-label"
+          // Largeur FIGÉE (calibrée sur la semaine la plus longue, texte centré) : les
+          // flèches ne bougent plus d'une semaine à l'autre. L'interlettrage resserré
+          // permet de tenir en 6rem sans changer la police.
+          // 6.25rem = 100 px : la semaine la plus large de l'année (« 23 mars ‣ 27 mars »,
+          // 98,5 px mesurés — mars est le seul mois long que l'abréviation française ne
+          // tronque pas, contrairement à « sept. » ou « janv. ») tient sans déborder, avec
+          // 1,5 px de réserve.
+          style={{ width: "6.25rem", letterSpacing: "-.05em", textAlign: "center" }}
+        >
+          {/* Séparateur « ‣ » et non « → » : 4,6 px contre 13,5 px dans la police du
+              libellé. C'est ce qui fait tenir la semaine la plus longue de l'année dans la
+              boîte figée — avec la flèche, elle débordait de 5 px. Grossi (1.35em) car le
+              glyphe est dessiné bien plus petit que la hauteur d'x ; `lineHeight: 0`
+              empêche ce grossissement de pousser la hauteur de la ligne. */}
+          {mondayStr ? (
+            <>
+              {shortDateFmt.format(addDays(mondayStr, firstDayOffset))}
+              <span
+                style={{
+                  fontSize: "1.35em",
+                  lineHeight: 0,
+                  // Descendu de ~1,5 px : le glyphe est dessiné haut dans sa boîte, et
+                  // grossi il tirait l'œil au-dessus de la ligne des dates. Décalage
+                  // PUREMENT visuel (position relative) : la hauteur de ligne ne bouge pas.
+                  position: "relative",
+                  top: ".12em",
+                }}
+              >
+                {" ‣ "}
+              </span>
+              {shortDateFmt.format(addDays(mondayStr, lastDayOffset))}
+            </>
+          ) : (
+            "…"
+          )}
+        </span>
+        <button
+          type="button"
+          className="ex-arrow"
+          disabled={!canNext}
+          onClick={() => canNext && onNext()}
+          {...nextProps}
+        >
+          ▸
+        </button>
+        {onToday && (
+          <button
+            type="button"
+            className="pn-today toolbar-icon-btn"
+            data-tip={todayTitle}
+            aria-label={todayTitle}
+            // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
+            // chrome que les boutons de la barre d'options (.toolbar-icon-btn).
+            // Desktop : hors flux, ancré en absolu juste après ▸ (ne compte pas dans le
+            // centrage de la nav). Mobile : DANS LE FLUX, à droite de ▸.
+            style={
+              mobile
+                ? { position: "static", marginLeft: ".4rem" }
+                : {
+                    position: "absolute",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    left: "100%",
+                    marginLeft: ".4rem",
+                  }
+            }
+            onClick={onToday}
+          >
+            <TodayGlyph size={15} />
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Onglets de PÉRIODE des deux grilles (`.period-tabs#agenda-period-tabs`), extraits à
+ * l'identique (audit D2 2026-09-17). `periods` = périodes VISIBLES (exercice courant) ;
+ * `activeId` = période couvrante ; `onPick` = clic (la grille fige la période et ancre la
+ * semaine sur son début, cf. legacy _pickedP). `renderLabel` (défaut : `label`) — l'admin
+ * y préfixe l'étiquette ; `buttonProps(p)` : attributs spread sur chaque onglet (côté
+ * admin, `dragPeriodProps` + surbrillance de l'onglet armé pendant un glisser, via `style`
+ * fusionné après `--period-color`). `emptyText` : message rendu tel quel quand fourni —
+ * la grille décide de la condition (aucune période du service, visibles ou non).
+ */
+export function PeriodTabs<P extends { id: number; label: string; color: string }>({
+  periods,
+  activeId,
+  onPick,
+  renderLabel,
+  buttonProps,
+  emptyText,
+}: {
+  periods: P[];
+  activeId: number | null | undefined;
+  onPick: (p: P) => void;
+  renderLabel?: (p: P) => React.ReactNode;
+  buttonProps?: (p: P) => React.ButtonHTMLAttributes<HTMLButtonElement>;
+  emptyText?: string;
+}) {
+  return (
+    <div className="period-tabs" id="agenda-period-tabs">
+      {periods.map((p) => {
+        const active = p.id === activeId;
+        const { style: extraStyle, ...extra } = buttonProps?.(p) ?? {};
+        return (
+          <button
+            key={p.id}
+            type="button"
+            className={`period-btn ${active ? "active" : ""}`}
+            style={{ "--period-color": p.color, ...extraStyle } as React.CSSProperties}
+            onClick={() => onPick(p)}
+            {...extra}
+          >
+            <span className="period-badge" />
+            {renderLabel ? renderLabel(p) : p.label}
+          </button>
+        );
+      })}
+      {emptyText && <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>{emptyText}</span>}
+    </div>
   );
 }
 

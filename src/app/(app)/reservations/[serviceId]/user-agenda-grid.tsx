@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+// Formatage partagé avec l'agenda admin (info-bulle « N enfants M adultes », date longue).
+import { fmtDateLongFr, participantsLabel } from "@/app/(admin)/services/[id]/agenda/agenda-format";
 import {
   useAgendaAutoRefresh,
   useAgendaToast,
@@ -23,12 +25,14 @@ import {
   BookingStateSwatch,
   CalendarGlyph,
   ModalOverlay,
+  PeriodTabs,
   PrintIconButton,
-  TodayGlyph,
   ToolbarIconButton,
   WaitingListButton,
+  WeekNavCapsule,
 } from "@/components/agenda-shared";
 import { AgendaTooltip, useAgendaTooltip } from "@/components/agenda-tooltip";
+import { useMediaQuery } from "@/components/use-media-query";
 import {
   type AbsencePrevenue,
   type AgendaBlockBase,
@@ -52,7 +56,6 @@ import {
   parseWeeks,
   periodsCoverToday,
   type Slot,
-  shortDateFmt,
   slotWeekTag,
   toMinutes,
   type UniqueSlot,
@@ -65,6 +68,7 @@ import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeUnits } from "@/lib/gauge";
 import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
+import { slotTimeLabel } from "@/lib/slot-label";
 import { usePointerDrag } from "@/lib/use-pointer-drag";
 import { THEME_REQUIS_MSG } from "@/schemas/booking";
 import type { ServiceModes } from "@/server/services/service-modes";
@@ -1030,25 +1034,9 @@ type BadgeCbs = {
   onAbsence: () => void;
 };
 
-// Date longue française d'un « YYYY-MM-DD » (modale d'absence : « jeudi 10 septembre 2026 »).
-function longDateFr(ymdStr: string): string {
-  const s = new Date(`${ymdStr}T00:00:00`).toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  // Majuscule initiale seule (« Lundi 21 septembre 2026 ») — pas de text-transform
-  // capitalize, qui mettrait aussi le mois en capitale.
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// Ligne « N enfant(s) M adulte(s) » de l'info-bulle au survol (port legacy _badgeTitle).
-function participantsLabel(enfants: number, accompagnants: number): string {
-  return `${enfants} enfant${enfants > 1 ? "s" : ""} ${accompagnants} adulte${
-    accompagnants > 1 ? "s" : ""
-  }`;
-}
+// Date longue française d'un « YYYY-MM-DD » avec année et majuscule initiale (modale
+// d'absence : « Jeudi 10 septembre 2026 ») — fmtDateLongFr partagé avec l'agenda admin.
+const longDateFr = (ymdStr: string) => fmtDateLongFr(ymdStr, { year: true, capitalize: true });
 
 // Socle commun aux deux grilles (AgendaBookingCore, agenda-core) + champs propres
 // au payload USAGER.
@@ -1287,15 +1275,8 @@ export function UserAgendaGrid({
   // ── Mobile : vue « un jour à la fois » ──────────────────────────────────────
   // Sur smartphone, la grille hebdo (5-7 colonnes) est illisible : on n'affiche
   // qu'UN jour, avec une navigation ◀ jour ▶. La logique par jour est inchangée.
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 640px)");
   const [mobileDayIdx, setMobileDayIdx] = useState(0);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
   const mobileDay = days.length ? (days[Math.min(mobileDayIdx, days.length - 1)] ?? null) : null;
   // Liste de jours réellement rendue : un seul jour sur mobile, toute la semaine sinon.
   const displayDays = useMemo(
@@ -1567,7 +1548,7 @@ export function UserAgendaGrid({
       ((!period.dateStart || d >= period.dateStart) && (!period.dateEnd || d <= period.dateEnd));
     const uniqById = new Map(uniqueSlots.map((u) => [u.id, u]));
     const slotById = new Map(slots.map((s) => [s.id, s]));
-    const timeOf = (st?: string, en?: string) => (st && en ? `${st} – ${en}` : "Journée entière");
+    const timeOf = slotTimeLabel;
     const dateLabel = (d: string) =>
       new Date(`${d}T00:00:00`).toLocaleDateString("fr-FR", {
         weekday: "long",
@@ -1889,9 +1870,10 @@ export function UserAgendaGrid({
   function pendKey(slotId: string, dayKey: string, ponctuel: boolean) {
     return ponctuel ? `u:${slotId}` : `r:${slotId}|${dayKey}`;
   }
+  // Horaire d'un créneau pour les info-bulles (forme commune slotTimeLabel).
   function slotTime(slotId: string, ponctuel: boolean) {
     const s = ponctuel ? uniqSlotById.get(slotId) : recurSlotById.get(slotId);
-    return s ? `${s.startTime}–${s.endTime}` : "";
+    return s ? slotTimeLabel(s.startTime, s.endTime) : "";
   }
   function ponctuelDateLabel(slotId: string) {
     const u = uniqSlotById.get(slotId);
@@ -3281,123 +3263,31 @@ export function UserAgendaGrid({
             )}
           </div>
         )}
-        {/* Navigation semaine (Semaine réelle) : centrée en absolu sur la ligne de
-            titre (desktop). Sur MOBILE, elle reste DANS LE FLUX (premier élément de la
-            ligne, le titre y étant masqué). */}
-        <div
-          className="periode-nav"
-          style={
-            isMobile
-              ? { margin: 0 }
-              : {
-                  position: "absolute",
-                  left: "50%",
-                  top: "50%",
-                  transform: "translate(-50%, -50%)",
-                  // Neutralise la marge asymétrique de .periode-nav qui décalerait le
-                  // centrage vertical (sinon la nav n'est pas au même niveau que le titre).
-                  margin: 0,
-                }
-          }
-        >
-          {/* Groupe ◀ label ▶ : shrink-wrappé et positionné (relative) → « Aujourd'hui »
-                s'ancre en left:100% de CE groupe (juste après ▶), sans compter dans le
-                centrage. Vrai sur desktop comme sur mobile, quelle que soit la largeur. */}
-          <span
-            className="pn-main"
-            style={{
-              position: "relative",
-              display: "inline-flex",
-              alignItems: "center",
-              // Capsule (bordure, arrondi, flèches rondes) : CSS .user-agenda .pn-main.
-              gap: 0,
-            }}
-          >
-            <button
-              type="button"
-              className="ex-arrow"
-              disabled={!canWeekPrev}
-              onClick={() => canWeekPrev && shiftWeek(-1)}
-            >
-              ◂
-            </button>
-            <span
-              className="ex-nav-label"
-              // Largeur FIGÉE : les flèches ne bougent plus d'une semaine à l'autre.
-              // 6.25rem = 100 px, calibrés sur la semaine la plus large de l'année
-              // (« 23 mars ‣ 27 mars », 98,5 px mesurés — mars est le seul mois long
-              // que l'abréviation française ne tronque pas). Gabarit HARMONISÉ sur la
-              // nav de l'agenda admin.
-              style={{ width: "6.25rem", letterSpacing: "-.05em", textAlign: "center" }}
-            >
-              {mondayStr ? (
-                <>
-                  {shortDateFmt.format(addDays(mondayStr, firstDayOffset))}
-                  {/* Séparateur « ‣ » et non « → » : 4,6 px contre 13,5 px. Grossi (le
-                      glyphe est dessiné bien plus petit que la hauteur d'x) et descendu,
-                      sans toucher à la hauteur de ligne. */}
-                  <span
-                    style={{
-                      fontSize: "1.35em",
-                      lineHeight: 0,
-                      position: "relative",
-                      top: ".12em",
-                    }}
-                  >
-                    {" ‣ "}
-                  </span>
-                  {shortDateFmt.format(addDays(mondayStr, lastDayOffset))}
-                </>
-              ) : (
-                "…"
-              )}
-            </span>
-            <button
-              type="button"
-              className="ex-arrow"
-              disabled={!canWeekNext}
-              onClick={() => canWeekNext && shiftWeek(1)}
-            >
-              ▸
-            </button>
-            {todayInVisiblePeriods && (
-              <button
-                type="button"
-                className="pn-today toolbar-icon-btn"
-                data-tip="Aujourd'hui"
-                aria-label="Aujourd'hui"
-                // Bouton à icône (calendrier + flèche, façon Outlook — Dom 2026-09-06), même
-                // chrome que les boutons de la ligne de titre (.toolbar-icon-btn).
-                // Hors flux : positionné à droite de « ◀ label ▶ » sans compter dans sa
-                // largeur → seule la nav ◀ label ▶ est centrée par rapport au tableau.
-                // Desktop : ancré en absolu juste après ▶ (hors du centrage de la nav).
-                // Mobile : DANS LE FLUX, à droite de ▶ (Dom 2026-09-05) — la nav étant en
-                // flux calée à droite, le groupe nav + bouton se replie sans déborder.
-                style={
-                  isMobile
-                    ? { position: "static", marginLeft: ".4rem" }
-                    : {
-                        position: "absolute",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        left: "100%",
-                        marginLeft: ".4rem",
-                      }
-                }
-                onClick={() => {
+        {/* Navigation semaine (WeekNavCapsule, partagée avec l'agenda admin) : centrée en
+            absolu sur la ligne de titre (desktop). Sur MOBILE, elle reste DANS LE FLUX
+            (premier élément de la ligne, le titre y étant masqué), « Aujourd'hui » aussi. */}
+        <WeekNavCapsule
+          mondayStr={mondayStr}
+          firstDayOffset={firstDayOffset}
+          lastDayOffset={lastDayOffset}
+          canPrev={canWeekPrev}
+          canNext={canWeekNext}
+          onPrev={() => shiftWeek(-1)}
+          onNext={() => shiftWeek(1)}
+          mobile={isMobile}
+          onToday={
+            todayInVisiblePeriods
+              ? () => {
                   // Retour à la semaine courante : on verrouille sur la période
                   // qui couvre AUJOURD'HUI (et non celle du lundi de la semaine,
                   // qui diffère quand la semaine chevauche deux périodes — sinon
                   // on afficherait la période du mois précédent).
                   setRwPeriodId(periodCoveringDate(todayYmd)?.id ?? null);
                   setAnchorMonday(ymd(mondayOf(new Date())));
-                }}
-              >
-                <TodayGlyph size={15} />
-              </button>
-            )}
-          </span>
-        </div>
+                }
+              : undefined
+          }
+        />
         {/* Boutons de la ligne de TITRE (icônes absence / liste d'attente, puis Imprimer
             sur bureau), poussés au bord droit par marginLeft:auto. */}
         <div
@@ -3442,35 +3332,20 @@ export function UserAgendaGrid({
           marginBottom: isMobile ? "0.5rem" : ".6rem",
         }}
       >
-        <div className="period-tabs" id="agenda-period-tabs">
-          {visiblePeriods.map((p) => {
-            const active = p.id === coveringPeriod?.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className={`period-btn ${active ? "active" : ""}`}
-                style={{ "--period-color": p.color } as React.CSSProperties}
-                onClick={() => {
-                  // Onglet choisi = source de vérité : on fige la période ET on ancre
-                  // la semaine sur son début (cf. legacy _pickedP).
-                  if (p.dateStart) {
-                    setRwPeriodId(p.id);
-                    setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
-                  }
-                }}
-              >
-                <span className="period-badge" />
-                {p.label}
-              </button>
-            );
-          })}
-          {periods.length === 0 && (
-            <span style={{ fontSize: ".75rem", color: "var(--muted)" }}>
-              Aucune période active.
-            </span>
-          )}
-        </div>
+        {/* Onglets de période (PeriodTabs, partagés avec l'agenda admin). */}
+        <PeriodTabs
+          periods={visiblePeriods}
+          activeId={coveringPeriod?.id}
+          onPick={(p) => {
+            // Onglet choisi = source de vérité : on fige la période ET on ancre
+            // la semaine sur son début (cf. legacy _pickedP).
+            if (p.dateStart) {
+              setRwPeriodId(p.id);
+              setAnchorMonday(ymd(mondayOf(new Date(`${p.dateStart}T00:00:00`))));
+            }
+          }}
+          emptyText={periods.length === 0 ? "Aucune période active." : undefined}
+        />
         {/* (Options « sans créneau » + impression : remontées sur la ligne de titre.)
             Aide « Prévenir d'une absence » : bouton purement INFORMATIF (la saisie se fait
             sur le badge de la réservation concernée) — explique la procédure. Aligné à

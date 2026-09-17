@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ModalOverlay, WaitingListGlyph } from "@/components/agenda-shared";
+import { useMediaQuery } from "@/components/use-media-query";
 import { DAY_NAMES } from "@/lib/agenda-core";
 import { dispoKey, HALF_DAY_LABEL, HALF_DAYS } from "@/lib/waiting-list";
 import { joinWaitingList, leaveWaitingList } from "./actions";
@@ -58,14 +59,7 @@ export function WaitingListModal({
   const inscrit = entry != null;
   // Petit écran : jours ABRÉGÉS en en-tête (« Mer. ») et tableau sur toute la largeur —
   // cinq colonnes de « Mercredi » ne tiennent pas dans 375 px (Dom 2026-09-05).
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const update = () => setNarrow(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
+  const narrow = useMediaQuery("(max-width: 640px)");
   const dayHeader = (d: string) => {
     const full = DAY_NAMES[d] ?? d;
     return narrow ? `${full.slice(0, 3)}.` : full;

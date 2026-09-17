@@ -34,11 +34,7 @@ export function badgeTitle(
   const lines: string[] = [];
   if (bk.tel.trim()) lines.push(`Tel : ${bk.tel.trim()}`);
   lines.push(bk.email);
-  lines.push(
-    `${bk.enfants} enfant${bk.enfants > 1 ? "s" : ""} ${bk.accompagnants} adulte${
-      bk.accompagnants > 1 ? "s" : ""
-    }`,
-  );
+  lines.push(participantsLabel(bk.enfants, bk.accompagnants));
   const niveau = bk.niveau?.trim();
   if (niveau) lines.push(`Niveau : ${niveau}`);
   const motif = bk.pointageMotif?.trim();
@@ -60,6 +56,16 @@ export function badgeTitle(
   return lines.join("\n");
 }
 
+/**
+ * Ligne « N enfant(s) M adulte(s) » des info-bulles de badge (port legacy _badgeTitle) —
+ * partagée par badgeTitle (admin) et les badges « ma réservation » de l'agenda usager.
+ */
+export function participantsLabel(enfants: number, accompagnants: number): string {
+  return `${enfants} enfant${enfants > 1 ? "s" : ""} ${accompagnants} adulte${
+    accompagnants > 1 ? "s" : ""
+  }`;
+}
+
 /** Accord pluriel des libellés de compteurs (cf. legacy _bdetUpdateLabels). */
 export function plural(n: number, singular: string, plural: string): string {
   return n > 1 ? plural : singular;
@@ -79,11 +85,19 @@ export function fmtSlotHoursFr(start?: string, end?: string): string {
   return `de ${fmtHourFr(start)} à ${fmtHourFr(end)}`;
 }
 
-// Date longue française à partir d'un « YYYY-MM-DD ».
-export function fmtDateLongFr(ymd: string): string {
-  return new Date(`${ymd}T00:00:00`).toLocaleDateString("fr-FR", {
+// Date longue française à partir d'un « YYYY-MM-DD » : « jeudi 10 septembre ».
+// `year` : ajoute l'année (« jeudi 10 septembre 2026 ») ; `capitalize` : majuscule
+// INITIALE seule (« Jeudi 10 septembre 2026 » — pas de text-transform capitalize, qui
+// mettrait aussi le mois en capitale), cf. modale d'absence de l'agenda usager.
+export function fmtDateLongFr(
+  ymd: string,
+  { year = false, capitalize = false }: { year?: boolean; capitalize?: boolean } = {},
+): string {
+  const s = new Date(`${ymd}T00:00:00`).toLocaleDateString("fr-FR", {
     weekday: "long",
     day: "numeric",
     month: "long",
+    ...(year ? { year: "numeric" } : {}),
   });
+  return capitalize ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
