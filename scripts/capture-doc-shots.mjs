@@ -47,9 +47,9 @@ const blurRealPeople = (page) =>
   page.evaluate((tokens) => {
     if (tokens.length === 0) return 0;
     // Mot entier, sans casse (« Dom » ne floute pas « domaine »).
-    const escape = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const res = tokens.map(
-      (t) => new RegExp("(^|[^\\p{L}\\p{N}])" + escape(t) + "(?=$|[^\\p{L}\\p{N}])", "iu"),
+      (t) => new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRe(t)}(?=$|[^\\p{L}\\p{N}])`, "iu"),
     );
     let n = 0;
     for (const el of document.body.querySelectorAll("*")) {

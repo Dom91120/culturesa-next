@@ -63,30 +63,8 @@ body {
     height: auto !important;
     overflow: visible !important;
   }
-  /* Tables larges (Liste des réservations, min-width 1080) : en impression on les laisse
-     tenir dans la page (fin du min-width + overflow) et les cellules passent à la ligne
-     (au lieu de l'ellipsis) pour n'amputer aucune donnée. */
-  .admin-table-wrap {
-    overflow: visible !important;
-  }
-  .admin-table {
-    min-width: 0 !important;
-    width: 100% !important;
-  }
-  .admin-table th,
-  .admin-table td {
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-  }
-  /* Liste : colonnes Date et Créneau sur 2 lignes à l'impression (jour / date, début /
-     fin) — le 2e segment passe en bloc. À l'écran, `.pr-2l` reste inline (une seule ligne). */
-  .admin-table td .pr-2l {
-    display: block;
-  }
-  /* Le tiret de séparation du créneau (« 15:00–16:00 ») disparaît à l'impression, où
-     début et fin sont sur 2 lignes. */
-  .admin-table td .pr-dash {
-    display: none;
-  }
+  /* (Ancien bloc d'impression `.admin-table / .pr-2l / .pr-dash` — Date et Créneau sur
+     deux lignes dans la Liste des réservations — retiré : plus aucune de ces classes dans
+     l'app ; la Liste met déjà le créneau en sous-ligne bloc `.ed-sub` sous la date, à
+     l'écran comme à l'impression — audit 2026-09-17.) */
 }

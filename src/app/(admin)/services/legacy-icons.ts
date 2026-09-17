@@ -1,5 +1,6 @@
-// AUTO-GÉNÉRÉ depuis test/public/js/app.js (ancienne version PHP) — ne pas éditer à la main.
-// Régénérer : node scripts/extract-legacy-icons.cjs
+// Extrait une fois pour toutes de l'ancienne version PHP (test/public/js/app.js,
+// _ICON_CATEGORIES + svcIcon) par un script d'extraction aujourd'hui supprimé (le dépôt
+// legacy n'est plus présent en local) : ce fichier est désormais la SOURCE, éditable à la main.
 
 export type IconCategory = { label: string; icons: string[] };
 

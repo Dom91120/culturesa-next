@@ -660,7 +660,11 @@ main {
   font-family: inherit;
   font-size: 0.82rem;
   cursor: pointer;
-  transition: all 0.15s;
+  /* Propriétés réellement animées (:hover / .active / mode réduit) — pas de `all`. */
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   background: transparent;
   color: var(--muted);
   white-space: nowrap;
@@ -1075,7 +1079,14 @@ textarea {
   font-weight: 600;
   cursor: pointer;
   letter-spacing: 0.02em;
-  transition: all 0.2s;
+  /* Animées par .btn-primary/.btn-ghost (:hover, :disabled) — pas de `all`. */
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s,
+    opacity 0.2s;
 }
 .btn-primary {
   background: var(--accent);
@@ -1380,47 +1391,6 @@ textarea.theme-pending:focus::placeholder {
   text-align: center;
   line-height: 1.35;
 }
-
-.admin-table-wrap {
-  overflow-x: auto;
-  border-radius: 6px;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  /* Ligne de fermeture en bas du tableau (les lignes n'ont pas de bordure basse). */
-  border-bottom: 1px solid var(--border);
-}
-.admin-table {
-  border-collapse: collapse;
-  font-size: 0.75rem;
-  width: 100%;
-  line-height: 1;
-}
-.admin-table th {
-  padding: 0.3rem 0.2rem 0.2rem;
-  text-align: left;
-  vertical-align: middle;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #e8e4da;
-  background: var(--admin-th-bg);
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-  transition: color 0.2s;
-  line-height: 1.4;
-}
-.admin-table th:hover {
-  color: #e8e4da;
-}
-.defaults-row {
-  margin: 1rem 0 1.8rem;
-}
-.admin-table th.sorted {
-  color: var(--accent);
-}
 .periods-table {
   border-collapse: collapse;
 }
@@ -1463,9 +1433,6 @@ textarea.theme-pending:focus::placeholder {
 .periods-table td > * {
   vertical-align: middle;
 }
-.periods-table td.td-left {
-  text-align: left;
-}
 .periods-table input[type="text"],
 .periods-table input[type="date"] {
   padding: 0 0.4rem !important;
@@ -1488,23 +1455,6 @@ textarea.theme-pending:focus::placeholder {
   border-radius: 3px;
   border: 1px solid var(--border);
   vertical-align: middle;
-}
-/* Titre + navigation exercice (« Exercice ◀ … ▶ ») du panneau Périodes. */
-.pr-head {
-  display: flex;
-  /* Centrage vertical : la nav ◀ … ▶ est un flex centré dont la « baseline » exportée
-     est celle des flèches — align-items:baseline décalait « Exercice » du libellé
-     d'année. Le centrage + line-height:1 sur les deux textes harmonise la ligne. */
-  align-items: center;
-  gap: 0 0.5rem;
-  flex-wrap: wrap;
-}
-.pr-head > span:first-child,
-.pr-head .ex-nav-label {
-  line-height: 1;
-}
-.pr-head > .periode-nav {
-  margin: 0;
 }
 
 /* Barre de navigation entre exercices : ◀ label ▶ — réutilisée par périodes, planning rec et planning ponctuel */
@@ -1611,31 +1561,6 @@ textarea.theme-pending:focus::placeholder {
   margin-left: 0.25rem;
   opacity: 0.5;
 }
-.admin-table td {
-  padding: 0.2rem 0.6rem;
-  vertical-align: middle;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.admin-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
-}
-/* Variante zébrée : une ligne sur deux sur fond gris clair (surface2 selon le thème). */
-.admin-table.zebra tbody tr:nth-child(even) td {
-  background: var(--surface2);
-}
-/* Hauteur de ligne uniforme (vraies lignes ET lignes vides de complément) : toutes les
-   pages d'un tableau paginé gardent exactement la même hauteur. */
-.admin-table.zebra tbody td {
-  height: 22px;
-}
-.admin-table td:first-child {
-  font-weight: 400;
-}
-.admin-table tr.role-break td {
-  border-top: 1px dotted var(--muted);
-}
 .search-wrap {
   position: relative;
   flex: 0 1 260px;
@@ -1654,16 +1579,6 @@ textarea.theme-pending:focus::placeholder {
   height: 0.95rem;
   color: var(--muted);
   pointer-events: none;
-}
-
-.col-check {
-  width: 36px;
-  text-align: left;
-}
-.admin-table th.col-check,
-.admin-table td.col-check {
-  padding-left: 0.5rem;
-  padding-right: 0.25rem;
 }
 .admin-cb {
   width: 15px;
@@ -3198,10 +3113,6 @@ textarea.theme-pending:focus::placeholder {
   #service-sidebar .sb-icon {
     font-size: 1.05rem;
   }
-  /* « Mon compte » sur sa propre ligne, pleine largeur, sous les services. */
-  #service-sidebar .sidebar-compte-btn {
-    flex-basis: 100%;
-  }
   .app-main {
     height: auto;
     overflow: visible;
@@ -3289,7 +3200,10 @@ textarea.theme-pending:focus::placeholder {
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 .acct-chip:hover {
   color: var(--text);
@@ -3351,17 +3265,8 @@ textarea.theme-pending:focus::placeholder {
 .acct-table tbody tr:hover td {
   background: color-mix(in srgb, var(--text) 4%, transparent);
 }
-.acct-table tr.row-checked td {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
 .acct-table tr.is-anon td {
   color: var(--muted);
-}
-.acct-table th.col-check,
-.acct-table td.col-check {
-  padding-left: 0.5rem;
-  padding-right: 0.2rem;
-  overflow: visible;
 }
 .acct-who {
   display: flex;
@@ -3498,7 +3403,11 @@ textarea.theme-pending:focus::placeholder {
   padding: 0;
   text-decoration: none;
   font-family: inherit;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
 }
 .acct-action:hover:not(:disabled) {
   border-color: var(--border-hover);
@@ -4392,6 +4301,8 @@ textarea.theme-pending:focus::placeholder {
   align-items: center;
   justify-content: center;
 }
+/* Classes construites dynamiquement (`ex-actor is-${actor}`, mail-routing-table) :
+   invisibles au script prune-dead-css — ne pas supprimer. */
 .ex-actor.is-usager {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
@@ -4953,7 +4864,9 @@ textarea.theme-pending:focus::placeholder {
   justify-content: center;
   flex: 0 0 auto;
   text-decoration: none;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
 }
 .edh-back:hover {
   border-color: var(--border-hover);
@@ -5301,6 +5214,8 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 .xc-ok {
   color: var(--accent) !important;
 }
+/* `xc-${undoTone}` (exercice-panel) : construites dynamiquement, invisibles au script
+   prune-dead-css — ne pas supprimer. */
 .xc-warn {
   color: var(--warn) !important;
 }
@@ -5869,22 +5784,6 @@ div:has(> section:last-child > .ed-table:last-child) + .ed-totals.is-strong,
 }
 .auth-card .field-error {
   display: block;
-}
-.auth-card .field-aside {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-.auth-card .field-aside a {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--muted);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.auth-card .field-aside a:hover {
-  color: var(--accent);
 }
 .auth-card .btn-row {
   margin-top: 0;

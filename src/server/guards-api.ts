@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { ManagerLevel, Role } from "@/generated/prisma/client";
+import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 import { journal } from "@/server/log";
@@ -71,20 +71,14 @@ export async function requireRoleApi(min: Role, chemin: string) {
   return session;
 }
 
-/** Exige le droit d'administrer CE service (niveau gestion). Lève `ApiAuthError` sinon. */
-export async function requireServiceManagerApi(serviceId: string, chemin: string) {
-  return requireServiceLevelApi(serviceId, chemin, "gestion");
-}
-
 /**
  * Exige au moins la CONSULTATION de ce service (gestion ou consultation) : routes de
  * lecture seule (exports CSV / PDF des éditions et statistiques). Lève `ApiAuthError` sinon.
+ * (Aucune route de GESTION n'existe en `route.ts` : la variante « niveau gestion »
+ * n'avait aucun appelant et a été retirée — audit 2026-09-17 ; à recréer sur le même
+ * modèle si une route d'écriture apparaît.)
  */
 export async function requireServiceAccessApi(serviceId: string, chemin: string) {
-  return requireServiceLevelApi(serviceId, chemin, "consultation");
-}
-
-async function requireServiceLevelApi(serviceId: string, chemin: string, min: ManagerLevel) {
   const session = await requireRoleApi("gestionnaire", chemin);
   const role = (session.user as { role?: Role }).role ?? "utilisateur";
   if (role === "administrateur") return session;
@@ -95,8 +89,7 @@ async function requireServiceLevelApi(serviceId: string, chemin: string, min: Ma
   });
   // Même refus, que le service existe ou non : distinguer « pas le droit » de
   // « n'existe pas » renseignerait un gestionnaire sur les services des autres.
-  // Un rattachement en consultation ne suffit pas à une route de gestion.
-  if (!mgr || (min === "gestion" && mgr.level !== "gestion")) {
+  if (!mgr) {
     refuser(403, "Ce service ne vous est pas rattaché.", {
       chemin,
       serviceId,

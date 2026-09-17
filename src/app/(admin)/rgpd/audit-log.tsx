@@ -102,6 +102,7 @@ function Actor({ party, action }: { party: AuditParty; action: string }) {
     const [nom, ...rest] = (party.name || "").split(" ");
     return (
       <div className="acct-who">
+        {/* biome-ignore lint/a11y/useValidAriaRole: `role` est la prop metier d Avatar (role applicatif), pas l attribut ARIA. */}
         <Avatar prenom={rest.join(" ")} nom={nom} email={party.email} role="administrateur" />
         <div style={{ minWidth: 0 }}>
           <div className="name" style={{ fontWeight: 500 }}>

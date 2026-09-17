@@ -70,7 +70,17 @@ const tokenRe = /[.#]([A-Za-z0-9_-]+)/g;
 // Classes composées DYNAMIQUEMENT (ex. `toast toast--${variant}`) : le nom complet
 // n'apparaît jamais littéralement dans les sources → on les conserve explicitement
 // pour éviter un faux « mort ». Ajouter ici toute nouvelle famille de ce type.
-const KEEP = new Set(["toast--success", "toast--danger", "toast--warn"]);
+// Classes construites dynamiquement (`is-${actor}`, `xc-${undoTone}`) : introuvables
+// telles quelles dans le corpus, mais bien vivantes.
+const KEEP = new Set([
+  "toast--success",
+  "toast--danger",
+  "toast--warn",
+  "is-usager",
+  "is-gestionnaire",
+  "xc-warn",
+  "xc-danger",
+]);
 
 const liveCache = new Map();
 function tokenLive(name) {
