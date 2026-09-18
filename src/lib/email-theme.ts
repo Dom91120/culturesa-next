@@ -68,7 +68,9 @@ export function safeHref(href: string): string {
   // Valeur venue d'une configuration ou d'un gabarit : tronquée ET privée de ses retours
   // à la ligne avant journalisation (une URL « …\n[auth] connexion admin » forgerait sinon
   // une fausse ligne de journal — CodeQL js/log-injection).
-  const apercu = v.slice(0, 80).replace(/[\r\n]+/g, " ");
+  // Forme exacte que CodeQL reconnaît comme assainissement : retours à la ligne remplacés
+  // par VIDE (un remplacement par une espace, pourtant équivalent, laissait l'alerte ouverte).
+  const apercu = v.slice(0, 80).replace(/\n|\r/g, "");
   console.error(`[email-theme] URL au schéma non autorisé, lien neutralisé : ${apercu}`);
   return "#";
 }
