@@ -82,9 +82,12 @@ jobs:
       # être confondue avec une vulnérabilité. Sinon la CI devient rouge pour une
       # raison sans rapport, et l'on prend l'habitude de passer outre.
       #
-      # Pour accepter sciemment un avis sans correctif :
-      #   pnpm audit --audit-level high --ignore-registry-errors --ignore GHSA-xxxx-xxxx-xxxx
-      # en documentant ici la raison et la date de réexamen.
+      # Pour accepter sciemment un avis sans correctif : l'ajouter à
+      # `auditConfig.ignoreGhsas` dans pnpm-workspace.yaml (pnpm 11 : `pnpm audit --ignore
+      # GHSA-xxxx-xxxx-xxxx` l'y inscrit), en y documentant la raison et la date de réexamen.
+      #
+      # Avis acceptés à ce jour : voir `auditConfig.ignoreGhsas` dans pnpm-workspace.yaml
+      # (source unique, valable aussi sur les postes), avec la raison de chacun.
       - name: pnpm audit
         run: pnpm audit --audit-level high --ignore-registry-errors
 
