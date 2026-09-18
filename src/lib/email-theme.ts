@@ -65,7 +65,11 @@ export function safeHref(href: string): string {
   } catch {
     // Non analysable → traité comme un schéma inconnu.
   }
-  console.error(`[email-theme] URL au schéma non autorisé, lien neutralisé : ${v.slice(0, 80)}`);
+  // Valeur venue d'une configuration ou d'un gabarit : tronquée ET privée de ses retours
+  // à la ligne avant journalisation (une URL « …\n[auth] connexion admin » forgerait sinon
+  // une fausse ligne de journal — CodeQL js/log-injection).
+  const apercu = v.slice(0, 80).replace(/[\r\n]+/g, " ");
+  console.error(`[email-theme] URL au schéma non autorisé, lien neutralisé : ${apercu}`);
   return "#";
 }
 

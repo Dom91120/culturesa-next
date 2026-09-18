@@ -220,10 +220,19 @@ async function isFileEncrypted(full: string): Promise<boolean> {
   }
 }
 
-/** Résout un nom de dump vers son chemin, en refusant tout nom hors du dossier. */
+/**
+ * Résout un nom de dump vers son chemin, en refusant tout nom hors du dossier.
+ * Deux barrières : le motif SAFE_NAME (ni séparateur ni « .. » en segment), puis le
+ * CONFINEMENT du chemin résolu dans le dossier des sauvegardes — redondant avec le motif,
+ * mais c'est la forme que reconnaissent les analyseurs statiques (CodeQL js/path-injection)
+ * et elle tiendrait encore si le motif était un jour assoupli par mégarde.
+ */
 export function backupPath(name: string): string {
   if (!SAFE_NAME.test(name)) throw new UserFacingError("Nom de fichier invalide.");
-  return path.join(BACKUPS_DIR, name);
+  const root = path.resolve(BACKUPS_DIR);
+  const full = path.resolve(root, name);
+  if (!full.startsWith(root + path.sep)) throw new UserFacingError("Nom de fichier invalide.");
+  return full;
 }
 
 function timestamp(): string {

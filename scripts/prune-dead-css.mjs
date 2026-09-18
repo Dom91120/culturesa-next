@@ -7,7 +7,7 @@
 // template string reste détecté comme vivant.
 // Usage : node scripts/prune-dead-css.mjs [--apply]
 
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -15,12 +15,13 @@ const CSS_PATH = join(ROOT, "src", "app", "app-legacy.css");
 const APPLY = process.argv.includes("--apply");
 
 // ── Source corpus : tout le contenu .ts/.tsx de src/ ──
+// `withFileTypes` : le type vient de la lecture du dossier elle-même, sans `stat` séparé
+// suivi d'une lecture (fenêtre de course fichier — CodeQL js/file-system-race).
 function walk(dir, out) {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    const st = statSync(p);
-    if (st.isDirectory()) walk(p, out);
-    else if (/\.(ts|tsx)$/.test(name)) out.push(readFileSync(p, "utf8"));
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) walk(p, out);
+    else if (/\.(ts|tsx)$/.test(entry.name)) out.push(readFileSync(p, "utf8"));
   }
   return out;
 }

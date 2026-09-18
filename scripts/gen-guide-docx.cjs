@@ -57,7 +57,14 @@ const jobs = process.argv[2] ? [process.argv.slice(2)] : PRESETS;
 async function generate([mdPath, outPath, coverTitle, coverSubtitle, filtre]) {
   const mdDir = path.dirname(path.resolve(mdPath));
   let md = fs.readFileSync(mdPath, "utf8");
-  md = md.replace(/<!--[\s\S]*?-->/g, ""); // commentaires HTML (en-tête source unique)
+  // Commentaires HTML (en-tête source unique), retirés JUSQU'À STABILITÉ : une passe
+  // unique laisse « <!-- » à partir de « <!-<!-- x -->- » (CodeQL
+  // js/incomplete-multi-character-sanitization).
+  let sansCommentaires;
+  do {
+    sansCommentaires = md;
+    md = md.replace(/<!--[\s\S]*?-->/g, "");
+  } while (md !== sansCommentaires);
   if (filtre) md = filtre(md);
 
   // ── Inline : **gras**, `code`, [texte](url), *italique* ────────────────────────────

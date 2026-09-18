@@ -518,19 +518,6 @@ export async function deleteCustomMailType(
   else await prisma.mailType.deleteMany({ where: { serviceId, key } });
 }
 
-/** Version texte brut dérivée du HTML rendu (deliverabilité + clients sans HTML). */
-export function htmlToText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/li>/gi, "\n")
-    .replace(/<li>/gi, "- ")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+// Version texte brut d'un e-mail : module pur lib/html-to-text (ré-exporté ici, point
+// d'import historique).
+export { htmlToText } from "@/lib/html-to-text";

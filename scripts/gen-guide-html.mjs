@@ -22,9 +22,19 @@ const outImg = join(root, "public", "aide", "img");
 // Slug façon GitHub : minuscules, on retire emojis/ponctuation, espaces → tirets.
 // (marked v18 ne génère plus les id d'en-têtes ; on les réinjecte pour que les
 // liens d'ancrage internes du guide — #1-usager, etc. — fonctionnent.)
+// Balises retirées JUSQU'À STABILITÉ (une passe unique laisse « <b> » à partir de
+// « <<b>b> » — CodeQL js/incomplete-multi-character-sanitization).
+const stripTags = (text) => {
+  let out = text;
+  let previous;
+  do {
+    previous = out;
+    out = out.replace(/<[^>]+>/g, "");
+  } while (out !== previous);
+  return out;
+};
 const slug = (text) =>
-  text
-    .replace(/<[^>]+>/g, "")
+  stripTags(text)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s-]/gu, "")
     .trim()

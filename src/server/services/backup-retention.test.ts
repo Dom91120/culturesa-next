@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // le genre de test qui, mal écrit, cause le dommage qu'il prétend prévenir.
 let dir: string;
 let purgeAgedBackups: (now?: number) => Promise<number>;
+let backupPath: (name: string) => string;
 
 const JOUR = 24 * 60 * 60 * 1000;
 const AGE_RETAIN_MS = 90 * JOUR;
@@ -32,7 +33,7 @@ beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "culturesa-retention-"));
   process.env.BACKUPS_DIR = dir;
   vi.resetModules();
-  ({ purgeAgedBackups } = await import("./backup"));
+  ({ purgeAgedBackups, backupPath } = await import("./backup"));
 });
 
 afterEach(async () => {
@@ -112,5 +113,27 @@ describe("purgeAgedBackups — rétention à 90 jours des exports manuels et té
 
   it("dossier vide : ne lève pas", async () => {
     expect(await purgeAgedBackups(MAINTENANT)).toBe(0);
+  });
+});
+
+describe("backupPath — nom sûr ET chemin confiné au dossier des sauvegardes", () => {
+  it("nom conforme → chemin absolu DANS le dossier", () => {
+    const p = backupPath("manuel-2026-01-01.sql.gz.enc");
+    expect(path.isAbsolute(p)).toBe(true);
+    expect(p).toBe(path.join(path.resolve(dir), "manuel-2026-01-01.sql.gz.enc"));
+  });
+  it("traversée, séparateurs, chemin absolu, extension étrangère → refus", () => {
+    for (const nom of [
+      "../secret.sql",
+      "..\\secret.sql",
+      "sous/dossier.sql",
+      "/etc/passwd",
+      "C:\\Windows\\win.ini",
+      ".cache.sql",
+      "dump.txt",
+      "",
+    ]) {
+      expect(() => backupPath(nom), nom).toThrow("Nom de fichier invalide.");
+    }
   });
 });
