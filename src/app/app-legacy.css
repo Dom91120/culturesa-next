@@ -3936,19 +3936,26 @@ textarea.theme-pending:focus::placeholder {
     display: none;
   }
 }
-/* Journal : frise chronologique par jour. */
+/* Journal : frise chronologique par jour.
+   UN SEUL AXE : la ligne et les deux types de points se centrent sur `--tl-axis` par
+   translate(-50%) — plus de décalages « à la main » en unités mélangées (px pour la
+   ligne, rem pour les points), qui laissaient ~1 px d'écart, amplifié par le zoom. */
 .rg-tl {
+  --tl-pad: 1.5rem; /* retrait du contenu */
+  --tl-axis: 0.5rem; /* position de l'axe depuis le bord gauche de la frise */
   position: relative;
-  padding-left: 1.5rem;
+  padding-left: var(--tl-pad);
   margin-top: 0.4rem;
 }
 .rg-tl::before {
   content: "";
   position: absolute;
-  left: 8px;
+  left: var(--tl-axis);
   top: 6px;
   bottom: 6px;
-  border-left: 1.5px solid var(--border-hover);
+  width: 1.5px;
+  background: var(--border-hover);
+  transform: translateX(-50%);
 }
 .rg-day {
   position: relative;
@@ -3960,12 +3967,13 @@ textarea.theme-pending:focus::placeholder {
 .rg-day::before {
   content: "";
   position: absolute;
-  left: -1.25rem;
-  top: 4px;
+  left: calc(var(--tl-axis) - var(--tl-pad));
+  top: 50%;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--muted);
+  transform: translate(-50%, -50%);
 }
 .rg-ev {
   position: relative;
@@ -3983,14 +3991,25 @@ textarea.theme-pending:focus::placeholder {
 .rg-ev::before {
   content: "";
   position: absolute;
-  left: -1.2rem;
+  left: calc(var(--tl-axis) - var(--tl-pad));
   top: 50%;
   width: 6px;
   height: 6px;
-  margin-top: -4px;
   border-radius: 50%;
   background: var(--surface1);
   border: 1.5px solid var(--muted);
+  transform: translate(-50%, -50%);
+}
+/* Dernier événement de la page : la ligne s'arrête À son point, sans bout qui dépasse. */
+.rg-tl > :last-child > .rg-ev::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--tl-axis) - var(--tl-pad));
+  top: calc(50% + 3px);
+  bottom: 0;
+  width: 5px;
+  background: var(--surface1);
+  transform: translateX(-50%);
 }
 .rg-ico {
   width: 26px;
