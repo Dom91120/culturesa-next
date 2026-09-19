@@ -100,8 +100,11 @@ services:
       # « Calling client.query() when the client is already executing a query » (pg,
       # cassant en pg@9) — non reproductible hors production, et aucun appel fautif dans
       # notre code ni dans l'adaptateur Prisma. Sans effet sur le fonctionnement ; pour
-      # lire le résultat : docker compose logs app | grep -A 25 DeprecationWarning
-      NODE_OPTIONS: --trace-deprecation
+      # lire le résultat : docker compose logs app | grep -A 65 DeprecationWarning
+      # 1re lecture : l'appel vient de l'interpréteur de requêtes de Prisma, dans une
+      # transaction — mais la pile, limitée à 10 lignes par défaut, s'arrêtait avant
+      # le fichier appelant ; d'où --stack-trace-limit.
+      NODE_OPTIONS: --trace-deprecation --stack-trace-limit=60
     ports: !override
       - "127.0.0.1:3000:3000"
     volumes:
