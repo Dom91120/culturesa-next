@@ -28,10 +28,12 @@ cp .env.example .env
 #   -> renseigne DATABASE_URL (décommente la ligne dev),
 #      BETTER_AUTH_SECRET, NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# Lancer juste une base Postgres locale via Docker :
+# Lancer juste une base Postgres locale via Docker (même version majeure que la prod ;
+# depuis l'image 18, le volume se monte sur /var/lib/postgresql, plus sur .../data) :
 docker run --name culturesa-db -e POSTGRES_USER=culturesa \
   -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=culturesa \
-  -p 5432:5432 -d postgres:17-alpine
+  -v culturesa-pgdata18:/var/lib/postgresql \
+  -p 5432:5432 -d postgres:18.6-alpine
 # DATABASE_URL=postgresql://culturesa:dev@localhost:5432/culturesa?schema=public
 
 # 3. Base de données
