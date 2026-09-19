@@ -6,13 +6,12 @@ beforeEach(() => {
 });
 
 describe("safeHref — liste blanche de schémas (constat S4)", () => {
-  it.each([
-    "https://ville.fr/verif?token=abc",
-    "http://localhost:3000/x",
-    "mailto:a@b.fr",
-  ])("laisse passer %s", (url) => {
-    expect(safeHref(url)).toBe(url);
-  });
+  it.each(["https://ville.fr/verif?token=abc", "http://localhost:3000/x", "mailto:a@b.fr"])(
+    "laisse passer %s",
+    (url) => {
+      expect(safeHref(url)).toBe(url);
+    },
+  );
 
   it.each(["/mon-compte", "#", "?k=v"])("laisse passer le chemin relatif %s", (url) => {
     // L'aperçu de l'éditeur de gabarits passe « # ». Le refuser casserait un écran

@@ -31,18 +31,17 @@ describe("cookiesSecurises — ce que le constat A5 corrige", () => {
     );
   });
 
-  it.each([
-    "1",
-    "TRUE",
-    "oui",
-    "yes",
-    "",
-  ])("« %s » ne lève PAS la protection — seule la chaîne exacte « true » le fait", (v) => {
-    // Une échappatoire trop accueillante finit ouverte par accident. Un opérateur
-    // qui écrit `ALLOW_INSECURE_COOKIES=1` doit voir que ça n'a pas marché, plutôt
-    // que de désactiver `Secure` en croyant avoir écrit autre chose.
-    expect(cookiesSecurises(env({ NODE_ENV: "production", ALLOW_INSECURE_COOKIES: v }))).toBe(true);
-  });
+  it.each(["1", "TRUE", "oui", "yes", ""])(
+    "« %s » ne lève PAS la protection — seule la chaîne exacte « true » le fait",
+    (v) => {
+      // Une échappatoire trop accueillante finit ouverte par accident. Un opérateur
+      // qui écrit `ALLOW_INSECURE_COOKIES=1` doit voir que ça n'a pas marché, plutôt
+      // que de désactiver `Secure` en croyant avoir écrit autre chose.
+      expect(cookiesSecurises(env({ NODE_ENV: "production", ALLOW_INSECURE_COOKIES: v }))).toBe(
+        true,
+      );
+    },
+  );
 });
 
 describe("alerteCookiesNonSecurises — le silence était le défaut", () => {
