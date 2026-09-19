@@ -569,12 +569,18 @@ export async function createUniqueBookingInTx(
   validated: boolean,
   opts: { dryRun?: boolean } = {},
 ) {
+  // DEUX relations au plus par lecture faite dans une transaction : Prisma 7 charge
+  // les relations d'un même niveau par des requêtes lancées EN PARALLÈLE, et une
+  // transaction n'a qu'une connexion — à partir de trois, pg avertit (« client.query()
+  // when the client is already executing a query », cassant en pg@9 ; constaté en
+  // production le 2026-09-19 via la tâche Liste d'attente, qui rejoue ce cœur à blanc).
+  // Les demandeurs du parent ne servent qu'à un miroir sans restriction propre : ils
+  // sont donc lus à la demande, plus bas.
   const slot = await tx.slot.findUnique({
     where: { id: input.slotId },
     include: {
       service: true,
       demandeurs: { select: { demandeurId: true } },
-      parent: { select: { demandeurs: { select: { demandeurId: true } } } },
     },
   });
   if (slot?.slotType !== "unique") {
@@ -586,7 +592,13 @@ export async function createUniqueBookingInTx(
   }
   // Demandeurs autorisés (SlotDemandeur) : restriction du créneau, sinon celle de
   // son parent pour un miroir. Compte sans demandeur effectif (ex. admin) : autorisé.
-  const restriction = slot.demandeurs.length ? slot.demandeurs : (slot.parent?.demandeurs ?? []);
+  const restriction =
+    slot.demandeurs.length || !slot.parentSlotId
+      ? slot.demandeurs
+      : await tx.slotDemandeur.findMany({
+          where: { slotId: slot.parentSlotId },
+          select: { demandeurId: true },
+        });
   if (restriction.length > 0) {
     const demId = await effectiveDemandeurId(tx, userId);
     if (demId != null && !restriction.some((d) => d.demandeurId === demId)) {

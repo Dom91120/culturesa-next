@@ -23,6 +23,7 @@ import {
   assertSlotCapacity,
   BookingError,
   cancelUserBookingInTx,
+  createUniqueBookingInTx,
   effectiveOpenOnSchoolHolidays,
   isValidationMode,
   limiteReservationAtteinte,
@@ -197,6 +198,79 @@ describe("userCanAccessService", () => {
   it("demandeur effectif non référencé → refus", async () => {
     const tx = userTx({ user: { demandeurId: 7, structure: null }, setting: null });
     expect(await userCanAccessService(tx, "u1", "s1")).toBe(false);
+  });
+});
+
+// ─── createUniqueBookingInTx — restriction de demandeurs (créneau / miroir) ───
+
+/**
+ * Usager de demandeur effectif 3, ayant accès au service. Le créneau n'a PAS de
+ * date : une restriction franchie se reconnaît donc à l'erreur SUIVANTE de la
+ * chaîne (« Ce créneau est passé. »), sans avoir à simuler tout le reste.
+ */
+function uniqueSlotTx(opts: {
+  own: number[];
+  parentSlotId: number | null;
+  parentDemandeurs?: number[];
+}) {
+  const findUnique = vi.fn(async (_args: { include: Record<string, unknown> }) => ({
+    id: 1,
+    slotType: "unique",
+    serviceId: "s1",
+    slotDate: null,
+    periodId: null,
+    parentSlotId: opts.parentSlotId,
+    service: {},
+    demandeurs: opts.own.map((demandeurId) => ({ demandeurId })),
+  }));
+  const findMany = vi.fn(async (_args: { where: { slotId: number } }) =>
+    (opts.parentDemandeurs ?? []).map((demandeurId) => ({ demandeurId })),
+  );
+  const tx = fakeTx({
+    slot: { findUnique },
+    slotDemandeur: { findMany },
+    user: { findUnique: vi.fn(async () => ({ demandeurId: 3, structure: null })) },
+    serviceDemandeurSettings: { findFirst: vi.fn(async () => ({})) },
+  });
+  const run = () => createUniqueBookingInTx(tx, "u1", { slotId: 1 } as never, false);
+  return { run, findUnique, findMany };
+}
+
+describe("createUniqueBookingInTx (restriction de demandeurs)", () => {
+  const REFUS = "Ce créneau est réservé à d'autres demandeurs.";
+  const SUIVANTE = "Ce créneau est passé.";
+
+  it("restriction propre au créneau : appliquée, le parent n'est pas lu", async () => {
+    const { run, findMany } = uniqueSlotTx({ own: [5], parentSlotId: 10, parentDemandeurs: [3] });
+    await expect(run()).rejects.toThrow(REFUS);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("créneau sans restriction ni parent : franchie sans lecture supplémentaire", async () => {
+    const { run, findMany } = uniqueSlotTx({ own: [], parentSlotId: null });
+    await expect(run()).rejects.toThrow(SUIVANTE);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("miroir sans restriction propre : hérite du parent → refus", async () => {
+    const { run, findMany } = uniqueSlotTx({ own: [], parentSlotId: 10, parentDemandeurs: [5] });
+    await expect(run()).rejects.toThrow(REFUS);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { slotId: 10 } }));
+  });
+
+  it("miroir sans restriction propre : hérite du parent → accepté", async () => {
+    const { run } = uniqueSlotTx({ own: [], parentSlotId: 10, parentDemandeurs: [3, 5] });
+    await expect(run()).rejects.toThrow(SUIVANTE);
+  });
+
+  // Garde de non-régression : Prisma 7 lance EN PARALLÈLE les requêtes des relations
+  // d'un même niveau, et une transaction n'a qu'une connexion — trois relations ou
+  // plus déclenchent la dépréciation pg « client.query() … already executing ».
+  it("la lecture du créneau charge au plus DEUX relations", async () => {
+    const { run, findUnique } = uniqueSlotTx({ own: [], parentSlotId: null });
+    await expect(run()).rejects.toThrow(SUIVANTE);
+    const include = findUnique.mock.calls[0]?.[0].include ?? {};
+    expect(Object.keys(include).length).toBeLessThanOrEqual(2);
   });
 });
 
