@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ModalOverlay } from "@/components/agenda-shared";
+import { ModalOverlay, ParticipantGlyph } from "@/components/agenda-shared";
 import {
   absencePrevenueDateFr,
   absencePrevenueLabel,
@@ -499,7 +499,7 @@ export function BookingDetailModal({
             <div className="pcm-counters">
               <label className="pcm-counter" htmlFor="bdet-enfants">
                 <span className="pcm-counter-icon" aria-hidden="true">
-                  👶
+                  <ParticipantGlyph kind="enfants" />
                 </span>
                 <input
                   id="bdet-enfants"
@@ -514,7 +514,7 @@ export function BookingDetailModal({
               </label>
               <label className="pcm-counter" htmlFor="bdet-accompagnants">
                 <span className="pcm-counter-icon" aria-hidden="true">
-                  🧑‍🦰
+                  <ParticipantGlyph kind="adultes" />
                 </span>
                 <input
                   id="bdet-accompagnants"

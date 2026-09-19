@@ -220,6 +220,21 @@ export function CalendarGlyph({ size = 24 }: { size?: number }) {
   return <img src="/calendar.svg" width={size} height={size} alt="" aria-hidden="true" />;
 }
 
+/** Icônes des compteurs de participants (fiche et création de réservation). Même
+ * raison que CalendarGlyph : l'emoji « adulte » était une séquence composée
+ * (personne + liant + cheveux roux) que les postes à police emoji ancienne
+ * affichaient en DEUX glyphes. SVG fournis par Dom (public/enfants.svg,
+ * public/adultes.svg), servis via <img> pour la même raison d'id internes. */
+export function ParticipantGlyph({
+  kind,
+  size = 20,
+}: {
+  kind: "enfants" | "adultes";
+  size?: number;
+}) {
+  return <img src={`/${kind}.svg`} width={size} height={size} alt="" aria-hidden="true" />;
+}
+
 /** Item de légende « pastille créneau » (récurrent jaune / ponctuel vert) — même
  * vocabulaire visuel dans les deux grilles (classes .agenda-legend-* du legacy). */
 export function AgendaLegendSwatch({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ModalOverlay } from "@/components/agenda-shared";
+import { ModalOverlay, ParticipantGlyph } from "@/components/agenda-shared";
 import { DAY_NAMES } from "@/lib/agenda-core";
 import { slotTimeLabel } from "@/lib/slot-label";
 import { fmtDateLongFr, plural } from "./agenda-format";
@@ -261,7 +261,7 @@ export function BookingCreateModal({
           <div className="pcm-counters">
             <label className="pcm-counter" htmlFor="pcm-enfants">
               <span className="pcm-counter-icon" aria-hidden="true">
-                👶
+                <ParticipantGlyph kind="enfants" />
               </span>
               <input
                 id="pcm-enfants"
@@ -275,7 +275,7 @@ export function BookingCreateModal({
             </label>
             <label className="pcm-counter" htmlFor="pcm-accompagnants">
               <span className="pcm-counter-icon" aria-hidden="true">
-                🧑‍🦰
+                <ParticipantGlyph kind="adultes" />
               </span>
               <input
                 id="pcm-accompagnants"
