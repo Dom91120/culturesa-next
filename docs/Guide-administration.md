@@ -16,7 +16,7 @@ plus un conteneur d'initialisation ponctuel (`init`) :
 | Conteneur | Rôle |
 |-----------|------|
 | **app** | Application Next.js (standalone) + Prisma — servie en HTTP sur le port **3000** |
-| **db** | Base de données PostgreSQL 17 (volume persistant `pgdata`) |
+| **db** | Base de données PostgreSQL 18 (volume persistant `pgdata18`) |
 | **cron** | Tâches planifiées (auto-validation, rappels, RGPD) **et sauvegarde quotidienne de la base** |
 | **init** | One-shot (profil `init`, lancé à la demande) : crée le compte administrateur et les référentiels d'e-mails |
 
@@ -95,7 +95,7 @@ par le reverse proxy externe.
 
 ## 5. Base de données
 
-- **Moteur** : PostgreSQL 17, dans le conteneur `db`, données dans le volume Docker
+- **Moteur** : PostgreSQL 18, dans le conteneur `db`, données dans le volume Docker
   persistant `pgdata` (conservées même après `docker compose down`).
 - **Migrations** : appliquées automatiquement au démarrage de `app`. Application manuelle
   possible : `docker compose exec app pnpm db:deploy`.

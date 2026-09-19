@@ -34,7 +34,7 @@ const gunzip = promisify(gunzipCb);
  *
  * `pg_dump`/`psql` sont exécutés :
  *   - en direct s'ils sont disponibles (PATH ou PG_BIN) — cas de l'image Docker de
- *     l'app (postgresql17-client) ;
+ *     l'app (postgresql18-client) ;
  *   - sinon via `docker exec` dans le conteneur Postgres (PG_DOCKER_CONTAINER,
  *     défaut « culturesa-db ») — cas du poste de dev Windows sans outils client.
  */

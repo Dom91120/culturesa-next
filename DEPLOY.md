@@ -1,6 +1,6 @@
 # Déploiement — CultuRésa (Next.js auto-hébergé)
 
-Stack de prod : **Next.js standalone** + **PostgreSQL 17**, orchestrés par Docker Compose.
+Stack de prod : **Next.js standalone** + **PostgreSQL 18**, orchestrés par Docker Compose.
 L'app est publiée en **HTTP sur le port 3000** ; le TLS et les en-têtes de sécurité relèvent
 d'un **reverse proxy externe** à la stack (nginx, Traefik, Caddy hôte…) si elle est exposée à Internet.
 
@@ -13,7 +13,7 @@ d'un **reverse proxy externe** à la stack (nginx, Traefik, Caddy hôte…) si e
 - **Docker Engine ≥ 24** + plugin Compose v2 (`docker compose version`).
 - **Dimensionnement minimal** : 2 vCPU, 2 Go RAM, 20 Go SSD. **Recommandé** : 2 vCPU, 4 Go RAM,
   40 Go SSD (le build de l'image Next.js et PostgreSQL sont les postes les plus gourmands ;
-  prévoir de la marge disque pour `pgdata` + `./backups`).
+  prévoir de la marge disque pour `pgdata18` + `./backups`).
 - Port **3000** joignable par le reverse proxy externe (ou ouvert directement pour un usage LAN).
 - Si exposition à Internet : un nom de domaine pointant (enregistrement A/AAAA) vers l'IP du
   proxy, et le TLS géré par celui-ci.
@@ -117,6 +117,73 @@ docker compose logs -f app
 version avait appliqué une migration **incompatible** avec l'ancien code, restaurer aussi la
 base depuis le dump pris à l'étape 1 (cf. § Sauvegarde / restauration). Tester les MAJ sur un
 environnement de pré-prod quand c'est possible.
+
+## Montée de version MAJEURE de PostgreSQL (17 → 18)
+
+Une version majeure de PostgreSQL **ne relit pas** les fichiers de la précédente : la
+procédure ordinaire (`git pull` + `up --build`) ne suffit pas, il faut **exporter sous
+l'ancienne version puis restaurer sous la nouvelle**. Trois choses changent ensemble dans le
+dépôt, et doivent le rester :
+
+- l'image `db` (`postgres:18.x-alpine`) ;
+- le **volume** : l'image 18 range ses données dans `/var/lib/postgresql/18/docker` et se
+  monte sur `/var/lib/postgresql` — d'où un volume **neuf**, `pgdata18`. L'ancien `pgdata`
+  (données 17) n'est **pas touché** : c'est le filet de retour arrière ;
+- le **client** `postgresql18-client` des images `app` et `cron` : un `pg_dump` plus ancien
+  que le serveur refuse d'exporter (onglet Exports, export planifié, `backup.sh`).
+
+Répétée sur le portable le 2026-09-19 (données identiques table par table, 66 migrations
+rejouées sur base vierge, `backup.sh` et tâches planifiées vérifiés sous durcissement).
+Prévoir **une coupure d'environ un quart d'heure**, hors heures d'usage.
+
+```bash
+# ── AVANT (pile 17 encore en service, code PAS encore mis à jour) ────────────────
+# 1. Dump de bascule, au format « custom », écrit sur l'hôte. `sh -c` : sous sudo,
+#    $POSTGRES_USER est vide côté hôte — on laisse le conteneur le résoudre.
+docker compose stop app cron          # plus aucune écriture pendant l'export
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > bascule17.dump
+ls -l bascule17.dump                  # non vide ; en garder une copie HORS machine
+
+# 2. Comptages de référence, à comparer après coup.
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select count(*) from bookings; select count(*) from \"user\";"'
+
+# ── BASCULE ─────────────────────────────────────────────────────────────────────
+# 3. Arrêt complet (SANS -v : l'ancien volume pgdata doit survivre), puis nouveau code.
+docker compose down
+git pull
+
+# 4. Démarrer UNIQUEMENT la base 18 (volume pgdata18 vide → initialisation).
+docker compose up -d db
+docker compose ps db                  # attendre « healthy »
+
+# 5. Restaurer. --no-owner/--no-acl : les rôles ne sont pas dans un dump de base.
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-acl --exit-on-error' < bascule17.dump
+
+# 6. SEULEMENT si APP_DB_USER est renseigné dans le .env : le rôle applicatif est
+#    global à l'instance, donc absent de la nouvelle — rejouer scripts/db/README.md
+#    (script 01, idempotent : il recrée le rôle et lui transfère les objets restaurés).
+grep -c '^APP_DB_USER=' .env
+
+# 7. Mêmes comptages qu'à l'étape 2 : ils doivent être identiques.
+
+# 8. Reconstruire et démarrer le reste (clients 18 dans app et cron).
+docker compose up -d --build
+
+# ── APRÈS ───────────────────────────────────────────────────────────────────────
+# 9. Se connecter, ouvrir un agenda, puis Administration › Tâches planifiées › Exports
+#    › « Créer un export maintenant » : l'export doit aboutir (preuve que pg_dump 18
+#    parle au serveur 18). Au passage suivant du déclencheur (5 min), vérifier que
+#    « Dernier appel » avance.
+```
+
+**Retour arrière** (tant que `pgdata` existe) : `docker compose down`, revenir au commit
+précédent (`git checkout <commit>`), `docker compose up -d --build` — la pile 17 repart sur
+ses données intactes ; ce qui a été saisi depuis la bascule est perdu, d'où la vérification
+immédiate de l'étape 9.
+
+**Ménage**, après une à deux semaines sans incident : `docker volume ls | grep pgdata` puis
+`docker volume rm <projet>_pgdata`, et suppression de `bascule17.dump` (données nominatives
+**en clair**).
 
 ## Sauvegarde de la base
 

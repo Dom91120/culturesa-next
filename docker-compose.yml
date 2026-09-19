@@ -1,6 +1,6 @@
 # Stack de production auto-hébergée :
 #   - app    : Next.js (standalone) + Prisma
-#   - db     : PostgreSQL 17
+#   - db     : PostgreSQL 18
 # (Plus de reverse proxy dans la stack : l'app est publiée en HTTP sur :3000 —
 #  à placer derrière un proxy TLS externe si exposée à Internet.)
 #
@@ -111,7 +111,7 @@ services:
     # temps (.github/dependabot.yml, écosystème docker) : épingler SANS automatiser
     # la montée de version échange un défaut de reproductibilité contre un défaut
     # de sécurité, ce qui serait un mauvais marché.
-    image: postgres:17.10-alpine
+    image: postgres:18.6-alpine
     restart: unless-stopped
     # ── Durcissement (constat D4) ────────────────────────────────────────────
     # MESURÉ, pas supposé : `cap_drop: ALL` seul EMPÊCHE POSTGRES DE DÉMARRER —
@@ -129,7 +129,7 @@ services:
       - SETUID
     security_opt:
       - no-new-privileges:true
-    # Racine immuable : les données vivent dans le volume `pgdata`, seuls les
+    # Racine immuable : les données vivent dans le volume `pgdata18`, seuls les
     # sockets et fichiers temporaires ont besoin d'être écrits.
     read_only: true
     tmpfs:
@@ -144,7 +144,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Depuis l'image Postgres 18, les données vivent dans un sous-dossier versionné
+      # (`/var/lib/postgresql/18/docker`) et le volume se monte sur le PARENT — monter
+      # `/var/lib/postgresql/data` fait refuser le démarrage. Volume NEUF (`pgdata18`) :
+      # une montée de version majeure passe par export/restauration (DEPLOY.md), et
+      # l'ancien volume `pgdata` (données 17) reste intact sur l'hôte tant qu'on ne le
+      # supprime pas — c'est le filet de retour arrière.
+      - pgdata18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -242,7 +248,7 @@ services:
       - web
 
 volumes:
-  pgdata:
+  pgdata18:
 
 networks:
   web:
