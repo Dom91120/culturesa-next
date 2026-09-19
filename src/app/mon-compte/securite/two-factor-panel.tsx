@@ -66,8 +66,10 @@ export function TwoFactorPanel({
         );
         return;
       }
-      setUri(res.data?.totpURI ?? "");
-      setCodesSecours(res.data?.backupCodes ?? []);
+      // better-auth ≥ 1.7 : le retour est une union (otp | totp) — seul totp porte l'URI.
+      const donnees = res.data && "totpURI" in res.data ? res.data : null;
+      setUri(donnees?.totpURI ?? "");
+      setCodesSecours(donnees?.backupCodes ?? []);
       setEtape("secret");
     } finally {
       setOccupe(false);
