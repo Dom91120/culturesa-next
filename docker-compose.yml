@@ -95,6 +95,13 @@ services:
       # planifié est produit par l'app elle-même via /api/cron/backup)
       BACKUPS_DIR: /backups
       NODE_ENV: production
+      # DIAGNOSTIC (2026-09-19), à retirer une fois la cause connue : Node joint la pile
+      # d'appels aux avertissements de dépréciation. Vu au démarrage en production :
+      # « Calling client.query() when the client is already executing a query » (pg,
+      # cassant en pg@9) — non reproductible hors production, et aucun appel fautif dans
+      # notre code ni dans l'adaptateur Prisma. Sans effet sur le fonctionnement ; pour
+      # lire le résultat : docker compose logs app | grep -A 25 DeprecationWarning
+      NODE_OPTIONS: --trace-deprecation
     ports: !override
       - "127.0.0.1:3000:3000"
     volumes:
