@@ -54,8 +54,9 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 
 # Client PostgreSQL (pg_dump/psql) : requis par l'onglet admin « Sauvegardes »
-# (export à la volée + restauration). Version 17 = celle du service db.
-RUN apk add --no-cache postgresql17-client
+# (export à la volée + restauration). Version 18 = celle du service db : un pg_dump
+# plus ancien que le serveur REFUSE d'exporter — les deux se montent ensemble.
+RUN apk add --no-cache postgresql18-client
 
 # Utilisateur non-root pour la sécurité
 RUN addgroup --system --gid 1001 nodejs \

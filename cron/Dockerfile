@@ -6,12 +6,12 @@
 # L'image embarque aussi backup.sh (export MANUEL en ligne de commande, hors crontab) :
 #   docker compose exec --user 1001:1001 cron backup.sh
 # → dump direct depuis Postgres, utilisable même si le conteneur app est HS.
-# postgresql17-client : la version du client doit couvrir celle du serveur (postgres:17),
-# d'où alpine >= 3.21 (3.20 s'arrête à postgresql16).
+# postgresql18-client : la version du client doit couvrir celle du serveur (postgres:18),
+# d'où alpine >= 3.23 (3.22 s'arrête à postgresql17).
 # openssl : chiffrement du dump manuel de backup.sh (constat D1) — la libcrypto
 # est déjà là via curl, mais pas le binaire.
-FROM alpine:3.22
-RUN apk add --no-cache curl tzdata postgresql17-client openssl
+FROM alpine:3.24
+RUN apk add --no-cache curl tzdata postgresql18-client openssl
 ENV TZ=Europe/Paris
 COPY crontab /etc/crontabs/root
 COPY backup.sh /usr/local/bin/backup.sh

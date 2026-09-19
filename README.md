@@ -5,7 +5,7 @@ Réécriture de l'ancienne application PHP/LAMP en stack TypeScript moderne.
 
 ## Stack
 - **Next.js 15** (App Router, React 19, Server Actions) + **TypeScript**
-- **Prisma 6** + **PostgreSQL 17**
+- **Prisma 6** + **PostgreSQL 18**
 - **Better Auth** (email/password, vérification email, reset, rôles, rate-limit)
 - **Tailwind CSS v4** (UI à compléter avec shadcn/ui)
 - **Zod** (validation), **Nodemailer** (emails)
