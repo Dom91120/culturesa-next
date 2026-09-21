@@ -51,8 +51,8 @@ importers:
         specifier: ^16.3.5
         version: 16.3.5(@types/node@26.6.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       nodemailer:
-        specifier: ^9.1.1
-        version: 9.1.1
+        specifier: ^10.0.10
+        version: 10.0.10
       puppeteer:
         specifier: ^25.11.0
         version: 25.11.0
@@ -2187,9 +2187,9 @@ packages:
       sass:
         optional: true
 
-  nodemailer@9.1.1:
-    resolution: {integrity: sha512-izw9mVKFix6YSnC9eLgV6g1opl9DUlRio9ZNcq+Wu9Ujn2UwF+8Nl0B8nz22kEC+CTZCvinkxwJ0DeFbb6NwcQ==}
-    engines: {node: '>=6.0.0'}
+  nodemailer@10.0.10:
+    resolution: {integrity: sha512-He9XskOFms62SyAKkLu8CcGcYHAo+BSHSsORI8s4PJH8qZgZY4L4lDfvyN0twvmbpyG+eGrxpyBlskj9d9rJ8A==}
+    engines: {node: '>=20.0.0'}
 
   obug@2.1.4:
     resolution: {integrity: sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA==}
@@ -4464,7 +4464,7 @@ snapshots:
       - '@types/node'
       - babel-plugin-macros
 
-  nodemailer@9.1.1: {}
+  nodemailer@10.0.10: {}
 
   obug@2.1.4: {}
 
