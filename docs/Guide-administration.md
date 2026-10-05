@@ -154,11 +154,11 @@ cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_D
 ### Dump manuel ponctuel
 
 ```bash
-docker compose exec --user 1001:1001 cron backup.sh
+docker compose exec --user 10001:10001 cron backup.sh
 ```
 
 > Dump direct depuis Postgres (fonctionne même si le conteneur `app` est arrêté ;
-> `--user 1001:1001` obligatoire — le conteneur durci n'autorise plus root à
+> `--user 10001:10001` obligatoire — le conteneur durci n'autorise plus root à
 > écrire dans `/backups`) → `backups/manuel-AAAAMMJJ-HHMMSS.sql.gz.aes`,
 > **chiffré** avec `BACKUP_ENCRYPTION_KEY` au format openssl (différent du `.enc`
 > de l'app), **invisible dans l'admin** et **jamais purgé** : restauration en

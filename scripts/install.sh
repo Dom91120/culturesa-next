@@ -127,11 +127,24 @@ fi
 say "2/5 · Construction et démarrage des conteneurs"
 
 # Dossier des dumps (bind-mount ./backups), créé AVANT le premier « up » : sinon Docker
-# le crée lui-même en root:root et le conteneur app — utilisateur nextjs, UID/GID 1001
+# le crée lui-même en root:root et le conteneur app — utilisateur nextjs, UID/GID 10001
 # (cf. Dockerfile) — ne peut plus y écrire : sauvegarde manuelle, téléversement et
-# suppression échouent depuis l'onglet admin « Sauvegardes ». Le cron, lui, tourne en
-# root et écrit dans tous les cas.
-BACKUPS_OWNER="1001:1001"
+# suppression échouent depuis l'onglet admin « Sauvegardes ». Le dump manuel du cron
+# aussi : durci (`cap_drop: ALL`), son root ne passe plus outre les droits, d'où
+# `--user 10001:10001`.
+BACKUPS_OWNER="10001:10001"
+# Compte système qui réserve ce numéro sur l'hôte (cf. DEPLOY.md § Compte dédié) :
+# sans lui, le prochain compte créé avec l'UID 10001 posséderait les dumps.
+if ! getent passwd 10001 >/dev/null; then
+  if { [ "$(id -u)" -eq 0 ] && useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa; } ||
+     { command -v sudo >/dev/null 2>&1 && sudo useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa; }; then
+    ok "Compte système culturesa (UID 10001) créé"
+  else
+    warn "Impossible de créer le compte système culturesa (UID 10001) : créez-le à la main, cf. DEPLOY.md § Compte dédié."
+  fi
+elif [ "$(getent passwd 10001 | cut -d: -f1)" != culturesa ]; then
+  warn "L'UID 10001 appartient déjà au compte « $(getent passwd 10001 | cut -d: -f1) » : il posséderait les fichiers de l'app. Cf. DEPLOY.md § Compte dédié."
+fi
 mkdir -p backups
 # (chown en condition, jamais en commande nue : sous `set -e`, un échec doit mener au
 # warn ci-dessous, pas avorter l'installation.)

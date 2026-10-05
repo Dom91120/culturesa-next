@@ -1,11 +1,11 @@
 #!/bin/sh
 # Export MANUEL de la base, lancé en ligne de commande sur l'hôte :
-#   docker compose exec --user 1001:1001 cron backup.sh
+#   docker compose exec --user 10001:10001 cron backup.sh
 #
-# `--user 1001:1001` (l'utilisateur applicatif) est OBLIGATOIRE depuis le
+# `--user 10001:10001` (l'utilisateur applicatif) est OBLIGATOIRE depuis le
 # durcissement D4 : `cap_drop: ALL` retire à root CAP_DAC_OVERRIDE, donc root
-# lui-même ne peut plus écrire dans /backups (possédé par 1001) — constaté le
-# 2026-08-20 (« Permission denied »). Lancé sous 1001, le dump naît directement
+# lui-même ne peut plus écrire dans /backups (possédé par 10001) — constaté le
+# 2026-08-20 (« Permission denied »). Lancé sous 10001, le dump naît directement
 # avec le bon propriétaire, sans aucune capacité.
 #
 # PAS utilisé par l'application ni par le crontab : l'export PLANIFIÉ est produit
@@ -57,7 +57,7 @@ else
   echo "ERREUR : BACKUP_ENCRYPTION_KEY absente de l'environnement — refus de" >&2
   echo "produire un dump nominatif EN CLAIR (constat D1). Définissez-la dans le" >&2
   echo ".env (cf. .env.example) puis \`docker compose up -d cron\`, ou, en tout" >&2
-  echo "dernier recours : docker compose exec --user 1001:1001 \\" >&2
+  echo "dernier recours : docker compose exec --user 10001:10001 \\" >&2
   echo "  -e BACKUP_PLAINTEXT_OK=1 cron backup.sh" >&2
   exit 1
 fi
@@ -66,9 +66,9 @@ fi
 # d'un échec en cours de route reste un `.manuel-*` caché, facile à identifier).
 mv "$TMP" "$FILE"
 chmod 600 "$FILE"
-# Sous 1001 le fichier a déjà le bon propriétaire ; le chown ne subsiste que
+# Sous 10001 le fichier a déjà le bon propriétaire ; le chown ne subsiste que
 # pour une éventuelle exécution root (CAP_CHOWN requise, elle aussi retirée
 # par le durcissement — d'où le garde plutôt qu'un échec en toute fin).
-[ "$(id -u)" != 0 ] || chown 1001:1001 "$FILE"
+[ "$(id -u)" != 0 ] || chown 10001:10001 "$FILE"
 
 echo "$(date '+%F %T') dump OK : $FILE ($(wc -c <"$FILE") octets)"

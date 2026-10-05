@@ -6,7 +6,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Le bac à sable de Chromium est sa principale barrière. Il était désactivé par un
  * simple commentaire « requis en conteneur / root », inexact : le conteneur tourne
- * en `nextjs` (uid 1001), pas en root.
+ * en `nextjs` (uid 10001), pas en root.
  *
  * La cause réelle a été MESURÉE (image Alpine identique, 2026-07-30) :
  *

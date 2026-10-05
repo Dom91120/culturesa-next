@@ -58,9 +58,17 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true
 # plus ancien que le serveur REFUSE d'exporter — les deux se montent ensemble.
 RUN apk add --no-cache postgresql18-client
 
-# Utilisateur non-root pour la sécurité
-RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs
+# Utilisateur non-root pour la sécurité.
+# UID/GID 10001, et NON 1001 : sans remappage des espaces de noms, l'hôte voit ce
+# numéro tel quel. 1001 est celui que `adduser` attribue au DEUXIÈME compte humain
+# d'un serveur — en production, il désignait un compte de connexion personnel, qui
+# possédait donc ./backups et partageait l'identité de l'app (constat 2026-10-05).
+# `adduser` prend le premier numéro libre à partir de 1000 : 10001 ne sera jamais
+# atteint par accident, et il est de toute façon réservé sur l'hôte par un compte
+# système `culturesa` sans shell (cf. DEPLOY.md). À changer ENSEMBLE :
+# cron/backup.sh, scripts/install.sh et les commandes `--user 10001:10001` des docs.
+RUN addgroup --system --gid 10001 nodejs \
+    && adduser --system --uid 10001 --ingroup nodejs nextjs
 
 # Output standalone de Next.js (serveur Node minimal + deps nécessaires)
 COPY --from=builder /app/public ./public

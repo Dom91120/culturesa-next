@@ -54,9 +54,13 @@ nano .env                       # domaine, mots de passe, ADMIN_EMAIL/ADMIN_PASS
 openssl rand -base64 32         # -> BETTER_AUTH_SECRET
 openssl rand -hex 24            # -> CRON_SECRET
 
+# Compte système qui RÉSERVE sur l'hôte l'UID de l'app (10001) : sans lui, le
+# prochain compte créé avec ce numéro posséderait les dumps (cf. § Compte dédié).
+sudo useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa
+
 # Dossier des dumps, AVANT le premier "up" (sinon Docker le crée en root:root et
-# l'app, qui tourne en UID 1001, ne peut plus y écrire) :
-mkdir -p backups && sudo chown 1001:1001 backups
+# l'app, qui tourne en UID 10001, ne peut plus y écrire) :
+mkdir -p backups && sudo chown culturesa:culturesa backups
 
 docker compose up -d --build    # build + démarrage (migrations jouées à l'entrypoint)
 docker compose run --rm init    # crée le compte admin + référentiels e-mails (db:init)
@@ -66,11 +70,45 @@ docker compose logs -f app
 Au démarrage, `docker-entrypoint.sh` applique automatiquement les migrations
 Prisma (`prisma migrate deploy`), puis lance le serveur Node.
 
-> Le dossier `./backups` doit appartenir à **1001:1001** (utilisateur `nextjs` de
-> l'image) : c'est lui que le conteneur `app` utilise pour la sauvegarde manuelle,
-> le téléversement et la suppression de dumps (onglet admin « Sauvegardes »). Le
-> conteneur `cron` tourne en root et écrit dans tous les cas. `scripts/install.sh`
-> s'en charge automatiquement.
+> Le dossier `./backups` doit appartenir à **10001:10001** (utilisateur `nextjs` de
+> l'image, `culturesa` sur l'hôte) : c'est lui que le conteneur `app` utilise pour
+> la sauvegarde manuelle, le téléversement et la suppression de dumps (onglet admin
+> « Sauvegardes »). `scripts/install.sh` s'en charge automatiquement.
+
+### Compte dédié (UID 10001)
+
+Sans remappage des espaces de noms Docker, l'hôte voit l'UID du conteneur **tel
+quel** : un compte de l'hôte qui porte le même numéro possède les fichiers de l'app
+(`./backups`) et partage son identité. L'image tournait autrefois en **1001**, le
+numéro que `adduser` donne au deuxième compte humain d'un serveur. Elle tourne
+désormais en **10001**, réservé par le compte système `culturesa` (sans shell, sans
+connexion possible).
+
+**Migration d'un serveur installé avant ce changement** (une seule fois) :
+
+```bash
+# 1. Vérifier que le numéro est libre (sinon, choisir un autre UID PARTOUT)
+getent passwd 10001 || echo "UID 10001 libre"
+
+# 2. Sauvegarder (encore sous l'ancien UID : l'image en service tourne en 1001)
+docker compose exec --user 1001:1001 cron backup.sh
+
+# 3. Créer le compte et lui donner les dumps existants
+sudo useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa
+sudo chown -R culturesa:culturesa backups
+
+# 4. Récupérer la version et reconstruire
+git pull
+docker compose up -d --build
+
+# 5. Vérifier : l'app tourne en 10001 et peut écrire dans /backups
+docker compose exec app id
+docker compose exec --user 10001:10001 cron backup.sh
+```
+
+Entre les étapes 3 et 4, l'ancienne image (1001) ne peut plus écrire dans
+`./backups` : enchaîner les deux sans attendre. Un export planifié qui tomberait
+dans cet intervalle échouerait et serait signalé dans l'admin.
 
 ### Données de démonstration (optionnel, hors prod)
 
@@ -97,9 +135,9 @@ docker compose up -d --build           # redéployer après un git pull
 # 1. SAUVEGARDER d'abord (les migrations de schéma ne sont pas réversibles automatiquement)
 #    — bouton « Créer un export maintenant » dans l'admin (Tâches planifiées › Exports),
 #    ou en ligne de commande (dump chiffré `manuel-<ts>.sql.gz.aes`, direct depuis
-#    Postgres, marche même app HS ; `--user 1001:1001` obligatoire : le conteneur
+#    Postgres, marche même app HS ; `--user 10001:10001` obligatoire : le conteneur
 #    durci n'autorise plus root à écrire dans /backups) :
-docker compose exec --user 1001:1001 cron backup.sh
+docker compose exec --user 10001:10001 cron backup.sh
 
 # 2. Récupérer la nouvelle version
 git pull
