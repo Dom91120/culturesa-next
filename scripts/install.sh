@@ -135,15 +135,31 @@ say "2/5 · Construction et démarrage des conteneurs"
 BACKUPS_OWNER="10001:10001"
 # Compte système qui réserve ce numéro sur l'hôte (cf. DEPLOY.md § Compte dédié) :
 # sans lui, le prochain compte créé avec l'UID 10001 posséderait les dumps.
+# Le GROUPE est créé explicitement en 10001 : `useradd --system --user-group` lui
+# donnerait un numéro de la plage système (< 1000) et l'hôte verrait les fichiers du
+# conteneur (gid 10001) avec un groupe sans nom — constaté sur SRV-WEB le 2026-10-10
+# (`culturesa:x:10001:997`).
+as_root() {
+  if [ "$(id -u)" -eq 0 ]; then "$@"
+  elif command -v sudo >/dev/null 2>&1; then sudo "$@"
+  else return 1
+  fi
+}
 if ! getent passwd 10001 >/dev/null; then
-  if { [ "$(id -u)" -eq 0 ] && useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa; } ||
-     { command -v sudo >/dev/null 2>&1 && sudo useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa; }; then
-    ok "Compte système culturesa (UID 10001) créé"
+  GID_OWNER="$(getent group 10001 | cut -d: -f1)"
+  if [ -n "$GID_OWNER" ] && [ "$GID_OWNER" != culturesa ]; then
+    warn "Le GID 10001 appartient déjà au groupe « $GID_OWNER » : les fichiers de l'app porteront ce groupe. Cf. DEPLOY.md § Compte dédié."
+  fi
+  if { [ -n "$GID_OWNER" ] || as_root groupadd --system --gid 10001 culturesa; } &&
+     as_root useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin culturesa; then
+    ok "Compte système culturesa (UID/GID 10001) créé"
   else
-    warn "Impossible de créer le compte système culturesa (UID 10001) : créez-le à la main, cf. DEPLOY.md § Compte dédié."
+    warn "Impossible de créer le compte système culturesa (UID/GID 10001) : créez-le à la main, cf. DEPLOY.md § Compte dédié."
   fi
 elif [ "$(getent passwd 10001 | cut -d: -f1)" != culturesa ]; then
   warn "L'UID 10001 appartient déjà au compte « $(getent passwd 10001 | cut -d: -f1) » : il posséderait les fichiers de l'app. Cf. DEPLOY.md § Compte dédié."
+elif [ "$(getent passwd 10001 | cut -d: -f4)" != 10001 ]; then
+  warn "Le compte culturesa a pour groupe principal le GID $(getent passwd 10001 | cut -d: -f4) et non 10001 : corrige avec  sudo groupmod -g 10001 culturesa && sudo chgrp -R culturesa backups  (si le GID 10001 est libre)."
 fi
 mkdir -p backups
 # (chown en condition, jamais en commande nue : sous `set -e`, un échec doit mener au

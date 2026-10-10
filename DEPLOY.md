@@ -54,9 +54,12 @@ nano .env                       # domaine, mots de passe, ADMIN_EMAIL/ADMIN_PASS
 openssl rand -base64 32         # -> BETTER_AUTH_SECRET
 openssl rand -hex 24            # -> CRON_SECRET
 
-# Compte système qui RÉSERVE sur l'hôte l'UID de l'app (10001) : sans lui, le
-# prochain compte créé avec ce numéro posséderait les dumps (cf. § Compte dédié).
-sudo useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa
+# Compte système qui RÉSERVE sur l'hôte l'UID et le GID de l'app (10001) : sans lui,
+# le prochain compte créé avec ce numéro posséderait les dumps (cf. § Compte dédié).
+# Groupe créé EXPLICITEMENT : avec --user-group, un compte --system recevrait un GID
+# de la plage système (< 1000), différent de celui que porte le conteneur.
+sudo groupadd --system --gid 10001 culturesa
+sudo useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin culturesa
 
 # Dossier des dumps, AVANT le premier "up" (sinon Docker le crée en root:root et
 # l'app, qui tourne en UID 10001, ne peut plus y écrire) :
@@ -87,14 +90,17 @@ connexion possible).
 **Migration d'un serveur installé avant ce changement** (une seule fois) :
 
 ```bash
-# 1. Vérifier que le numéro est libre (sinon, choisir un autre UID PARTOUT)
+# 1. Vérifier que le numéro est libre, côté comptes ET côté groupes (sinon, choisir
+#    un autre UID/GID PARTOUT)
 getent passwd 10001 || echo "UID 10001 libre"
+getent group 10001  || echo "GID 10001 libre"
 
 # 2. Sauvegarder (encore sous l'ancien UID : l'image en service tourne en 1001)
 docker compose exec --user 1001:1001 cron backup.sh
 
-# 3. Créer le compte et lui donner les dumps existants
-sudo useradd --system --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin culturesa
+# 3. Créer le groupe PUIS le compte, et leur donner les dumps existants
+sudo groupadd --system --gid 10001 culturesa
+sudo useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin culturesa
 sudo chown -R culturesa:culturesa backups
 
 # 4. Récupérer la version et reconstruire
@@ -104,6 +110,17 @@ docker compose up -d --build
 # 5. Vérifier : l'app tourne en 10001 et peut écrire dans /backups
 docker compose exec app id
 docker compose exec --user 10001:10001 cron backup.sh
+```
+
+**Serveur migré avec un groupe en plage système** (compte créé par `useradd
+--user-group` avant le 2026-10-10 : `getent passwd 10001` affiche un GID < 1000,
+par exemple `culturesa:x:10001:997:…`). L'écriture des dumps n'est pas affectée
+(le propriétaire reste l'UID 10001), mais l'hôte voit les fichiers du conteneur
+avec un groupe numérique sans nom. Réalignement, si le GID 10001 est libre :
+
+```bash
+sudo groupmod -g 10001 culturesa && sudo chgrp -R culturesa backups
+getent group culturesa          # attendu : culturesa:x:10001:
 ```
 
 Entre les étapes 3 et 4, l'ancienne image (1001) ne peut plus écrire dans
