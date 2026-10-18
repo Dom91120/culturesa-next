@@ -86,8 +86,8 @@ jobs:
       # `auditConfig.ignoreGhsas` dans pnpm-workspace.yaml (pnpm 11 : `pnpm audit --ignore
       # GHSA-xxxx-xxxx-xxxx` l'y inscrit), en y documentant la raison et la date de réexamen.
       #
-      # Avis acceptés à ce jour : voir `auditConfig.ignoreGhsas` dans pnpm-workspace.yaml
-      # (source unique, valable aussi sur les postes), avec la raison de chacun.
+      # Avis acceptés à ce jour : AUCUN (2026-10-18 — deepmerge-ts, seul avis accepté,
+      # corrigé par Prisma 7.10.1). Source unique si besoin : `auditConfig.ignoreGhsas`.
       - name: pnpm audit
         run: pnpm audit --audit-level high --ignore-registry-errors
 

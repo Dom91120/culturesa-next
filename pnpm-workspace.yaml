@@ -44,19 +44,3 @@ overrides:
   # Chaîne : next > postcss > source-map-js (et vite > postcss). Build uniquement.
   'source-map-js@<1.2.2': '>=1.2.2 <2'
 
-# Alerte VOLONTAIREMENT non surchargée (réexaminée le 2026-09-17 avec Prisma 7.10.0,
-# toujours épinglée en 7.1.5 par @prisma/config) :
-# deepmerge-ts 7.1.5 (GHSA-ggr8-5vv4-36mx, épuisement de pile sur graphe
-# d'objets récursif). Le correctif est la version MAJEURE 8.0.0 alors que
-# @prisma/config l'épingle exactement en 7.1.5 — la règle « correctif patch
-# seulement » s'applique. Risque réel nul : fusion des fichiers de config
-# Prisma par le CLI de dev, entrée maîtrisée par le développeur, jamais
-# atteignable à l'exécution de l'application.
-#
-# L'avis est donc ACCEPTÉ explicitement pour `pnpm audit` (poste et CI, source unique) :
-# sans cette entrée, le job « Audit des dépendances » de la CI — seuil « high » — restait
-# rouge en permanence, et une CI toujours rouge ne signale plus rien. À retirer dès que
-# Prisma embarque deepmerge-ts >= 8.
-auditConfig:
-  ignoreGhsas:
-    - GHSA-ggr8-5vv4-36mx
