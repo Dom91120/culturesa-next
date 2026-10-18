@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -11,7 +12,7 @@ import {
   isEncryptedBackup,
   isGzip,
 } from "@/server/services/backup-crypto";
-import { assertSafeDump } from "@/server/services/backup-guard";
+import { assertSafeDump, confinePsqlScript } from "@/server/services/backup-guard";
 
 const gzip = promisify(gzipCb);
 const gunzip = promisify(gunzipCb);
@@ -422,12 +423,34 @@ export async function restoreBackup(name: string): Promise<void> {
   // directement dans le dossier de sauvegardes. Barrière secondaire : la mesure
   // décisive reste le rôle PostgreSQL non-superutilisateur (cf. scripts/db/).
   assertSafeDump(sql);
+  // Barrière décisive contre les MÉTA-COMMANDES psql (\!, \o |…, \copy … program),
+  // qui s'exécutent hors de la base : psql en mode \restrict, clé tirée ici, inconnue
+  // du dump — cf. confinePsqlScript. `-X` : aucun ~/.psqlrc ne s'intercale.
+  sql = confinePsqlScript(sql, randomBytes(32).toString("hex"));
   const p = dbParams();
-  await runPgTool(
-    "psql",
-    ["-d", p.database, "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "-"],
-    sql,
-  );
+  try {
+    await runPgTool(
+      "psql",
+      ["-X", "-d", p.database, "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "-"],
+      sql,
+    );
+  } catch (e) {
+    // psql antérieur au mode restreint : la 1re ligne échoue, RIEN n'est exécuté.
+    // Refus explicite plutôt que repli sans protection.
+    if (e instanceof Error && /invalid command \\restrict/.test(e.message)) {
+      throw new UserFacingError(
+        "Client psql trop ancien : le mode restreint (\\restrict) est requis pour restaurer " +
+          "sans risque (psql ≥ 18, 17.6, 16.10, 15.14, 14.19 ou 13.22). Restauration refusée.",
+      );
+    }
+    if (e instanceof Error && /backslash commands are restricted/.test(e.message)) {
+      throw new UserFacingError(
+        "Ce dump contient une méta-commande psql, qu'une sauvegarde de l'application ne " +
+          "produit jamais. Restauration refusée et annulée ; utilisez une autre sauvegarde.",
+      );
+    }
+    throw e;
+  }
   await prisma.$disconnect();
 }
 

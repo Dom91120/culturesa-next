@@ -168,6 +168,12 @@ L'analyse est structurelle et non textuelle : les blocs de données (`COPY … F
 
 ⚠️ **C'est un filtre par liste noire, donc contournable par nature.** Il agit en défense en profondeur et couvre la période antérieure à la bascule. Il ne remplace pas le rôle non-superutilisateur, qui supprime la *capacité* au lieu d'en reconnaître les usages.
 
+### Méta-commandes psql : mode restreint (audit 2026-10-18)
+
+Le dump est lu par `psql`, qui interprète aussi ses propres méta-commandes (`\!`, `\o |…`, `\copy … program`, `\i`, `\gexec`…). Elles s'exécutent sur la machine qui lance `psql`, hors de la base, donc hors de portée du rôle non-superutilisateur. Le filtre ci-dessus les refuse en début de ligne, mais son repérage des blocs de données diffère de celui de `psql` : une chaîne SQL laissée ouverte sur une fausse ligne `COPY … FROM stdin;` suffit à le contourner.
+
+La restauration lance donc `psql` en **mode restreint** : `restoreBackup` place `\restrict <clé aléatoire>` en tête du script. Le dump ne connaît pas cette clé et ne peut pas sortir du mode : `psql` refuse lui-même toute méta-commande, arrête la restauration (`ON_ERROR_STOP`) et annule tout (`--single-transaction`). Le couple `\restrict` / `\unrestrict` qu'émet pg_dump 18 est retiré au préalable. Prérequis : psql ≥ 18, 17.6, 16.10, 15.14, 14.19 ou 13.22. Avec un client plus ancien, la restauration est refusée avec un message explicite.
+
 ## Reste à faire
 
 **Exiger une ré-authentification** avant les opérations destructrices (restauration, suppression de service, anonymisation en masse). `freshAge` est déjà posé dans `src/server/session-policy.ts` — c'est le constat BAC3.

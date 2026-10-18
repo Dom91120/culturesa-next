@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertSafeDump, UnsafeDumpError } from "./backup-guard";
+import { assertSafeDump, confinePsqlScript, UnsafeDumpError } from "./backup-guard";
 
 // Terminateur de bloc de données de pg_dump : antislash + point, seul sur sa ligne.
 // Construit via String.raw pour qu'aucune couche d'échappement ne le dénature —
@@ -145,5 +145,80 @@ describe("assertSafeDump — accepte un Buffer comme une chaîne", () => {
     expect(() => assertSafeDump(Buffer.from("CREATE EXTENSION x;", "utf8"))).toThrow(
       UnsafeDumpError,
     );
+  });
+});
+
+// Méta-commandes psql (audit 2026-10-18). String.raw partout : l'antislash EST le sujet.
+const KEY = "a".repeat(64);
+
+describe("assertSafeDump — méta-commandes psql", () => {
+  const attaques: [string, string][] = [
+    ["shell", String.raw`\! id`],
+    ["sortie vers un programme", String.raw`\o |sh`],
+    ["copy vers un programme", String.raw`\copy (SELECT 1) TO PROGRAM 'id'`],
+    ["inclusion de fichier", String.raw`\i /etc/passwd`],
+    ["exécution du résultat", String.raw`\gexec`],
+    ["désactivation d'ON_ERROR_STOP", String.raw`\set ON_ERROR_STOP 0`],
+    ["indentée", String.raw`   \! id`],
+    ["derrière un commentaire bloc", String.raw`/* ruse */ \! id`],
+    [
+      "après un bloc de données",
+      ["COPY public.t (v) FROM stdin;", "x", END, String.raw`\! id`].join("\n"),
+    ],
+  ];
+  for (const [nom, sql] of attaques) {
+    it(`refuse : ${nom}`, () => {
+      expect(() => assertSafeDump(sql)).toThrow(/méta-commande psql/);
+    });
+  }
+
+  it("accepte le couple restrict / unrestrict émis par pg_dump 18", () => {
+    const dump = [String.raw`\restrict Abc123`, dumpLegitime, String.raw`\unrestrict Abc123`];
+    expect(() => assertSafeDump(dump.join("\n"))).not.toThrow();
+  });
+
+  it("ignore une méta-commande située dans un bloc de données", () => {
+    const dump = ["COPY public.t (v) FROM stdin;", String.raw`\! id`, END].join("\n");
+    expect(() => assertSafeDump(dump)).not.toThrow();
+  });
+});
+
+describe("confinePsqlScript — mode restreint de psql", () => {
+  const lines = (b: Buffer) => b.toString("latin1").split("\n");
+
+  it("place la ligne restrict <clé> en tête, sans unrestrict", () => {
+    const out = lines(confinePsqlScript(Buffer.from(dumpLegitime), KEY));
+    expect(out[0]).toBe(String.raw`\restrict ` + KEY);
+    expect(out.some((l) => l.startsWith(String.raw`\unrestrict`))).toBe(false);
+    expect(out.slice(1).join("\n")).toBe(dumpLegitime);
+  });
+
+  it("retire le couple émis par pg_dump (un second restrict serait refusé)", () => {
+    const dump = [String.raw`\restrict Dump42`, "SELECT 1;", String.raw`\unrestrict Dump42`, ""];
+    expect(lines(confinePsqlScript(Buffer.from(dump.join("\n")), KEY))).toEqual([
+      String.raw`\restrict ` + KEY,
+      "SELECT 1;",
+      "",
+    ]);
+  });
+
+  it("ne touche pas aux lignes d'un bloc de données", () => {
+    const dump = ["COPY public.t (v) FROM stdin;", String.raw`\restrict Dump42`, END].join("\n");
+    expect(
+      lines(confinePsqlScript(Buffer.from(dump), KEY))
+        .slice(1)
+        .join("\n"),
+    ).toBe(dump);
+  });
+
+  it("préserve les octets, quel que soit l'encodage (CRLF, non-UTF-8)", () => {
+    const raw = Buffer.from([0x53, 0x45, 0x4c, 0xe9, 0xff, 0x0d, 0x0a, 0x31, 0x3b]);
+    const out = confinePsqlScript(raw, KEY);
+    expect(out.subarray(out.indexOf(0x0a) + 1).equals(raw)).toBe(true);
+  });
+
+  it("refuse une clé faible ou non alphanumérique", () => {
+    expect(() => confinePsqlScript(Buffer.from(""), "court")).toThrow();
+    expect(() => confinePsqlScript(Buffer.from(""), `${KEY} x`)).toThrow();
   });
 });

@@ -77,15 +77,18 @@ const RULES: Rule[] = [
  * `pg_dump` émet `COPY table (colonnes) FROM stdin;` puis les lignes de données,
  * terminées par `\.` seul sur sa ligne. Ces lignes sont des données, jamais du SQL.
  */
+const COPY_FROM_STDIN = /^\s*COPY\b[\s\S]*\bFROM\s+stdin\s*;/i;
+const END_OF_DATA = /^\\\.\r?$/;
+
 function statementsOnly(sql: string): string {
   const out: string[] = [];
   let inData = false;
   for (const line of sql.split(/\r?\n/)) {
     if (inData) {
-      if (line === "\\.") inData = false; // fin du bloc de données
+      if (END_OF_DATA.test(line)) inData = false; // fin du bloc de données
       continue;
     }
-    if (/^\s*COPY\b[\s\S]*\bFROM\s+stdin\s*;/i.test(line)) {
+    if (COPY_FROM_STDIN.test(line)) {
       inData = true;
       continue;
     }
@@ -110,10 +113,65 @@ function stripComments(sql: string): string {
 export function assertSafeDump(sql: Buffer | string): void {
   const text = stripComments(statementsOnly(typeof sql === "string" ? sql : sql.toString("utf8")));
   const found = RULES.filter((r) => r.re.test(text)).map((r) => r.label);
+  if (text.split("\n").some((l) => PSQL_META.test(l) && !PG_DUMP_RESTRICT.test(l))) {
+    found.push(String.raw`méta-commande psql (\!, \o |…, \copy … program, \i…)`);
+  }
   if (found.length === 0) return;
   throw new UnsafeDumpError(
     `Ce dump contient des instructions qu'une sauvegarde de l'application ne produit jamais : ${found.join(" ; ")}. ` +
       "Restauration refusée. S'il provient bien de CultuRésa, il a été modifié depuis ; " +
       "utilisez une autre sauvegarde.",
   );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Méta-commandes psql (audit 2026-10-18).
+//
+//  Le dump est lu par `psql`, pas par le serveur : une ligne `\! commande`,
+//  `\o |commande`, `\copy … to program`, `\i fichier`, `\gexec`… s'exécute sur la
+//  machine qui lance psql (conteneur de l'application, ou conteneur Postgres en mode
+//  docker) — HORS de portée du rôle non-superutilisateur. Le filtre ci-dessus ne
+//  suffit pas : son repérage des blocs COPY diffère du lexer de psql (une chaîne SQL
+//  laissée ouverte sur une fausse ligne `COPY … FROM stdin;` fait passer la suite
+//  pour des données), et psql reconnaît aussi un antislash en milieu de ligne.
+//
+//  ── Mesure décisive : le mode restreint de psql ──
+//  `\restrict <clé>` (psql ≥ 18, 17.6, 16.10, 15.14, 14.19, 13.22) interdit toute
+//  méta-commande hormis `\unrestrict <même clé>`. On l'injecte EN TÊTE avec une clé
+//  aléatoire tirée à chaque restauration : le dump ne peut pas la connaître, donc ne
+//  peut pas sortir du mode. C'est psql lui-même qui refuse — aucun écart d'analyse
+//  possible. Avec ON_ERROR_STOP, le refus arrête tout et --single-transaction annule
+//  (vérifié sur psql 18.6 : sortie en code 3, rien d'exécuté).
+//
+//  pg_dump 18 émet déjà son propre couple `\restrict` / `\unrestrict` : un second
+//  `\restrict` étant refusé en mode restreint, ces lignes sont retirées (à
+//  l'identique de ce qu'émet pg_dump, hors blocs de données) avant l'enveloppe.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Ligne commençant par un antislash (commentaires retirés) : méta-commande. */
+const PSQL_META = /^\s*\\/;
+/** Couple émis par pg_dump ≥ 18 / 17.6 (clé alphanumérique), seul sur sa ligne. */
+const PG_DUMP_RESTRICT = /^\\(?:un)?restrict [A-Za-z0-9]+\r?$/;
+
+/**
+ * Enveloppe le dump pour psql : `\restrict <clé>` en première ligne, sans
+ * `\unrestrict` (psql reste restreint jusqu'à la fin de l'entrée). Travaille en
+ * `latin1` — un caractère par octet — pour ne jamais altérer les données, quel que
+ * soit l'encodage du dump.
+ */
+export function confinePsqlScript(sql: Buffer, key: string): Buffer {
+  if (!/^[A-Za-z0-9]{32,}$/.test(key)) throw new Error(String.raw`Clé \restrict invalide.`);
+  const out = [String.raw`\restrict ` + key];
+  let inData = false;
+  for (const line of sql.toString("latin1").split("\n")) {
+    if (inData) {
+      if (END_OF_DATA.test(line)) inData = false;
+    } else if (COPY_FROM_STDIN.test(line)) {
+      inData = true;
+    } else if (PG_DUMP_RESTRICT.test(line)) {
+      continue;
+    }
+    out.push(line);
+  }
+  return Buffer.from(out.join("\n"), "latin1");
 }
