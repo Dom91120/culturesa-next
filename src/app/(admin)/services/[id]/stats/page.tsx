@@ -9,6 +9,7 @@ import {
   TargetGlyph,
 } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import {
   currentExerciceIdForService,
   eligiblePeriodsWhere,
@@ -596,6 +597,8 @@ export default async function StatsPage({
   searchParams: Promise<{ type?: string; from?: string; to?: string; exercice?: string }>;
 }) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   // Service + exercice courant : deux lectures indépendantes, en une seule vague
   // (auparavant en série — audit perf 2026-09-17).
   const [service, currentExoId] = await Promise.all([

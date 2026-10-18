@@ -3,6 +3,7 @@ import { UsersGlyph } from "@/app/(admin)/users/account-ui";
 import { InfoGlyph } from "@/components/ui-glyphs";
 import { formatTel } from "@/lib/format";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import { type Inscrit, listInscrits } from "@/server/services/editions";
 import { AnonymisesToggle } from "../anonymises-toggle";
 import { dash, EditionHeader, EditionSummary, type SummaryPill, Who } from "../edition-header";
@@ -23,6 +24,8 @@ export default async function EditionsInscritsPage({
   searchParams: Promise<{ exercice?: string; anonymises?: string; tri?: string; dir?: string }>;
 }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   const sp = await searchParams;
 
   const [service, exo] = await Promise.all([

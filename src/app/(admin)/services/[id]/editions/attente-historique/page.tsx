@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { HistoryGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import { listWaitingHistory } from "@/server/services/waiting-list-editions";
 import { muted, tdNoWrap, WaitlistEditionHeader } from "../attente/header";
 import { dash, EditionSummary, WhoLabel } from "../edition-header";
@@ -20,6 +21,8 @@ export default async function EditionsAttenteHistoriquePage({
   searchParams: Promise<{ exercice?: string }>;
 }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   const sp = await searchParams;
   const [service, exo] = await Promise.all([
     prisma.service.findUnique({ where: { id }, select: { label: true } }),

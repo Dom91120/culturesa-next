@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ChartBarGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import { waitingDemand } from "@/server/services/waiting-list-editions";
 import { WaitlistEditionHeader } from "../attente/header";
 import { EditionSummary } from "../edition-header";
@@ -16,6 +17,8 @@ export default async function EditionsAttenteDemandePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
   if (!service) notFound();
   const d = await waitingDemand(id);

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui-glyphs";
 import { todayParisISO } from "@/lib/booking-delay";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import { listDatedSessions, listInscrits, listOpenSlots } from "@/server/services/editions";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import { listWaitingHistory, waitingDemand } from "@/server/services/waiting-list-editions";
@@ -58,6 +59,8 @@ export default async function EditionsPage({
   searchParams: Promise<{ exercice?: string }>;
 }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   const sp = await searchParams;
   const [service, exo] = await Promise.all([
     prisma.service.findUnique({ where: { id }, select: { label: true, listeAttente: true } }),

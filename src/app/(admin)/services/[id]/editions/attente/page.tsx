@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import { EditionSummary, Who } from "../edition-header";
 import { isoDateLabel, muted, tdNoWrap, WaitlistEditionHeader, ymdLabel } from "./header";
@@ -11,6 +12,8 @@ export const metadata = { title: "CultuRésa — Liste d'attente" };
 // État du jour : pas de navigation d'exercice.
 export default async function EditionsAttentePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
   if (!service) notFound();
   const rows = await listWaitingEntries(id);

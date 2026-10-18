@@ -5,6 +5,7 @@ import { HourglassGlyph, ListDetailsGlyph } from "@/components/ui-glyphs";
 import { formatTel } from "@/lib/format";
 import { slotTimeLabel } from "@/lib/slot-label";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import {
   type DatedSession,
@@ -94,6 +95,8 @@ export default async function EditionsListePage({
   }>;
 }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   const sp = await searchParams;
 
   const [service, demRows, exo] = await Promise.all([

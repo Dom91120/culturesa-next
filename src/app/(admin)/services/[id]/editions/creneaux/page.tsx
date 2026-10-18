@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ClockGlyph } from "@/components/ui-glyphs";
 import { prisma } from "@/server/db";
+import { requireServiceAccess } from "@/server/guards";
 import { listOpenSlots, type OpenSlot } from "@/server/services/editions";
 import { EditionHeader, EditionSummary } from "../edition-header";
 import { resolveEditionExercice } from "../range";
@@ -44,6 +45,8 @@ export default async function EditionsCreneauxPage({
   searchParams: Promise<{ exercice?: string; ruptures?: string }>;
 }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   const sp = await searchParams;
 
   const [service, exo] = await Promise.all([

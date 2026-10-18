@@ -1,4 +1,5 @@
 import { slotTimeLabel } from "@/lib/slot-label";
+import { requireServiceAccess } from "@/server/guards";
 import { type DatedSession, pointageCell } from "@/server/services/editions";
 import { formatDateHeading, type SessionBucket } from "../range";
 import { EditionScreenView, type EditionSearchParams, loadEditionScreen } from "../screen";
@@ -13,6 +14,8 @@ export default async function PointagesPage({
   searchParams: Promise<EditionSearchParams>;
 }) {
   const { id } = await params;
+  // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
+  await requireServiceAccess(id);
   // Prologue commun aux écrans datés (service, exercice, plage, séances, PDF) :
   // cf. editions/screen.tsx — seule la présentation d'un bucket est propre aux Pointages.
   const data = await loadEditionScreen(id, "pointages", await searchParams);
