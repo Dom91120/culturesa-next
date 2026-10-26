@@ -34,16 +34,16 @@
     "@tiptap/pm": "^3.31.3",
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
-    "better-auth": "^1.7.5",
-    "next": "^16.3.8",
-    "nodemailer": "^10.0.14",
+    "better-auth": "^1.7.12",
+    "next": "^16.4.3",
+    "nodemailer": "^10.1.4",
     "puppeteer": "^25.11.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "sanitize-html": "^2.17.7",
+    "sanitize-html": "^2.18.1",
     "svg-captcha": "^1.4.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
@@ -60,7 +60,8 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vite": "^8.3.5",
+    "vitest": "^4.1.12"
   },
   "packageManager": "pnpm@11.5.0",
   "engines": {

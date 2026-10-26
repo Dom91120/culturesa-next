@@ -25,9 +25,11 @@ overrides:
   'postcss@<8.5.18': '>=8.5.18 <9'
   # Confusion d'hôte (antislash littéral, canonicalisation IDN) ; plancher relevé
   # à 3.1.5 le 2026-08-20 (GHSA-7p8r-x3mc-p8w7), puis à 3.1.6 le 2026-09-17
-  # (quatre avis « high » supplémentaires, tous corrigés en 3.1.6).
+  # (quatre avis « high » supplémentaires, tous corrigés en 3.1.6), puis à 3.1.9
+  # le 2026-10-26 (GHSA-333x-w4r6-6crp, GHSA-xhq7-xmqj-769h, GHSA-w74x-v6f9-j3xg,
+  # GHSA-wjr9-j795-jxcr).
   # Chaîne : @prisma/client > prisma > @prisma/dev > ajv > fast-uri.
-  'fast-uri@<3.1.6': '>=3.1.6 <4'
+  'fast-uri@<3.1.9': '>=3.1.9 <4'
   # Pilote MySQL épinglé par le CLI Prisma (chaîne : prisma > mysql2), JAMAIS chargé
   # ici : la base est Postgres (@prisma/adapter-pg). Deux avis (high + moderate)
   # corrigés en 3.23.1 ; c'est une montée MINEURE dans la même version majeure,
@@ -43,4 +45,9 @@ overrides:
   # source map indexée (GHSA-68fv-2mgg-jv7q), corrigé en 1.2.2.
   # Chaîne : next > postcss > source-map-js (et vite > postcss). Build uniquement.
   'source-map-js@<1.2.2': '>=1.2.2 <2'
-
+  # Épuisement mémoire à la validation de collections contraintes surdimensionnées
+  # (GHSA-mrhx-c7xc-m3w5), corrigé en 4.6.6. Chaîne : better-auth > better-call > zod.
+  'zod@<4.6.6': '>=4.6.6 <5'
+  # Avis sur le serveur de dev de Vite (launch-editor, server.fs.allow, etc.),
+  # corrigés en 8.1.6. Chaîne : vitest > vite. Tests uniquement.
+  'vite@<8.1.6': '>=8.1.6 <9'
