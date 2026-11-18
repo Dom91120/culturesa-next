@@ -6,7 +6,9 @@ import { requireRole, sessionDeadline } from "@/server/guards";
 import { listServicesForCurrentAdmin } from "@/server/services/services";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireRole("gestionnaire");
+  // Seuil = Direction des accueils de loisirs (lecture seule) : elle partage cette
+  // enveloppe. Ce layout n'autorise RIEN par lui-même — chaque page porte son garde.
+  const session = await requireRole("direction_loisirs");
   // Trois lectures indépendantes en une seule vague (le garde reste seul en tête — il
   // peut rediriger) ; auparavant en série (audit perf 2026-09-17).
   // - Nav : un gestionnaire ne voit que les services qu'il gère ; un admin, tous.
@@ -41,7 +43,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     >
       {children}
       <OnboardingModalLazy
-        variant={isAdmin ? "administrateur" : "gestionnaire"}
+        variant={
+          isAdmin ? "administrateur" : role === "direction_loisirs" ? "direction" : "gestionnaire"
+        }
         open={needsOnboarding}
       />
       {deadline !== null && <SessionWatchdog expiresAt={deadline} />}

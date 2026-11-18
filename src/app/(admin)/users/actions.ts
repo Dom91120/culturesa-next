@@ -26,7 +26,9 @@ import {
 } from "@/server/services/rgpd";
 import { resolveStructureLibre } from "@/server/services/structures";
 
-const ROLES = ["utilisateur", "gestionnaire", "administrateur"] as const;
+// `direction_loisirs` (Direction des accueils de loisirs) : ni services rattachés (son
+// accès est automatique, cf. server/services/loisirs-scope.ts), ni enfants/accompagnants.
+const ROLES = ["utilisateur", "direction_loisirs", "gestionnaire", "administrateur"] as const;
 
 // Champs métier communs (création + édition). Identité : fragments partagés
 // (schemas/user) — plafonds uniques avec « Mon compte » et l'inscription.

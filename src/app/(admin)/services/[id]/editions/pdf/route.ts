@@ -1,7 +1,7 @@
 import puppeteer from "puppeteer";
 import { escapeHtml } from "@/lib/email-theme";
 import { prisma } from "@/server/db";
-import { reponseApi, requireServiceAccessApi } from "@/server/guards-api";
+import { reponseApi, requireServiceViewApi } from "@/server/guards-api";
 import { argsChromium } from "@/server/pdf-browser";
 
 // PDF serveur des éditions (Puppeteer). On réutilise la page d'édition existante en média
@@ -17,6 +17,7 @@ const KIND_TITLES: Record<string, string> = {
   planning: "Planning",
   pointages: "Pointages",
   inscrits: "Liste des inscrits",
+  loisirs: "Inscrits des accueils de loisirs",
   creneaux: "Liste des créneaux ouverts",
   attente: "Liste d'attente en cours",
   "attente-demande": "Demande par demi-journée",
@@ -27,16 +28,29 @@ const KIND_TITLES: Record<string, string> = {
 
 // Éditions qui tiennent en PORTRAIT (peu de colonnes) ; les autres sont en paysage.
 // Planning en portrait (Dom 2026-09-09) : trois cartes par rangée, plus de séances par page.
-const PORTRAIT_KINDS = ["inscrits", "creneaux", "planning", "attente-demande", "attente-adresses"];
+const PORTRAIT_KINDS = [
+  "inscrits",
+  "loisirs",
+  "creneaux",
+  "planning",
+  "attente-demande",
+  "attente-adresses",
+];
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return reponseApi(async () => {
-    await requireServiceAccessApi(id, "/services/[id]/editions/pdf");
+    const { loisirsScope } = await requireServiceViewApi(id, "/services/[id]/editions/pdf");
 
     const reqUrl = new URL(req.url);
     const kind = reqUrl.searchParams.get("kind") ?? "liste";
     if (!(kind in KIND_TITLES)) return new Response("Édition inconnue", { status: 400 });
+    // Direction des accueils de loisirs : sa seule édition. (La page cible la refuserait
+    // de toute façon — Puppeteer rejoue SA session — mais on n'ouvre pas un navigateur
+    // pour imprimer une redirection.)
+    if (loisirsScope && kind !== "loisirs") {
+      return new Response("Édition non autorisée", { status: 403 });
+    }
 
     const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
     if (!service) return new Response("Service introuvable", { status: 404 });

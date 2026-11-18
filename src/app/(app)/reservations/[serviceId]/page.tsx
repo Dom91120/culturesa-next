@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getConfigMany } from "@/server/config";
-import { requireUser } from "@/server/guards";
+import { requireBookingUser } from "@/server/guards";
 import { getUserServiceAgenda } from "@/server/services/bookings";
 import { getWaitingEntry } from "@/server/services/waiting-list";
 import { UserAgendaGrid } from "./user-agenda-grid";
@@ -11,7 +11,7 @@ export default async function ReservationsServicePage({
   params: Promise<{ serviceId: string }>;
 }) {
   const { serviceId } = await params;
-  const session = await requireUser();
+  const session = await requireBookingUser();
   const data = await getUserServiceAgenda(serviceId, session.user.id);
   if (!data) notFound();
   // Inscription éventuelle de l'usager sur la liste d'attente du service.

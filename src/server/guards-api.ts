@@ -3,6 +3,7 @@ import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { getSession } from "@/server/guards";
 import { journal } from "@/server/log";
+import { loisirsDemandeurIds } from "@/server/services/loisirs-scope";
 import { exige2FA } from "@/server/two-factor-policy";
 
 /**
@@ -35,7 +36,12 @@ export class ApiAuthError extends Error {
   }
 }
 
-const RANG: Record<Role, number> = { utilisateur: 0, gestionnaire: 1, administrateur: 2 };
+const RANG: Record<Role, number> = {
+  utilisateur: 0,
+  direction_loisirs: 1,
+  gestionnaire: 2,
+  administrateur: 3,
+};
 
 function refuser(statut: 401 | 403, motif: string, details: Record<string, unknown>): never {
   // Journalisé au niveau AVERTISSEMENT, jamais ERREUR : un refus est le
@@ -97,6 +103,30 @@ export async function requireServiceAccessApi(serviceId: string, chemin: string)
     });
   }
   return session;
+}
+
+/**
+ * Variante de `requireServiceAccessApi` qui admet AUSSI la Direction des accueils de
+ * loisirs, avec son périmètre (cf. `requireServiceView`). Réservée aux routes dont la
+ * requête est filtrée par `loisirsScope` : l'appelant doit refuser tout type d'édition
+ * qui ne l'est pas quand ce périmètre est non nul.
+ */
+export async function requireServiceViewApi(serviceId: string, chemin: string) {
+  const session = await requireRoleApi("direction_loisirs", chemin);
+  const role = (session.user as { role?: Role }).role ?? "utilisateur";
+  if (role !== "direction_loisirs") {
+    await requireServiceAccessApi(serviceId, chemin);
+    return { session, loisirsScope: null as number[] | null };
+  }
+  const ids = await loisirsDemandeurIds(serviceId);
+  if (ids.length === 0) {
+    refuser(403, "Ce service ne vous est pas rattaché.", {
+      chemin,
+      serviceId,
+      userId: session.user.id,
+    });
+  }
+  return { session, loisirsScope: ids as number[] | null };
 }
 
 /**

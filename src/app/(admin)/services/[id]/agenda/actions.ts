@@ -24,7 +24,7 @@ import {
   uniqueSlotBatchCreateSchema,
 } from "@/schemas/slot";
 import { prisma } from "@/server/db";
-import { requireServiceAccess, requireServiceManager } from "@/server/guards";
+import { requireServiceManager, requireServiceView } from "@/server/guards";
 import { journal } from "@/server/log";
 import {
   ABSENCE_CANDIDATE_SELECT,
@@ -117,14 +117,17 @@ function envoyerApresReponse(quoi: string, envoi: () => Promise<unknown>): void 
 /**
  * Sessions datées (occurrences) du service sur [fromYmd, toYmd] avec leurs participants
  * nominatifs — pour l'impression « liste » de l'agenda admin. Gardé au niveau consultation.
+ * La Direction des accueils de loisirs imprime aussi, mais SON périmètre seulement : le
+ * filtre de catégorie est appliqué à la requête, comme sur la grille.
  */
 export async function listAgendaSessionsAction(
   serviceId: string,
   fromYmd: string,
   toYmd: string,
 ): Promise<DatedSession[]> {
-  await requireServiceAccess(serviceId); // lecture : la consultation imprime aussi
-  return listDatedSessions(serviceId, fromYmd, toYmd);
+  // Lecture : la consultation imprime aussi.
+  const { loisirsScope } = await requireServiceView(serviceId);
+  return listDatedSessions(serviceId, fromYmd, toYmd, undefined, loisirsScope ?? undefined);
 }
 
 // (Verrou pointage/miroir — `bookingLocked`, `assertNotLockedByPointage[InTx]` : source

@@ -32,7 +32,7 @@ export default async function MonCompteLayout({ children }: { children: React.Re
   const user = { name: session.user.name ?? "", email: session.user.email, role };
   const watchdog = deadline !== null && <SessionWatchdog expiresAt={deadline} />;
 
-  if (role === "gestionnaire" || role === "administrateur") {
+  if (role === "gestionnaire" || role === "administrateur" || role === "direction_loisirs") {
     // Périmètre par rôle : un gestionnaire ne voit QUE ses services gérés (ServiceManager),
     // un administrateur les voit tous. (Auparavant : findMany sans filtre → un gestionnaire
     // voyait les onglets de tous les services depuis « Mon compte ».)
@@ -42,7 +42,10 @@ export default async function MonCompteLayout({ children }: { children: React.Re
         {children}
         {/* Monté fermé : SEUL récepteur de « Revoir la présentation » sur cette page
             (sans lui, l'entrée du menu ne faisait rien depuis Mon compte). */}
-        <OnboardingModalLazy variant={role} open={false} />
+        <OnboardingModalLazy
+          variant={role === "direction_loisirs" ? "direction" : role}
+          open={false}
+        />
         {watchdog}
       </ConnectedShell>
     );

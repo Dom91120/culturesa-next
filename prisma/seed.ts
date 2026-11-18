@@ -16,8 +16,8 @@ async function main() {
   const demandeurs = [
     { id: 1, label: "Ecole maternelle" },
     { id: 2, label: "Ecole élémentaire" },
-    { id: 3, label: "Accueil de loisir maternel" },
-    { id: 4, label: "Accueil de loisir élémentaire" },
+    { id: 3, label: "Accueil de loisir maternel", accueilLoisirs: true },
+    { id: 4, label: "Accueil de loisir élémentaire", accueilLoisirs: true },
     { id: 5, label: "Assistante maternelle" },
   ];
   for (const d of demandeurs) {
@@ -514,6 +514,18 @@ async function main() {
       enfants: 3,
       accompagnants: 1,
     },
+    // Direction des accueils de loisirs : lecture seule, aucune catégorie de demandeur
+    // (son périmètre vient des catégories marquées « accueil de loisirs »).
+    {
+      email: "direction.loisirs@test.fr",
+      prenom: "Diane",
+      nom: "DIRECTION",
+      demandeurId: null,
+      niveau: "",
+      enfants: 0,
+      accompagnants: 0,
+      role: "direction_loisirs" as const,
+    },
   ];
   for (const u of testUsers) {
     await prisma.user.upsert({
@@ -532,7 +544,7 @@ async function main() {
         name: `${u.prenom} ${u.nom}`,
         prenom: u.prenom,
         nom: u.nom,
-        role: "utilisateur",
+        role: "role" in u ? u.role : "utilisateur",
         rgpdOk: true,
         demandeurId: u.demandeurId,
         niveau: u.niveau,

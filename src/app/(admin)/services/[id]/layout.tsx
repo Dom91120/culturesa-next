@@ -1,4 +1,4 @@
-import { requireServiceAccess } from "@/server/guards";
+import { requireServiceView } from "@/server/guards";
 
 /**
  * Point de contrôle unique pour TOUTES les pages d'un service (agenda, éditions, stats,
@@ -24,6 +24,9 @@ export default async function ServiceLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireServiceAccess(id);
+  // `requireServiceView` : admet aussi la Direction des accueils de loisirs, dont le
+  // périmètre est appliqué page par page (les pages qui ne l'appliquent pas gardent
+  // `requireServiceAccess`, qui la refuse).
+  await requireServiceView(id);
   return <>{children}</>;
 }

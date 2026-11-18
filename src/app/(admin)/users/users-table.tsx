@@ -63,10 +63,18 @@ export type ServiceRef = { id: string; label: string };
 type SortKey = "default" | "nom" | "role";
 
 // Filtres rapides (puces au-dessus du tableau — refonte Dom 2026-09-08).
-type Filter = "all" | "utilisateur" | "gestionnaire" | "administrateur" | "pending" | "anonymized";
+type Filter =
+  | "all"
+  | "utilisateur"
+  | "direction_loisirs"
+  | "gestionnaire"
+  | "administrateur"
+  | "pending"
+  | "anonymized";
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "Tous" },
   { key: "utilisateur", label: "Utilisateurs" },
+  { key: "direction_loisirs", label: "Direction loisirs" },
   { key: "gestionnaire", label: "Gestionnaires" },
   { key: "administrateur", label: "Administrateurs" },
   { key: "pending", label: "Non confirmés" },
@@ -90,7 +98,7 @@ const PAGE_SIZE = 15;
 // ── Largeurs de colonnes (cf. <colgroup>) : colonnes d'appoint en pixels, « Compte »
 // et « Structure / Service » se partagent le reste (58 % – 42 %).
 const COL_STATUT = 112; // pastille « En attente » avec son pictogramme
-const COL_ROLE = 120; // pastille « Administrateur »
+const COL_ROLE = 132; // pastille « Direction loisirs »
 const COL_TEL = 112; // « 06 12 34 56 78 »
 const COL_ACTIONS = 160; // jusqu'à 6 boutons de 24 px
 const COL_REST = COL_STATUT + COL_ROLE + COL_TEL + COL_ACTIONS;

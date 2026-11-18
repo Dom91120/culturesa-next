@@ -151,6 +151,7 @@ export const UsersGlyph = (p: GlyphProps) => (
 export const ROLE_LABEL: Record<Role, string> = {
   administrateur: "Administrateur",
   gestionnaire: "Gestionnaire",
+  direction_loisirs: "Direction loisirs",
   utilisateur: "Utilisateur",
 };
 

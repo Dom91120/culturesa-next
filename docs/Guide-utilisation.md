@@ -15,7 +15,8 @@ CultuRésa est l'application de réservation d'activités culturelles. Elle perm
 de réserver des créneaux d'activités proposées par différents services (médiathèque,
 conservatoire, ludothèque, maison des enfants, maison des arts…), aux **gestionnaires**
 d'organiser ces activités et de suivre la présence, et aux **administrateurs** de piloter
-l'ensemble du système.
+l'ensemble du système. La **Direction des accueils de loisirs** y suit, en lecture seule, les
+réservations de ses accueils.
 
 Ce guide est organisé par profil d'utilisateur. Chaque section décrit ce que vous pouvez faire
 dans l'application. Pour l'installation et l'exploitation serveur, voir le
@@ -25,11 +26,12 @@ dans l'application. Pour l'installation et l'exploitation serveur, voir le
 > première connexion, adaptée au rôle. On peut la revoir à tout moment via le menu utilisateur →
 > **« Revoir la présentation »**.
 
-### Les trois profils
+### Les profils
 
 | Profil | Ce qu'il peut faire |
 |--------|---------------------|
 | **Usager** | Réserver des créneaux d'activités, gérer ses réservations, modifier son compte. |
+| **Direction des accueils de loisirs** | Consulter, sans rien modifier, l'agenda des services qui accueillent des accueils de loisirs et la liste de leurs inscrits. Ne réserve pas. |
 | **Gestionnaire** | Tout ce que fait l'usager, plus la gestion des services qui lui sont confiés : créneaux, réservations, pointage, statistiques et paramètres. |
 | **Administrateur** | Tout ce que fait le gestionnaire, sur tous les services, plus la gestion des utilisateurs, des référentiels, de la messagerie et du RGPD. |
 
@@ -202,6 +204,25 @@ l'activité — se reconnaît à l'**œil** qui suit son nom dans la barre laté
 mais rien ne s'y modifie — ni créneau, ni réservation, ni pointage, ni validation — et l'onglet
 **Paramètres** n'existe pas. Un gestionnaire en consultation ne reçoit pas les e-mails adressés
 aux gestionnaires du service.
+
+### Direction des accueils de loisirs
+
+Le rôle **« Direction des accueils de loisirs »** est un profil de consultation à part : il ne
+se rattache à aucun service en particulier. La barre latérale lui présente d'elle-même, marqués
+de l'œil, **tous les services qui accueillent des accueils de loisirs** — c'est-à-dire ceux dont
+l'onglet **Paramètres › Configuration** autorise une catégorie de demandeur marquée
+**« Accueil de loisirs »** dans les référentiels. Sur chacun, deux onglets seulement :
+
+- **Agenda** : tous les créneaux du service s'affichent, mais **seules les réservations des
+  accueils de loisirs** y figurent. Un créneau qui paraît libre peut donc être occupé par une
+  école ou un autre demandeur ; l'impression de l'agenda suit la même règle. Rien ne s'y modifie
+  et la liste d'attente n'est pas proposée.
+- **Éditions** : une seule édition, **« Inscrits des accueils de loisirs »** — les usagers des
+  accueils de loisirs ayant réservé sur l'exercice (identité, structure, niveau, contact),
+  triable, imprimable en PDF et exportable en CSV.
+
+Les statistiques, les autres éditions et les paramètres ne lui sont pas ouverts, et ce compte ne
+peut pas réserver pour lui-même. Il ne reçoit aucun e-mail adressé aux gestionnaires.
 
 ### Agenda — créneaux et réservations
 
@@ -494,7 +515,9 @@ pastille « IP locale » signale une adresse privée qui ne serait pas joignable
 **référentiels** — **Services**, **Demandeurs**, **Structures** et **Niveaux** — se présentent en
 tuiles avec leur effectif et une ligne de signalement (services sans e-mail de contact, demandeurs
 ouverts pendant les vacances, structures sans usager, répartition des niveaux) ; une tuile ouvre
-l'éditeur. Chaque éditeur travaille **en tampon** : les lignes créées (filet vert, pastille
+l'éditeur. Dans l'éditeur des demandeurs, l'interrupteur **« Accueil de loisirs »** désigne les
+catégories suivies par la Direction des accueils de loisirs : c'est lui, et non le libellé de la
+catégorie, qui détermine les services et les réservations qu'elle voit. Chaque éditeur travaille **en tampon** : les lignes créées (filet vert, pastille
 « nouveau ») ou changées (filet orange, pastille « modifié ») sont comptées en pied de fenêtre
 et rien n'est écrit avant **« Enregistrer »** ; **« Annuler »** revient à l'état enregistré. La
 corbeille demande confirmation dans un bandeau rouge qui nomme l'élément et ce qui disparaît avec
@@ -514,12 +537,15 @@ un service sans e-mail ni gestionnaire, où personne ne les recevrait.
 
 L'onglet a deux sous-onglets. **« Comptes »** : la liste des utilisateurs permet de rechercher
 (nom, e-mail, structure), filtrer et modifier les comptes : informations, **rôle** (utilisateur,
-gestionnaire, administrateur), structure / service rattaché, services gérés et statut RGPD. Pour
+direction des accueils de loisirs, gestionnaire, administrateur), structure / service rattaché,
+services gérés et statut RGPD. Le rôle **« Direction des accueils de loisirs »** n'a aucun
+service à cocher : son accès, en lecture seule, se déduit des catégories marquées
+« Accueil de loisirs ». Pour
 un gestionnaire, chaque service coché porte son **niveau** : **Gestion** (par défaut) ou
 **Consultation** (agenda, éditions et statistiques en lecture seule) ; la colonne d'affiliation
 le rappelle par la mention « (consultation) » après le nom du service. Des
 **filtres rapides** au-dessus du tableau isolent une population avec son effectif : tous,
-utilisateurs, gestionnaires, administrateurs, **non confirmés**, anonymisés. Chaque ligne montre
+utilisateurs, direction loisirs, gestionnaires, administrateurs, **non confirmés**, anonymisés. Chaque ligne montre
 l'avatar et l'e-mail du compte, son **statut** — « Confirmé » (adresse e-mail confirmée),
 « En attente » (le compte ne peut pas encore se connecter) ou « Anonymisé » — son rôle et son
 affiliation. Les actions apparaissent au survol de la ligne : **modifier la fiche** (crayon),
@@ -624,7 +650,8 @@ par la tâche de rétention. Les exports et anonymisations RGPD, eux, restent da
 ## 5. Notions clés
 
 - **Demandeur** — l'établissement ou l'organisme auquel un usager est rattaché. Il conditionne
-  l'accès aux services et les jours d'ouverture.
+  l'accès aux services et les jours d'ouverture. Une catégorie marquée « Accueil de loisirs »
+  entre dans le périmètre de la Direction des accueils de loisirs.
 - **Structure** — unité organisationnelle sous un demandeur ; rattacher un usager à une structure
   lui fait hériter du demandeur.
 - **Niveau** — classification (par demandeur) utilisée dans le profil et les statistiques.

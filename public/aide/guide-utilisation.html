@@ -60,7 +60,8 @@
 de réserver des créneaux d&#39;activités proposées par différents services (médiathèque,
 conservatoire, ludothèque, maison des enfants, maison des arts…), aux <strong>gestionnaires</strong>
 d&#39;organiser ces activités et de suivre la présence, et aux <strong>administrateurs</strong> de piloter
-l&#39;ensemble du système.</p>
+l&#39;ensemble du système. La <strong>Direction des accueils de loisirs</strong> y suit, en lecture seule, les
+réservations de ses accueils.</p>
 <p>Ce guide est organisé par profil d&#39;utilisateur. Chaque section décrit ce que vous pouvez faire
 dans l&#39;application. Pour l&#39;installation et l&#39;exploitation serveur, voir le
 <span>Guide d&#39;administration</span> et le <span>runbook d&#39;exploitation</span>.</p>
@@ -69,7 +70,7 @@ dans l&#39;application. Pour l&#39;installation et l&#39;exploitation serveur, v
 première connexion, adaptée au rôle. On peut la revoir à tout moment via le menu utilisateur →
 <strong>« Revoir la présentation »</strong>.</p>
 </blockquote>
-<h3 id="les-trois-profils">Les trois profils</h3>
+<h3 id="les-profils">Les profils</h3>
 <table>
 <thead>
 <tr>
@@ -80,6 +81,10 @@ première connexion, adaptée au rôle. On peut la revoir à tout moment via le 
 <tbody><tr>
 <td><strong>Usager</strong></td>
 <td>Réserver des créneaux d&#39;activités, gérer ses réservations, modifier son compte.</td>
+</tr>
+<tr>
+<td><strong>Direction des accueils de loisirs</strong></td>
+<td>Consulter, sans rien modifier, l&#39;agenda des services qui accueillent des accueils de loisirs et la liste de leurs inscrits. Ne réserve pas.</td>
 </tr>
 <tr>
 <td><strong>Gestionnaire</strong></td>
@@ -224,6 +229,23 @@ l&#39;activité — se reconnaît à l&#39;<strong>œil</strong> qui suit son no
 mais rien ne s&#39;y modifie — ni créneau, ni réservation, ni pointage, ni validation — et l&#39;onglet
 <strong>Paramètres</strong> n&#39;existe pas. Un gestionnaire en consultation ne reçoit pas les e-mails adressés
 aux gestionnaires du service.</p>
+<h3 id="direction-des-accueils-de-loisirs">Direction des accueils de loisirs</h3>
+<p>Le rôle <strong>« Direction des accueils de loisirs »</strong> est un profil de consultation à part : il ne
+se rattache à aucun service en particulier. La barre latérale lui présente d&#39;elle-même, marqués
+de l&#39;œil, <strong>tous les services qui accueillent des accueils de loisirs</strong> — c&#39;est-à-dire ceux dont
+l&#39;onglet <strong>Paramètres › Configuration</strong> autorise une catégorie de demandeur marquée
+<strong>« Accueil de loisirs »</strong> dans les référentiels. Sur chacun, deux onglets seulement :</p>
+<ul>
+<li><strong>Agenda</strong> : tous les créneaux du service s&#39;affichent, mais <strong>seules les réservations des
+accueils de loisirs</strong> y figurent. Un créneau qui paraît libre peut donc être occupé par une
+école ou un autre demandeur ; l&#39;impression de l&#39;agenda suit la même règle. Rien ne s&#39;y modifie
+et la liste d&#39;attente n&#39;est pas proposée.</li>
+<li><strong>Éditions</strong> : une seule édition, <strong>« Inscrits des accueils de loisirs »</strong> — les usagers des
+accueils de loisirs ayant réservé sur l&#39;exercice (identité, structure, niveau, contact),
+triable, imprimable en PDF et exportable en CSV.</li>
+</ul>
+<p>Les statistiques, les autres éditions et les paramètres ne lui sont pas ouverts, et ce compte ne
+peut pas réserver pour lui-même. Il ne reçoit aucun e-mail adressé aux gestionnaires.</p>
 <h3 id="agenda-créneaux-et-réservations">Agenda — créneaux et réservations</h3>
 <p>L&#39;agenda du gestionnaire permet de gérer les créneaux et les réservations de chaque usager.</p>
 <ul>
@@ -480,7 +502,9 @@ pastille « IP locale » signale une adresse privée qui ne serait pas joignable
 <strong>référentiels</strong> — <strong>Services</strong>, <strong>Demandeurs</strong>, <strong>Structures</strong> et <strong>Niveaux</strong> — se présentent en
 tuiles avec leur effectif et une ligne de signalement (services sans e-mail de contact, demandeurs
 ouverts pendant les vacances, structures sans usager, répartition des niveaux) ; une tuile ouvre
-l&#39;éditeur. Chaque éditeur travaille <strong>en tampon</strong> : les lignes créées (filet vert, pastille
+l&#39;éditeur. Dans l&#39;éditeur des demandeurs, l&#39;interrupteur <strong>« Accueil de loisirs »</strong> désigne les
+catégories suivies par la Direction des accueils de loisirs : c&#39;est lui, et non le libellé de la
+catégorie, qui détermine les services et les réservations qu&#39;elle voit. Chaque éditeur travaille <strong>en tampon</strong> : les lignes créées (filet vert, pastille
 « nouveau ») ou changées (filet orange, pastille « modifié ») sont comptées en pied de fenêtre
 et rien n&#39;est écrit avant <strong>« Enregistrer »</strong> ; <strong>« Annuler »</strong> revient à l&#39;état enregistré. La
 corbeille demande confirmation dans un bandeau rouge qui nomme l&#39;élément et ce qui disparaît avec
@@ -496,12 +520,15 @@ un service sans e-mail ni gestionnaire, où personne ne les recevrait.</p>
 <h3 id="utilisateurs">Utilisateurs</h3>
 <p>L&#39;onglet a deux sous-onglets. <strong>« Comptes »</strong> : la liste des utilisateurs permet de rechercher
 (nom, e-mail, structure), filtrer et modifier les comptes : informations, <strong>rôle</strong> (utilisateur,
-gestionnaire, administrateur), structure / service rattaché, services gérés et statut RGPD. Pour
+direction des accueils de loisirs, gestionnaire, administrateur), structure / service rattaché,
+services gérés et statut RGPD. Le rôle <strong>« Direction des accueils de loisirs »</strong> n&#39;a aucun
+service à cocher : son accès, en lecture seule, se déduit des catégories marquées
+« Accueil de loisirs ». Pour
 un gestionnaire, chaque service coché porte son <strong>niveau</strong> : <strong>Gestion</strong> (par défaut) ou
 <strong>Consultation</strong> (agenda, éditions et statistiques en lecture seule) ; la colonne d&#39;affiliation
 le rappelle par la mention « (consultation) » après le nom du service. Des
 <strong>filtres rapides</strong> au-dessus du tableau isolent une population avec son effectif : tous,
-utilisateurs, gestionnaires, administrateurs, <strong>non confirmés</strong>, anonymisés. Chaque ligne montre
+utilisateurs, direction loisirs, gestionnaires, administrateurs, <strong>non confirmés</strong>, anonymisés. Chaque ligne montre
 l&#39;avatar et l&#39;e-mail du compte, son <strong>statut</strong> — « Confirmé » (adresse e-mail confirmée),
 « En attente » (le compte ne peut pas encore se connecter) ou « Anonymisé » — son rôle et son
 affiliation. Les actions apparaissent au survol de la ligne : <strong>modifier la fiche</strong> (crayon),
@@ -588,7 +615,8 @@ par la tâche de rétention. Les exports et anonymisations RGPD, eux, restent da
 <h2 id="5-notions-clés">5. Notions clés</h2>
 <ul>
 <li><strong>Demandeur</strong> — l&#39;établissement ou l&#39;organisme auquel un usager est rattaché. Il conditionne
-l&#39;accès aux services et les jours d&#39;ouverture.</li>
+l&#39;accès aux services et les jours d&#39;ouverture. Une catégorie marquée « Accueil de loisirs »
+entre dans le périmètre de la Direction des accueils de loisirs.</li>
 <li><strong>Structure</strong> — unité organisationnelle sous un demandeur ; rattacher un usager à une structure
 lui fait hériter du demandeur.</li>
 <li><strong>Niveau</strong> — classification (par demandeur) utilisée dans le profil et les statistiques.</li>

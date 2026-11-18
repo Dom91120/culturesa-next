@@ -14,7 +14,7 @@ import {
   bookingThemeSchema,
 } from "@/schemas/booking";
 import { prisma } from "@/server/db";
-import { requireUser } from "@/server/guards";
+import { requireBookingUser } from "@/server/guards";
 import {
   ABSENCE_CANDIDATE_SELECT,
   absenceWriteData,
@@ -505,7 +505,7 @@ const waitlistSchema = z.object({
  * n'active pas la liste d'attente ou si l'usager n'y a pas accès.
  */
 export async function joinWaitingList(serviceId: string, raw: unknown): Promise<Result> {
-  const session = await requireUser();
+  const session = await requireBookingUser();
   const parsed = waitlistSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: "Indiquez au moins une demi-journée de disponibilité." };
@@ -561,7 +561,7 @@ export async function joinWaitingList(serviceId: string, raw: unknown): Promise<
 
 /** Retrait de la liste d'attente du service (l'usager lui-même). */
 export async function leaveWaitingList(serviceId: string): Promise<Result> {
-  const session = await requireUser();
+  const session = await requireBookingUser();
   await closeWaitingEntry(serviceId, session.user.id);
   revalidate(serviceId);
   return { ok: true };
@@ -584,7 +584,7 @@ const absenceSchema = z.object({
  * appartenir à l'usager ET au service.
  */
 export async function setMyAbsence(serviceId: string, raw: unknown): Promise<Result> {
-  const session = await requireUser();
+  const session = await requireBookingUser();
   const parsed = absenceSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Données invalides." };
   const { bookingId, absent, motif } = parsed.data;
@@ -635,7 +635,7 @@ export async function setMyAbsence(serviceId: string, raw: unknown): Promise<Res
 }
 
 export async function commitDraft(serviceId: string, rawDraft: unknown): Promise<Result> {
-  const session = await requireUser();
+  const session = await requireBookingUser();
   const parsed = draftSchema.safeParse(rawDraft);
   if (!parsed.success) return { ok: false, error: "Brouillon invalide." };
   let confirmations: BookingConfirmationParams[] = [];

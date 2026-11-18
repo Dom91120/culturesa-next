@@ -12,6 +12,9 @@ export type ServiceItem = {
   // Niveau du compte courant sur ce service : `consultation` = lecture seule (agenda,
   // éditions, statistiques) — pas d'onglet Paramètres, pictogramme « œil » dans la barre.
   level?: "gestion" | "consultation";
+  // Direction des accueils de loisirs : lecture seule ET périmètre restreint — seuls
+  // l'agenda et l'onglet Éditions (réduit à son édition dédiée) existent pour elle.
+  loisirsOnly?: boolean;
 };
 type Tab = { href: string; label: string; icon: string };
 
@@ -28,11 +31,14 @@ const ADMIN_TABS: Tab[] = [
 // Onglets ouverts à un rattachement en consultation (les autres relèvent du paramétrage).
 const CONSULT_TABS = new Set(["agenda", "editions", "stats"]);
 
-function serviceTabs(id: string, readOnly: boolean): Tab[] {
+// Sous-chemins ouverts à la Direction des accueils de loisirs.
+const LOISIRS_PATHS = new Set(["agenda", "editions", "editions/loisirs"]);
+
+function serviceTabs(id: string, readOnly: boolean, loisirsOnly: boolean): Tab[] {
   return [
     { href: `/services/${id}/agenda`, label: "Agenda", icon: "📆" },
     { href: `/services/${id}/editions`, label: "Éditions", icon: "📋" },
-    { href: `/services/${id}/stats`, label: "Statistiques", icon: "📈" },
+    ...(loisirsOnly ? [] : [{ href: `/services/${id}/stats`, label: "Statistiques", icon: "📈" }]),
     ...(readOnly ? [] : [{ href: `/services/${id}`, label: "Paramètres", icon: "🔧" }]),
   ];
 }
@@ -83,8 +89,10 @@ export function ConnectedShell({
   const isReadOnly = (id: string | null) =>
     !!id && services.find((s) => s.id === id)?.level === "consultation";
   // Onglets d'administration réservés aux administrateurs.
+  const isLoisirsOnly = (id: string | null) =>
+    !!id && !!services.find((s) => s.id === id)?.loisirsOnly;
   const tabs = activeServiceId
-    ? serviceTabs(activeServiceId, isReadOnly(activeServiceId))
+    ? serviceTabs(activeServiceId, isReadOnly(activeServiceId), isLoisirsOnly(activeServiceId))
     : isAdmin
       ? ADMIN_TABS
       : [];
@@ -154,6 +162,10 @@ export function ConnectedShell({
     // Service en consultation : seuls agenda / éditions / statistiques existent pour lui —
     // venir de « Paramètres » d'un autre service y ouvrirait une page refusée.
     if (isReadOnly(id) && !CONSULT_TABS.has(target.split("/")[0])) target = "agenda";
+    // Direction des accueils de loisirs : ni statistiques, ni autres éditions.
+    if (isLoisirsOnly(id) && !LOISIRS_PATHS.has(target)) {
+      target = target.startsWith("editions") ? "editions" : "agenda";
+    }
     router.push(`/services/${id}/${target}`);
   }
 

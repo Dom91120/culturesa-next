@@ -19,6 +19,7 @@ import { initialsOf } from "@/lib/format";
 const ROLE_LABELS: Record<string, string> = {
   administrateur: "Administrateur",
   gestionnaire: "Gestionnaire",
+  direction_loisirs: "Direction accueils de loisirs",
   utilisateur: "Usager",
 };
 

@@ -6,6 +6,10 @@ import { getSession } from "@/server/guards";
  * Services administrables par l'usager courant (liste + nav admin) : TOUS pour un
  * administrateur ; uniquement ceux gérés (relation ServiceManager) pour un gestionnaire
  * — liste vide = aucun (deny par défaut, cf. requireServiceManager).
+ *
+ * Direction des accueils de loisirs : aucun rattachement nominatif — les services dont
+ * la matrice demandeurs accepte une catégorie « accueil de loisirs » (même critère que
+ * `requireServiceView`), en consultation, marqués `loisirsOnly`.
  */
 export async function listServicesForCurrentAdmin() {
   const session = await getSession();
@@ -14,8 +18,13 @@ export async function listServicesForCurrentAdmin() {
   // Deny par défaut : seul l'administrateur voit TOUS les services (where undefined). Un
   // gestionnaire ne voit que les siens ; sans session (userId absent), `userId ?? ""` ne
   // matche aucun ServiceManager → aucun service (et non plus « tous » comme auparavant).
+  const loisirsOnly = role === "direction_loisirs";
   const where =
-    role === "administrateur" ? undefined : { managers: { some: { userId: userId ?? "" } } };
+    role === "administrateur"
+      ? undefined
+      : loisirsOnly
+        ? { demandeurSettings: { some: { demandeur: { accueilLoisirs: true } } } }
+        : { managers: { some: { userId: userId ?? "" } } };
   const rows = await prisma.service.findMany({
     where,
     orderBy: [{ position: "asc" }, { label: "asc" }],
@@ -34,7 +43,10 @@ export async function listServicesForCurrentAdmin() {
     ...s,
     level: (role === "administrateur"
       ? "gestion"
-      : (managers[0]?.level ?? "gestion")) as ManagerLevel,
+      : loisirsOnly
+        ? "consultation"
+        : (managers[0]?.level ?? "gestion")) as ManagerLevel,
+    loisirsOnly,
   }));
 }
 

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui-glyphs";
 import { todayParisISO } from "@/lib/booking-delay";
 import { prisma } from "@/server/db";
-import { requireServiceAccess } from "@/server/guards";
+import { requireServiceView } from "@/server/guards";
 import { listDatedSessions, listInscrits, listOpenSlots } from "@/server/services/editions";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import { listWaitingHistory, waitingDemand } from "@/server/services/waiting-list-editions";
@@ -60,7 +60,10 @@ export default async function EditionsPage({
 }) {
   const { id } = await params;
   // Garde PROPRE à la page : le layout ne suffit pas (cf. services/[id]/layout.tsx).
-  await requireServiceAccess(id);
+  // `requireServiceView` : admet la Direction des accueils de loisirs, pour qui la page
+  // se réduit à sa seule édition (branche `loisirsScope` plus bas) — AUCUN autre chiffre
+  // n'est alors calculé ni envoyé.
+  const { loisirsScope } = await requireServiceView(id);
   const sp = await searchParams;
   const [service, exo] = await Promise.all([
     prisma.service.findUnique({ where: { id }, select: { label: true, listeAttente: true } }),
@@ -71,6 +74,56 @@ export default async function EditionsPage({
   const periodIds = selected?.periodIds;
   const q = selected ? `?exercice=${selected.id}` : "";
   const qAnd = selected ? `&exercice=${selected.id}` : "";
+
+  if (loisirsScope) {
+    const n = (await listInscrits(id, periodIds, false, loisirsScope)).length;
+    const card: Card = {
+      key: "loisirs",
+      icon: <UsersGlyph size={14} />,
+      tone: "ok",
+      label: "Inscrits des accueils de loisirs",
+      description:
+        "Les usagers des accueils de loisirs ayant réservé sur l'exercice : identité, structure, niveau et contact.",
+      figure: { value: fmt(n), unit: plural(n, "inscrit", "inscrits") },
+      href: `/services/${id}/editions/loisirs${q}`,
+      csv: `/services/${id}/editions/export?kind=loisirs${qAnd}`,
+      pdf: true,
+    };
+    return (
+      <div>
+        <div className="panel" id="editions-panel">
+          <div
+            className="panel-title"
+            style={{ justifyContent: "space-between", gap: ".75rem", marginBottom: ".25rem" }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+              <span className="rg-ico is-ok">
+                <PrinterGlyph size={16} />
+              </span>
+              Éditions
+              <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {service.label}</span>
+            </span>
+            <span className="ed-exo">
+              <ExerciceNav exercices={exercices} selectedId={selected?.id ?? null} />
+            </span>
+          </div>
+          <div className="ms-grp">
+            {"Sur l'exercice"}
+            <span className="hint">· liste triable, exportable</span>
+          </div>
+          <div className="ed-cards">{renderCard(card)}</div>
+        </div>
+        <div className="rg-foot" style={{ marginTop: 0 }}>
+          <InfoGlyph size={13} />
+          <span style={{ flex: 1, lineHeight: 1.45 }}>
+            L&apos;édition s&apos;ouvre sur son écran, où elle se trie et s&apos;imprime en PDF ; le
+            bouton de téléchargement livre le CSV directement. Elle ne porte que sur les usagers
+            rattachés à un accueil de loisirs, pour l&apos;exercice sélectionné en haut.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   // Éditions de la liste d'attente : proposées si le réglage est actif, ou s'il reste un
   // historique à consulter (liste désactivée depuis).

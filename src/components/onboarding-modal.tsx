@@ -709,7 +709,51 @@ function usagerSteps(services: ServiceLite[], hasGauge: boolean, isMobile: boole
 }
 
 // Étapes des rôles à périmètre étendu (texte simple, pas d'illustration).
-const STAFF_STEPS: Record<"gestionnaire" | "administrateur", Step[]> = {
+const STAFF_STEPS: Record<"gestionnaire" | "administrateur" | "direction", Step[]> = {
+  // Direction des accueils de loisirs : lecture seule, périmètre réduit aux accueils de
+  // loisirs. Ni création, ni validation, ni pointage, ni statistiques.
+  direction: [
+    {
+      title: "👋 Bienvenue",
+      body: (
+        <>
+          <p style={P}>
+            Vous suivez les réservations des <strong>accueils de loisirs</strong>. La barre latérale
+            liste les services qui les accueillent, marqués d'un œil : vous les consultez sans
+            pouvoir y intervenir.
+          </p>
+          <p style={{ margin: 0 }}>
+            Ces services s'affichent d'eux-mêmes : aucun rattachement n'est à demander.
+          </p>
+        </>
+      ),
+    },
+    {
+      title: "🗓️ L'agenda, semaine par semaine",
+      body: (
+        <>
+          <p style={P}>
+            L'agenda de chaque service affiche une <strong>semaine datée</strong> avec tous ses
+            créneaux. Naviguez avec les flèches ◀ ▶ et les onglets de période.
+          </p>
+          <p style={{ margin: 0 }}>
+            Seules les réservations des accueils de loisirs y figurent. Un créneau qui paraît libre
+            peut donc être occupé par une école ou un autre demandeur.
+          </p>
+        </>
+      ),
+    },
+    {
+      title: "📋 La liste des inscrits",
+      body: (
+        <p style={{ margin: 0 }}>
+          L'onglet <strong>« 📋 Éditions »</strong> propose la{" "}
+          <strong>liste des inscrits des accueils de loisirs</strong> sur l'exercice : identité,
+          structure, niveau et contact. Elle se trie, s'imprime en PDF et s'exporte en CSV.
+        </p>
+      ),
+    },
+  ],
   // Gestionnaire : périmètre LIMITÉ aux services qui lui sont confiés. Pas d'accès au
   // menu Administration (réservé aux administrateurs).
   gestionnaire: [
@@ -852,7 +896,7 @@ export function OnboardingModal({
   services = [],
   hasGauge = true,
 }: {
-  variant: "usager" | "gestionnaire" | "administrateur";
+  variant: "usager" | "gestionnaire" | "administrateur" | "direction";
   open: boolean;
   // Services réservables (variant « usager ») : cités et illustrés dans la présentation.
   services?: ServiceLite[];

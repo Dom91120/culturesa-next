@@ -56,6 +56,8 @@ export const TOUCH_THROTTLE_MS = 60_000; // 1 min
 /** Inactivité maximale tolérée, par rôle. */
 export const MAX_IDLE_MS: Record<Role, number> = {
   utilisateur: 2 * 60 * 60 * 1000, // 2 h
+  // Lecture seule, mais sur des données nominatives de mineurs : délais du personnel.
+  direction_loisirs: 15 * 60 * 1000,
   gestionnaire: 15 * 60 * 1000, // 15 min
   administrateur: 15 * 60 * 1000, // 15 min — mêmes privilèges d'écriture
 };
@@ -63,6 +65,7 @@ export const MAX_IDLE_MS: Record<Role, number> = {
 /** Durée de vie maximale d'une session, quelle que soit l'activité. */
 export const MAX_ABSOLUTE_MS: Record<Role, number> = {
   utilisateur: 24 * 60 * 60 * 1000, // 24 h
+  direction_loisirs: 8 * 60 * 60 * 1000,
   gestionnaire: 8 * 60 * 60 * 1000, // 8 h — une journée de travail
   administrateur: 8 * 60 * 60 * 1000,
 };

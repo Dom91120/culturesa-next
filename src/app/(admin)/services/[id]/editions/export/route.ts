@@ -1,7 +1,8 @@
 import { csvResponse } from "@/lib/csv";
 import { prisma } from "@/server/db";
-import { reponseApi, requireServiceAccessApi } from "@/server/guards-api";
+import { reponseApi, requireServiceViewApi } from "@/server/guards-api";
 import { listEditionRows, listInscrits, listOpenSlots } from "@/server/services/editions";
+import { loisirsDemandeurIds } from "@/server/services/loisirs-scope";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import {
   listWaitingContacts,
@@ -38,22 +39,36 @@ const HEADER = [
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return reponseApi(async () => {
-    await requireServiceAccessApi(id, "/services/[id]/editions/export");
+    const { loisirsScope } = await requireServiceViewApi(id, "/services/[id]/editions/export");
+    const sp = new URL(req.url).searchParams;
+    // `kind` (défaut : réservations, l'export historique) : inscrits et créneaux
+    // ouverts partagent la route — mêmes colonnes que leurs écrans.
+    const kind = sp.get("kind") ?? "reservations";
+    // Direction des accueils de loisirs : UNE seule édition lui est ouverte. Refus posé
+    // ici, avant toute lecture — le défaut (`reservations`) lui est donc refusé aussi.
+    if (loisirsScope && kind !== "loisirs") {
+      return new Response("Édition non autorisée", { status: 403 });
+    }
 
     const service = await prisma.service.findUnique({ where: { id }, select: { label: true } });
     if (!service) return new Response("Service introuvable", { status: 404 });
 
     // Export scopé à l'exercice sélectionné (param `?exercice=`), comme les écrans.
-    const sp = new URL(req.url).searchParams;
     const spExercice = sp.get("exercice") ?? undefined;
     const { selected } = await resolveEditionExercice(id, spExercice);
     const safeName = service.label.replace(/[^a-zA-Z0-9-_]+/g, "_").slice(0, 40) || "service";
 
-    // `kind` (défaut : réservations, l'export historique) : inscrits et créneaux
-    // ouverts partagent la route — mêmes colonnes que leurs écrans.
-    const kind = sp.get("kind") ?? "reservations";
-    if (kind === "inscrits") {
-      const inscrits = await listInscrits(id, selected?.periodIds, sp.get("anonymises") === "1");
+    if (kind === "inscrits" || kind === "loisirs") {
+      // `loisirs` : mêmes colonnes, restreintes aux catégories « accueil de loisirs »
+      // (périmètre de la Direction, ou recalculé pour un gestionnaire / administrateur).
+      const loisirs =
+        kind === "loisirs" ? (loisirsScope ?? (await loisirsDemandeurIds(id))) : undefined;
+      const inscrits = await listInscrits(
+        id,
+        selected?.periodIds,
+        !loisirs && sp.get("anonymises") === "1",
+        loisirs,
+      );
       const lines = [
         ["Nom", "Prénom", "Structure", "Niveau", "Email", "Téléphone", "Inscrit le"],
         ...inscrits.map((u) => [
@@ -66,7 +81,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
           u.inscritLe,
         ]),
       ];
-      return csvResponse(lines, `inscrits_${safeName}.csv`);
+      return csvResponse(
+        lines,
+        `${loisirs ? "inscrits_accueils_loisirs" : "inscrits"}_${safeName}.csv`,
+      );
     }
     if (kind === "creneaux") {
       const slots = await listOpenSlots(id, selected?.periodIds);

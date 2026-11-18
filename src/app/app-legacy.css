@@ -1626,6 +1626,10 @@ textarea.theme-pending:focus::placeholder {
   background: rgba(232, 164, 90, 0.15);
   color: var(--warn);
 }
+.role-direction {
+  background: rgba(128, 104, 216, 0.16);
+  color: #8068d8;
+}
 .role-utilisateur {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
@@ -3311,6 +3315,11 @@ textarea.theme-pending:focus::placeholder {
 .acct-pill.role-gestionnaire {
   background: rgba(232, 164, 90, 0.16);
   color: var(--warn);
+}
+.acct-avatar.role-direction_loisirs,
+.acct-pill.role-direction_loisirs {
+  background: rgba(128, 104, 216, 0.16);
+  color: #8068d8;
 }
 .acct-avatar.role-utilisateur,
 .acct-pill.role-utilisateur {

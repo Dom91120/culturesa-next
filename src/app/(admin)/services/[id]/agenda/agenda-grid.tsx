@@ -296,6 +296,7 @@ export function AgendaGrid({
   viewerEmail,
   waitingEntries,
   readOnly,
+  loisirsOnly = false,
 }: {
   service: Service;
   // Rattachement en CONSULTATION (ManagerLevel) : la grille est figée — pas de mode
@@ -303,6 +304,9 @@ export function AgendaGrid({
   // croix ni de menu contextuel, fiches en lecture seule. Le serveur refuse de toute façon
   // toute action à ce niveau (requireServiceManager) : ce drapeau n'est que l'interface.
   readOnly: boolean;
+  // Direction des accueils de loisirs : les réservations reçues sont déjà filtrées par
+  // le serveur — ce drapeau n'adapte que le texte d'aide.
+  loisirsOnly?: boolean;
   // Inscrits sur la liste d'attente (ordre d'inscription) — vide si réglage inactif.
   waitingEntries: WaitingAdminRow[];
   periods: Period[];
@@ -3880,11 +3884,13 @@ export function AgendaGrid({
               le conseil dépend du mode création. */}
           <p className="agenda-hint" style={{ margin: 0 }}>
             <span aria-hidden="true">💡</span>{" "}
-            {readOnly
-              ? "Consultation seule : cliquez sur une réservation pour ouvrir sa fiche. Ce service ne vous est pas confié en gestion."
-              : creationMode
-                ? "Saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
-                : "Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer ; déposée sur un créneau déjà réservé, vous choisissez entre déplacer et échanger les créneaux."}
+            {loisirsOnly
+              ? "Consultation seule : seules les réservations des accueils de loisirs sont affichées. Un créneau qui paraît libre peut être occupé par un autre demandeur."
+              : readOnly
+                ? "Consultation seule : cliquez sur une réservation pour ouvrir sa fiche. Ce service ne vous est pas confié en gestion."
+                : creationMode
+                  ? "Saisissez le bord haut ou bas d'un créneau vide pour changer sa durée, ou son bord gauche/droit pour l'étendre aux jours voisins."
+                  : "Cliquez sur un créneau vide pour ajouter une réservation, ou glissez une réservation vers un autre créneau pour la déplacer ; déposée sur un créneau déjà réservé, vous choisissez entre déplacer et échanger les créneaux."}
           </p>
           {/* Légende alignée à DROITE, une ligne vide sous l'astuce (retour Dom 2026-09-04). */}
           <div
