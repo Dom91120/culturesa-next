@@ -13,6 +13,8 @@ const rowSchema = z.object({
   label: z.string().trim().min(1, "Le libellé est obligatoire").max(100),
   openOnSchoolHolidays: z.boolean(),
   structureLibre: z.boolean(),
+  // Catégorie « accueil de loisirs » : périmètre du rôle direction_loisirs.
+  accueilLoisirs: z.boolean().default(false),
 });
 
 // Union discriminée partagée (lib/action-state).
@@ -23,6 +25,7 @@ export async function createDemandeurAction(input: {
   label: string;
   openOnSchoolHolidays: boolean;
   structureLibre: boolean;
+  accueilLoisirs?: boolean;
 }): Promise<CreateResult> {
   await requireRole("administrateur");
   const parsed = rowSchema.safeParse(input);
@@ -34,6 +37,7 @@ export async function createDemandeurAction(input: {
       label: parsed.data.label,
       openOnSchoolHolidays: parsed.data.openOnSchoolHolidays,
       structureLibre: parsed.data.structureLibre,
+      accueilLoisirs: parsed.data.accueilLoisirs,
     },
     select: { id: true },
   });
@@ -43,7 +47,12 @@ export async function createDemandeurAction(input: {
 
 export async function updateDemandeurAction(
   id: number,
-  input: { label: string; openOnSchoolHolidays: boolean; structureLibre: boolean },
+  input: {
+    label: string;
+    openOnSchoolHolidays: boolean;
+    structureLibre: boolean;
+    accueilLoisirs?: boolean;
+  },
 ): Promise<Result> {
   await requireRole("administrateur");
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Demandeur introuvable" };
@@ -57,6 +66,7 @@ export async function updateDemandeurAction(
       label: parsed.data.label,
       openOnSchoolHolidays: parsed.data.openOnSchoolHolidays,
       structureLibre: parsed.data.structureLibre,
+      accueilLoisirs: parsed.data.accueilLoisirs,
     },
   });
   revalidatePath("/configuration");

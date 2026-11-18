@@ -9,18 +9,20 @@ type Initial = {
   label: string;
   openOnSchoolHolidays: boolean;
   structureLibre: boolean;
+  accueilLoisirs: boolean;
 };
 type Row = {
   id: number | null;
   label: string;
   openOnSchoolHolidays: boolean;
   structureLibre: boolean;
+  accueilLoisirs: boolean;
 };
 
 // minmax(0, 1fr) (et non « 1fr » = minmax(auto, 1fr)) : la 1re colonne ne se dimensionne PAS
 // sur le min-content de son contenu (l'input des lignes est plus large que le span de l'en-tête),
 // sinon les colonnes ne s'alignent plus entre en-tête et lignes quand la modale est étroite.
-const GRID = "minmax(0, 1fr) 190px 150px 30px";
+const GRID = "minmax(0, 1fr) 130px 120px 130px 30px";
 
 /**
  * Éditeur des demandeurs (modale du référentiel, Administration > Configuration).
@@ -43,12 +45,14 @@ export function DemandeursEditor({
         label: d.label,
         openOnSchoolHolidays: d.openOnSchoolHolidays,
         structureLibre: d.structureLibre,
+        accueilLoisirs: d.accueilLoisirs,
       })}
       blankRow={() => ({
         id: null,
         label: "",
         openOnSchoolHolidays: true,
         structureLibre: false,
+        accueilLoisirs: false,
       })}
       labels={{
         placeholder: "Nom du demandeur",
@@ -74,17 +78,20 @@ export function DemandeursEditor({
       extraHeaders={[
         { label: "Ouvert vacances", style: { textAlign: "center" } },
         { label: "Structure libre", style: { textAlign: "center" } },
+        { label: "Accueil de loisirs", style: { textAlign: "center" } },
       ]}
       isDirty={(r, init) =>
         init.label !== r.label.trim() ||
         init.openOnSchoolHolidays !== r.openOnSchoolHolidays ||
-        init.structureLibre !== r.structureLibre
+        init.structureLibre !== r.structureLibre ||
+        init.accueilLoisirs !== r.accueilLoisirs
       }
       onCreate={(r) =>
         createDemandeurAction({
           label: r.label.trim(),
           openOnSchoolHolidays: r.openOnSchoolHolidays,
           structureLibre: r.structureLibre,
+          accueilLoisirs: r.accueilLoisirs,
         })
       }
       onUpdate={(id, r) =>
@@ -92,6 +99,7 @@ export function DemandeursEditor({
           label: r.label.trim(),
           openOnSchoolHolidays: r.openOnSchoolHolidays,
           structureLibre: r.structureLibre,
+          accueilLoisirs: r.accueilLoisirs,
         })
       }
       onDelete={(id) => deleteDemandeurAction(id)}
@@ -113,6 +121,16 @@ export function DemandeursEditor({
               size="sm"
               on={r.structureLibre}
               onChange={(v) => patch(r.key, { structureLibre: v })}
+            />
+          </span>
+          {/* Périmètre du rôle « Direction des accueils de loisirs » : ces comptes ne
+              voient que les services acceptant une catégorie cochée ici, et que les
+              réservations de ces catégories. */}
+          <span style={{ display: "flex", justifyContent: "center" }}>
+            <Switch
+              size="sm"
+              on={r.accueilLoisirs}
+              onChange={(v) => patch(r.key, { accueilLoisirs: v })}
             />
           </span>
         </>

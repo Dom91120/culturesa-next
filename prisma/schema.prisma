@@ -17,8 +17,13 @@ datasource db {
 //  Enums
 // ============================================================
 
+// `direction_loisirs` (Dom 2026-11-18) : « Direction des accueils de loisirs ». Lecture
+// seule, SANS rattachement nominatif : accès automatique aux services dont la matrice
+// demandeurs accepte une catégorie `Demandeur.accueilLoisirs`, et uniquement aux
+// réservations de ces catégories (cf. server/guards.ts, `requireServiceView`).
 enum Role {
   utilisateur
+  direction_loisirs
   gestionnaire
   administrateur
 }
@@ -497,6 +502,10 @@ model Demandeur {
   /// saisie libre pour cette catégorie (sans quoi chacun lirait la liste de ce que
   /// les précédents ont déclaré).
   structureLibre       Boolean @default(false)
+  /// Catégorie « accueil de loisirs » : périmètre du rôle `direction_loisirs` (services
+  /// accessibles, réservations visibles, édition dédiée). Marqueur EXPLICITE — le
+  /// libellé n'est plus la source de vérité, il peut être renommé sans effet de bord.
+  accueilLoisirs       Boolean @default(false)
 
   structures       Structure[]
   niveaux          Niveau[]

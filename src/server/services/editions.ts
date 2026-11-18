@@ -2,6 +2,7 @@ import { DAY_NAMES, ISO_DAY_KEYS, parseWeeks } from "@/lib/agenda-core";
 import { DATE_FMT_FR as dateFmt } from "@/lib/format";
 import { slotTimeLabel } from "@/lib/slot-label";
 import { prisma } from "@/server/db";
+import { loisirsUserWhere } from "@/server/services/loisirs-scope";
 
 // Libellés de jours : source unique = DAY_NAMES (lib/agenda-core, pur — audit D2).
 // Libellé de créneau (« HH:MM – HH:MM » / « Journée entière ») : slotTimeLabel (lib/slot-label).
@@ -81,10 +82,13 @@ export async function listDatedSessions(
   toYmd: string,
   // Restreint aux réservations des périodes de l'exercice sélectionné (scope exercice).
   periodIds?: number[],
+  // Restreint aux usagers de ces catégories (Direction des accueils de loisirs).
+  demandeurIds?: number[],
 ): Promise<DatedSession[]> {
   const rows = await prisma.booking.findMany({
     where: {
       serviceId,
+      ...(demandeurIds ? { user: loisirsUserWhere(demandeurIds) } : {}),
       // Scope exercice via le CRÉNEAU : booking.periodId est null pour les ponctuels,
       // alors que slot.periodId est renseigné pour récurrents ET ponctuels.
       slot: {
@@ -182,12 +186,19 @@ export async function listInscrits(
   serviceId: string,
   periodIds?: number[],
   withAnonymized = false,
+  // Restreint aux usagers de ces catégories (demandeur effectif) : édition « Inscrits
+  // des accueils de loisirs ». Un compte anonymisé n'a plus de rattachement — il n'y
+  // figure donc jamais, quel que soit `withAnonymized`.
+  demandeurIds?: number[],
 ): Promise<Inscrit[]> {
   const rows = await prisma.booking.findMany({
     where: {
       serviceId,
       ...(periodIds ? { slot: { periodId: { in: periodIds } } } : {}),
-      ...(withAnonymized ? {} : { user: { anonymizedAt: null } }),
+      user: {
+        ...(withAnonymized ? {} : { anonymizedAt: null }),
+        ...(demandeurIds ? loisirsUserWhere(demandeurIds) : {}),
+      },
     },
     distinct: ["userId"],
     select: {

@@ -4,14 +4,21 @@ import { cache } from "react";
 import type { ManagerLevel, Role } from "@/generated/prisma/client";
 import { auth } from "@/server/auth";
 import { prisma } from "@/server/db";
+import { loisirsDemandeurIds } from "@/server/services/loisirs-scope";
 import { checkSessionPolicy, sessionDeadlineAt, shouldTouch } from "@/server/session-policy";
 import { CHEMIN_ENROLEMENT, exige2FA } from "@/server/two-factor-policy";
 
-/** Hiérarchie des rôles : un administrateur satisfait aussi un guard gestionnaire. */
+/**
+ * Hiérarchie des rôles : un administrateur satisfait aussi un guard gestionnaire.
+ * `direction_loisirs` se range SOUS gestionnaire : tout garde `requireRole("gestionnaire")`
+ * — donc `requireServiceManager` et `requireServiceAccess` — le refuse par construction.
+ * Il n'entre que par `requireServiceView`.
+ */
 const RANK: Record<Role, number> = {
   utilisateur: 0,
-  gestionnaire: 1,
-  administrateur: 2,
+  direction_loisirs: 1,
+  gestionnaire: 2,
+  administrateur: 3,
 };
 
 type SessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -110,6 +117,18 @@ export async function sessionDeadline(): Promise<number | null> {
   return sessionDeadlineAt(role, session.session.updatedAt, session.session.createdAt);
 }
 
+/**
+ * Exige un compte autorisé à RÉSERVER pour lui-même (côté usager). La Direction des
+ * accueils de loisirs est en lecture seule : elle n'a pas de catégorie de demandeur, et
+ * « compte sans demandeur » vaut « tous les services » dans le cœur de réservation (cas
+ * de l'administrateur). Sans ce garde, elle pourrait donc réserver partout.
+ */
+export async function requireBookingUser() {
+  const session = await requireUser();
+  if ((session.user as { role?: Role }).role === "direction_loisirs") redirect("/");
+  return session;
+}
+
 /** Exige au moins le rôle demandé, sinon redirige. */
 export async function requireRole(min: Role) {
   const session = await requireUser();
@@ -179,4 +198,30 @@ export async function requireServiceAccess(serviceId: string) {
   const level = await serviceAccessLevel(session.user.id, role, serviceId);
   if (!level) redirect("/configuration");
   return { session, level, readOnly: level === "consultation" };
+}
+
+/**
+ * Exige de pouvoir VOIR ce service, périmètre restreint compris. Seul garde qui admet
+ * la Direction des accueils de loisirs — à n'appeler que là où son périmètre est
+ * RÉELLEMENT appliqué aux données (layout du service, agenda, accueil des éditions,
+ * édition dédiée). Partout ailleurs : `requireServiceAccess`, qui la refuse.
+ *
+ * `loisirsScope` :
+ *   - `null`      → gestionnaire ou administrateur : aucune restriction de catégorie ;
+ *   - `number[]`  → Direction : seules les réservations de ces catégories sont lisibles.
+ *     L'appelant DOIT filtrer ses requêtes avec (cf. `loisirsUserWhere`, services/loisirs-scope.ts) ; la liste
+ *     n'est jamais vide (service sans accueil de loisirs = accès refusé).
+ */
+export async function requireServiceView(serviceId: string) {
+  const session = await requireRole("direction_loisirs");
+  const role = (session.user as { role?: Role }).role ?? "utilisateur";
+  if (role === "direction_loisirs") {
+    const ids = await loisirsDemandeurIds(serviceId);
+    // La racine aiguille vers le premier service accessible (ou Mon compte, faute de mieux).
+    if (ids.length === 0) redirect("/");
+    return { session, readOnly: true, loisirsScope: ids as number[] | null };
+  }
+  const level = await serviceAccessLevel(session.user.id, role, serviceId);
+  if (!level) redirect("/configuration");
+  return { session, readOnly: level === "consultation", loisirsScope: null as number[] | null };
 }

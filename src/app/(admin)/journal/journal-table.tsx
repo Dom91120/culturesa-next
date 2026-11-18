@@ -184,7 +184,9 @@ function ActionIcon({ action }: { action: string }) {
 /** Acteur : avatar teinté par rôle, nom ou adresse, rôle (« lui-même » quand il agit sur son compte). */
 function Actor({ e }: { e: JournalEntry }) {
   const role =
-    e.actorRole === "administrateur" || e.actorRole === "gestionnaire"
+    e.actorRole === "administrateur" ||
+    e.actorRole === "gestionnaire" ||
+    e.actorRole === "direction_loisirs"
       ? e.actorRole
       : "utilisateur";
   const self = e.target !== null && e.target === e.actorLabel && role === "utilisateur";

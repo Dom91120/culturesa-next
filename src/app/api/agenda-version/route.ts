@@ -3,6 +3,7 @@ import type { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { getSessionNoTouch } from "@/server/guards";
 import { userCanAccessService } from "@/server/services/bookings";
+import { loisirsDemandeurIds } from "@/server/services/loisirs-scope";
 
 /**
  * « Version d'agenda » d'un service — sonde LÉGÈRE du polling des grilles (audit
@@ -15,7 +16,8 @@ import { userCanAccessService } from "@/server/services/bookings";
  * (refresh inconditionnel) ou à la navigation.
  *
  * Accès : mêmes règles que les grilles — administrateur ; gestionnaire DU service
- * (ServiceManager) ; usager dont le demandeur effectif est accepté par le service.
+ * (ServiceManager) ; Direction des accueils de loisirs si le service en accueille ;
+ * usager dont le demandeur effectif est accepté par le service.
  * Route API (et non server action) : GET haute fréquence sans mutation, no-store.
  *
  * Session lue via `getSessionNoTouch` : ce sondage est émis par la PAGE, pas par
@@ -36,7 +38,14 @@ export async function GET(req: Request) {
       select: { serviceId: true },
     }));
   }
-  if (!allowed) allowed = await userCanAccessService(prisma, session.user.id, serviceId);
+  // Direction des accueils de loisirs : services acceptant un accueil de loisirs, et
+  // RIEN d'autre — pas de repli sur la règle usager, qui ouvre tout à un compte sans
+  // catégorie de demandeur.
+  if (role === "direction_loisirs") {
+    allowed = (await loisirsDemandeurIds(serviceId)).length > 0;
+  } else if (!allowed) {
+    allowed = await userCanAccessService(prisma, session.user.id, serviceId);
+  }
   if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const [b, s] = await Promise.all([

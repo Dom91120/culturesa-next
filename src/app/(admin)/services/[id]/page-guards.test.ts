@@ -36,18 +36,43 @@ describe("pages et routes de services/[id] : garde propre", () => {
   });
 
   it.each(pages.map((f) => [relative(ROOT, f).replaceAll("\\", "/"), f]))(
-    "%s appelle requireServiceAccess ou requireServiceManager",
+    "%s appelle requireServiceAccess, requireServiceView ou requireServiceManager",
     (_name, file) => {
       const src = readFileSync(file, "utf8");
       if (isRedirectOnly(src)) return;
-      expect(src).toMatch(/await require(ServiceAccess|ServiceManager)\(id\)/);
+      expect(src).toMatch(/await require(ServiceAccess|ServiceView|ServiceManager)\(id\)/);
     },
   );
 
   it.each(routes.map((f) => [relative(ROOT, f).replaceAll("\\", "/"), f]))(
-    "%s appelle requireServiceAccessApi",
+    "%s appelle requireServiceAccessApi ou requireServiceViewApi",
     (_name, file) => {
-      expect(readFileSync(file, "utf8")).toMatch(/await requireServiceAccessApi\(id,/);
+      expect(readFileSync(file, "utf8")).toMatch(/await requireService(Access|View)Api\(id,/);
     },
   );
+
+  // `requireServiceView` admet la Direction des accueils de loisirs : il n'a sa place
+  // que là où son périmètre est appliqué aux données. Liste FERMÉE — l'ajouter à une
+  // autre page lui ouvrirait des données hors accueils de loisirs.
+  it("requireServiceView n'est appelé que par les pages au périmètre filtré", () => {
+    const withView = [...pages, ...files.filter((f) => f.endsWith("layout.tsx"))]
+      .filter((f) => /requireServiceView\(/.test(readFileSync(f, "utf8")))
+      .map((f) => relative(ROOT, f).replaceAll("\\", "/"))
+      .sort();
+    expect(withView).toEqual([
+      "agenda/page.tsx",
+      "editions/loisirs/page.tsx",
+      "editions/page.tsx",
+      "layout.tsx",
+      "page.tsx",
+    ]);
+  });
+
+  it("requireServiceViewApi n'est appelé que par les exports des éditions", () => {
+    const withView = routes
+      .filter((f) => /requireServiceViewApi\(/.test(readFileSync(f, "utf8")))
+      .map((f) => relative(ROOT, f).replaceAll("\\", "/"))
+      .sort();
+    expect(withView).toEqual(["editions/export/route.ts", "editions/pdf/route.ts"]);
+  });
 });

@@ -5,10 +5,11 @@ import { absencePrevenueDto } from "@/lib/agenda-core";
 import { toDateInput } from "@/lib/format";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
-import { getSession, requireServiceAccess } from "@/server/guards";
+import { getSession, requireServiceView } from "@/server/guards";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { currentExerciceIdForService, eligiblePeriodsWhere } from "@/server/services/exercice";
 import { loadSchoolHolidayRanges } from "@/server/services/holidays";
+import { loisirsUserWhere } from "@/server/services/loisirs-scope";
 import { deriveServiceModes } from "@/server/services/service-modes";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import { AgendaGrid } from "./agenda-grid";
@@ -17,7 +18,13 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   // Niveau du compte sur ce service (le layout a déjà exigé au moins la consultation) :
   // en consultation, la grille est rendue figée.
-  const { readOnly } = await requireServiceAccess(id);
+  //
+  // `loisirsScope` non nul = Direction des accueils de loisirs : TOUS les créneaux lui
+  // sont montrés, mais seules les réservations des accueils de loisirs quittent le
+  // serveur. Le filtre est posé sur la REQUÊTE (cf. bookings ci-dessous), jamais à
+  // l'affichage : rien d'autre ne doit figurer dans le payload RSC. Conséquence
+  // assumée (Dom 2026-11-18) : un créneau occupé par une école lui paraît libre.
+  const { readOnly, loisirsScope } = await requireServiceView(id);
   // Vague d'amorçage : quatre lectures indépendantes (le garde ci-dessus reste SEUL en
   // tête — il peut rediriger). Auparavant enchaînées en série (audit perf 2026-09-17).
   // (Les réglages d'ouverture sont portés par chaque exercice, cf. plus bas.)
@@ -78,7 +85,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
       orderBy: periodOrder,
       select: periodSelect,
     }),
-    service.listeAttente ? listWaitingEntries(id) : Promise.resolve([]),
+    // Liste d'attente : jamais pour la Direction (inscrits de toutes catégories).
+    service.listeAttente && !loisirsScope ? listWaitingEntries(id) : Promise.resolve([]),
   ]);
   // Aucune période à afficher → l'agenda n'a rien à montrer : on invite le gestionnaire
   // à agir (au lieu d'une grille vide et muette). Trois cas, du plus en amont au plus
@@ -103,9 +111,12 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
               ? "Aucune période n'est configurée pour ce service. Créez au moins une période pour pouvoir gérer l'agenda et les créneaux."
               : "Aucune période dans l'exercice courant. Créez-en une, ou activez « Afficher les exercices précédents » dans les paramètres du service pour retrouver les périodes des exercices passés."}
         </p>
-        <Link className="btn btn-primary" href={`/services/${id}/periodes`}>
-          {noExercice ? "Créer un exercice" : "Créer une période"}
-        </Link>
+        {/* Lecture seule : la page des périodes lui est refusée, pas de bouton. */}
+        {!readOnly && (
+          <Link className="btn btn-primary" href={`/services/${id}/periodes`}>
+            {noExercice ? "Créer un exercice" : "Créer une période"}
+          </Link>
+        )}
       </div>
     );
   }
@@ -163,6 +174,10 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
           serviceId: id,
           bookingType: { in: ["recurring", "unique"] },
           slot: { periodId: { in: periodIds } },
+          // Direction des accueils de loisirs : ses seules catégories (demandeur
+          // effectif de l'usager). Une occurrence enfant porte le même usager que sa
+          // parente : la paire est donc toujours filtrée ensemble.
+          ...(loisirsScope ? { user: loisirsUserWhere(loisirsScope) } : {}),
         },
         select: {
           id: true,
@@ -348,7 +363,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
   return (
     <>
       <AgendaGrid
-        service={service}
+        // Direction : le bouton « Liste d'attente » n'existe pas pour elle.
+        service={loisirsScope ? { ...service, listeAttente: false } : service}
         waitingEntries={waitingEntries}
         periods={periodsData}
         slots={slotsData}
@@ -364,8 +380,10 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         autoRefreshSeconds={autoRefreshSeconds}
         viewerEmail={viewerEmail}
         readOnly={readOnly}
+        loisirsOnly={loisirsScope !== null}
       />
-      <AdminDemInfo rows={demRows} />
+      {/* Bandeau de debug (matrice demandeurs complète) : pas pour la Direction. */}
+      {!loisirsScope && <AdminDemInfo rows={demRows} />}
     </>
   );
 }

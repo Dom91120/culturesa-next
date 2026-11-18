@@ -26,6 +26,7 @@ type ServiceLevel = "gestion" | "consultation";
 
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: "utilisateur", label: "Utilisateur" },
+  { value: "direction_loisirs", label: "Direction des accueils de loisirs" },
   { value: "gestionnaire", label: "Gestionnaire" },
   { value: "administrateur", label: "Administrateur" },
 ];
@@ -71,6 +72,9 @@ export function UserModal({
   const [pending, startTransition] = useTransition();
 
   const isManager = role === "gestionnaire";
+  // Direction des accueils de loisirs : accès AUTOMATIQUE (services acceptant une
+  // catégorie « accueil de loisirs »), donc aucun service à cocher.
+  const isDirection = role === "direction_loisirs";
   // Un compte « utilisateur » doit déclarer ≥ 1 enfant et ≥ 1 accompagnant, à la
   // création comme à l'édition ; pas d'exigence pour les gestionnaires/administrateurs.
   const requireKids = role === "utilisateur";
@@ -161,7 +165,7 @@ export function UserModal({
       niveau: niveau.trim(),
       enfants: enfants === "" ? 0 : Number(enfants),
       accompagnants: accompagnants === "" ? 0 : Number(accompagnants),
-      role: role as "utilisateur" | "gestionnaire" | "administrateur",
+      role: role as "utilisateur" | "direction_loisirs" | "gestionnaire" | "administrateur",
       demandeurId: demandeurId ? Number(demandeurId) : null,
       // L'un OU l'autre selon la catégorie : un identifiant quand il y a une liste,
       // le libellé saisi sinon — que le serveur rapproche d'une structure existante
@@ -452,11 +456,17 @@ export function UserModal({
             id="uc-services"
             className="uc-services-list"
             style={{
-              opacity: isManager ? 1 : 0.5,
+              opacity: isManager || isDirection ? 1 : 0.5,
               pointerEvents: isManager ? "auto" : "none",
             }}
           >
-            {services.length === 0 ? (
+            {isDirection ? (
+              <span style={{ color: "var(--muted)", fontSize: ".78rem", lineHeight: 1.5 }}>
+                Accès automatique, en lecture seule, aux services qui accueillent des accueils de
+                loisirs. Ce compte n&apos;y voit que leurs réservations et la liste de leurs
+                inscrits. Les catégories concernées se cochent dans Configuration › Demandeurs.
+              </span>
+            ) : services.length === 0 ? (
               <span style={{ color: "var(--muted)", fontSize: ".78rem" }}>
                 Aucun service disponible
               </span>

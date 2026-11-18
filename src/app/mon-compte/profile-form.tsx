@@ -6,7 +6,7 @@ import { upperCaseOnInput } from "@/lib/format";
 import { STRUCTURE_LIBRE_MAX } from "@/schemas/user";
 import { updateProfileAction } from "./actions";
 
-type Role = "utilisateur" | "gestionnaire" | "administrateur";
+type Role = "utilisateur" | "direction_loisirs" | "gestionnaire" | "administrateur";
 
 type Profile = {
   prenom: string;
@@ -27,6 +27,7 @@ type Profile = {
 const ROLE_META: Record<Role, { cls: string; label: string }> = {
   administrateur: { cls: "role-admin", label: "Administrateur" },
   gestionnaire: { cls: "role-gestionnaire", label: "Gestionnaire" },
+  direction_loisirs: { cls: "role-direction", label: "Direction des accueils de loisirs" },
   utilisateur: { cls: "role-utilisateur", label: "Utilisateur" },
 };
 

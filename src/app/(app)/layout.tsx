@@ -2,11 +2,11 @@ import { OnboardingModalLazy } from "@/components/onboarding-modal-lazy";
 import { SessionWatchdog } from "@/components/session-watchdog";
 import { UserShell } from "@/components/user-shell";
 import { prisma } from "@/server/db";
-import { requireUser, sessionDeadline } from "@/server/guards";
+import { requireBookingUser, sessionDeadline } from "@/server/guards";
 import { listBookableServices, userHasAnyGauge } from "@/server/services/bookings";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireUser();
+  const session = await requireBookingUser();
   // Quatre lectures indépendantes en une seule vague (le garde reste seul en tête — il
   // peut rediriger) ; échéance de session et fiche usager étaient en série (audit perf
   // 2026-09-17).
