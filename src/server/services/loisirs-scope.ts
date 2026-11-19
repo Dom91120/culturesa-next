@@ -40,3 +40,38 @@ export function loisirsUserWhere(demandeurIds: number[]) {
     ],
   };
 }
+
+/**
+ * Occupation des créneaux datés par les AUTRES catégories — tout ce que la Direction
+ * ne voit pas — pour l'affichage « N places restantes » de son agenda. Un total par
+ * créneau (nombre de réservations, enfants, accompagnants) : ni identité, ni détail par
+ * réservation ne quitte le serveur.
+ *
+ * Mêmes bornes que les réservations de l'agenda (types récurrent / ponctuel, périodes
+ * affichées). Seuls les créneaux DATÉS comptent : en semaine réelle, une récurrente
+ * occupe ses occurrences (réservations-enfants sur les slots miroirs), pas son modèle.
+ * Un compte anonymisé n'a plus de catégorie : il tombe ici, donc reste compté.
+ */
+export async function loisirsHiddenOccupancyRows(
+  serviceId: string,
+  periodIds: number[],
+  demandeurIds: number[],
+): Promise<{ slotId: string; count: number; enfants: number; accompagnants: number }[]> {
+  const rows = await prisma.booking.groupBy({
+    by: ["slotId"],
+    where: {
+      serviceId,
+      bookingType: { in: ["recurring", "unique"] },
+      slot: { periodId: { in: periodIds }, slotType: "unique" },
+      NOT: { user: loisirsUserWhere(demandeurIds) },
+    },
+    _count: { _all: true },
+    _sum: { enfants: true, accompagnants: true },
+  });
+  return rows.map((r) => ({
+    slotId: r.slotId,
+    count: r._count._all,
+    enfants: r._sum.enfants ?? 0,
+    accompagnants: r._sum.accompagnants ?? 0,
+  }));
+}

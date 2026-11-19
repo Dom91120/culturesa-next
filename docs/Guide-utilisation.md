@@ -214,9 +214,14 @@ l'onglet **Paramètres › Configuration** autorise une catégorie de demandeur 
 **« Accueil de loisirs »** dans les référentiels. Sur chacun, deux onglets seulement :
 
 - **Agenda** : tous les créneaux du service s'affichent, mais **seules les réservations des
-  accueils de loisirs** y figurent. Un créneau qui paraît libre peut donc être occupé par une
-  école ou un autre demandeur ; l'impression de l'agenda suit la même règle. Rien ne s'y modifie
-  et la liste d'attente n'est pas proposée.
+  accueils de loisirs** y figurent. Chaque créneau indique en revanche ce qu'il
+  peut encore accueillir, calculé sur l'ensemble des demandeurs : sur un créneau à jauge, une
+  barre de remplissage et le nombre de **places restantes** (une place par enfant) ; sur un
+  créneau sans jauge, le nombre de **groupes possibles** (une réservation entière, quel que
+  soit son effectif) ; « Complet » quand il ne reste rien. Un créneau sans réservation visible
+  peut donc être entamé par une école ou un autre demandeur.
+  L'impression de l'agenda ne liste que les réservations des accueils de loisirs. Rien ne s'y
+  modifie et la liste d'attente n'est pas proposée.
 - **Éditions** : une seule édition, **« Inscrits des accueils de loisirs »** — les usagers des
   accueils de loisirs ayant réservé sur l'exercice (identité, structure, niveau, contact),
   triable, imprimable en PDF et exportable en CSV.

@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import { AdminDemInfo } from "@/components/admin-dem-info";
 import { absencePrevenueDto } from "@/lib/agenda-core";
 import { toDateInput } from "@/lib/format";
+import { buildHiddenOccupancy } from "@/lib/hidden-occupancy";
 import { getConfigMany } from "@/server/config";
 import { prisma } from "@/server/db";
 import { getSession, requireServiceView } from "@/server/guards";
 import { getServiceDemandeurSettingsLabeled } from "@/server/services/demandeur-settings";
 import { currentExerciceIdForService, eligiblePeriodsWhere } from "@/server/services/exercice";
 import { loadSchoolHolidayRanges } from "@/server/services/holidays";
-import { loisirsUserWhere } from "@/server/services/loisirs-scope";
+import { loisirsHiddenOccupancyRows, loisirsUserWhere } from "@/server/services/loisirs-scope";
 import { deriveServiceModes } from "@/server/services/service-modes";
 import { listWaitingEntries } from "@/server/services/waiting-list";
 import { AgendaGrid } from "./agenda-grid";
@@ -133,8 +134,8 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
 
   // Une seule vague pour toutes les requêtes indépendantes (l'agenda payait ~8-10
   // allers-retours EN SÉRIE à chaque tick d'auto-refresh — audit perf 2026-07-17).
-  const [slots, uniqueSlots, bookings, exerciceRowsRaw, themesRows, refreshCfg] = await Promise.all(
-    [
+  const [slots, uniqueSlots, bookings, exerciceRowsRaw, themesRows, refreshCfg, hiddenRows] =
+    await Promise.all([
       prisma.slot.findMany({
         where: { serviceId: id, slotType: "recurring", periodId: { in: periodIds } },
         select: {
@@ -237,8 +238,13 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         : Promise.resolve([]),
       // Intervalle d'auto-rafraîchissement + zone de vacances scolaires.
       getConfigMany(["agenda.autoRefreshSeconds", "school.zone"]),
-    ],
-  );
+      // Direction des accueils de loisirs : total occupé par les AUTRES catégories, par
+      // créneau daté — pour afficher des places restantes exactes sans rien montrer
+      // d'autre (cf. lib/hidden-occupancy.ts).
+      loisirsScope
+        ? loisirsHiddenOccupancyRows(id, periodIds, loisirsScope)
+        : Promise.resolve(null),
+    ]);
 
   // Seconde vague (dépendante de la première) : demandeurs autorisés par créneau
   // + plages de vacances scolaires de la zone configurée.
@@ -321,6 +327,11 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
     jauge: s.jauge,
   }));
 
+  // Places restantes (Direction) : totaux masqués ramenés à la cellule affichée.
+  const hiddenOccupancy = hiddenRows
+    ? buildHiddenOccupancy(hiddenRows, uniqueSlotsData, service.gaugeAccompagnants)
+    : null;
+
   const periodsData = periods.map((p) => ({
     id: p.id,
     label: p.label,
@@ -381,6 +392,7 @@ export default async function AgendaPage({ params }: { params: Promise<{ id: str
         viewerEmail={viewerEmail}
         readOnly={readOnly}
         loisirsOnly={loisirsScope !== null}
+        hiddenOccupancy={hiddenOccupancy}
       />
       {/* Bandeau de debug (matrice demandeurs complète) : pas pour la Direction. */}
       {!loisirsScope && <AdminDemInfo rows={demRows} />}

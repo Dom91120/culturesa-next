@@ -61,6 +61,12 @@ import {
 } from "@/lib/agenda-core";
 import { isFrenchHoliday } from "@/lib/french-holidays";
 import { gaugeColor, gaugeUnits } from "@/lib/gauge";
+import {
+  type HiddenOccupancy,
+  occupancyKey,
+  remainingLabel,
+  remainingPlaces,
+} from "@/lib/hidden-occupancy";
 import { printTableDocument } from "@/lib/print-html";
 import { isInSchoolHolidayRange as inSchoolHolidayRange } from "@/lib/school-holidays";
 import { slotTimeLabel } from "@/lib/slot-label";
@@ -297,6 +303,7 @@ export function AgendaGrid({
   waitingEntries,
   readOnly,
   loisirsOnly = false,
+  hiddenOccupancy = null,
 }: {
   service: Service;
   // Rattachement en CONSULTATION (ManagerLevel) : la grille est figée — pas de mode
@@ -307,6 +314,10 @@ export function AgendaGrid({
   // Direction des accueils de loisirs : les réservations reçues sont déjà filtrées par
   // le serveur — ce drapeau n'adapte que le texte d'aide.
   loisirsOnly?: boolean;
+  // Direction des accueils de loisirs : occupation des AUTRES catégories par cellule
+  // (créneau affiché + date), en totaux anonymes. Non nul ⇒ le compteur « X/Y » (faux
+  // pour elle, il ignorerait les réservations masquées) devient « N places restantes ».
+  hiddenOccupancy?: Record<string, HiddenOccupancy> | null;
   // Inscrits sur la liste d'attente (ordre d'inscription) — vide si réglage inactif.
   waitingEntries: WaitingAdminRow[];
   periods: Period[];
@@ -2511,6 +2522,24 @@ export function AgendaGrid({
       const count = b.bookings.length;
       const countPct = Math.min(100, b.capacity > 0 ? (count / b.capacity) * 100 : 0);
       const countColor = gaugeColor(countPct);
+      // Direction des accueils de loisirs : places restantes, même règle de comptage
+      // que ci-dessus, occupation masquée comprise. null = affichage habituel.
+      const remaining =
+        hiddenOccupancy && mondayStr && b.capacity > 0
+          ? remainingPlaces({
+              capacity: b.capacity,
+              jauge: b.jauge,
+              visibleUsed: b.used,
+              visibleCount: count,
+              hidden:
+                hiddenOccupancy[
+                  occupancyKey(b.slotId, ymd(addDays(mondayStr, DAY_OFFSET[b.dayKey] ?? 0)))
+                ],
+            })
+          : null;
+      const remainingPct =
+        remaining === null ? 0 : Math.min(100, ((b.capacity - remaining) / b.capacity) * 100);
+      const remainingColor = remaining === null ? undefined : gaugeColor(remainingPct);
       const posStyle: React.CSSProperties = allday
         ? {}
         : (() => {
@@ -2922,9 +2951,30 @@ export function AgendaGrid({
                 );
               })}
           </div>
+          {/* Direction des accueils de loisirs : places restantes RÉELLES (réservations
+              visibles + total masqué des autres catégories), sur tous les créneaux —
+              un créneau sans réservation visible peut être entamé, voire complet. */}
+          {remaining !== null &&
+            (gaugeForCell ? (
+              // Créneau à jauge : même barre de remplissage que les gestionnaires
+              // (occupation RÉELLE), suivie des places — une place = un enfant.
+              <div className="agenda-block-meta is-gauge" style={{ color: remainingColor }}>
+                <span className="agenda-block-gauge-bar">
+                  <span style={{ width: `${remainingPct}%`, background: remainingColor }} />
+                </span>
+                {remainingLabel(remaining, true)}
+              </div>
+            ) : (
+              // Créneau sans jauge : pas de barre, et l'unité change — un GROUPE (une
+              // réservation entière), jamais lisible comme un nombre d'enfants.
+              <div className="agenda-block-meta" style={{ color: remainingColor }}>
+                {remainingLabel(remaining, false)}
+              </div>
+            ))}
           {/* Jauge DE CE CRÉNEAU (slots.jauge, source unique) ON → barre
           + used/cap ; OFF → simple compteur réservations/total (format 1/15). */}
-          {b.bookings.length > 0 &&
+          {remaining === null &&
+            b.bookings.length > 0 &&
             (gaugeForCell ? (
               <div className="agenda-block-meta is-gauge" style={{ color: fillColor }}>
                 {/* Barre + texte X/Y colorés selon le remplissage (rouge si complet) ;
@@ -2965,6 +3015,8 @@ export function AgendaGrid({
       batchSlotIds,
       uniqueWeeksById,
       readOnly,
+      hiddenOccupancy,
+      mondayStr,
     ],
   );
 
@@ -3885,7 +3937,7 @@ export function AgendaGrid({
           <p className="agenda-hint" style={{ margin: 0 }}>
             <span aria-hidden="true">💡</span>{" "}
             {loisirsOnly
-              ? "Consultation seule : seules les réservations des accueils de loisirs sont affichées. Un créneau qui paraît libre peut être occupé par un autre demandeur."
+              ? "Consultation seule : seules les réservations des accueils de loisirs sont affichées. Les places et groupes encore possibles tiennent compte de tous les demandeurs."
               : readOnly
                 ? "Consultation seule : cliquez sur une réservation pour ouvrir sa fiche. Ce service ne vous est pas confié en gestion."
                 : creationMode
