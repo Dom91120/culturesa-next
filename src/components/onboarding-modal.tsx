@@ -737,8 +737,10 @@ const STAFF_STEPS: Record<"gestionnaire" | "administrateur" | "direction", Step[
             créneaux. Naviguez avec les flèches ◀ ▶ et les onglets de période.
           </p>
           <p style={{ margin: 0 }}>
-            Seules les réservations des accueils de loisirs y figurent. Un créneau qui paraît libre
-            peut donc être occupé par une école ou un autre demandeur.
+            Seules les réservations des accueils de loisirs y figurent. Chaque créneau indique en
+            revanche ce qu'il peut encore accueillir, tous demandeurs confondus : des{" "}
+            <strong>places restantes</strong> (une par enfant, avec une barre de remplissage) ou des{" "}
+            <strong>groupes possibles</strong> quand le créneau se réserve par groupe entier.
           </p>
         </>
       ),

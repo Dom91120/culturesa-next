@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db";
 import { listDatedSessions, listInscrits } from "./editions";
-import { loisirsDemandeurIds, loisirsUserWhere } from "./loisirs-scope";
+import { loisirsDemandeurIds, loisirsHiddenOccupancyRows, loisirsUserWhere } from "./loisirs-scope";
 
 /**
  * Périmètre « accueils de loisirs » (rôle direction_loisirs, 2026-11-18). Le filtrage
@@ -12,7 +12,7 @@ import { loisirsDemandeurIds, loisirsUserWhere } from "./loisirs-scope";
 vi.mock("@/server/db", () => ({
   prisma: {
     serviceDemandeurSettings: { findMany: vi.fn() },
-    booking: { findMany: vi.fn() },
+    booking: { findMany: vi.fn(), groupBy: vi.fn() },
   },
 }));
 
@@ -92,6 +92,34 @@ describe("listDatedSessions (impression de l'agenda)", () => {
     expect(bookings.mock.calls[0][0]?.where).toMatchObject({
       serviceId: "svc_001",
       user: loisirsUserWhere([3, 4]),
+    });
+  });
+});
+
+describe("loisirsHiddenOccupancyRows (places restantes)", () => {
+  const groupBy = vi.mocked(prisma.booking.groupBy);
+
+  it("ne demande que des TOTAUX par créneau daté, sur les autres catégories", async () => {
+    groupBy.mockResolvedValue([
+      { slotId: "m1", _count: { _all: 2 }, _sum: { enfants: 30, accompagnants: 4 } },
+      { slotId: "U1", _count: { _all: 1 }, _sum: { enfants: null, accompagnants: null } },
+      // biome-ignore lint/suspicious/noExplicitAny: forme réduite du résultat groupBy
+    ] as any);
+    const rows = await loisirsHiddenOccupancyRows("svc_001", [10, 11], [3, 4]);
+    expect(rows).toEqual([
+      { slotId: "m1", count: 2, enfants: 30, accompagnants: 4 },
+      { slotId: "U1", count: 1, enfants: 0, accompagnants: 0 },
+    ]);
+    const arg = groupBy.mock.calls[0][0];
+    // Agrégat par créneau : aucune colonne d'identité ne peut en sortir.
+    expect(arg.by).toEqual(["slotId"]);
+    expect(arg).not.toHaveProperty("select");
+    // Complément EXACT du périmètre visible : tout ce que la Direction ne voit pas.
+    expect(arg.where).toEqual({
+      serviceId: "svc_001",
+      bookingType: { in: ["recurring", "unique"] },
+      slot: { periodId: { in: [10, 11] }, slotType: "unique" },
+      NOT: { user: loisirsUserWhere([3, 4]) },
     });
   });
 });
